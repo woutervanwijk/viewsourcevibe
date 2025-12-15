@@ -13,7 +13,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   
   # HTML viewing and syntax highlighting
-  flutter_highlight: ^0.7.0
+  code_text_field: ^1.0.0
   highlight: ^0.7.0
   
   # File handling

@@ -13,11 +13,8 @@ class FileViewer extends StatelessWidget {
   Widget build(BuildContext context) {
     final htmlService = Provider.of<HtmlService>(context);
     final settings = Provider.of<AppSettings>(context);
-    final searchResults = htmlService.searchResults;
-    final currentIndex = htmlService.currentSearchIndex;
 
     final lines = file.content.split('\n');
-    final contentScrollController = ScrollController();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -78,75 +75,13 @@ class FileViewer extends StatelessWidget {
         ),
         const Divider(height: 1),
 
-        // File content with syntax highlighting and line numbers
+        // File content with built-in syntax highlighting and line numbers
         Expanded(
-          child: Scrollbar(
-            controller: contentScrollController,
-            child: SingleChildScrollView(
-              controller: contentScrollController,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Line numbers (compact, controlled by settings)
-                  if (settings.showLineNumbers)
-                    SizedBox(
-                        width: 50,
-                        child: RichText(
-                          text: TextSpan(
-                              children: List.generate(
-                            lines.length,
-                            (i) => (TextSpan(
-                              text: '${i + 1}\n',
-                              style: TextStyle(
-                                fontSize: settings.fontSize,
-                                fontFamily: 'Courier',
-                                fontFamilyFallback: const [
-                                  'monospace',
-                                  'Courier New'
-                                ],
-                                color: Colors.grey[600],
-                                height: 1.2,
-                              ),
-                            ) // Match line height exactly
-
-                                ),
-                          )),
-                        )),
-
-                  // Vertical divider
-                  if (settings.showLineNumbers) const VerticalDivider(width: 1),
-
-                  // Syntax highlighted content
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        htmlService.buildHighlightedText(
-                          file.content,
-                          file.extension,
-                          fontSize: settings.fontSize,
-                          themeName: settings.themeName,
-                        ),
-
-                        // Search highlights overlay
-                        if (searchResults.isNotEmpty && currentIndex >= 0)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: CustomPaint(
-                                painter: SearchHighlightPainter(
-                                  searchResults: searchResults,
-                                  currentIndex: currentIndex,
-                                  searchQuery: htmlService.searchQuery,
-                                  content: file.content,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          child: htmlService.buildHighlightedText(
+            file.content,
+            file.extension,
+            fontSize: settings.fontSize,
+            themeName: settings.themeName,
           ),
         ),
       ],

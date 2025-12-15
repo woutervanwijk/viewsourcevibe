@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:htmlviewer/models/html_file.dart';
-import 'package:flutter_highlight/flutter_highlight.dart';
-import 'package:flutter_highlight/themes/github.dart';
+import 'package:code_text_field/code_text_field.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 
@@ -152,7 +151,7 @@ class HtmlService with ChangeNotifier {
     notifyListeners();
   }
 
-  Map<String, dynamic> getHighlightTheme() => githubTheme;
+  // Map<String, dynamic> getHighlightTheme() => githubTheme;
 
   String getLanguageForExtension(String extension) {
     final ext = extension.toLowerCase();
@@ -170,17 +169,43 @@ class HtmlService with ChangeNotifier {
   }
 
   Widget buildHighlightedText(String content, String extension,
-          {double fontSize = 14.0, String themeName = 'github'}) =>
-      HighlightView(
-        content,
-        language: getLanguageForExtension(extension),
-        theme: githubTheme, // Using default theme for now
-        // padding: const EdgeInsets.all(6),
-        textStyle: TextStyle(
-          fontSize: fontSize,
-          height: 1.2,
-          fontFamily: 'Courier',
-          fontFamilyFallback: const ['monospace', 'Courier New'],
-        ),
-      );
+      {double fontSize = 14.0, String themeName = 'github'}) {
+    // Create a code field controller
+    final controller = CodeController(
+      text: content,
+      // language: getLanguageForCodeField(extension),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return CodeField(
+          controller: controller,
+          textStyle: TextStyle(
+            fontSize: fontSize,
+            fontFamily: 'Courier',
+            fontFamilyFallback: const ['monospace', 'Courier New'],
+            height: 1.2,
+          ),
+          readOnly: true,
+          lineNumbers: true, // Enable built-in line numbers
+          horizontalScroll: true,
+          lineNumberStyle: LineNumberStyle(
+            width: 42.0,
+            textAlign: TextAlign.right,
+            margin: 10.0,
+            textStyle: TextStyle(
+              fontSize: fontSize,
+              fontFamily: 'Courier',
+              fontFamilyFallback: const ['monospace', 'Courier New'],
+              color: Colors.grey[600], // Subtle color for line numbers
+            ),
+          ),
+          expands: true, // Don't expand, use external scrolling
+          padding: EdgeInsets.zero,
+          minLines: null,
+          maxLines: null,
+        );
+      },
+    );
+  }
 }
