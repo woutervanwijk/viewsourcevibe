@@ -68,7 +68,7 @@ class AppSettings with ChangeNotifier {
   void resetToDefaults() {
     _darkMode = false;
     _themeName = 'github';
-    _fontSize = 12.0;
+    _fontSize = 14.0;
     _showLineNumbers = true;
     _wrapText = false;
     _autoDetectLanguage = true;

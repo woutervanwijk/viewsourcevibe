@@ -170,7 +170,7 @@ class HtmlService with ChangeNotifier {
   }
 
   Widget buildHighlightedText(String content, String extension,
-          {double fontSize = 12.0, String themeName = 'github'}) =>
+          {double fontSize = 14.0, String themeName = 'github'}) =>
       HighlightView(
         content,
         language: getLanguageForExtension(extension),
