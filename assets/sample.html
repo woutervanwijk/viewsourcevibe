@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample HTML File</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+        }
+        
+        .highlight {
+            background-color: #ffff00;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to HTML Viewer</h1>
+        <p>This is a sample HTML file to demonstrate the HTML Viewer app.</p>
+        
+        <h2>Features</h2>
+        <ul>
+            <li>Syntax highlighting for HTML, CSS, JavaScript</li>
+            <li>File browsing and loading</li>
+            <li>Text search with navigation</li>
+            <li>Line numbers</li>
+            <li>Support for multiple file formats</li>
+        </ul>
+        
+        <h2>Supported Formats</h2>
+        <p>The app supports the following file formats:</p>
+        <ul>
+            <li><strong>HTML</strong> (.html, .htm)</li>
+            <li><strong>CSS</strong> (.css)</li>
+            <li><strong>JavaScript</strong> (.js)</li>
+            <li><strong>JSON</strong> (.json)</li>
+            <li><strong>XML</strong> (.xml)</li>
+            <li><strong>Text</strong> (.txt)</li>
+        </ul>
+        
+        <div class="code-example">
+            <h3>JavaScript Example</h3>
+            <pre>
+function greet(name) {
+    console.log(`Hello, ${name}!`);
+    return `Welcome to our app, ${name}`;
+}
+
+// Usage
+greet('Developer');
+            </pre>
+        </div>
+        
+        <footer>
+            <p>Created with ❤️ using Flutter</p>
+        </footer>
+    </div>
+    
+    <script>
+        // Simple script example
+        console.log('HTML file loaded successfully!');
+        
+        function init() {
+            document.body.style.opacity = '1';
+        }
+        
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
