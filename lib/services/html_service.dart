@@ -121,11 +121,11 @@ class HtmlService with ChangeNotifier {
          : 'html'; // Default
   }
 
-  Widget buildHighlightedText(String content, String extension) => HighlightView(
+  Widget buildHighlightedText(String content, String extension, {double fontSize = 14.0, String themeName = 'github'}) => HighlightView(
     content,
     language: getLanguageForExtension(extension),
-    theme: githubTheme,
+    theme: githubTheme, // Using default theme for now
     padding: const EdgeInsets.all(12),
-    textStyle: const TextStyle(fontSize: 14),
+    textStyle: TextStyle(fontSize: fontSize),
   );
 }

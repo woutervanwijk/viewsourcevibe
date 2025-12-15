@@ -5,11 +5,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:htmlviewer/models/html_file.dart';
 import 'package:htmlviewer/utils/file_utils.dart';
 import 'package:htmlviewer/widgets/url_dialog.dart';
+import 'package:htmlviewer/screens/settings_screen.dart';
 
 class Toolbar extends StatelessWidget {
   const Toolbar({super.key});
 
   Future<void> _pickFile(BuildContext context) async {
+    final navigatorContext = context;
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -28,24 +30,33 @@ class Toolbar extends StatelessWidget {
           size: file.size,
         );
 
-        Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+        Provider.of<HtmlService>(navigatorContext, listen: false).loadFile(htmlFile);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(navigatorContext).showSnackBar(
         SnackBar(content: Text('Error loading file: $e')),
       );
     }
   }
 
   Future<void> _loadSampleFile(BuildContext context, String filename) async {
+    final navigatorContext = context;
     try {
       final htmlFile = await FileUtils.loadSampleFile(filename);
-      Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+      Provider.of<HtmlService>(navigatorContext, listen: false).loadFile(htmlFile);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(navigatorContext).showSnackBar(
         SnackBar(content: Text('Error loading sample file: $e')),
       );
     }
+  }
+
+  void _showSettingsScreen(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const SettingsScreen(),
+      ),
+    );
   }
 
   void _showSampleFilesMenu(BuildContext context) {
@@ -104,9 +115,7 @@ class Toolbar extends StatelessWidget {
         IconButton(
           icon: const Icon(Icons.settings),
           tooltip: 'Settings',
-          onPressed: () {
-            // TODO: Implement settings
-          },
+          onPressed: () => _showSettingsScreen(context),
         ),
       ],
     );

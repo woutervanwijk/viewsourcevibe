@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:htmlviewer/screens/home_screen.dart';
 import 'package:htmlviewer/services/html_service.dart';
+import 'package:htmlviewer/models/settings.dart';
 
 void main() {
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => HtmlService()),
+        ChangeNotifierProvider(create: (_) => AppSettings()),
       ],
       child: const MyApp(),
     ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:htmlviewer/services/html_service.dart';
 import 'package:htmlviewer/models/html_file.dart';
+import 'package:htmlviewer/models/settings.dart';
 
 class FileViewer extends StatelessWidget {
   final HtmlFile file;
@@ -11,6 +12,7 @@ class FileViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final htmlService = Provider.of<HtmlService>(context);
+    final settings = Provider.of<AppSettings>(context);
     final searchResults = htmlService.searchResults;
     final currentIndex = htmlService.currentSearchIndex;
 
@@ -80,25 +82,26 @@ class FileViewer extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Line numbers (compact)
-              SizedBox(
-                width: 50,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: List.generate(
-                        lines.length,
-                        (i) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2),
-                              child: Text(
-                                '${i + 1}',
-                                style: TextStyle(
-                                    fontSize: 12, color: Colors.grey[600]),
-                                textAlign: TextAlign.right,
-                              ),
-                            )),
+              // Line numbers (compact, controlled by settings)
+              if (settings.showLineNumbers)
+                SizedBox(
+                  width: 50,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: List.generate(
+                          lines.length,
+                          (i) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 2),
+                                child: Text(
+                                  '${i + 1}',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey[600]),
+                                  textAlign: TextAlign.right,
+                                ),
+                              )),
+                    ),
                   ),
                 ),
-              ),
 
               // Vertical divider
               const VerticalDivider(width: 1),
@@ -111,6 +114,8 @@ class FileViewer extends StatelessWidget {
                       child: htmlService.buildHighlightedText(
                         file.content,
                         file.extension,
+                        fontSize: settings.fontSize,
+                        themeName: settings.themeName,
                       ),
                     ),
 
@@ -168,7 +173,7 @@ class SearchHighlightPainter extends CustomPainter {
           final rect = Rect.fromLTWH(0, i * 20.0, size.width, 20);
 
           final paint = Paint()
-            ..color = Colors.yellow.withOpacity(0.3)
+            ..color = Colors.yellow.withAlpha(77) // Use withAlpha instead of withOpacity
             ..style = PaintingStyle.fill;
 
           canvas.drawRect(rect, paint);
