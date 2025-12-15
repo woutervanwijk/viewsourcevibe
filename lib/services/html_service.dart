@@ -3,6 +3,8 @@ import 'package:htmlviewer/models/html_file.dart';
 import 'package:code_text_field/code_text_field.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import 'package:highlight/languages/all.dart' show allLanguages;
+import 'package:highlight/highlight.dart' show Mode;
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -155,8 +157,8 @@ class HtmlService with ChangeNotifier {
 
   String getLanguageForExtension(String extension) {
     final ext = extension.toLowerCase();
-    return ext.contains('html')
-        ? 'html'
+    return ext == 'html' || ext == 'htm'
+        ? 'htmlbars' // Use htmlbars for HTML files
         : ext == 'css'
             ? 'css'
             : ext == 'js'
@@ -168,12 +170,22 @@ class HtmlService with ChangeNotifier {
                         : 'plaintext'; // Default to plaintext if unknown
   }
 
+  Mode? getLanguageModeForExtension(String extension) {
+    final languageName = getLanguageForExtension(extension);
+
+    // Get the Mode object from allLanguages map
+    return allLanguages[languageName];
+  }
+
   Widget buildHighlightedText(String content, String extension,
       {double fontSize = 14.0, String themeName = 'github'}) {
-    // Create a code field controller
+    // Get the appropriate language mode for syntax highlighting
+    final languageMode = getLanguageModeForExtension(extension);
+
+    // Create a code field controller with syntax highlighting
     final controller = CodeController(
       text: content,
-      // language: getLanguageForCodeField(extension),
+      language: languageMode, // Enable syntax highlighting
     );
 
     return LayoutBuilder(
@@ -187,14 +199,16 @@ class HtmlService with ChangeNotifier {
             height: 1.2,
           ),
           readOnly: true,
+          wrap: true,
           lineNumbers: true, // Enable built-in line numbers
-          horizontalScroll: true,
+          horizontalScroll:
+              true, // Disable built-in horizontal scroll since we handle it externally
           lineNumberStyle: LineNumberStyle(
             width: 42.0,
             textAlign: TextAlign.right,
             margin: 10.0,
             textStyle: TextStyle(
-              fontSize: fontSize,
+              // fontSize: fontSize,
               fontFamily: 'Courier',
               fontFamilyFallback: const ['monospace', 'Courier New'],
               color: Colors.grey[600], // Subtle color for line numbers
