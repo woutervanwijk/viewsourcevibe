@@ -17,6 +17,7 @@ class FileViewer extends StatelessWidget {
     final currentIndex = htmlService.currentSearchIndex;
 
     final lines = file.content.split('\n');
+    final contentScrollController = ScrollController();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -79,64 +80,73 @@ class FileViewer extends StatelessWidget {
 
         // File content with syntax highlighting and line numbers
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Line numbers (compact, controlled by settings)
-              if (settings.showLineNumbers)
-                SizedBox(
-                  width: 50,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: List.generate(
-                          lines.length,
-                          (i) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 2),
-                                child: Text(
-                                  '${i + 1}',
-                                  style: TextStyle(
-                                      fontSize: 12, color: Colors.grey[600]),
-                                  textAlign: TextAlign.right,
+          child: Scrollbar(
+            controller: contentScrollController,
+            child: SingleChildScrollView(
+              controller: contentScrollController,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Line numbers (compact, controlled by settings)
+                  if (settings.showLineNumbers)
+                    SizedBox(
+                        width: 50,
+                        child: RichText(
+                          text: TextSpan(
+                              children: List.generate(
+                            lines.length,
+                            (i) => (TextSpan(
+                              text: '${i + 1}\n',
+                              style: TextStyle(
+                                fontSize: settings.fontSize,
+                                fontFamily: 'Courier',
+                                fontFamilyFallback: const [
+                                  'monospace',
+                                  'Courier New'
+                                ],
+                                color: Colors.grey[600],
+                                height: 1.2,
+                              ),
+                            ) // Match line height exactly
+
                                 ),
-                              )),
-                    ),
-                  ),
-                ),
+                          )),
+                        )),
 
-              // Vertical divider
-              const VerticalDivider(width: 1),
+                  // Vertical divider
+                  if (settings.showLineNumbers) const VerticalDivider(width: 1),
 
-              // Syntax highlighted content
-              Expanded(
-                child: Stack(
-                  children: [
-                    SingleChildScrollView(
-                      child: htmlService.buildHighlightedText(
-                        file.content,
-                        file.extension,
-                        fontSize: settings.fontSize,
-                        themeName: settings.themeName,
-                      ),
-                    ),
+                  // Syntax highlighted content
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        htmlService.buildHighlightedText(
+                          file.content,
+                          file.extension,
+                          fontSize: settings.fontSize,
+                          themeName: settings.themeName,
+                        ),
 
-                    // Search highlights overlay
-                    if (searchResults.isNotEmpty && currentIndex >= 0)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(
-                            painter: SearchHighlightPainter(
-                              searchResults: searchResults,
-                              currentIndex: currentIndex,
-                              searchQuery: htmlService.searchQuery,
-                              content: file.content,
+                        // Search highlights overlay
+                        if (searchResults.isNotEmpty && currentIndex >= 0)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: SearchHighlightPainter(
+                                  searchResults: searchResults,
+                                  currentIndex: currentIndex,
+                                  searchQuery: htmlService.searchQuery,
+                                  content: file.content,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                  ],
-                ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ],
@@ -173,7 +183,8 @@ class SearchHighlightPainter extends CustomPainter {
           final rect = Rect.fromLTWH(0, i * 20.0, size.width, 20);
 
           final paint = Paint()
-            ..color = Colors.yellow.withAlpha(77) // Use withAlpha instead of withOpacity
+            ..color = Colors.yellow
+                .withAlpha(77) // Use withAlpha instead of withOpacity
             ..style = PaintingStyle.fill;
 
           canvas.drawRect(rect, paint);

@@ -4,11 +4,27 @@ import 'package:htmlviewer/screens/home_screen.dart';
 import 'package:htmlviewer/services/html_service.dart';
 import 'package:htmlviewer/models/settings.dart';
 
-void main() {
+void main() async {
+  // Initialize Flutter binding before any async operations
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  final htmlService = HtmlService();
+  
+  // Load sample file in debug mode for easier testing
+  if (const bool.fromEnvironment('dart.vm.product') == false) {
+    // We're in debug mode
+    try {
+      await htmlService.loadSampleFile();
+    } catch (e) {
+      debugPrint('Failed to load sample file: $e');
+      // Continue anyway - app will work without sample file
+    }
+  }
+  
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => HtmlService()),
+        ChangeNotifierProvider(create: (_) => htmlService),
         ChangeNotifierProvider(create: (_) => AppSettings()),
       ],
       child: const MyApp(),

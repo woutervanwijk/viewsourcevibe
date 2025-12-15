@@ -4,11 +4,11 @@ class AppSettings with ChangeNotifier {
   // Theme settings
   bool _darkMode = false;
   String _themeName = 'github';
-  
+
   // Display settings
   double _fontSize = 14.0;
   bool _showLineNumbers = true;
-  
+
   // Behavior settings
   bool _wrapText = false;
   bool _autoDetectLanguage = true;
@@ -68,7 +68,7 @@ class AppSettings with ChangeNotifier {
   void resetToDefaults() {
     _darkMode = false;
     _themeName = 'github';
-    _fontSize = 14.0;
+    _fontSize = 12.0;
     _showLineNumbers = true;
     _wrapText = false;
     _autoDetectLanguage = true;
@@ -77,16 +77,14 @@ class AppSettings with ChangeNotifier {
 
   // Available themes
   static List<String> get availableThemes => [
-    'github',
-    'androidstudio',
-    'atom-one-dark',
-    'vs2015',
-    'solarized-light',
-    'monokai-sublime',
-  ];
+        'github',
+        'androidstudio',
+        'atom-one-dark',
+        'vs2015',
+        'solarized-light',
+        'monokai-sublime',
+      ];
 
   // Available font sizes
-  static List<double> get availableFontSizes => [
-    12.0, 14.0, 16.0, 18.0, 20.0
-  ];
+  static List<double> get availableFontSizes => [12.0, 14.0, 16.0, 18.0, 20.0];
 }

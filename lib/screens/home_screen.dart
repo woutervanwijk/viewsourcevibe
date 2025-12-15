@@ -32,7 +32,31 @@ class HomeScreen extends StatelessWidget {
                   );
                 }
                 
-                return FileViewer(file: htmlService.currentFile!);
+                // Show a subtle indicator if this is the sample file
+                final isSampleFile = htmlService.currentFile!.path.contains('sample.html') ||
+                                   htmlService.currentFile!.path.contains('assets');
+                
+                return Column(
+                  children: [
+                    if (isSampleFile)
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                        color: const Color.fromRGBO(21, 101, 192, 0.1), // Blue with 10% opacity
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                            SizedBox(width: 4),
+                            Text(
+                              'Sample file loaded (Debug Mode)',
+                              style: TextStyle(fontSize: 12, color: Colors.blue, fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Expanded(child: FileViewer(file: htmlService.currentFile!)),
+                  ],
+                );
               },
             ),
           ),

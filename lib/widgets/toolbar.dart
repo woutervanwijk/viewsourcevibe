@@ -11,14 +11,13 @@ class Toolbar extends StatelessWidget {
   const Toolbar({super.key});
 
   Future<void> _pickFile(BuildContext context) async {
-    final navigatorContext = context;
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['html', 'htm', 'css', 'js', 'json', 'xml', 'txt'],
       );
 
-      if (result != null) {
+      if (result != null && context.mounted) {
         final file = result.files.single;
         final content = String.fromCharCodes(file.bytes!);
         
@@ -30,24 +29,29 @@ class Toolbar extends StatelessWidget {
           size: file.size,
         );
 
-        Provider.of<HtmlService>(navigatorContext, listen: false).loadFile(htmlFile);
+        Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
       }
     } catch (e) {
-      ScaffoldMessenger.of(navigatorContext).showSnackBar(
-        SnackBar(content: Text('Error loading file: $e')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading file: $e')),
+        );
+      }
     }
   }
 
   Future<void> _loadSampleFile(BuildContext context, String filename) async {
-    final navigatorContext = context;
     try {
       final htmlFile = await FileUtils.loadSampleFile(filename);
-      Provider.of<HtmlService>(navigatorContext, listen: false).loadFile(htmlFile);
+      if (context.mounted) {
+        Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(navigatorContext).showSnackBar(
-        SnackBar(content: Text('Error loading sample file: $e')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading sample file: $e')),
+        );
+      }
     }
   }
 
