@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:htmlviewer/services/html_service.dart';
@@ -104,11 +105,12 @@ class Toolbar extends StatelessWidget {
           tooltip: 'Open URL',
           onPressed: () => showUrlDialog(context),
         ),
-        IconButton(
-          icon: const Icon(Icons.code),
-          tooltip: 'Sample Files',
-          onPressed: () => _showSampleFilesMenu(context),
-        ),
+        if (kDebugMode)
+          IconButton(
+            icon: const Icon(Icons.code),
+            tooltip: 'Sample Files',
+            onPressed: () => _showSampleFilesMenu(context),
+          ),
         IconButton(
           icon: const Icon(Icons.settings),
           tooltip: 'Settings',
