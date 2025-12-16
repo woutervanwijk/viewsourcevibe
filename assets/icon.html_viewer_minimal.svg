@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- HTML Viewer Icon - Minimalist Design -->
+  
+  <!-- Blue Background with Rounded Corners -->
+  <rect width="512" height="512" rx="80" fill="#2196F3"/>
+  
+  <!-- White Document/Code Container -->
+  <path d="M400 144H112C94.3269 144 80 158.327 80 176V336C80 353.673 94.3269 368 112 368H400C417.673 368 432 353.673 432 336V176C432 158.327 417.673 144 400 144Z" fill="white"/>
+  
+  <!-- HTML Angle Bracket Symbol -->
+  <path d="M184 224L216 208L248 224L232 240L208 224L184 240L200 256L184 224Z" fill="#FF5722"/>
+  
+  <!-- Code Brackets - Clean Design -->
+  <rect x="208" y="256" width="8" height="32" rx="4" fill="#4CAF50"/>
+  <rect x="296" y="256" width="8" height="32" rx="4" fill="#4CAF50"/>
+  
+  <!-- Horizontal Code Lines -->
+  <rect x="224" y="264" width="64" height="2" fill="#E0E0E0"/>
+  <rect x="224" y="276" width="48" height="2" fill="#E0E0E0"/>
+  <rect x="224" y="288" width="80" height="2" fill="#E0E0E0"/>
+  
+  <!-- Magnifying Glass - Viewing Symbol -->
+  <circle cx="384" cy="256" r="32" stroke="white" stroke-width="12"/>
+  <path d="M400 268L416 284" stroke="white" stroke-width="12" stroke-linecap="round"/>
+  
+  <!-- Subtle Shadow for Depth -->
+  <rect x="104" y="360" width="296" height="8" rx="4" fill="black" fill-opacity="0.08"/>
+  
+  <!-- Decorative Corner Accent -->
+  <rect x="112" y="144" width="8" height="48" fill="#1976D2" fill-opacity="0.8"/>
+  
+</svg>

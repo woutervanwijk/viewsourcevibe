@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- HTML Viewer Icon - Modern Design -->
+  
+  <!-- Background Container -->
+  <rect width="512" height="512" rx="96" fill="#1E88E5"/>
+  
+  <!-- Document/Code Symbol -->
+  <path d="M384 128H128C108.327 128 92 144.327 92 164V348C92 367.673 108.327 384 128 384H384C403.673 384 416 367.673 416 348V164C416 144.327 403.673 128 384 128Z" fill="white"/>
+  
+  <!-- HTML Tags Symbol -->
+  <path d="M160 200L192 184L224 200L208 216L184 200L160 216L176 232L160 200Z" fill="#FF5722"/>
+  
+  <!-- Code Brackets - Left -->
+  <path d="M200 240L184 240L184 272L200 272L200 240Z" fill="#4CAF50"/>
+  <path d="M200 288L184 288L184 320L200 320L200 288Z" fill="#4CAF50"/>
+  
+  <!-- Code Brackets - Right -->
+  <path d="M312 240L328 240L328 272L312 272L312 240Z" fill="#4CAF50"/>
+  <path d="M312 288L328 288L328 320L312 320L312 288Z" fill="#4CAF50"/>
+  
+  <!-- Magnifying Glass (Viewing Symbol) -->
+  <circle cx="368" cy="256" r="40" stroke="white" stroke-width="16"/>
+  <path d="M392 272L416 296" stroke="white" stroke-width="16" stroke-linecap="round"/>
+  
+  <!-- Decorative Elements - Code Lines -->
+  <rect x="192" y="256" width="32" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
+  <rect x="192" y="268" width="24" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
+  <rect x="192" y="280" width="40" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
+  
+  <rect x="288" y="256" width="32" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
+  <rect x="288" y="268" width="24" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
+  <rect x="288" y="280" width="40" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
+  
+  <!-- Shadow Effect -->
+  <rect x="112" y="376" width="288" height="16" rx="8" fill="black" fill-opacity="0.1"/>
+  
+</svg>
