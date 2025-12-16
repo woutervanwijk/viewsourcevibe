@@ -4,7 +4,7 @@ import 'package:htmlviewer/screens/home_screen.dart';
 import 'package:htmlviewer/services/html_service.dart';
 import 'package:htmlviewer/models/settings.dart';
 import 'package:htmlviewer/services/platform_sharing_handler.dart';
-import 'package:htmlviewer/services/shared_content_manager.dart';
+import 'package:htmlviewer/widgets/shared_content_wrapper.dart';
 
 void main() async {
   // Initialize Flutter binding before any async operations

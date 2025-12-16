@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:htmlviewer/services/html_service.dart';
-import 'package:htmlviewer/services/sharing_service.dart';
 import 'package:htmlviewer/widgets/file_viewer.dart';
 import 'package:htmlviewer/widgets/toolbar.dart';
 import 'package:htmlviewer/widgets/url_input.dart';
