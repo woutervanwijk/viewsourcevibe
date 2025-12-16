@@ -23,16 +23,36 @@ import 'package:flutter/services.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
+  ScrollController? _scrollController;
 
   HtmlFile? get currentFile => _currentFile;
+  ScrollController? get scrollController => _scrollController;
+
+  HtmlService() {
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController?.dispose();
+    super.dispose();
+  }
 
   void loadFile(HtmlFile file) {
     _currentFile = file;
+    // Reset scroll position when loading new file
+    if (_scrollController?.hasClients ?? false) {
+      _scrollController?.jumpTo(0);
+    }
     notifyListeners();
   }
 
   void clearFile() {
     _currentFile = null;
+    // Reset scroll position when clearing file
+    if (_scrollController?.hasClients ?? false) {
+      _scrollController?.jumpTo(0);
+    }
     notifyListeners();
   }
 
@@ -335,8 +355,10 @@ class HtmlService with ChangeNotifier {
       padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
       scrollController: scrollController != null
           ? CodeScrollController(verticalScroller: scrollController)
-          : CodeScrollController(
-              verticalScroller: PrimaryScrollController.of(context)),
+          : (_scrollController != null
+              ? CodeScrollController(verticalScroller: _scrollController)
+              : CodeScrollController(
+                  verticalScroller: PrimaryScrollController.of(context))),
       style: CodeEditorStyle(
         codeTheme: codeTheme,
         fontSize: fontSize,
