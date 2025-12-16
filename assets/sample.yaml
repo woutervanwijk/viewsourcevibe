@@ -1,0 +1,102 @@
+# Sample YAML file for testing syntax highlighting
+# This demonstrates various YAML features and structures
+
+# Basic key-value pairs
+app:
+  name: "HTML Viewer"
+  version: "1.0.0"
+  description: "A versatile code viewer with syntax highlighting"
+
+# Nested structures
+database:
+  host: "localhost"
+  port: 5432
+  username: "admin"
+  password: "secret123"
+  databases:
+    - "main_db"
+    - "test_db"
+    - "backup_db"
+
+# Lists and arrays
+features:
+  - "Syntax highlighting"
+  - "Multiple file formats"
+  - "Theme support"
+  - "Line numbers"
+  - "Word wrap"
+  - "URL loading"
+
+# Boolean and numeric values
+settings:
+  debug: true
+  max_connections: 100
+  timeout: 30.5
+  retries: 3
+
+# Multi-line strings
+configuration:
+  welcome_message: |
+    Welcome to the HTML Viewer!
+    This application supports over 100 programming languages.
+    Enjoy syntax highlighting for all your code files.
+
+  footer_text: >
+    Copyright © 2023 HTML Viewer.
+    All rights reserved.
+
+# Complex nested example
+server:
+  environment: "production"
+  https:
+    enabled: true
+    certificate: "/etc/ssl/certs/server.crt"
+    key: "/etc/ssl/private/server.key"
+  cors:
+    allowed_origins:
+      - "https://example.com"
+      - "https://api.example.com"
+    allowed_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+
+# Anchors and aliases
+defaults: &defaults
+  timeout: 10
+  retries: 3
+
+development:
+  <<: *defaults
+  debug: true
+
+production:
+  <<: *defaults
+  debug: false
+
+# Comments can appear anywhere
+# This is a comment
+another_section: "value"  # inline comment
+
+# YAML supports various data types
+data_types:
+  string: "Hello World"
+  integer: 42
+  float: 3.14159
+  boolean: true
+  null_value: null
+  date: 2023-12-15
+  datetime: 2023-12-15T14:30:00Z
+
+# JSON-like structure
+api:
+  endpoints:
+    users:
+      method: "GET"
+      path: "/api/users"
+      description: "Get all users"
+    create_user:
+      method: "POST"
+      path: "/api/users"
+      description: "Create a new user"

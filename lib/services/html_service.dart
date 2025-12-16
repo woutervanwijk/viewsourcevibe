@@ -114,17 +114,157 @@ class HtmlService with ChangeNotifier {
 
   String getLanguageForExtension(String extension) {
     final ext = extension.toLowerCase();
-    return ext == 'html' || ext == 'htm'
-        ? 'xml' // Use xml for HTML files
-        : ext == 'css'
-            ? 'css'
-            : ext == 'js'
-                ? 'javascript'
-                : ext == 'json'
-                    ? 'json'
-                    : ext == 'xml'
-                        ? 'xml'
-                        : 'plaintext'; // Default to plaintext if unknown
+    
+    // Comprehensive language mapping for common file extensions
+    switch (ext) {
+      // Web Development
+      case 'html':
+      case 'htm':
+      case 'xhtml':
+        return 'xml'; // HTML is handled as XML in re_highlight
+      case 'css':
+        return 'css';
+      case 'js':
+      case 'javascript':
+      case 'mjs':
+      case 'cjs':
+        return 'javascript';
+      case 'ts':
+      case 'typescript':
+        return 'typescript';
+      case 'jsx':
+      case 'tsx':
+        return 'javascript'; // JSX/TSX use JavaScript highlighting
+      case 'json':
+        return 'json';
+      case 'json5':
+        return 'json';
+      case 'xml':
+      case 'xsd':
+      case 'xsl':
+      case 'svg':
+        return 'xml';
+      case 'yaml':
+      case 'yml':
+        return 'yaml';
+      case 'vue':
+        return 'vue';
+      case 'svelte':
+        return 'html'; // Svelte files use HTML highlighting
+      
+      // Markup & Documentation
+      case 'md':
+      case 'markdown':
+        return 'markdown';
+      case 'txt':
+      case 'text':
+        return 'plaintext';
+      case 'adoc':
+      case 'asciidoc':
+        return 'asciidoc';
+      
+      // Programming Languages
+      case 'dart':
+        return 'dart';
+      case 'py':
+      case 'python':
+        return 'python';
+      case 'java':
+        return 'java';
+      case 'kt':
+      case 'kts':
+        return 'kotlin';
+      case 'swift':
+        return 'swift';
+      case 'go':
+        return 'go';
+      case 'rs':
+      case 'rust':
+        return 'rust';
+      case 'php':
+        return 'php';
+      case 'rb':
+      case 'ruby':
+        return 'ruby';
+      case 'cpp':
+      case 'cc':
+      case 'cxx':
+      case 'c++':
+      case 'h':
+      case 'hpp':
+      case 'hxx':
+        return 'cpp';
+      case 'c':
+        return 'c';
+      case 'cs':
+        return 'csharp';
+      case 'scala':
+        return 'scala';
+      case 'hs':
+      case 'haskell':
+        return 'haskell';
+      case 'lua':
+        return 'lua';
+      case 'pl':
+      case 'perl':
+        return 'perl';
+      case 'r':
+        return 'r';
+      case 'sh':
+      case 'bash':
+      case 'zsh':
+      case 'fish':
+        return 'bash';
+      case 'ps1':
+      case 'psm1':
+        return 'powershell';
+      
+      // Configuration & Data
+      case 'ini':
+      case 'conf':
+      case 'config':
+        return 'ini';
+      case 'properties':
+        return 'properties';
+      case 'toml':
+        return 'toml';
+      case 'sql':
+        return 'sql';
+      case 'graphql':
+      case 'gql':
+        return 'graphql';
+      case 'dockerfile':
+        return 'dockerfile';
+      case 'makefile':
+      case 'mk':
+        return 'makefile';
+      case 'cmake':
+        return 'cmake';
+      
+      // Styling & Preprocessors
+      case 'scss':
+      case 'sass':
+        return 'scss';
+      case 'less':
+        return 'less';
+      case 'styl':
+      case 'stylus':
+        return 'stylus';
+      
+      // Other Common Formats
+      case 'diff':
+      case 'patch':
+        return 'diff';
+      case 'gitignore':
+      case 'ignore':
+        return 'gitignore';
+      case 'editorconfig':
+        return 'ini';
+      
+      // Default fallback
+      default:
+        return 'plaintext';
+    }
   }
 
   Mode? getReHighlightModeForExtension(String extension) {
@@ -214,30 +354,70 @@ class HtmlService with ChangeNotifier {
 
   // Helper method to get re_highlight mode for language name
   Mode? _getReHighlightMode(String languageName) {
-    // Map language names to re_highlight language names
+    // First, try the language name directly
+    if (builtinAllLanguages.containsKey(languageName)) {
+      return builtinAllLanguages[languageName]!;
+    }
+
+    // Map common language names to re_highlight language names
     const languageMap = {
       'html': 'xml',
       'htm': 'xml',
-      'css': 'css',
       'javascript': 'javascript',
       'js': 'javascript',
-      'json': 'json',
-      'xml': 'xml',
+      'typescript': 'typescript',
+      'ts': 'typescript',
+      'jsx': 'javascript',
+      'tsx': 'javascript',
+      'yaml': 'yaml',
+      'yml': 'yaml',
+      'markdown': 'markdown',
+      'md': 'markdown',
+      'asciidoc': 'asciidoc',
+      'adoc': 'asciidoc',
+      'cpp': 'cpp',
+      'c++': 'cpp',
+      'csharp': 'csharp',
+      'cs': 'csharp',
       'plaintext': 'plaintext',
+      'txt': 'plaintext',
+      'text': 'plaintext',
     };
 
-    final reLanguageName = languageMap[languageName] ?? 'plaintext';
-
-    // Get the mode from re_highlight languages
-    try {
-      if (builtinAllLanguages.containsKey(reLanguageName)) {
-        return builtinAllLanguages[reLanguageName]!;
-      }
-      return builtinAllLanguages['plaintext']!; // Fallback to plaintext
-    } catch (e) {
-      return builtinAllLanguages[
-          'plaintext']!; // Fallback to plaintext if any error occurs
+    // Try the mapped language name
+    final mappedLanguageName = languageMap[languageName];
+    if (mappedLanguageName != null && builtinAllLanguages.containsKey(mappedLanguageName)) {
+      return builtinAllLanguages[mappedLanguageName]!;
     }
+
+    // Special cases and fallbacks
+    // HTML/XML family
+    if (languageName == 'html' || languageName == 'htm' || languageName == 'xhtml') {
+      return builtinAllLanguages['xml'] ?? builtinAllLanguages['plaintext']!;
+    }
+
+    // JavaScript family
+    if (languageName == 'javascript' || languageName == 'js' || languageName == 'jsx' || languageName == 'tsx') {
+      return builtinAllLanguages['javascript'] ?? builtinAllLanguages['plaintext']!;
+    }
+
+    // TypeScript
+    if (languageName == 'typescript' || languageName == 'ts') {
+      return builtinAllLanguages['typescript'] ?? builtinAllLanguages['javascript'] ?? builtinAllLanguages['plaintext']!;
+    }
+
+    // XML family
+    if (languageName == 'xml' || languageName == 'xsd' || languageName == 'xsl' || languageName == 'svg') {
+      return builtinAllLanguages['xml'] ?? builtinAllLanguages['plaintext']!;
+    }
+
+    // Shell scripting
+    if (languageName == 'bash' || languageName == 'sh' || languageName == 'zsh' || languageName == 'fish' || languageName == 'shell') {
+      return builtinAllLanguages['bash'] ?? builtinAllLanguages['plaintext']!;
+    }
+
+    // Ultimate fallback to plaintext
+    return builtinAllLanguages['plaintext']!;
   }
 
   // Helper method to get the VS theme for re_highlight
