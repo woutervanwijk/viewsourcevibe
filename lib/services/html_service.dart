@@ -91,7 +91,7 @@ class HtmlService with ChangeNotifier {
 
         final uri = Uri.parse(finalUrl);
         final filename =
-            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'index.html';
+            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'index';
 
         final htmlFile = HtmlFile(
           name: filename,
@@ -154,7 +154,8 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  Widget buildHighlightedText(String content, String extension,
+  Widget buildHighlightedText(
+      String content, String extension, BuildContext context,
       {double fontSize = 14.0,
       String themeName = 'github',
       bool wrapText = false,
@@ -179,6 +180,8 @@ class HtmlService with ChangeNotifier {
       controller: controller,
       readOnly: true,
       wordWrap: wrapText,
+      scrollController: CodeScrollController(
+          verticalScroller: PrimaryScrollController.of(context)),
       style: CodeEditorStyle(
         codeTheme: codeTheme,
         fontSize: fontSize,

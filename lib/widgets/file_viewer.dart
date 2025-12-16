@@ -51,7 +51,6 @@ class FileViewer extends StatelessWidget {
                   ),
                 ],
               ),
-
             ],
           ),
         ),
@@ -62,6 +61,7 @@ class FileViewer extends StatelessWidget {
           child: htmlService.buildHighlightedText(
             file.content,
             file.extension,
+            context,
             fontSize: settings.fontSize,
             themeName: settings.themeName,
             wrapText: settings.wrapText,
