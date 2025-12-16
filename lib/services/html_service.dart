@@ -115,7 +115,7 @@ class HtmlService with ChangeNotifier {
   String getLanguageForExtension(String extension) {
     final ext = extension.toLowerCase();
     return ext == 'html' || ext == 'htm'
-        ? 'xml' // Use vbscript-html for HTML files
+        ? 'xml' // Use xml for HTML files
         : ext == 'css'
             ? 'css'
             : ext == 'js'
@@ -137,7 +137,7 @@ class HtmlService with ChangeNotifier {
         return builtinAllLanguages[languageName]!;
       }
 
-      // Fallback for HTML - try vbscript-html if html is requested
+      // Fallback for HTML - try xml if html is requested
       if (languageName == 'html' ||
           languageName == 'htm' ||
           languageName == 'xml') {
@@ -159,7 +159,8 @@ class HtmlService with ChangeNotifier {
       {double fontSize = 14.0,
       String themeName = 'github',
       bool wrapText = false,
-      bool showLineNumbers = true}) {
+      bool showLineNumbers = true,
+      ScrollController? scrollController}) {
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
 
@@ -180,8 +181,10 @@ class HtmlService with ChangeNotifier {
       controller: controller,
       readOnly: true,
       wordWrap: wrapText,
-      scrollController: CodeScrollController(
-          verticalScroller: PrimaryScrollController.of(context)),
+      scrollController: scrollController != null
+          ? CodeScrollController(verticalScroller: scrollController)
+          : CodeScrollController(
+              verticalScroller: PrimaryScrollController.of(context)),
       style: CodeEditorStyle(
         codeTheme: codeTheme,
         fontSize: fontSize,

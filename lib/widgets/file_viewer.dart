@@ -6,8 +6,9 @@ import 'package:htmlviewer/models/settings.dart';
 
 class FileViewer extends StatelessWidget {
   final HtmlFile file;
+  final ScrollController? scrollController;
 
-  const FileViewer({super.key, required this.file});
+  const FileViewer({super.key, required this.file, this.scrollController});
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +67,7 @@ class FileViewer extends StatelessWidget {
             themeName: settings.themeName,
             wrapText: settings.wrapText,
             showLineNumbers: settings.showLineNumbers,
+            scrollController: scrollController,
           ),
         ),
       ],

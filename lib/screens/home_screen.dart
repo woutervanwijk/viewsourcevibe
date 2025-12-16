@@ -5,11 +5,46 @@ import 'package:htmlviewer/widgets/file_viewer.dart';
 import 'package:htmlviewer/widgets/toolbar.dart';
 import 'package:htmlviewer/widgets/url_input.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  ScrollController? _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to HTML service changes to scroll to top when file loads
+    final htmlService = context.read<HtmlService>();
+    htmlService.addListener(_onFileLoaded);
+  }
+
+  @override
+  void dispose() {
+    final htmlService = context.read<HtmlService>();
+    htmlService.removeListener(_onFileLoaded);
+    _scrollController?.dispose();
+    super.dispose();
+  }
+
+  void _onFileLoaded() {
+    // Scroll to top when a new file is loaded
+    if (_scrollController!.hasClients) {
+      _scrollController?.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _scrollController ??= PrimaryScrollController.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vibe HTML Viewer'),
@@ -61,7 +96,12 @@ class HomeScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                    Expanded(child: FileViewer(file: htmlService.currentFile!)),
+                    Expanded(
+                      child: FileViewer(
+                        file: htmlService.currentFile!,
+                        scrollController: _scrollController,
+                      ),
+                    ),
                   ],
                 );
               },
