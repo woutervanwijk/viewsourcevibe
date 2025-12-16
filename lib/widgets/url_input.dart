@@ -90,7 +90,10 @@ class _UrlInputState extends State<UrlInput> {
                 const SizedBox(height: 2),
                 Text(
                   _errorMessage,
-                  style: const TextStyle(color: Colors.red, fontSize: 11),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ],

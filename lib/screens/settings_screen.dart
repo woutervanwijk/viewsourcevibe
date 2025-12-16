@@ -31,16 +31,15 @@ class SettingsScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
-                      // Dark Mode Toggle
-                      SwitchListTile(
-                        title: const Text('Dark Mode'),
-                        subtitle: const Text('Enable dark theme'),
-                        value: settings.darkMode,
-                        onChanged: (value) => settings.darkMode = value,
-                        secondary: const Icon(Icons.dark_mode),
+                      // Theme Mode Selection
+                      ListTile(
+                        title: const Text('Theme Mode'),
+                        subtitle: Text(_getThemeModeLabel(settings.themeMode)),
+                        trailing: const Icon(Icons.arrow_forward_ios),
+                        onTap: () => _showThemeModeDialog(context, settings),
                       ),
                       
-                      // Theme Selection
+                      // Syntax Highlight Theme
                       ListTile(
                         title: const Text('Syntax Highlight Theme'),
                         subtitle: Text(settings.themeName),
@@ -142,6 +141,62 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Helper method to get theme mode label
+  String _getThemeModeLabel(ThemeModeOption mode) {
+    switch (mode) {
+      case ThemeModeOption.system:
+        return 'Follow system settings';
+      case ThemeModeOption.light:
+        return 'Always light theme';
+      case ThemeModeOption.dark:
+        return 'Always dark theme';
+    }
+  }
+
+  void _showThemeModeDialog(BuildContext context, AppSettings settings) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Theme Mode'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: ThemeModeOption.values.map((mode) => 
+              ListTile(
+                title: Text(_getThemeModeLabel(mode)),
+                subtitle: Text(_getThemeModeDescription(mode)),
+                trailing: settings.themeMode == mode 
+                    ? const Icon(Icons.check, color: Colors.blue)
+                    : null,
+                onTap: () {
+                  settings.themeMode = mode;
+                  Navigator.of(context).pop();
+                },
+              )
+            ).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to get theme mode description
+  String _getThemeModeDescription(ThemeModeOption mode) {
+    switch (mode) {
+      case ThemeModeOption.system:
+        return 'Automatically switch between light and dark based on system settings';
+      case ThemeModeOption.light:
+        return 'Always use light theme regardless of system settings';
+      case ThemeModeOption.dark:
+        return 'Always use dark theme regardless of system settings';
+    }
   }
 
   void _showThemeDialog(BuildContext context, AppSettings settings) {

@@ -43,7 +43,7 @@ class FileViewer extends StatelessWidget {
               Text(
                 '${lines.length} lines • ${file.fileSize}',
                 style: TextStyle(
-                  color: Colors.grey[500],
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153), // 60% opacity
                   fontSize: 11,
                 ),
               ),

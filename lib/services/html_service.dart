@@ -4,6 +4,20 @@ import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/styles/vs.dart';
+import 'package:re_highlight/styles/github.dart';
+import 'package:re_highlight/styles/github-dark.dart';
+import 'package:re_highlight/styles/github-dark-dimmed.dart';
+import 'package:re_highlight/styles/androidstudio.dart';
+import 'package:re_highlight/styles/atom-one-dark.dart';
+import 'package:re_highlight/styles/atom-one-light.dart';
+import 'package:re_highlight/styles/vs2015.dart';
+import 'package:re_highlight/styles/monokai-sublime.dart';
+import 'package:re_highlight/styles/monokai.dart';
+import 'package:re_highlight/styles/nord.dart';
+import 'package:re_highlight/styles/tokyo-night-dark.dart';
+import 'package:re_highlight/styles/tokyo-night-light.dart';
+import 'package:re_highlight/styles/dark.dart';
+import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 
@@ -307,12 +321,12 @@ class HtmlService with ChangeNotifier {
     // Create a controller for the code editor
     final controller = CodeLineEditingController.fromText(content);
 
-    // Create a code theme using the VS theme
+    // Create a code theme using the selected theme
     final mode =
         _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
     final codeTheme = CodeHighlightTheme(
         languages: {languageName: CodeHighlightThemeMode(mode: mode)},
-        theme: _getVsTheme());
+        theme: _getThemeByName(themeName));
 
     return CodeEditor(
       controller: controller,
@@ -433,9 +447,42 @@ class HtmlService with ChangeNotifier {
     return builtinAllLanguages['plaintext']!;
   }
 
-  // Helper method to get the VS theme for re_highlight
-  Map<String, TextStyle> _getVsTheme() {
-    // Use the built-in VS theme from re_highlight
-    return vsTheme;
+  // Helper method to get the appropriate theme for re_highlight based on theme name
+  Map<String, TextStyle> _getThemeByName(String themeName) {
+    switch (themeName) {
+      case 'github':
+        return githubTheme;
+      case 'github-dark':
+        return githubDarkTheme;
+      case 'github-dark-dimmed':
+        return githubDarkDimmedTheme;
+      case 'androidstudio':
+        return androidstudioTheme;
+      case 'atom-one-dark':
+        return atomOneDarkTheme;
+      case 'atom-one-light':
+        return atomOneLightTheme;
+      case 'vs':
+        return vsTheme;
+      case 'vs2015':
+        return vs2015Theme;
+      case 'monokai-sublime':
+        return monokaiSublimeTheme;
+      case 'monokai':
+        return monokaiTheme;
+      case 'nord':
+        return nordTheme;
+      case 'tokyo-night-dark':
+        return tokyoNightDarkTheme;
+      case 'tokyo-night-light':
+        return tokyoNightLightTheme;
+      case 'dark':
+        return darkTheme;
+      case 'lightfair':
+        return lightfairTheme;
+      default:
+        // Fallback to github theme
+        return githubTheme;
+    }
   }
 }

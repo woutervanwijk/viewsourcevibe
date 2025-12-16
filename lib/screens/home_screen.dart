@@ -59,10 +59,13 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Consumer<HtmlService>(
               builder: (context, htmlService, child) {
                 if (htmlService.currentFile == null) {
-                  return const Center(
+                  return Center(
                     child: Text(
                       'No file loaded. Tap the folder icon to open a file.',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Theme.of(context).colorScheme.onSurface.withAlpha(153), // 60% opacity
+                      ),
                     ),
                   );
                 }

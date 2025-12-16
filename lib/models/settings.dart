@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Theme mode options
+enum ThemeModeOption { system, light, dark }
+
 class AppSettings with ChangeNotifier {
   static const String _prefsDarkMode = 'darkMode';
   static const String _prefsThemeName = 'themeName';
+  static const String _prefsThemeMode = 'themeMode'; // system, light, dark
   static const String _prefsFontSize = 'fontSize';
   static const String _prefsShowLineNumbers = 'showLineNumbers';
   static const String _prefsWrapText = 'wrapText';
@@ -13,6 +17,7 @@ class AppSettings with ChangeNotifier {
   SharedPreferences? _prefs;
 
   // Theme settings
+  ThemeModeOption _themeMode = ThemeModeOption.system; // Default to system
   bool _darkMode = false;
   String _themeName = 'github';
 
@@ -25,6 +30,7 @@ class AppSettings with ChangeNotifier {
   bool _autoDetectLanguage = true;
 
   // Getters
+  ThemeModeOption get themeMode => _themeMode;
   bool get darkMode => _darkMode;
   String get themeName => _themeName;
   double get fontSize => _fontSize;
@@ -33,6 +39,14 @@ class AppSettings with ChangeNotifier {
   bool get autoDetectLanguage => _autoDetectLanguage;
 
   // Setters with notification and persistence
+  set themeMode(ThemeModeOption value) {
+    if (_themeMode != value) {
+      _themeMode = value;
+      _saveSetting(_prefsThemeMode, value.name);
+      notifyListeners();
+    }
+  }
+
   set darkMode(bool value) {
     if (_darkMode != value) {
       _darkMode = value;
@@ -91,6 +105,13 @@ class AppSettings with ChangeNotifier {
   Future<void> _loadSettings() async {
     if (_prefs == null) return;
 
+    // Load theme mode - default to system if not set
+    final themeModeString = _prefs!.getString(_prefsThemeMode) ?? 'system';
+    _themeMode = ThemeModeOption.values.firstWhere(
+      (e) => e.name == themeModeString,
+      orElse: () => ThemeModeOption.system,
+    );
+    
     _darkMode = _prefs!.getBool(_prefsDarkMode) ?? false;
     _themeName = _prefs!.getString(_prefsThemeName) ?? 'github';
     _fontSize = _prefs!.getDouble(_prefsFontSize) ?? 14.0;
@@ -114,6 +135,7 @@ class AppSettings with ChangeNotifier {
 
   // Reset to defaults
   void resetToDefaults() {
+    _themeMode = ThemeModeOption.system;
     _darkMode = false;
     _themeName = 'github';
     _fontSize = 14.0;
@@ -142,11 +164,20 @@ class AppSettings with ChangeNotifier {
   // Available themes
   static List<String> get availableThemes => [
         'github',
+        'github-dark',
+        'github-dark-dimmed',
         'androidstudio',
         'atom-one-dark',
+        'atom-one-light',
+        'vs',
         'vs2015',
-        'solarized-light',
         'monokai-sublime',
+        'monokai',
+        'nord',
+        'tokyo-night-dark',
+        'tokyo-night-light',
+        'dark',
+        'lightfair',
       ];
 
   // Available font sizes
