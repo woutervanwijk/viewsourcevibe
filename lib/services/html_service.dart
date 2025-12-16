@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:htmlviewer/models/html_file.dart';
 import 'package:re_editor/re_editor.dart';
-import 'package:re_highlight/languages/xml.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/styles/vs.dart';
@@ -201,7 +199,7 @@ class HtmlService with ChangeNotifier {
   }
 
   Widget buildHighlightedText(String content, String extension,
-      {double fontSize = 14.0, String themeName = 'github'}) {
+      {double fontSize = 14.0, String themeName = 'github', bool wrapText = false}) {
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
 
@@ -221,7 +219,7 @@ class HtmlService with ChangeNotifier {
     return CodeEditor(
       controller: controller,
       readOnly: true,
-      wordWrap: true,
+      wordWrap: wrapText,
       style: CodeEditorStyle(
         codeTheme: codeTheme,
         fontSize: fontSize,

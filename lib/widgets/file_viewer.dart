@@ -82,6 +82,7 @@ class FileViewer extends StatelessWidget {
             file.extension,
             fontSize: settings.fontSize,
             themeName: settings.themeName,
+            wrapText: settings.wrapText,
           ),
         ),
       ],

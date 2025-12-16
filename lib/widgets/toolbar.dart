@@ -20,7 +20,7 @@ class Toolbar extends StatelessWidget {
       if (result != null && context.mounted) {
         final file = result.files.single;
         final content = String.fromCharCodes(file.bytes!);
-        
+
         final htmlFile = HtmlFile(
           name: file.name,
           path: file.path ?? '',
@@ -108,13 +108,6 @@ class Toolbar extends StatelessWidget {
           icon: const Icon(Icons.code),
           tooltip: 'Sample Files',
           onPressed: () => _showSampleFilesMenu(context),
-        ),
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          tooltip: 'Refresh',
-          onPressed: () {
-            // TODO: Implement refresh functionality
-          },
         ),
         IconButton(
           icon: const Icon(Icons.settings),
