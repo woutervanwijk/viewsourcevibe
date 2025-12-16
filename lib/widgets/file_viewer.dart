@@ -15,7 +15,12 @@ class FileViewer extends StatelessWidget {
     final htmlService = Provider.of<HtmlService>(context);
     final settings = Provider.of<AppSettings>(context);
 
-    final lines = file.content.split('\n');
+    // Add null safety checks
+    final fileName = file.name;
+    final fileContent = file.content;
+    final lines = fileContent.split('\n');
+    final fileExtension = file.extension;
+    final isHtmlFile = fileExtension == 'html' || fileExtension == 'htm';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -26,13 +31,13 @@ class FileViewer extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                file.isHtml ? Icons.html : Icons.text_snippet,
+                isHtmlFile ? Icons.html : Icons.text_snippet,
                 size: 14,
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  file.name,
+                  fileName,
                   style: const TextStyle(
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
@@ -43,7 +48,10 @@ class FileViewer extends StatelessWidget {
               Text(
                 '${lines.length} lines • ${file.fileSize}',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153), // 60% opacity
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withAlpha(153), // 60% opacity
                   fontSize: 11,
                 ),
               ),

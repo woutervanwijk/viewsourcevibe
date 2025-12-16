@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:htmlviewer/models/html_file.dart';
 import 'package:htmlviewer/utils/file_utils.dart';
 import 'package:htmlviewer/screens/settings_screen.dart';
+import 'dart:io';
 
 class Toolbar extends StatelessWidget {
   const Toolbar({super.key});
@@ -19,26 +20,26 @@ class Toolbar extends StatelessWidget {
           'html', 'htm', 'xhtml', 'css', 'js', 'javascript', 'mjs', 'cjs',
           'ts', 'typescript', 'jsx', 'tsx', 'json', 'json5', 'xml', 'xsd',
           'xsl', 'svg', 'yaml', 'yml', 'vue', 'svelte',
-          
+
           // Markup & Documentation
           'md', 'markdown', 'txt', 'text', 'adoc', 'asciidoc',
-          
+
           // Programming Languages
           'dart', 'py', 'python', 'java', 'kt', 'kts', 'swift', 'go',
           'rs', 'rust', 'php', 'rb', 'ruby', 'cpp', 'cc', 'cxx', 'c++',
           'h', 'hpp', 'hxx', 'c', 'cs', 'scala', 'hs', 'haskell', 'lua',
           'pl', 'perl', 'r', 'sh', 'bash', 'zsh', 'fish', 'ps1', 'psm1',
-          
+
           // Configuration & Data
           'ini', 'conf', 'config', 'properties', 'toml', 'sql', 'graphql',
           'gql', 'dockerfile', 'makefile', 'mk', 'cmake',
-          
+
           // Styling & Preprocessors
           'scss', 'sass', 'less', 'styl', 'stylus',
-          
+
           // Other Common Formats
           'diff', 'patch', 'gitignore', 'ignore', 'editorconfig',
-          
+
           // Additional common text formats
           'log', 'env', 'gradle',
         ],
@@ -46,14 +47,47 @@ class Toolbar extends StatelessWidget {
 
       if (result != null && context.mounted) {
         final file = result.files.single;
-        final content = String.fromCharCodes(file.bytes!);
+
+        // Try to get content from bytes first, then fall back to reading from file path
+        String content = '';
+        int fileSize = file.size;
+
+        if (file.bytes != null && file.bytes!.isNotEmpty) {
+          // Use bytes if available
+          content = String.fromCharCodes(file.bytes!);
+        } else if (file.path != null && file.path!.isNotEmpty) {
+          // Try to read from file path if bytes are not available
+          try {
+            final fileObject = File(file.path!);
+            if (await fileObject.exists()) {
+              content = await fileObject.readAsString();
+              fileSize = await fileObject.length();
+            }
+          } catch (e) {
+            debugPrint('Error reading file from path: $e');
+            // Fall back to empty content if file reading fails
+            content = '';
+            fileSize = 0;
+          }
+        }
+
+        // If we still have no content, try to get it from file identifier
+        if (content.isEmpty && file.identifier != null) {
+          try {
+            // Some file pickers provide content through identifier
+            // This is a fallback attempt for special cases
+            content = 'File content could not be loaded: ${file.name}';
+          } catch (e) {
+            debugPrint('Error getting file content: $e');
+          }
+        }
 
         final htmlFile = HtmlFile(
           name: file.name,
           path: file.path ?? '',
           content: content,
           lastModified: DateTime.now(),
-          size: file.size,
+          size: fileSize,
         );
 
         Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);

@@ -71,9 +71,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 // Show a subtle indicator if this is the sample file
-                final isSampleFile =
-                    htmlService.currentFile!.path.contains('sample.html') ||
-                        htmlService.currentFile!.path.contains('assets');
+                final currentFile = htmlService.currentFile;
+                final isSampleFile = currentFile != null &&
+                    (currentFile.path.contains('sample.html') ||
+                     currentFile.path.contains('assets'));
 
                 return Column(
                   children: [
@@ -100,10 +101,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     Expanded(
-                      child: FileViewer(
-                        file: htmlService.currentFile!,
-                        scrollController: _scrollController,
-                      ),
+                      child: currentFile != null
+                          ? FileViewer(
+                              file: currentFile,
+                              scrollController: _scrollController,
+                            )
+                          : const Center(
+                              child: Text('File data is not available'),
+                            ),
                     ),
                   ],
                 );
