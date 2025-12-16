@@ -1,38 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- HTML Viewer Icon - Modern Design -->
+  <!-- Stylish Eye Icon for HTML Viewer -->
   
-  <!-- Background Container -->
-  <rect width="512" height="512" rx="96" fill="#1E88E5"/>
+  <!-- Gradient Background -->
+  <defs>
+    <linearGradient id="eyeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2196F3"/>
+      <stop offset="100%" stop-color="#1976D2"/>
+    </linearGradient>
+    <radialGradient id="irisGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="70%" stop-color="#FFA500"/>
+      <stop offset="100%" stop-color="#FF8C00"/>
+    </radialGradient>
+  </defs>
   
-  <!-- Document/Code Symbol -->
-  <path d="M384 128H128C108.327 128 92 144.327 92 164V348C92 367.673 108.327 384 128 384H384C403.673 384 416 367.673 416 348V164C416 144.327 403.673 128 384 128Z" fill="white"/>
+  <!-- Eye Background with Gradient -->
+  <rect width="512" height="512" rx="96" fill="url(#eyeGradient)"/>
   
-  <!-- HTML Tags Symbol -->
-  <path d="M160 200L192 184L224 200L208 216L184 200L160 216L176 232L160 200Z" fill="#FF5722"/>
+  <!-- Eye Shape - Stylized -->
+  <path d="M400 256C400 350.4 324.4 426 224 426C123.6 426 48 350.4 48 256C48 161.6 123.6 86 224 86C324.4 86 400 161.6 400 256Z" fill="white"/>
   
-  <!-- Code Brackets - Left -->
-  <path d="M200 240L184 240L184 272L200 272L200 240Z" fill="#4CAF50"/>
-  <path d="M200 288L184 288L184 320L200 320L200 288Z" fill="#4CAF50"/>
+  <!-- Iris with Gradient -->
+  <circle cx="224" cy="256" r="80" fill="url(#irisGradient)"/>
   
-  <!-- Code Brackets - Right -->
-  <path d="M312 240L328 240L328 272L312 272L312 240Z" fill="#4CAF50"/>
-  <path d="M312 288L328 288L328 320L312 320L312 288Z" fill="#4CAF50"/>
+  <!-- Pupil -->
+  <circle cx="224" cy="256" r="40" fill="#2C3E50"/>
   
-  <!-- Magnifying Glass (Viewing Symbol) -->
-  <circle cx="368" cy="256" r="40" stroke="white" stroke-width="16"/>
-  <path d="M392 272L416 296" stroke="white" stroke-width="16" stroke-linecap="round"/>
+  <!-- Eye Reflection - Sparkle Effect -->
+  <circle cx="240" cy="240" r="12" fill="white"/>
+  <path d="M240 240L248 232L256 240L248 248L240 240Z" fill="white"/>
   
-  <!-- Decorative Elements - Code Lines -->
-  <rect x="192" y="256" width="32" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
-  <rect x="192" y="268" width="24" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
-  <rect x="192" y="280" width="40" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
+  <!-- Eyelashes - Stylized -->
+  <path d="M368 160L384 144L400 160L384 176L368 160Z" fill="#2C3E50"/>
+  <path d="M320 128L336 112L352 128L336 144L320 128Z" fill="#2C3E50"/>
+  <path d="M416 208L432 192L448 208L432 224L416 208Z" fill="#2C3E50"/>
   
-  <rect x="288" y="256" width="32" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
-  <rect x="288" y="268" width="24" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
-  <rect x="288" y="280" width="40" height="4" fill="#B3E5FC" fill-opacity="0.6"/>
+  <!-- Bottom Eyelashes -->
+  <path d="M368 352L384 368L400 352L384 336L368 352Z" fill="#2C3E50"/>
+  <path d="M320 384L336 400L352 384L336 368L320 384Z" fill="#2C3E50"/>
+  <path d="M416 304L432 320L448 304L432 288L416 304Z" fill="#2C3E50"/>
   
-  <!-- Shadow Effect -->
-  <rect x="112" y="376" width="288" height="16" rx="8" fill="black" fill-opacity="0.1"/>
+  <!-- Eye Detail Lines -->
+  <path d="M160 256C160 230.4 178.4 212 204 212" stroke="#E0E0E0" stroke-width="8" stroke-linecap="round"/>
+  <path d="M288 256C288 281.6 269.6 300 244 300" stroke="#E0E0E0" stroke-width="8" stroke-linecap="round"/>
+  
+  <!-- Shadow for Depth -->
+  <ellipse cx="224" cy="368" rx="120" ry="32" fill="black" fill-opacity="0.1"/>
+  
+  <!-- Decorative HTML Element - Subtle -->
+  <path d="M80 80L96 64L112 80L96 96L80 80Z" fill="#FF5722" fill-opacity="0.3"/>
   
 </svg>

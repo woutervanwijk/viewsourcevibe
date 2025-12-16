@@ -1,33 +1,45 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- HTML Viewer Icon - Minimalist Design -->
+  <!-- Minimal Stylish Eye Icon for HTML Viewer -->
   
-  <!-- Blue Background with Rounded Corners -->
-  <rect width="512" height="512" rx="80" fill="#2196F3"/>
+  <!-- Gradient Background -->
+  <defs>
+    <linearGradient id="eyeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2196F3"/>
+      <stop offset="100%" stop-color="#1976D2"/>
+    </linearGradient>
+    <radialGradient id="irisGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="100%" stop-color="#FFA500"/>
+    </radialGradient>
+  </defs>
   
-  <!-- White Document/Code Container -->
-  <path d="M400 144H112C94.3269 144 80 158.327 80 176V336C80 353.673 94.3269 368 112 368H400C417.673 368 432 353.673 432 336V176C432 158.327 417.673 144 400 144Z" fill="white"/>
+  <!-- Eye Background with Gradient -->
+  <rect width="512" height="512" rx="80" fill="url(#eyeGradient)"/>
   
-  <!-- HTML Angle Bracket Symbol -->
-  <path d="M184 224L216 208L248 224L232 240L208 224L184 240L200 256L184 224Z" fill="#FF5722"/>
+  <!-- Eye Shape - Minimal -->
+  <path d="M384 256C384 336 312 400 224 400C136 400 64 336 64 256C64 176 136 112 224 112C312 112 384 176 384 256Z" fill="white"/>
   
-  <!-- Code Brackets - Clean Design -->
-  <rect x="208" y="256" width="8" height="32" rx="4" fill="#4CAF50"/>
-  <rect x="296" y="256" width="8" height="32" rx="4" fill="#4CAF50"/>
+  <!-- Iris with Gradient -->
+  <circle cx="224" cy="256" r="64" fill="url(#irisGradient)"/>
   
-  <!-- Horizontal Code Lines -->
-  <rect x="224" y="264" width="64" height="2" fill="#E0E0E0"/>
-  <rect x="224" y="276" width="48" height="2" fill="#E0E0E0"/>
-  <rect x="224" y="288" width="80" height="2" fill="#E0E0E0"/>
+  <!-- Pupil -->
+  <circle cx="224" cy="256" r="32" fill="#2C3E50"/>
   
-  <!-- Magnifying Glass - Viewing Symbol -->
-  <circle cx="384" cy="256" r="32" stroke="white" stroke-width="12"/>
-  <path d="M400 268L416 284" stroke="white" stroke-width="12" stroke-linecap="round"/>
+  <!-- Eye Reflection - Simple -->
+  <circle cx="240" cy="240" r="8" fill="white"/>
   
-  <!-- Subtle Shadow for Depth -->
-  <rect x="104" y="360" width="296" height="8" rx="4" fill="black" fill-opacity="0.08"/>
+  <!-- Minimal Eyelashes -->
+  <path d="M352 144L368 128L384 144L368 160L352 144Z" fill="#2C3E50"/>
+  <path d="M352 368L368 384L384 368L368 352L352 368Z" fill="#2C3E50"/>
   
-  <!-- Decorative Corner Accent -->
-  <rect x="112" y="144" width="8" height="48" fill="#1976D2" fill-opacity="0.8"/>
+  <!-- Eye Detail Line - Subtle -->
+  <path d="M176 256C176 240 192 224 216 224" stroke="#E0E0E0" stroke-width="6" stroke-linecap="round"/>
+  
+  <!-- Shadow for Depth -->
+  <ellipse cx="224" cy="352" rx="104" ry="24" fill="black" fill-opacity="0.1"/>
+  
+  <!-- Decorative HTML Element - Very Subtle -->
+  <path d="M64 64L80 48L96 64L80 80L64 64Z" fill="#FF5722" fill-opacity="0.2"/>
   
 </svg>
