@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:htmlviewer/services/html_service.dart';
-import 'package:highlight/languages/all.dart' show allLanguages;
+import 'package:re_highlight/languages/all.dart';
 
 void main() {
   group('Syntax Highlighting Verification Tests', () {
@@ -11,60 +11,61 @@ void main() {
     });
 
     test('HTML syntax highlighting should use correct language mode', () {
-      final languageMode = htmlService.getLanguageModeForExtension('html');
+      final languageMode = htmlService.getReHighlightModeForExtension('html');
       
       expect(languageMode, isNotNull);
-      expect(languageMode, equals(allLanguages['htmlbars']));
+      // We expect vbscript-html for HTML files
+      expect(languageMode, equals(builtinAllLanguages['vbscript-html']));
     });
 
     test('CSS syntax highlighting should use correct language mode', () {
-      final languageMode = htmlService.getLanguageModeForExtension('css');
+      final languageMode = htmlService.getReHighlightModeForExtension('css');
       
       expect(languageMode, isNotNull);
-      expect(languageMode, equals(allLanguages['css']));
+      expect(languageMode, equals(builtinAllLanguages['css']));
     });
 
     test('JavaScript syntax highlighting should use correct language mode', () {
-      final languageMode = htmlService.getLanguageModeForExtension('js');
+      final languageMode = htmlService.getReHighlightModeForExtension('js');
       
       expect(languageMode, isNotNull);
-      expect(languageMode, equals(allLanguages['javascript']));
+      expect(languageMode, equals(builtinAllLanguages['javascript']));
     });
 
     test('JSON syntax highlighting should use correct language mode', () {
-      final languageMode = htmlService.getLanguageModeForExtension('json');
+      final languageMode = htmlService.getReHighlightModeForExtension('json');
       
       expect(languageMode, isNotNull);
-      expect(languageMode, equals(allLanguages['json']));
+      expect(languageMode, equals(builtinAllLanguages['json']));
     });
 
     test('XML syntax highlighting should use correct language mode', () {
-      final languageMode = htmlService.getLanguageModeForExtension('xml');
+      final languageMode = htmlService.getReHighlightModeForExtension('xml');
       
       expect(languageMode, isNotNull);
-      expect(languageMode, equals(allLanguages['xml']));
+      expect(languageMode, equals(builtinAllLanguages['xml']));
     });
 
     test('Unknown extensions should default to plaintext', () {
-      final languageMode = htmlService.getLanguageModeForExtension('unknown');
+      final languageMode = htmlService.getReHighlightModeForExtension('unknown');
       
       expect(languageMode, isNotNull);
-      expect(languageMode, equals(allLanguages['plaintext']));
+      expect(languageMode, equals(builtinAllLanguages['plaintext']));
     });
 
     test('All supported extensions should have valid language modes', () {
       final extensions = ['html', 'htm', 'css', 'js', 'json', 'xml', 'txt'];
       
       for (final ext in extensions) {
-        final languageMode = htmlService.getLanguageModeForExtension(ext);
+        final languageMode = htmlService.getReHighlightModeForExtension(ext);
         expect(languageMode, isNotNull, reason: 'Extension $ext should have a valid language mode');
       }
     });
 
     test('Language mode mapping should be consistent', () {
       // Test that the same extension always returns the same language mode
-      final firstCall = htmlService.getLanguageModeForExtension('html');
-      final secondCall = htmlService.getLanguageModeForExtension('html');
+      final firstCall = htmlService.getReHighlightModeForExtension('html');
+      final secondCall = htmlService.getReHighlightModeForExtension('html');
       
       expect(firstCall, equals(secondCall));
     });

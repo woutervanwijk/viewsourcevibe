@@ -10,8 +10,8 @@ void main() {
     });
 
     test('getLanguageForExtension should return correct language names', () {
-      expect(htmlService.getLanguageForExtension('html'), equals('htmlbars'));
-      expect(htmlService.getLanguageForExtension('htm'), equals('htmlbars'));
+      expect(htmlService.getLanguageForExtension('html'), equals('vbscript-html'));
+      expect(htmlService.getLanguageForExtension('htm'), equals('vbscript-html'));
       expect(htmlService.getLanguageForExtension('css'), equals('css'));
       expect(htmlService.getLanguageForExtension('js'), equals('javascript'));
       expect(htmlService.getLanguageForExtension('json'), equals('json'));

@@ -13,7 +13,6 @@ dependencies:
   cupertino_icons: ^1.0.2
   
   # HTML viewing and syntax highlighting
-  code_text_field: ^1.1.0
   highlight: ^0.7.0
   
   # File handling
@@ -28,6 +27,11 @@ dependencies:
   
   # UI enhancements
   flutter_svg: ^2.0.7
+  flutter_highlight: ^0.7.0
+  
+  # Code editor
+  re_editor: ^0.8.0
+  re_highlight: ^0.0.3
   
 dev_dependencies:
   flutter_test:
