@@ -20,37 +20,32 @@ class FileViewer extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // File info header
+        // File info header - more compact
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Icon(
-                    file.isHtml ? Icons.html : Icons.text_snippet,
-                    size: 16,
+              Icon(
+                file.isHtml ? Icons.html : Icons.text_snippet,
+                size: 14,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  file.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      file.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    '${lines.length} lines • ${file.fileSize}',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                '${lines.length} lines • ${file.fileSize}',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 11,
+                ),
               ),
             ],
           ),

@@ -53,7 +53,7 @@ class _UrlInputState extends State<UrlInput> {
         }
 
         return Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -68,27 +68,29 @@ class _UrlInputState extends State<UrlInput> {
                           htmlService.currentFile!.path.startsWith('http')
                       ? ''
                       : 'https://example.com',
-                  prefixIcon: const Icon(Icons.link),
+                  prefixIcon: const Icon(Icons.link, size: 20),
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(6)),
                   suffixIcon: _urlController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear),
+                          icon: const Icon(Icons.clear, size: 20),
                           onPressed: () => _urlController.clear(),
                         )
                       : null,
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  isDense: true,
                 ),
                 keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.go,
                 onSubmitted: (_) => _loadUrl(),
-                // Removed readOnly to allow text selection
-                // Users can still edit the URL even when showing current file
+                style: const TextStyle(fontSize: 14),
               ),
               if (_errorMessage.isNotEmpty) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   _errorMessage,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                  style: const TextStyle(color: Colors.red, fontSize: 11),
                 ),
               ],
             ],

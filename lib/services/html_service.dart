@@ -45,7 +45,7 @@ class HtmlService with ChangeNotifier {
     <title>Sample HTML</title>
 </head>
 <body>
-    <h1>Welcome to HTML Viewer</h1>
+    <h1>Welcome to Vibe HTML Viewer</h1>
     <p>This is a sample HTML file for testing.</p>
 </body>
 </html>''';
@@ -313,9 +313,6 @@ class HtmlService with ChangeNotifier {
     final codeTheme = CodeHighlightTheme(
         languages: {languageName: CodeHighlightThemeMode(mode: mode)},
         theme: _getVsTheme());
-    // final codeTheme = CodeHighlightTheme(
-    //     languages: {'xml': CodeHighlightThemeMode(mode: langXml)},
-    //     theme: atomOneLightTheme);
 
     return CodeEditor(
       controller: controller,

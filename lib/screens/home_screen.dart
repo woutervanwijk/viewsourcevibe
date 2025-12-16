@@ -47,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController ??= PrimaryScrollController.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vibe HTML Viewer'),
+        title: const Text('Vibe HTML Viewer', style: TextStyle(fontSize: 18)),
         actions: const [
           Toolbar(),
         ],
