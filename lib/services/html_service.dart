@@ -181,6 +181,7 @@ class HtmlService with ChangeNotifier {
       controller: controller,
       readOnly: true,
       wordWrap: wrapText,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       scrollController: scrollController != null
           ? CodeScrollController(verticalScroller: scrollController)
           : CodeScrollController(

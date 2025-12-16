@@ -16,7 +16,7 @@ void main() {
         notified = true;
       });
 
-      final testContent = '''<!DOCTYPE html>
+      const testContent = '''<!DOCTYPE html>
 <html>
 <head>
     <title>Test</title>
@@ -43,8 +43,7 @@ void main() {
 
     test('Scroll controller integration should work', () {
       // This test verifies that the scroll controller parameter is accepted
-      const testContent = 'Test content';
-      
+
       // We can't fully test the scroll controller without a real BuildContext,
       // but we can verify the method signature works
       expect(() {
