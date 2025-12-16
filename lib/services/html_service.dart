@@ -263,7 +263,7 @@ class HtmlService with ChangeNotifier {
 
       // Default fallback
       default:
-        return 'plaintext';
+        return 'xml';
     }
   }
 
