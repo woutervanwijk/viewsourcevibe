@@ -42,7 +42,7 @@ class SettingsScreen extends StatelessWidget {
                       // Syntax Highlight Theme
                       ListTile(
                         title: const Text('Syntax Highlight Theme'),
-                        subtitle: Text(settings.themeName),
+                        subtitle: Text(AppSettings.getThemeMetadata(settings.themeName).name),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () => _showThemeDialog(context, settings),
                       ),
@@ -200,24 +200,79 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _showThemeDialog(BuildContext context, AppSettings settings) {
+    // Separate themes by category for better organization
+    final lightThemes = AppSettings.lightThemes;
+    final darkThemes = AppSettings.darkThemes;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Select Theme'),
+        title: const Text('Select Syntax Theme'),
         content: SingleChildScrollView(
           child: Column(
-            children: AppSettings.availableThemes.map((theme) => 
-              ListTile(
-                title: Text(theme),
-                trailing: settings.themeName == theme 
-                    ? const Icon(Icons.check, color: Colors.blue)
-                    : null,
-                onTap: () {
-                  settings.themeName = theme;
-                  Navigator.of(context).pop();
-                },
-              )
-            ).toList(),
+            children: [
+              // Light themes section
+              if (lightThemes.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Light Themes',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                ...lightThemes.map((theme) {
+                  final meta = AppSettings.getThemeMetadata(theme);
+                  return ListTile(
+                    title: Text(meta.name),
+                    subtitle: Text(
+                      meta.description,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: settings.themeName == theme 
+                        ? const Icon(Icons.check, color: Colors.blue)
+                        : null,
+                    onTap: () {
+                      settings.themeName = theme;
+                      Navigator.of(context).pop();
+                    },
+                  );
+                }),
+              ],
+              
+              // Dark themes section
+              if (darkThemes.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Dark Themes',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                ...darkThemes.map((theme) {
+                  final meta = AppSettings.getThemeMetadata(theme);
+                  return ListTile(
+                    title: Text(meta.name),
+                    subtitle: Text(
+                      meta.description,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: settings.themeName == theme 
+                        ? const Icon(Icons.check, color: Colors.blue)
+                        : null,
+                    onTap: () {
+                      settings.themeName = theme;
+                      Navigator.of(context).pop();
+                    },
+                  );
+                }),
+              ],
+            ],
           ),
         ),
         actions: [

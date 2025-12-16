@@ -1,6 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Theme metadata class
+class ThemeMetadata {
+  final String name;
+  final String description;
+  final bool isDark;
+  
+  const ThemeMetadata({
+    required this.name,
+    required this.description,
+    required this.isDark,
+  });
+}
+
 // Theme mode options
 enum ThemeModeOption { system, light, dark }
 
@@ -51,7 +64,48 @@ class AppSettings with ChangeNotifier {
     if (_darkMode != value) {
       _darkMode = value;
       _saveSetting(_prefsDarkMode, value);
+      
+      // Auto-switch theme based on dark mode if in system mode
+      if (_themeMode == ThemeModeOption.system) {
+        _autoSwitchThemeBasedOnMode();
+      }
+      
       notifyListeners();
+    }
+  }
+  
+  /// Automatically switch syntax theme based on current theme mode and dark mode
+  void _autoSwitchThemeBasedOnMode() {
+    final isDarkTheme = _getEffectiveDarkMode();
+    final currentThemeMeta = AppSettings.getThemeMetadata(_themeName);
+    
+    // Only auto-switch if the current theme doesn't match the desired darkness
+    if (currentThemeMeta.isDark != isDarkTheme) {
+      // Find an appropriate theme based on darkness
+      final availableThemes = isDarkTheme ? AppSettings.darkThemes : AppSettings.lightThemes;
+      
+      if (availableThemes.isNotEmpty) {
+        // Try to find a theme with similar name or use the first one
+        final similarTheme = availableThemes.firstWhere(
+          (theme) => theme.split('-').first == _themeName.split('-').first,
+          orElse: () => availableThemes.first,
+        );
+        
+        _themeName = similarTheme;
+        _saveSetting(_prefsThemeName, similarTheme);
+      }
+    }
+  }
+  
+  /// Get the effective dark mode based on theme mode setting
+  bool _getEffectiveDarkMode() {
+    switch (_themeMode) {
+      case ThemeModeOption.system:
+        return _darkMode; // Use the darkMode setting
+      case ThemeModeOption.light:
+        return false;
+      case ThemeModeOption.dark:
+        return true;
     }
   }
 
@@ -161,24 +215,113 @@ class AppSettings with ChangeNotifier {
     await _saveSetting(_prefsAutoDetectLanguage, _autoDetectLanguage);
   }
 
-  // Available themes
-  static List<String> get availableThemes => [
-        'github',
-        'github-dark',
-        'github-dark-dimmed',
-        'androidstudio',
-        'atom-one-dark',
-        'atom-one-light',
-        'vs',
-        'vs2015',
-        'monokai-sublime',
-        'monokai',
-        'nord',
-        'tokyo-night-dark',
-        'tokyo-night-light',
-        'dark',
-        'lightfair',
-      ];
+  // Theme categories and metadata
+  static final Map<String, ThemeMetadata> _themeMetadata = {
+    // Light themes
+    'github': ThemeMetadata(
+      name: 'GitHub Light',
+      description: 'Classic light theme inspired by GitHub',
+      isDark: false,
+    ),
+    'atom-one-light': ThemeMetadata(
+      name: 'Atom One Light',
+      description: 'Clean and bright theme from Atom editor',
+      isDark: false,
+    ),
+    'vs': ThemeMetadata(
+      name: 'Visual Studio',
+      description: 'Light theme based on Visual Studio',
+      isDark: false,
+    ),
+    'vs2015': ThemeMetadata(
+      name: 'Visual Studio 2015',
+      description: 'Modern light theme from VS 2015',
+      isDark: false,
+    ),
+    'lightfair': ThemeMetadata(
+      name: 'Lightfair',
+      description: 'Soft and pleasant light theme',
+      isDark: false,
+    ),
+    'tokyo-night-light': ThemeMetadata(
+      name: 'Tokyo Night Light',
+      description: 'Light variant of the popular Tokyo Night theme',
+      isDark: false,
+    ),
+    
+    // Dark themes
+    'github-dark': ThemeMetadata(
+      name: 'GitHub Dark',
+      description: 'Dark theme inspired by GitHub',
+      isDark: true,
+    ),
+    'github-dark-dimmed': ThemeMetadata(
+      name: 'GitHub Dark Dimmed',
+      description: 'Softer dark theme with dimmed colors',
+      isDark: true,
+    ),
+    'androidstudio': ThemeMetadata(
+      name: 'Android Studio',
+      description: 'Dark theme based on Android Studio',
+      isDark: true,
+    ),
+    'atom-one-dark': ThemeMetadata(
+      name: 'Atom One Dark',
+      description: 'Popular dark theme from Atom editor',
+      isDark: true,
+    ),
+    'monokai-sublime': ThemeMetadata(
+      name: 'Monokai Sublime',
+      description: 'Enhanced Monokai theme from Sublime Text',
+      isDark: true,
+    ),
+    'monokai': ThemeMetadata(
+      name: 'Monokai',
+      description: 'Classic Monokai dark theme',
+      isDark: true,
+    ),
+    'nord': ThemeMetadata(
+      name: 'Nord',
+      description: 'Arctic-inspired dark theme with cool colors',
+      isDark: true,
+    ),
+    'tokyo-night-dark': ThemeMetadata(
+      name: 'Tokyo Night Dark',
+      description: 'Dark theme inspired by Tokyo nights',
+      isDark: true,
+    ),
+    'dark': ThemeMetadata(
+      name: 'Dark',
+      description: 'Simple dark theme with high contrast',
+      isDark: true,
+    ),
+  };
+  
+  // Available themes (all)
+  static List<String> get availableThemes => _themeMetadata.keys.toList();
+  
+  // Get theme metadata
+  static ThemeMetadata getThemeMetadata(String themeName) {
+    return _themeMetadata[themeName] ?? ThemeMetadata(
+      name: themeName,
+      description: 'Unknown theme',
+      isDark: false,
+    );
+  }
+  
+  // Get themes by category
+  static List<String> getThemesByCategory(bool isDark) {
+    return _themeMetadata.entries
+        .where((entry) => entry.value.isDark == isDark)
+        .map((entry) => entry.key)
+        .toList();
+  }
+  
+  // Get light themes
+  static List<String> get lightThemes => getThemesByCategory(false);
+  
+  // Get dark themes
+  static List<String> get darkThemes => getThemesByCategory(true);
 
   // Available font sizes
   static List<double> get availableFontSizes =>
