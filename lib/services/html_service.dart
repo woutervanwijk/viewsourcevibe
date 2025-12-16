@@ -9,28 +9,16 @@ import 'package:flutter/services.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
-  String _searchQuery = '';
-  List<int> _searchResults = [];
-  int _currentSearchIndex = -1;
 
   HtmlFile? get currentFile => _currentFile;
-  String get searchQuery => _searchQuery;
-  List<int> get searchResults => _searchResults;
-  int get currentSearchIndex => _currentSearchIndex;
 
   void loadFile(HtmlFile file) {
     _currentFile = file;
-    _searchQuery = '';
-    _searchResults = [];
-    _currentSearchIndex = -1;
     notifyListeners();
   }
 
   void clearFile() {
     _currentFile = null;
-    _searchQuery = '';
-    _searchResults = [];
-    _currentSearchIndex = -1;
     notifyListeners();
   }
 
@@ -106,52 +94,7 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  void searchText(String query) {
-    if (_currentFile == null || query.isEmpty) {
-      _searchQuery = '';
-      _searchResults = [];
-      _currentSearchIndex = -1;
-      notifyListeners();
-      return;
-    }
 
-    _searchQuery = query;
-    _searchResults = [];
-    _currentSearchIndex = -1;
-
-    final content = _currentFile!.content;
-    final queryLower = query.toLowerCase();
-    final contentLower = content.toLowerCase();
-
-    int index = 0;
-    while (true) {
-      index = contentLower.indexOf(queryLower, index);
-      if (index == -1) break;
-      _searchResults.add(index);
-      index += query.length;
-    }
-
-    if (_searchResults.isNotEmpty) {
-      _currentSearchIndex = 0;
-    }
-
-    notifyListeners();
-  }
-
-  void navigateSearchResults(bool forward) {
-    if (_searchResults.isEmpty) return;
-
-    if (forward) {
-      _currentSearchIndex = (_currentSearchIndex + 1) % _searchResults.length;
-    } else {
-      _currentSearchIndex = (_currentSearchIndex - 1) % _searchResults.length;
-      if (_currentSearchIndex < 0) {
-        _currentSearchIndex = _searchResults.length - 1;
-      }
-    }
-
-    notifyListeners();
-  }
 
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
 

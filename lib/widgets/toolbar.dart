@@ -5,7 +5,6 @@ import 'package:htmlviewer/services/html_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:htmlviewer/models/html_file.dart';
 import 'package:htmlviewer/utils/file_utils.dart';
-import 'package:htmlviewer/widgets/url_dialog.dart';
 import 'package:htmlviewer/screens/settings_screen.dart';
 
 class Toolbar extends StatelessWidget {
@@ -99,11 +98,6 @@ class Toolbar extends StatelessWidget {
           icon: const Icon(Icons.folder_open),
           tooltip: 'Open File',
           onPressed: () => _pickFile(context),
-        ),
-        IconButton(
-          icon: const Icon(Icons.language),
-          tooltip: 'Open URL',
-          onPressed: () => showUrlDialog(context),
         ),
         if (kDebugMode)
           IconButton(

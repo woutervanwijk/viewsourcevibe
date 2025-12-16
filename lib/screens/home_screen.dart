@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:htmlviewer/services/html_service.dart';
 import 'package:htmlviewer/widgets/file_viewer.dart';
-import 'package:htmlviewer/widgets/search_bar.dart' as custom_search;
 import 'package:htmlviewer/widgets/toolbar.dart';
+import 'package:htmlviewer/widgets/url_input.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -12,14 +12,14 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('HTML Viewer'),
+        title: const Text('Vibe HTML Viewer'),
         actions: const [
           Toolbar(),
         ],
       ),
       body: Column(
         children: [
-          const custom_search.SearchBar(),
+          const UrlInput(),
           Expanded(
             child: Consumer<HtmlService>(
               builder: (context, htmlService, child) {
@@ -31,25 +31,32 @@ class HomeScreen extends StatelessWidget {
                     ),
                   );
                 }
-                
+
                 // Show a subtle indicator if this is the sample file
-                final isSampleFile = htmlService.currentFile!.path.contains('sample.html') ||
-                                   htmlService.currentFile!.path.contains('assets');
-                
+                final isSampleFile =
+                    htmlService.currentFile!.path.contains('sample.html') ||
+                        htmlService.currentFile!.path.contains('assets');
+
                 return Column(
                   children: [
                     if (isSampleFile)
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                        color: const Color.fromRGBO(21, 101, 192, 0.1), // Blue with 10% opacity
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 4, horizontal: 8),
+                        color: const Color.fromRGBO(
+                            21, 101, 192, 0.1), // Blue with 10% opacity
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                            Icon(Icons.info_outline,
+                                size: 16, color: Colors.blue),
                             SizedBox(width: 4),
                             Text(
                               'Sample file loaded (Debug Mode)',
-                              style: TextStyle(fontSize: 12, color: Colors.blue, fontStyle: FontStyle.italic),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue,
+                                  fontStyle: FontStyle.italic),
                             ),
                           ],
                         ),

@@ -7,9 +7,9 @@ import 'package:htmlviewer/models/settings.dart';
 void main() async {
   // Initialize Flutter binding before any async operations
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   final htmlService = HtmlService();
-  
+
   // Load sample file in debug mode for easier testing
   if (const bool.fromEnvironment('dart.vm.product') == false) {
     // We're in debug mode
@@ -20,7 +20,7 @@ void main() async {
       // Continue anyway - app will work without sample file
     }
   }
-  
+
   runApp(
     MultiProvider(
       providers: [
@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'HTML Viewer',
+      title: 'Vibe HTML Viewer',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,

@@ -51,25 +51,7 @@ class FileViewer extends StatelessWidget {
                   ),
                 ],
               ),
-              if (file.path.startsWith('http')) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.link, size: 14, color: Colors.blue),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        file.path,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue[700],
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+
             ],
           ),
         ),
