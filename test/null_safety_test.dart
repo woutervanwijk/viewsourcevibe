@@ -68,7 +68,7 @@ void main() {
       expect(settings.darkMode, false);
       expect(settings.themeName, 'github');
       expect(settings.themeMode, ThemeModeOption.system);
-      expect(settings.fontSize, 14.0);
+      expect(settings.fontSize, 16.0);
       expect(settings.showLineNumbers, true);
       expect(settings.wrapText, false);
       expect(settings.autoDetectLanguage, true);

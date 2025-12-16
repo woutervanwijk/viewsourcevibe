@@ -22,7 +22,7 @@ class AppSettings with ChangeNotifier {
   String _themeName = 'github';
 
   // Display settings
-  double _fontSize = 14.0;
+  double _fontSize = 16.0;
   bool _showLineNumbers = true;
 
   // Behavior settings
@@ -111,10 +111,10 @@ class AppSettings with ChangeNotifier {
       (e) => e.name == themeModeString,
       orElse: () => ThemeModeOption.system,
     );
-    
+
     _darkMode = _prefs!.getBool(_prefsDarkMode) ?? false;
     _themeName = _prefs!.getString(_prefsThemeName) ?? 'github';
-    _fontSize = _prefs!.getDouble(_prefsFontSize) ?? 14.0;
+    _fontSize = _prefs!.getDouble(_prefsFontSize) ?? 16.0;
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
     _autoDetectLanguage = _prefs!.getBool(_prefsAutoDetectLanguage) ?? true;
@@ -138,14 +138,14 @@ class AppSettings with ChangeNotifier {
     _themeMode = ThemeModeOption.system;
     _darkMode = false;
     _themeName = 'github';
-    _fontSize = 14.0;
+    _fontSize = 16.0;
     _showLineNumbers = true;
     _wrapText = false;
     _autoDetectLanguage = true;
-    
+
     // Save the default values
     _saveAllSettings();
-    
+
     notifyListeners();
   }
 
@@ -181,5 +181,6 @@ class AppSettings with ChangeNotifier {
       ];
 
   // Available font sizes
-  static List<double> get availableFontSizes => [12.0, 14.0, 16.0, 18.0, 20.0];
+  static List<double> get availableFontSizes =>
+      [10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0];
 }

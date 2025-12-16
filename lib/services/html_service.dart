@@ -310,7 +310,7 @@ class HtmlService with ChangeNotifier {
 
   Widget buildHighlightedText(
       String content, String extension, BuildContext context,
-      {double fontSize = 14.0,
+      {double fontSize = 16.0,
       String themeName = 'github',
       bool wrapText = false,
       bool showLineNumbers = true,
