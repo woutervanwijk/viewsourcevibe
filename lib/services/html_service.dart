@@ -72,7 +72,7 @@ class HtmlService with ChangeNotifier {
       // Use the http package's built-in redirect following
       // We'll make the request and then check if there were redirects
       final client = http.Client();
-      
+
       // Make the request
       // Note: The http package automatically follows redirects, but doesn't expose the final URL
       // For complete redirect tracking, consider using packages like:
@@ -80,15 +80,15 @@ class HtmlService with ChangeNotifier {
       // - dio
       // - http_client with custom redirect handling
       final response = await client.get(Uri.parse(url));
-      
+
       if (response.statusCode == 200) {
         final content = response.body;
-        
+
         // Use the original URL since we can't get the final URL after redirects
         // with the standard http package
         // TODO: Consider upgrading to a more advanced HTTP client for full redirect support
         final finalUrl = url;
-        
+
         final uri = Uri.parse(finalUrl);
         final filename =
             uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'index.html';
@@ -109,8 +109,6 @@ class HtmlService with ChangeNotifier {
       throw Exception('Error loading URL: $e');
     }
   }
-
-
 
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
 
