@@ -86,9 +86,8 @@ class HtmlService with ChangeNotifier {
       if (response.statusCode == 200) {
         final content = response.body;
         final uri = Uri.parse(url);
-        final filename = uri.pathSegments.isNotEmpty
-            ? uri.pathSegments.last
-            : 'webpage.html';
+        final filename =
+            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'index.html';
 
         final htmlFile = HtmlFile(
           name: filename,
@@ -199,7 +198,10 @@ class HtmlService with ChangeNotifier {
   }
 
   Widget buildHighlightedText(String content, String extension,
-      {double fontSize = 14.0, String themeName = 'github', bool wrapText = false}) {
+      {double fontSize = 14.0,
+      String themeName = 'github',
+      bool wrapText = false,
+      bool showLineNumbers = true}) {
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
 
@@ -227,21 +229,22 @@ class HtmlService with ChangeNotifier {
         fontFamilyFallback: const ['monospace', 'Courier New'],
         fontHeight: 1.2,
       ),
-      sperator: SizedBox(width: fontSize / 3),
-      indicatorBuilder:
-          (context, editingController, chunkController, notifier) {
-        return DefaultCodeLineNumber(
-          controller: editingController,
-          notifier: notifier,
-          textStyle: TextStyle(
-            fontSize: fontSize,
-            fontFamily: 'Courier',
-            height: 1.2,
-            fontFamilyFallback: const ['monospace', 'Courier New'],
-            color: Colors.grey[600], // Subtle color for line numbers
-          ),
-        );
-      },
+      sperator: showLineNumbers ? SizedBox(width: fontSize / 3) : null,
+      indicatorBuilder: showLineNumbers
+          ? (context, editingController, chunkController, notifier) {
+              return DefaultCodeLineNumber(
+                controller: editingController,
+                notifier: notifier,
+                textStyle: TextStyle(
+                  fontSize: fontSize,
+                  fontFamily: 'Courier',
+                  height: 1.2,
+                  fontFamilyFallback: const ['monospace', 'Courier New'],
+                  color: Colors.grey[600], // Subtle color for line numbers
+                ),
+              );
+            }
+          : null,
     );
   }
 
