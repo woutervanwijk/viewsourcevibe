@@ -13,15 +13,11 @@ class _UrlInputState extends State<UrlInput> {
   final _urlController = TextEditingController();
   String _errorMessage = '';
 
-
-
   @override
   void dispose() {
     _urlController.dispose();
     super.dispose();
   }
-
-
 
   Future<void> _loadUrl() async {
     final url = _urlController.text.trim();
@@ -48,14 +44,14 @@ class _UrlInputState extends State<UrlInput> {
     return Consumer<HtmlService>(
       builder: (context, htmlService, child) {
         // Update URL display when file changes
-        if (htmlService.currentFile != null && 
+        if (htmlService.currentFile != null &&
             htmlService.currentFile!.path.startsWith('http') &&
             _urlController.text != htmlService.currentFile!.path) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _urlController.text = htmlService.currentFile!.path;
           });
         }
-        
+
         return Padding(
           padding: const EdgeInsets.all(8.0),
           child: Column(
@@ -64,16 +60,17 @@ class _UrlInputState extends State<UrlInput> {
               TextField(
                 controller: _urlController,
                 decoration: InputDecoration(
-                  labelText: htmlService.currentFile != null && 
+                  labelText: htmlService.currentFile != null &&
                           htmlService.currentFile!.path.startsWith('http')
                       ? 'Current URL'
                       : 'Enter URL',
-                  hintText: htmlService.currentFile != null && 
+                  hintText: htmlService.currentFile != null &&
                           htmlService.currentFile!.path.startsWith('http')
                       ? ''
                       : 'https://example.com',
                   prefixIcon: const Icon(Icons.link),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
                   suffixIcon: _urlController.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear),
@@ -84,8 +81,8 @@ class _UrlInputState extends State<UrlInput> {
                 keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.go,
                 onSubmitted: (_) => _loadUrl(),
-                readOnly: htmlService.currentFile != null && 
-                         htmlService.currentFile!.path.startsWith('http'),
+                // Removed readOnly to allow text selection
+                // Users can still edit the URL even when showing current file
               ),
               if (_errorMessage.isNotEmpty) ...[
                 const SizedBox(height: 4),
