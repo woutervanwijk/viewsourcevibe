@@ -59,22 +59,27 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Consumer<HtmlService>(
               builder: (context, htmlService, child) {
                 if (htmlService.currentFile == null) {
-                  return Center(
-                    child: Text(
-                      'No file loaded. Tap the folder icon to open a file.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Theme.of(context).colorScheme.onSurface.withAlpha(153), // 60% opacity
-                      ),
-                    ),
-                  );
+                  return Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Center(
+                        child: Text(
+                          'No file loaded. Tap the folder icon to open a file.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withAlpha(153), // 60% opacity
+                          ),
+                        ),
+                      ));
                 }
 
                 // Show a subtle indicator if this is the sample file
                 final currentFile = htmlService.currentFile;
                 final isSampleFile = currentFile != null &&
                     (currentFile.path.contains('sample.html') ||
-                     currentFile.path.contains('assets'));
+                        currentFile.path.contains('assets'));
 
                 return Column(
                   children: [
