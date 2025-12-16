@@ -6,7 +6,7 @@ class ThemeMetadata {
   final String name;
   final String description;
   final bool isDark;
-  
+
   const ThemeMetadata({
     required this.name,
     required this.description,
@@ -62,41 +62,55 @@ class AppSettings with ChangeNotifier {
 
   set darkMode(bool value) {
     if (_darkMode != value) {
+      debugPrint('Dark mode changing from $_darkMode to $value');
       _darkMode = value;
       _saveSetting(_prefsDarkMode, value);
-      
+
       // Auto-switch theme based on dark mode if in system mode
       if (_themeMode == ThemeModeOption.system) {
+        debugPrint('Theme mode is system, auto-switching theme');
         _autoSwitchThemeBasedOnMode();
+      } else {
+        debugPrint('Theme mode is $_themeMode, not auto-switching');
       }
-      
+
       notifyListeners();
     }
   }
-  
+
   /// Automatically switch syntax theme based on current theme mode and dark mode
   void _autoSwitchThemeBasedOnMode() {
     final isDarkTheme = _getEffectiveDarkMode();
     final currentThemeMeta = AppSettings.getThemeMetadata(_themeName);
-    
+
+    debugPrint(
+        'Auto-switching theme: current=$currentThemeMeta, desiredDark=$isDarkTheme');
+
     // Only auto-switch if the current theme doesn't match the desired darkness
     if (currentThemeMeta.isDark != isDarkTheme) {
       // Find an appropriate theme based on darkness
-      final availableThemes = isDarkTheme ? AppSettings.darkThemes : AppSettings.lightThemes;
-      
+      final availableThemes =
+          isDarkTheme ? AppSettings.darkThemes : AppSettings.lightThemes;
+
+      debugPrint('Available themes: $availableThemes');
+
       if (availableThemes.isNotEmpty) {
         // Try to find a theme with similar name or use the first one
         final similarTheme = availableThemes.firstWhere(
           (theme) => theme.split('-').first == _themeName.split('-').first,
           orElse: () => availableThemes.first,
         );
-        
+
+        debugPrint('Switching from $_themeName to $similarTheme');
+
         _themeName = similarTheme;
         _saveSetting(_prefsThemeName, similarTheme);
       }
+    } else {
+      debugPrint('Theme already matches desired darkness: $_themeName');
     }
   }
-  
+
   /// Get the effective dark mode based on theme mode setting
   bool _getEffectiveDarkMode() {
     switch (_themeMode) {
@@ -171,6 +185,11 @@ class AppSettings with ChangeNotifier {
     _fontSize = _prefs!.getDouble(_prefsFontSize) ?? 16.0;
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
+
+    // Auto-switch theme if in system mode and theme doesn't match current dark mode
+    if (_themeMode == ThemeModeOption.system) {
+      _autoSwitchThemeBasedOnMode();
+    }
     _autoDetectLanguage = _prefs!.getBool(_prefsAutoDetectLanguage) ?? true;
   }
 
@@ -248,7 +267,7 @@ class AppSettings with ChangeNotifier {
       description: 'Light variant of the popular Tokyo Night theme',
       isDark: false,
     ),
-    
+
     // Dark themes
     'github-dark': ThemeMetadata(
       name: 'GitHub Dark',
@@ -296,19 +315,20 @@ class AppSettings with ChangeNotifier {
       isDark: true,
     ),
   };
-  
+
   // Available themes (all)
   static List<String> get availableThemes => _themeMetadata.keys.toList();
-  
+
   // Get theme metadata
   static ThemeMetadata getThemeMetadata(String themeName) {
-    return _themeMetadata[themeName] ?? ThemeMetadata(
-      name: themeName,
-      description: 'Unknown theme',
-      isDark: false,
-    );
+    return _themeMetadata[themeName] ??
+        ThemeMetadata(
+          name: themeName,
+          description: 'Unknown theme',
+          isDark: false,
+        );
   }
-  
+
   // Get themes by category
   static List<String> getThemesByCategory(bool isDark) {
     return _themeMetadata.entries
@@ -316,10 +336,10 @@ class AppSettings with ChangeNotifier {
         .map((entry) => entry.key)
         .toList();
   }
-  
+
   // Get light themes
   static List<String> get lightThemes => getThemesByCategory(false);
-  
+
   // Get dark themes
   static List<String> get darkThemes => getThemesByCategory(true);
 

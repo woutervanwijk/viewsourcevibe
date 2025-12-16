@@ -16,6 +16,33 @@ void main() async {
   // Initialize settings persistence
   await appSettings.initialize();
 
+  // Setup system dark mode listener
+  final platformDispatcher = WidgetsBinding.instance.platformDispatcher;
+  final systemBrightness = platformDispatcher.platformBrightness;
+  
+  debugPrint('Initial system brightness: $systemBrightness');
+  
+  // Set initial dark mode based on system (only if in system mode)
+  if (appSettings.themeMode == ThemeModeOption.system) {
+    debugPrint('Theme mode is system, setting initial dark mode');
+    appSettings.darkMode = systemBrightness == Brightness.dark;
+  } else {
+    debugPrint('Theme mode is ${appSettings.themeMode}, not setting initial dark mode');
+  }
+  
+  // Listen for system brightness changes
+  platformDispatcher.onPlatformBrightnessChanged = () {
+    final newBrightness = platformDispatcher.platformBrightness;
+    final newDarkMode = newBrightness == Brightness.dark;
+    
+    debugPrint('System brightness changed to: $newBrightness');
+    
+    if (appSettings.darkMode != newDarkMode) {
+      debugPrint('Updating app dark mode to: $newDarkMode');
+      appSettings.darkMode = newDarkMode;
+    }
+  };
+
   // Setup platform sharing handler
   PlatformSharingHandler.setup();
 
