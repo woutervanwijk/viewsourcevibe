@@ -9,6 +9,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final htmlService = HtmlService();
+  final appSettings = AppSettings();
+
+  // Initialize settings persistence
+  await appSettings.initialize();
 
   // Load sample file in debug mode for easier testing
   if (const bool.fromEnvironment('dart.vm.product') == false) {
@@ -25,7 +29,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => htmlService),
-        ChangeNotifierProvider(create: (_) => AppSettings()),
+        ChangeNotifierProvider(create: (_) => appSettings),
       ],
       child: const MyApp(),
     ),

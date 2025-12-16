@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppSettings with ChangeNotifier {
+  static const String _prefsDarkMode = 'darkMode';
+  static const String _prefsThemeName = 'themeName';
+  static const String _prefsFontSize = 'fontSize';
+  static const String _prefsShowLineNumbers = 'showLineNumbers';
+  static const String _prefsWrapText = 'wrapText';
+  static const String _prefsAutoDetectLanguage = 'autoDetectLanguage';
+
+  // Shared Preferences instance
+  SharedPreferences? _prefs;
+
   // Theme settings
   bool _darkMode = false;
   String _themeName = 'github';
@@ -21,10 +32,11 @@ class AppSettings with ChangeNotifier {
   bool get wrapText => _wrapText;
   bool get autoDetectLanguage => _autoDetectLanguage;
 
-  // Setters with notification
+  // Setters with notification and persistence
   set darkMode(bool value) {
     if (_darkMode != value) {
       _darkMode = value;
+      _saveSetting(_prefsDarkMode, value);
       notifyListeners();
     }
   }
@@ -32,6 +44,7 @@ class AppSettings with ChangeNotifier {
   set themeName(String value) {
     if (_themeName != value) {
       _themeName = value;
+      _saveSetting(_prefsThemeName, value);
       notifyListeners();
     }
   }
@@ -39,6 +52,7 @@ class AppSettings with ChangeNotifier {
   set fontSize(double value) {
     if (_fontSize != value) {
       _fontSize = value;
+      _saveSetting(_prefsFontSize, value);
       notifyListeners();
     }
   }
@@ -46,6 +60,7 @@ class AppSettings with ChangeNotifier {
   set showLineNumbers(bool value) {
     if (_showLineNumbers != value) {
       _showLineNumbers = value;
+      _saveSetting(_prefsShowLineNumbers, value);
       notifyListeners();
     }
   }
@@ -53,6 +68,7 @@ class AppSettings with ChangeNotifier {
   set wrapText(bool value) {
     if (_wrapText != value) {
       _wrapText = value;
+      _saveSetting(_prefsWrapText, value);
       notifyListeners();
     }
   }
@@ -60,7 +76,39 @@ class AppSettings with ChangeNotifier {
   set autoDetectLanguage(bool value) {
     if (_autoDetectLanguage != value) {
       _autoDetectLanguage = value;
+      _saveSetting(_prefsAutoDetectLanguage, value);
       notifyListeners();
+    }
+  }
+
+  // Initialize shared preferences
+  Future<void> initialize() async {
+    _prefs = await SharedPreferences.getInstance();
+    await _loadSettings();
+  }
+
+  // Load settings from shared preferences
+  Future<void> _loadSettings() async {
+    if (_prefs == null) return;
+
+    _darkMode = _prefs!.getBool(_prefsDarkMode) ?? false;
+    _themeName = _prefs!.getString(_prefsThemeName) ?? 'github';
+    _fontSize = _prefs!.getDouble(_prefsFontSize) ?? 14.0;
+    _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
+    _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
+    _autoDetectLanguage = _prefs!.getBool(_prefsAutoDetectLanguage) ?? true;
+  }
+
+  // Save a setting to shared preferences
+  Future<void> _saveSetting(String key, dynamic value) async {
+    if (_prefs == null) return;
+
+    if (value is bool) {
+      await _prefs!.setBool(key, value);
+    } else if (value is String) {
+      await _prefs!.setString(key, value);
+    } else if (value is double) {
+      await _prefs!.setDouble(key, value);
     }
   }
 
@@ -72,7 +120,23 @@ class AppSettings with ChangeNotifier {
     _showLineNumbers = true;
     _wrapText = false;
     _autoDetectLanguage = true;
+    
+    // Save the default values
+    _saveAllSettings();
+    
     notifyListeners();
+  }
+
+  // Save all settings
+  Future<void> _saveAllSettings() async {
+    if (_prefs == null) return;
+
+    await _saveSetting(_prefsDarkMode, _darkMode);
+    await _saveSetting(_prefsThemeName, _themeName);
+    await _saveSetting(_prefsFontSize, _fontSize);
+    await _saveSetting(_prefsShowLineNumbers, _showLineNumbers);
+    await _saveSetting(_prefsWrapText, _wrapText);
+    await _saveSetting(_prefsAutoDetectLanguage, _autoDetectLanguage);
   }
 
   // Available themes

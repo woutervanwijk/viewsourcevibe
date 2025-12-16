@@ -24,7 +24,10 @@ dependencies:
   
   # State management
   provider: ^6.1.1
-  
+
+  # Settings persistence
+  shared_preferences: ^2.2.2
+
   # UI enhancements
   flutter_svg: ^2.0.7
   flutter_highlight: ^0.7.0
