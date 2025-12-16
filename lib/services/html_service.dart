@@ -69,17 +69,33 @@ class HtmlService with ChangeNotifier {
         url = 'https://$url';
       }
 
-      final response = await http.get(Uri.parse(url));
-
+      // Use the http package's built-in redirect following
+      // We'll make the request and then check if there were redirects
+      final client = http.Client();
+      
+      // Make the request
+      // Note: The http package automatically follows redirects, but doesn't expose the final URL
+      // For complete redirect tracking, consider using packages like:
+      // - http_with_middleware
+      // - dio
+      // - http_client with custom redirect handling
+      final response = await client.get(Uri.parse(url));
+      
       if (response.statusCode == 200) {
         final content = response.body;
-        final uri = Uri.parse(url);
+        
+        // Use the original URL since we can't get the final URL after redirects
+        // with the standard http package
+        // TODO: Consider upgrading to a more advanced HTTP client for full redirect support
+        final finalUrl = url;
+        
+        final uri = Uri.parse(finalUrl);
         final filename =
             uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'index.html';
 
         final htmlFile = HtmlFile(
           name: filename,
-          path: url,
+          path: finalUrl,
           content: content,
           lastModified: DateTime.now(),
           size: content.length,
