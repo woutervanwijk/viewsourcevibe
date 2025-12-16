@@ -32,6 +32,9 @@ dependencies:
   flutter_svg: ^2.0.7
   flutter_highlight: ^0.7.0
   
+  # Platform-specific file handling
+  universal_io: ^2.0.4
+  
   # Code editor
   re_editor: ^0.8.0
   re_highlight: ^0.0.3

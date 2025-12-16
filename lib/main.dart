@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:htmlviewer/screens/home_screen.dart';
 import 'package:htmlviewer/services/html_service.dart';
 import 'package:htmlviewer/models/settings.dart';
+import 'package:htmlviewer/services/platform_sharing_handler.dart';
+import 'package:htmlviewer/services/shared_content_manager.dart';
 
 void main() async {
   // Initialize Flutter binding before any async operations
@@ -13,6 +15,9 @@ void main() async {
 
   // Initialize settings persistence
   await appSettings.initialize();
+
+  // Setup platform sharing handler
+  PlatformSharingHandler.setup();
 
   // Load sample file in debug mode for easier testing
   if (const bool.fromEnvironment('dart.vm.product') == false) {
@@ -88,7 +93,7 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.dark,
       ),
       themeMode: effectiveThemeMode,
-      home: const HomeScreen(),
+      home: SharedContentWrapper(child: const HomeScreen()),
       debugShowCheckedModeBanner: false,
     );
   }
