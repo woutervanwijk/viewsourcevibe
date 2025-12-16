@@ -114,7 +114,7 @@ class HtmlService with ChangeNotifier {
 
   String getLanguageForExtension(String extension) {
     final ext = extension.toLowerCase();
-    
+
     // Comprehensive language mapping for common file extensions
     switch (ext) {
       // Web Development
@@ -151,7 +151,7 @@ class HtmlService with ChangeNotifier {
         return 'vue';
       case 'svelte':
         return 'html'; // Svelte files use HTML highlighting
-      
+
       // Markup & Documentation
       case 'md':
       case 'markdown':
@@ -162,7 +162,7 @@ class HtmlService with ChangeNotifier {
       case 'adoc':
       case 'asciidoc':
         return 'asciidoc';
-      
+
       // Programming Languages
       case 'dart':
         return 'dart';
@@ -218,7 +218,7 @@ class HtmlService with ChangeNotifier {
       case 'ps1':
       case 'psm1':
         return 'powershell';
-      
+
       // Configuration & Data
       case 'ini':
       case 'conf':
@@ -240,7 +240,7 @@ class HtmlService with ChangeNotifier {
         return 'makefile';
       case 'cmake':
         return 'cmake';
-      
+
       // Styling & Preprocessors
       case 'scss':
       case 'sass':
@@ -250,7 +250,7 @@ class HtmlService with ChangeNotifier {
       case 'styl':
       case 'stylus':
         return 'stylus';
-      
+
       // Other Common Formats
       case 'diff':
       case 'patch':
@@ -260,7 +260,7 @@ class HtmlService with ChangeNotifier {
         return 'gitignore';
       case 'editorconfig':
         return 'ini';
-      
+
       // Default fallback
       default:
         return 'plaintext';
@@ -321,7 +321,7 @@ class HtmlService with ChangeNotifier {
       controller: controller,
       readOnly: true,
       wordWrap: wrapText,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
       scrollController: scrollController != null
           ? CodeScrollController(verticalScroller: scrollController)
           : CodeScrollController(
@@ -386,33 +386,49 @@ class HtmlService with ChangeNotifier {
 
     // Try the mapped language name
     final mappedLanguageName = languageMap[languageName];
-    if (mappedLanguageName != null && builtinAllLanguages.containsKey(mappedLanguageName)) {
+    if (mappedLanguageName != null &&
+        builtinAllLanguages.containsKey(mappedLanguageName)) {
       return builtinAllLanguages[mappedLanguageName]!;
     }
 
     // Special cases and fallbacks
     // HTML/XML family
-    if (languageName == 'html' || languageName == 'htm' || languageName == 'xhtml') {
+    if (languageName == 'html' ||
+        languageName == 'htm' ||
+        languageName == 'xhtml') {
       return builtinAllLanguages['xml'] ?? builtinAllLanguages['plaintext']!;
     }
 
     // JavaScript family
-    if (languageName == 'javascript' || languageName == 'js' || languageName == 'jsx' || languageName == 'tsx') {
-      return builtinAllLanguages['javascript'] ?? builtinAllLanguages['plaintext']!;
+    if (languageName == 'javascript' ||
+        languageName == 'js' ||
+        languageName == 'jsx' ||
+        languageName == 'tsx') {
+      return builtinAllLanguages['javascript'] ??
+          builtinAllLanguages['plaintext']!;
     }
 
     // TypeScript
     if (languageName == 'typescript' || languageName == 'ts') {
-      return builtinAllLanguages['typescript'] ?? builtinAllLanguages['javascript'] ?? builtinAllLanguages['plaintext']!;
+      return builtinAllLanguages['typescript'] ??
+          builtinAllLanguages['javascript'] ??
+          builtinAllLanguages['plaintext']!;
     }
 
     // XML family
-    if (languageName == 'xml' || languageName == 'xsd' || languageName == 'xsl' || languageName == 'svg') {
+    if (languageName == 'xml' ||
+        languageName == 'xsd' ||
+        languageName == 'xsl' ||
+        languageName == 'svg') {
       return builtinAllLanguages['xml'] ?? builtinAllLanguages['plaintext']!;
     }
 
     // Shell scripting
-    if (languageName == 'bash' || languageName == 'sh' || languageName == 'zsh' || languageName == 'fish' || languageName == 'shell') {
+    if (languageName == 'bash' ||
+        languageName == 'sh' ||
+        languageName == 'zsh' ||
+        languageName == 'fish' ||
+        languageName == 'shell') {
       return builtinAllLanguages['bash'] ?? builtinAllLanguages['plaintext']!;
     }
 
