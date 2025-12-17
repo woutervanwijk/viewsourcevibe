@@ -37,6 +37,7 @@ import UIKit
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
   ) -> Bool {
     // Handle URL sharing
+    print("AppDelegate: open URL called with: \(url.absoluteString)")
     sharedContent = [
       "type": "url",
       "content": url.absoluteString

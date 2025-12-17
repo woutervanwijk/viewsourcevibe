@@ -3,7 +3,7 @@ import UIKit
 
 public class SharingService: NSObject, FlutterPlugin {
     
-    public static func register(with registrar: FlutterPluginRegistrar) {
+    @objc(registerWithRegistrar:) public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "info.wouter.sourceview.sharing", binaryMessenger: registrar.messenger())
         let instance = SharingService()
         registrar.addMethodCallDelegate(instance, channel: channel)

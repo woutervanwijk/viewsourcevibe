@@ -27,11 +27,19 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedIntent = intent
+        println("MainActivity: onCreate - intent action: ${intent.action}, data: ${intent.data}, type: ${intent.type}")
+        if (intent.data != null) {
+            println("MainActivity: onCreate - URL detected: ${intent.data}")
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         println("MainActivity: onNewIntent called with intent: ${intent.action}")
+        println("MainActivity: onNewIntent - data: ${intent.data}, type: ${intent.type}")
+        if (intent.data != null) {
+            println("MainActivity: onNewIntent - URL detected: ${intent.data}")
+        }
         sharedIntent = intent
         // When using singleTask, we need to explicitly set the intent
         // to ensure it's processed when the activity is brought to front

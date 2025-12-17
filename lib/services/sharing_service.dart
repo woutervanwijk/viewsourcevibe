@@ -6,7 +6,8 @@ import 'package:htmlviewer/models/html_file.dart';
 import 'package:htmlviewer/services/html_service.dart';
 
 class SharingService {
-  static const MethodChannel _channel = MethodChannel('com.htmlviewer.sharing');
+  static const MethodChannel _channel =
+      MethodChannel('info.wouter.sourceview.sharing');
 
   /// Share text content using native platform sharing
   static Future<void> shareText(String text) async {
@@ -234,7 +235,7 @@ class SharingService {
     }
   }
 
-  /// Check if a string is a URL
+  /// Check if a string is a URL using Dart's Uri class for robust parsing
   static bool _isUrl(String text) {
     // Remove any surrounding whitespace and quotes
     final trimmedText = text.trim();
@@ -244,27 +245,20 @@ class SharingService {
             ? trimmedText.substring(1, trimmedText.length - 1)
             : trimmedText;
 
-    // Check for common URL patterns
-    final urlPattern = RegExp(
-      r'^(https?://)?' // Optional http:// or https://
-      r'([\w-]+\.)+[\w-]+' // Domain name
-      r'(/[\w-./?%&=]*)?' // Optional path
-      r'(\?[\w-./?%&=]*)?' // Optional query
-      r'(#[\w-]*)?$', // Optional fragment
-      caseSensitive: false,
-    );
+    // Try to parse as URI - this is more robust than regex
+    try {
+      // Handle URLs with or without protocol
+      final uri =
+          cleanText.startsWith('http://') || cleanText.startsWith('https://')
+              ? Uri.parse(cleanText)
+              : Uri.parse('https://$cleanText'); // Add https:// if missing
 
-    // Additional checks for common URL characteristics
-    final hasProtocol =
-        cleanText.startsWith('http://') || cleanText.startsWith('https://');
-    final hasDomain = cleanText.contains('.') && !cleanText.endsWith('.');
-    final hasPathOrQuery = cleanText.contains('/') ||
-        cleanText.contains('?') ||
-        cleanText.contains('=');
-
-    // Consider it a URL if it matches the pattern and has domain characteristics
-    return urlPattern.hasMatch(cleanText) &&
-        (hasProtocol || (hasDomain && hasPathOrQuery));
+      // Check if it's a valid URL
+      return uri.hasScheme && uri.hasAuthority && !uri.path.contains(' ');
+    } catch (e) {
+      // If parsing fails, it's not a valid URL
+      return false;
+    }
   }
 
   /// Check for shared content when app is launched

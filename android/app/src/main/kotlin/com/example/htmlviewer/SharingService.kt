@@ -19,7 +19,7 @@ class SharingService : FlutterPlugin, MethodCallHandler {
     private lateinit var context: Context
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.htmlviewer.sharing")
+        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "info.wouter.sourceview.sharing")
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
     }
