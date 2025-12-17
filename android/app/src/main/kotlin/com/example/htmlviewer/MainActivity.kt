@@ -31,7 +31,11 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        println("MainActivity: onNewIntent called with intent: ${intent.action}")
         sharedIntent = intent
+        // When using singleTask, we need to explicitly set the intent
+        // to ensure it's processed when the activity is brought to front
+        setIntent(intent)
     }
 
     private fun handleSharedIntent(result: MethodChannel.Result) {
