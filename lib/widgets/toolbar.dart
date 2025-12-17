@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:htmlviewer/services/html_service.dart';
+import 'package:htmlviewer/services/sharing_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:htmlviewer/models/html_file.dart';
 import 'package:htmlviewer/utils/file_utils.dart';
@@ -124,6 +125,29 @@ class Toolbar extends StatelessWidget {
     );
   }
 
+  Future<void> _shareCurrentFile(BuildContext context) async {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    final currentFile = htmlService.currentFile;
+
+    if (currentFile == null || currentFile.content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No content to share')),
+      );
+      return;
+    }
+
+    try {
+      // Try to share the HTML content
+      await SharingService.shareHtml(currentFile.content,
+          filename: currentFile.name);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error sharing: $e')),
+      );
+      debugPrint('Share error: $e');
+    }
+  }
+
   void _showSampleFilesMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -190,6 +214,11 @@ class Toolbar extends StatelessWidget {
             tooltip: 'Sample Files',
             onPressed: () => _showSampleFilesMenu(context),
           ),
+        IconButton(
+          icon: const Icon(Icons.share),
+          tooltip: 'Share',
+          onPressed: () => _shareCurrentFile(context),
+        ),
         IconButton(
           icon: const Icon(Icons.settings),
           tooltip: 'Settings',

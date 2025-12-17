@@ -1,9 +1,9 @@
 import 'package:flutter/services.dart';
-import 'package:htmlviewer/services/sharing_service.dart';
 
 class PlatformSharingHandler {
-  static const MethodChannel _channel = MethodChannel('com.yourcompany.htmlviewer/sharing');
-  
+  static const MethodChannel _channel =
+      MethodChannel('com.yourcompany.htmlviewer/sharing');
+
   static void setup() {
     _channel.setMethodCallHandler((call) async {
       try {
@@ -18,7 +18,8 @@ class PlatformSharingHandler {
             final args = call.arguments as Map<dynamic, dynamic>?;
             return _handleSharedFile(args);
           default:
-            throw MissingPluginException('Method ${call.method} not implemented');
+            throw MissingPluginException(
+                'Method ${call.method} not implemented');
         }
       } catch (e) {
         print('Error handling platform sharing: $e');
@@ -26,7 +27,7 @@ class PlatformSharingHandler {
       }
     });
   }
-  
+
   static Future<Map<String, dynamic>> _handleSharedText(String? text) async {
     try {
       if (text != null && text.isNotEmpty) {
@@ -39,7 +40,7 @@ class PlatformSharingHandler {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   static Future<Map<String, dynamic>> _handleSharedUrl(String? url) async {
     try {
       if (url != null && url.isNotEmpty) {
@@ -50,14 +51,15 @@ class PlatformSharingHandler {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
-  static Future<Map<String, dynamic>> _handleSharedFile(Map<dynamic, dynamic>? args) async {
+
+  static Future<Map<String, dynamic>> _handleSharedFile(
+      Map<dynamic, dynamic>? args) async {
     try {
       if (args != null && args.isNotEmpty) {
         final filePath = args['path'] as String?;
         final fileName = args['name'] as String?;
         final bytes = args['bytes'] as List<int>?;
-        
+
         if (filePath != null || bytes != null) {
           return {
             'success': true,
@@ -73,7 +75,7 @@ class PlatformSharingHandler {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// Call this method when the app is ready to handle shared content
   static Future<Map<String, dynamic>?> checkForInitialSharedContent() async {
     try {
@@ -81,7 +83,7 @@ class PlatformSharingHandler {
       if (result != null && result is Map) {
         final type = result['type'] as String?;
         final content = result['content'];
-        
+
         if (type != null && content != null) {
           print('Initial shared content found: $type');
           return {
@@ -98,17 +100,19 @@ class PlatformSharingHandler {
     }
     return null;
   }
-  
+
   /// Register a callback to handle shared content when the app is launched with it
-  static void registerSharedContentHandler(Function(Map<String, dynamic>) handler) {
+  static void registerSharedContentHandler(
+      Function(Map<String, dynamic>) handler) {
     _sharedContentHandler = handler;
   }
-  
+
   /// Internal handler for shared content
   static Function(Map<String, dynamic>)? _sharedContentHandler;
-  
+
   /// Process shared content using the registered handler
-  static Future<void> processSharedContent(Map<String, dynamic> sharedData) async {
+  static Future<void> processSharedContent(
+      Map<String, dynamic> sharedData) async {
     if (_sharedContentHandler != null) {
       try {
         _sharedContentHandler!(sharedData);
