@@ -60,7 +60,9 @@ class SharingService {
         await _processSharedUrl(context, htmlService, sharedUrl);
       }
       // Priority 2: Check if shared text is actually a URL
-      else if (sharedText != null && sharedText.isNotEmpty && _isUrl(sharedText)) {
+      else if (sharedText != null &&
+          sharedText.isNotEmpty &&
+          _isUrl(sharedText)) {
         // Handle text that looks like a URL
         await _processSharedUrl(context, htmlService, sharedText);
       }
@@ -72,7 +74,8 @@ class SharingService {
       // Priority 4: Handle file bytes
       else if (fileBytes != null && fileBytes.isNotEmpty) {
         // Handle shared file bytes
-        await _processSharedFileBytes(context, htmlService, fileBytes, fileName);
+        await _processSharedFileBytes(
+            context, htmlService, fileBytes, fileName);
       }
       // Priority 5: Handle file path
       else if (filePath != null && filePath.isNotEmpty) {
@@ -238,9 +241,9 @@ class SharingService {
     final cleanText = trimmedText.startsWith('"') && trimmedText.endsWith('"')
         ? trimmedText.substring(1, trimmedText.length - 1)
         : (trimmedText.startsWith("'") && trimmedText.endsWith("'"))
-        ? trimmedText.substring(1, trimmedText.length - 1)
-        : trimmedText;
-    
+            ? trimmedText.substring(1, trimmedText.length - 1)
+            : trimmedText;
+
     // Check for common URL patterns
     final urlPattern = RegExp(
       r'^(https?://)?' // Optional http:// or https://
@@ -250,22 +253,25 @@ class SharingService {
       r'(#[\w-]*)?$', // Optional fragment
       caseSensitive: false,
     );
-    
+
     // Additional checks for common URL characteristics
-    final hasProtocol = cleanText.startsWith('http://') || cleanText.startsWith('https://');
+    final hasProtocol =
+        cleanText.startsWith('http://') || cleanText.startsWith('https://');
     final hasDomain = cleanText.contains('.') && !cleanText.endsWith('.');
-    final hasPathOrQuery = cleanText.contains('/') || cleanText.contains('?') || cleanText.contains('=');
-    
+    final hasPathOrQuery = cleanText.contains('/') ||
+        cleanText.contains('?') ||
+        cleanText.contains('=');
+
     // Consider it a URL if it matches the pattern and has domain characteristics
-    return urlPattern.hasMatch(cleanText) && 
-           (hasProtocol || (hasDomain && hasPathOrQuery));
+    return urlPattern.hasMatch(cleanText) &&
+        (hasProtocol || (hasDomain && hasPathOrQuery));
   }
 
   /// Check for shared content when app is launched
   static Future<Map<String, dynamic>?> checkForSharedContent() async {
     try {
       const MethodChannel channel =
-          MethodChannel('com.example.htmlviewer/shared_content');
+          MethodChannel('info.wouter.sourceviewer/shared_content');
       final result = await channel.invokeMethod('getSharedContent');
       return result != null ? Map<String, dynamic>.from(result) : null;
     } catch (e) {

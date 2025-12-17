@@ -52,7 +52,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.yourcompany.htmlviewer</string>
+			<string>info.wouter.sourceviewer</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>htmlviewer</string>

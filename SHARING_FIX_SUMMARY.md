@@ -4,8 +4,8 @@
 The app was experiencing a critical error when trying to share HTML files on Android:
 
 ```
-I/flutter ( 4269): Failed to share HTML: 'Failed to share HTML: file:///storage/emulated/0/Android/data/com.example.htmlviewer/files/Documents/sample.html exposed beyond app through ClipData.Item.getUri()'.
-I/flutter ( 4269): Share error: Exception: Sharing failed: Failed to share HTML: file:///storage/emulated/0/Android/data/com.example.htmlviewer/files/Documents/sample.html exposed beyond app through ClipData.Item.getUri()
+I/flutter ( 4269): Failed to share HTML: 'Failed to share HTML: file:///storage/emulated/0/Android/data/info.wouter.sourceviewer/files/Documents/sample.html exposed beyond app through ClipData.Item.getUri()'.
+I/flutter ( 4269): Share error: Exception: Sharing failed: Failed to share HTML: file:///storage/emulated/0/Android/data/info.wouter.sourceviewer/files/Documents/sample.html exposed beyond app through ClipData.Item.getUri()
 ```
 
 ## Root Cause
@@ -79,8 +79,8 @@ The FileProvider is configured in `AndroidManifest.xml`:
 
 ### Authority Consistency
 The authority string is consistent between:
-- Manifest: `${applicationId}.fileprovider` → `com.example.htmlviewer.fileprovider`
-- Kotlin code: `${context.packageName}.fileprovider` → `com.example.htmlviewer.fileprovider`
+- Manifest: `${applicationId}.fileprovider` → `info.wouter.sourceviewer.fileprovider`
+- Kotlin code: `${context.packageName}.fileprovider` → `info.wouter.sourceviewer.fileprovider`
 
 ### Cache Directory Benefits
 Using `context.cacheDir` provides several advantages:

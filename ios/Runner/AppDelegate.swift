@@ -4,7 +4,7 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var sharedContent: [String: Any]? = nil
-  private let SHARED_CONTENT_CHANNEL = "com.example.htmlviewer/shared_content"
+  private let SHARED_CONTENT_CHANNEL = "info.wouter.sourceviewer/shared_content"
 
   override func application(
     _ application: UIApplication,

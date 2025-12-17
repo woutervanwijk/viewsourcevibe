@@ -1,4 +1,4 @@
-package com.example.htmlviewer
+package info.wouter.sourceviewer
 
 import android.content.Intent
 import android.os.Bundle
@@ -7,7 +7,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val SHARED_CONTENT_CHANNEL = "com.example.htmlviewer/shared_content"
+    private val SHARED_CONTENT_CHANNEL = "info.wouter.sourceviewer/shared_content"
     private var sharedIntent: Intent? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

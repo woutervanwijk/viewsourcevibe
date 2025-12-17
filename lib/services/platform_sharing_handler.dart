@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 class PlatformSharingHandler {
   static const MethodChannel _channel =
-      MethodChannel('com.yourcompany.htmlviewer/sharing');
+      MethodChannel('info.wouter.sourceviewer/sharing');
 
   static void setup() {
     _channel.setMethodCallHandler((call) async {

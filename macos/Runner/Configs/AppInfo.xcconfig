@@ -8,7 +8,7 @@
 PRODUCT_NAME = htmlviewer
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.htmlviewer
+PRODUCT_BUNDLE_IDENTIFIER = info.wouter.sourceviewer
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2025 com.example. All rights reserved.
