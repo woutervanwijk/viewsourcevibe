@@ -91,7 +91,7 @@ Comprehensive error handling ensures the app doesn't crash:
 ## User Experience Flow
 
 ### Scenario 1: Sharing a URL
-1. User shares URL from browser to Vibe HTML Viewer
+1. User shares URL from browser to View Source Vibe
 2. App launches (or comes to foreground)
 3. User sees: "Loading URL..."
 4. URL content loads automatically in viewer

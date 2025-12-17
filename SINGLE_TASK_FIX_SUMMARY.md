@@ -85,12 +85,12 @@ override fun onNewIntent(intent: Intent) {
 ### Expected Behavior
 
 **Before Fix:**
-1. Share content from App A → New instance of View Source created
+1. Share content from App A → New instance of View Source Vibe created
 2. Share again → Another new instance created
 3. Multiple app instances running simultaneously ❌
 
 **After Fix:**
-1. Share content from App A → Existing View Source instance reused
+1. Share content from App A → Existing View Source Vibe instance reused
 2. Share again → Same instance brought to foreground
 3. Single app instance handles all shares ✅
 

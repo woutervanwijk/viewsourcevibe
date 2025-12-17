@@ -47,9 +47,9 @@ class HtmlService with ChangeNotifier {
 
     // Try to detect content type from content
     final lowerContent = content.toLowerCase();
-    
+
     // Check for HTML content
-    if (lowerContent.contains('<html') || 
+    if (lowerContent.contains('<html') ||
         lowerContent.contains('<!doctype html') ||
         lowerContent.contains('<head') ||
         lowerContent.contains('<body')) {
@@ -57,14 +57,14 @@ class HtmlService with ChangeNotifier {
     }
 
     // Check for CSS content
-    if (lowerContent.contains('body {') || 
+    if (lowerContent.contains('body {') ||
         lowerContent.contains('@media') ||
         lowerContent.contains('/* css')) {
       return '$filename.css';
     }
 
     // Check for JavaScript content
-    if (lowerContent.contains('function(') || 
+    if (lowerContent.contains('function(') ||
         lowerContent.contains('const ') ||
         lowerContent.contains('let ') ||
         lowerContent.contains('=>')) {
@@ -116,7 +116,7 @@ class HtmlService with ChangeNotifier {
     <title>Sample HTML</title>
 </head>
 <body>
-    <h1>Welcome to Vibe HTML Viewer</h1>
+    <h1>Welcome to View Source Vibe</h1>
     <p>This is a sample HTML file for testing.</p>
 </body>
 </html>''';

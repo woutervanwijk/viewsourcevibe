@@ -166,13 +166,13 @@ When shared content is received:
 To test manually:
 
 **Android:**
-1. Share text from another app to Vibe HTML Viewer
-2. Share URL from browser to Vibe HTML Viewer
-3. Share file from file manager to Vibe HTML Viewer
+1. Share text from another app to View Source Vibe
+2. Share URL from browser to View Source Vibe
+3. Share file from file manager to View Source Vibe
 
 **iOS:**
-1. Share URL from Safari to Vibe HTML Viewer
-2. Use "Open with..." on a file and select Vibe HTML Viewer
+1. Share URL from Safari to View Source Vibe
+2. Use "Open with..." on a file and select View Source Vibe
 
 ## Error Handling
 

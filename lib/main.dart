@@ -19,24 +19,25 @@ void main() async {
   // Setup system dark mode listener
   final platformDispatcher = WidgetsBinding.instance.platformDispatcher;
   final systemBrightness = platformDispatcher.platformBrightness;
-  
+
   debugPrint('Initial system brightness: $systemBrightness');
-  
+
   // Set initial dark mode based on system (only if in system mode)
   if (appSettings.themeMode == ThemeModeOption.system) {
     debugPrint('Theme mode is system, setting initial dark mode');
     appSettings.darkMode = systemBrightness == Brightness.dark;
   } else {
-    debugPrint('Theme mode is ${appSettings.themeMode}, not setting initial dark mode');
+    debugPrint(
+        'Theme mode is ${appSettings.themeMode}, not setting initial dark mode');
   }
-  
+
   // Listen for system brightness changes
   platformDispatcher.onPlatformBrightnessChanged = () {
     final newBrightness = platformDispatcher.platformBrightness;
     final newDarkMode = newBrightness == Brightness.dark;
-    
+
     debugPrint('System brightness changed to: $newBrightness');
-    
+
     if (appSettings.darkMode != newDarkMode) {
       debugPrint('Updating app dark mode to: $newDarkMode');
       appSettings.darkMode = newDarkMode;
@@ -74,15 +75,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
-    
+
     // Determine the effective theme mode based on user preference
     ThemeMode effectiveThemeMode;
     switch (settings.themeMode) {
       case ThemeModeOption.system:
         // Use system preference
         final platformBrightness = MediaQuery.platformBrightnessOf(context);
-        effectiveThemeMode = platformBrightness == Brightness.dark 
-            ? ThemeMode.dark 
+        effectiveThemeMode = platformBrightness == Brightness.dark
+            ? ThemeMode.dark
             : ThemeMode.light;
         break;
       case ThemeModeOption.light:
@@ -92,9 +93,9 @@ class MyApp extends StatelessWidget {
         effectiveThemeMode = ThemeMode.dark;
         break;
     }
-    
+
     return MaterialApp(
-      title: 'Vibe HTML Viewer',
+      title: 'View Source Vibe',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
