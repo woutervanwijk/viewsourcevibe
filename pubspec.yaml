@@ -1,5 +1,5 @@
 name: htmlviewer
-description: A cross-platform HTML source viewer app
+description: A cross-platform source code viewer app (HTML, CSS, JavaScript, Markdown, Yaml, etc)
 version: 1.0.0+1
 
 environment:
