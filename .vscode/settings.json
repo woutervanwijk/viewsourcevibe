@@ -1,8 +1,8 @@
 {
   // Flutter specific settings
   "dart.flutterSdkPath": ".",
-  "dart.flutterHotReloadOnSave": "always",
-  "dart.flutterHotRestartOnSave": "always",
+  "dart.flutterHotReloadOnSave": "allIfDirty",
+  // "dart.flutterHotRestartOnSave": "always",
   "dart.flutterRunLogFile": "debug.log",
   "dart.flutterTestLogFile": "test.log",
   "dart.flutterDaemonLogFile": "daemon.log",

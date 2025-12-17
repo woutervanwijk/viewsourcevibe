@@ -7,36 +7,7 @@
     {
       "name": "Flutter",
       "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "args": ["--flavor", "development", "--target", "lib/main.dart"],
-      "flutterMode": "debug",
-      "deviceId": "all"
-    },
-    {
-      "name": "Flutter (Profile)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "args": ["--flavor", "development"],
-      "flutterMode": "profile"
-    },
-    {
-      "name": "Flutter (Release)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "args": ["--flavor", "development"],
-      "flutterMode": "release"
-    },
-    {
-      "name": "Flutter (Test)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "args": ["--flavor", "development"],
-      "flutterMode": "debug",
-      "deviceId": "all"
+      "type": "dart"
     }
   ]
 }
