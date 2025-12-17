@@ -17,9 +17,22 @@ class SharedContentManager {
   /// Check for initial shared content when app launches
   static Future<void> _checkInitialSharedContent(BuildContext context) async {
     try {
+      // Check platform-specific shared content first
       final sharedData = await PlatformSharingHandler.checkForInitialSharedContent();
       if (sharedData != null) {
         await _handleSharedContent(context, sharedData);
+        return;
+      }
+      
+      // Also check our new shared content channel
+      final channelSharedData = await SharingService.checkForSharedContent();
+      if (channelSharedData != null) {
+        final sharedDataFromChannel = {
+          'type': channelSharedData['type'],
+          'content': channelSharedData['content'],
+          if (channelSharedData.containsKey('uri')) 'filePath': channelSharedData['uri'],
+        };
+        await _handleSharedContent(context, sharedDataFromChannel);
       }
     } catch (e) {
       debugPrint('Error checking initial shared content: $e');

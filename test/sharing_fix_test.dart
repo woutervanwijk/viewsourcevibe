@@ -39,5 +39,15 @@ void main() {
         expect(e.toString(), contains('MissingPluginException'));
       }
     });
+
+    test('checkForSharedContent handles missing platform implementation gracefully', () async {
+      // This test verifies that checkForSharedContent works in test environments
+      // where the platform channel isn't available
+      
+      final result = await SharingService.checkForSharedContent();
+      
+      // In test environment, this should return null (no shared content)
+      expect(result, isNull);
+    });
   });
 }

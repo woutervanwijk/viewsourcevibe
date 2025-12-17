@@ -38,6 +38,43 @@ class HtmlService with ChangeNotifier {
     super.dispose();
   }
 
+  /// Ensure filename has proper extension based on content
+  String _ensureHtmlExtension(String filename, String content) {
+    // If filename already has an extension, use it
+    if (filename.contains('.')) {
+      return filename;
+    }
+
+    // Try to detect content type from content
+    final lowerContent = content.toLowerCase();
+    
+    // Check for HTML content
+    if (lowerContent.contains('<html') || 
+        lowerContent.contains('<!doctype html') ||
+        lowerContent.contains('<head') ||
+        lowerContent.contains('<body')) {
+      return '$filename.html';
+    }
+
+    // Check for CSS content
+    if (lowerContent.contains('body {') || 
+        lowerContent.contains('@media') ||
+        lowerContent.contains('/* css')) {
+      return '$filename.css';
+    }
+
+    // Check for JavaScript content
+    if (lowerContent.contains('function(') || 
+        lowerContent.contains('const ') ||
+        lowerContent.contains('let ') ||
+        lowerContent.contains('=>')) {
+      return '$filename.js';
+    }
+
+    // Default to .txt if we can't detect the type
+    return '$filename.txt';
+  }
+
   void loadFile(HtmlFile file) {
     _currentFile = file;
     // Reset scroll position when loading new file
@@ -125,10 +162,13 @@ class HtmlService with ChangeNotifier {
 
         final uri = Uri.parse(finalUrl);
         final filename =
-            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'index';
+            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'index.html';
+
+        // Ensure the filename has a proper extension for HTML content
+        final processedFilename = _ensureHtmlExtension(filename, content);
 
         final htmlFile = HtmlFile(
-          name: filename,
+          name: processedFilename,
           path: finalUrl,
           content: content,
           lastModified: DateTime.now(),
