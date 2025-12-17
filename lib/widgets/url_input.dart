@@ -44,12 +44,22 @@ class _UrlInputState extends State<UrlInput> {
     return Consumer<HtmlService>(
       builder: (context, htmlService, child) {
         // Update URL display when file changes
-        if (htmlService.currentFile != null &&
-            htmlService.currentFile!.path.startsWith('http') &&
-            _urlController.text != htmlService.currentFile!.path) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _urlController.text = htmlService.currentFile!.path;
-          });
+        if (htmlService.currentFile != null) {
+          if (htmlService.currentFile!.path.startsWith('http')) {
+            // Show URL for web content
+            if (_urlController.text != htmlService.currentFile!.path) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _urlController.text = htmlService.currentFile!.path;
+              });
+            }
+          } else {
+            // Clear URL bar for local files
+            if (_urlController.text.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _urlController.clear();
+              });
+            }
+          }
         }
 
         return Padding(
@@ -63,11 +73,15 @@ class _UrlInputState extends State<UrlInput> {
                   labelText: htmlService.currentFile != null &&
                           htmlService.currentFile!.path.startsWith('http')
                       ? 'Current URL'
-                      : 'Enter URL',
+                      : htmlService.currentFile != null
+                          ? 'Local File Loaded'
+                          : 'Enter URL',
                   hintText: htmlService.currentFile != null &&
                           htmlService.currentFile!.path.startsWith('http')
                       ? ''
-                      : 'https://example.com',
+                      : htmlService.currentFile != null
+                          ? ''
+                          : 'https://example.com',
                   prefixIcon: const Icon(Icons.link, size: 20),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6)),

@@ -17,6 +17,8 @@ public class SharingService: NSObject, FlutterPlugin {
             shareHtml(call: call, result: result)
         case "shareFile":
             shareFile(call: call, result: result)
+        case "shareUrl":
+            shareUrl(call: call, result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -34,6 +36,41 @@ public class SharingService: NSObject, FlutterPlugin {
         DispatchQueue.main.async {
             let activityViewController = UIActivityViewController(
                 activityItems: [text], 
+                applicationActivities: nil
+            )
+            
+            // Get the root view controller
+            if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+                rootViewController.present(activityViewController, animated: true, completion: nil)
+                result(true)
+            } else {
+                result(FlutterError(code: "NO_ROOT_VC", 
+                                   message: "No root view controller found", 
+                                   details: nil))
+            }
+        }
+    }
+    
+    private func shareUrl(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let urlString = args["url"] as? String else {
+            result(FlutterError(code: "INVALID_ARGUMENTS", 
+                               message: "URL argument is required", 
+                               details: nil))
+            return
+        }
+        
+        // Validate URL format
+        guard let url = URL(string: urlString) else {
+            result(FlutterError(code: "INVALID_URL", 
+                               message: "Invalid URL format: $urlString", 
+                               details: nil))
+            return
+        }
+         
+        DispatchQueue.main.async {
+            let activityViewController = UIActivityViewController(
+                activityItems: [url], 
                 applicationActivities: nil
             )
             

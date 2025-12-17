@@ -41,6 +41,16 @@ class SharingService {
     }
   }
 
+  /// Share URL content using native platform sharing
+  static Future<void> shareUrl(String url) async {
+    try {
+      await _channel.invokeMethod('shareUrl', {'url': url});
+    } on PlatformException catch (e) {
+      print("Failed to share URL: '${e.message}'.");
+      throw Exception("Sharing failed: ${e.message}");
+    }
+  }
+
   /// Handle shared content received from other apps
   static Future<void> handleSharedContent(
     BuildContext context, {

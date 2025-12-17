@@ -45,6 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Enable URL handling for Safari sharing -->
+	<key>LSHandlesURLsInBackground</key>
+	<true/>
 	<!-- URL Scheme for deep linking -->
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -56,6 +59,17 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>htmlviewer</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>Web URL Handler</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>http</string>
+				<string>https</string>
 			</array>
 		</dict>
 	</array>
@@ -103,6 +117,16 @@
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>public.javascript</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Web URL</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.url</string>
 			</array>
 		</dict>
 	</array>

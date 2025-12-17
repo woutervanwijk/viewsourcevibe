@@ -137,9 +137,15 @@ class Toolbar extends StatelessWidget {
     }
 
     try {
-      // Try to share the HTML content
-      await SharingService.shareHtml(currentFile.content,
-          filename: currentFile.name);
+      // Check if the current file is a URL (starts with http:// or https://)
+      if (currentFile.path.startsWith('http://') || currentFile.path.startsWith('https://')) {
+        // Share as URL
+        await SharingService.shareUrl(currentFile.path);
+      } else {
+        // Share as HTML content
+        await SharingService.shareHtml(currentFile.content,
+            filename: currentFile.name);
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error sharing: $e')),

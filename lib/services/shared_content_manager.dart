@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:htmlviewer/services/sharing_service.dart';
 import 'package:htmlviewer/services/platform_sharing_handler.dart';
 
@@ -9,28 +10,49 @@ class SharedContentManager {
     PlatformSharingHandler.registerSharedContentHandler((sharedData) {
       _handleSharedContent(context, sharedData);
     });
-    
+
     // Check for initial shared content when app starts
     _checkInitialSharedContent(context);
   }
-  
+
+  static Future<String?> checkForSharedExtensionUrl() async {
+    try {
+      const MethodChannel channel =
+          MethodChannel('info.wouter.sourceviewer/shared_content');
+      final result = await channel.invokeMethod('getSharedContent');
+
+      if (result != null && result is Map) {
+        final contentMap = Map<String, dynamic>.from(result);
+        if (contentMap['type'] == 'url' && contentMap['content'] != null) {
+          return contentMap['content'] as String;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error checking for shared extension URL: $e');
+      return null;
+    }
+  }
+
   /// Check for initial shared content when app launches
   static Future<void> _checkInitialSharedContent(BuildContext context) async {
     try {
       // Check platform-specific shared content first
-      final sharedData = await PlatformSharingHandler.checkForInitialSharedContent();
+      final sharedData =
+          await PlatformSharingHandler.checkForInitialSharedContent();
       if (sharedData != null) {
         await _handleSharedContent(context, sharedData);
         return;
       }
-      
+
       // Also check our new shared content channel
       final channelSharedData = await SharingService.checkForSharedContent();
       if (channelSharedData != null) {
         final sharedDataFromChannel = {
           'type': channelSharedData['type'],
           'content': channelSharedData['content'],
-          if (channelSharedData.containsKey('uri')) 'filePath': channelSharedData['uri'],
+          if (channelSharedData.containsKey('uri'))
+            'filePath': channelSharedData['uri'],
         };
         await _handleSharedContent(context, sharedDataFromChannel);
       }
@@ -38,7 +60,7 @@ class SharedContentManager {
       debugPrint('Error checking initial shared content: $e');
     }
   }
-  
+
   /// Handle shared content by routing to the appropriate service
   static Future<void> _handleSharedContent(
     BuildContext context,
@@ -50,9 +72,10 @@ class SharedContentManager {
       final fileName = sharedData['fileName'] as String?;
       final filePath = sharedData['filePath'] as String?;
       final fileBytes = sharedData['fileBytes'] as List<int>?;
-      
-      debugPrint('SharedContentManager: Handling shared content of type: $type');
-      
+
+      debugPrint(
+          'SharedContentManager: Handling shared content of type: $type');
+
       // Route to the appropriate sharing service method
       await SharingService.handleSharedContent(
         context,
@@ -62,15 +85,15 @@ class SharedContentManager {
         fileBytes: fileBytes,
         fileName: fileName,
       );
-      
     } catch (e) {
       debugPrint('SharedContentManager: Error handling shared content: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error processing shared content: ${e.toString()}')),
+        SnackBar(
+            content: Text('Error processing shared content: ${e.toString()}')),
       );
     }
   }
-  
+
   /// Manually trigger shared content handling (for testing)
   static Future<void> triggerTestSharedContent(
     BuildContext context, {
@@ -81,7 +104,7 @@ class SharedContentManager {
     String? fileName,
   }) async {
     final sharedData = <String, dynamic>{};
-    
+
     if (text != null) {
       sharedData['type'] = 'text';
       sharedData['content'] = text;
@@ -96,7 +119,7 @@ class SharedContentManager {
       sharedData['type'] = 'file';
       sharedData['filePath'] = filePath;
     }
-    
+
     await _handleSharedContent(context, sharedData);
   }
 }
