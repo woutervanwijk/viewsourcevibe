@@ -1,0 +1,66 @@
+{
+  // Flutter specific settings
+  "dart.flutterSdkPath": ".",
+  "dart.flutterHotReloadOnSave": "always",
+  "dart.flutterHotRestartOnSave": "always",
+  "dart.flutterRunLogFile": "debug.log",
+  "dart.flutterTestLogFile": "test.log",
+  "dart.flutterDaemonLogFile": "daemon.log",
+  
+  // Launch configuration
+  "launch": {
+    "configurations": [
+      {
+        "name": "Flutter",
+        "request": "launch",
+        "type": "dart",
+        "program": "lib/main.dart"
+      }
+    ],
+    "compounds": []
+  },
+  
+  // Debug console settings
+  "debug.console": {
+    "fontSize": 12,
+    "fontFamily": "Consolas, 'Courier New', monospace"
+  },
+  
+  // Editor settings
+  "editor.fontSize": 14,
+  "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
+  "editor.fontLigatures": true,
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  
+  // Format on save
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  
+  // Dart specific formatting
+  "dart.formatOnSave": true,
+  "dart.formatOnType": true,
+  
+  // Exclude patterns
+  "files.exclude": {
+    "**/.dart_tool": true,
+    "**/.flutter-plugins": true,
+    "**/.flutter-plugins-dependencies": true,
+    "**/.packages": true,
+    "**/.pub": true,
+    "**/build": true,
+    "**/.idea": true,
+    "**/.vscode": false
+  },
+  
+  // Terminal settings
+  "terminal.integrated.fontSize": 12,
+  "terminal.integrated.fontFamily": "Consolas, 'Courier New', monospace",
+  
+  // Workspace settings
+  "files.autoSave": "onFocusChange",
+  "explorer.autoReveal": false,
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.enablePreviewFromQuickOpen": false
+}
