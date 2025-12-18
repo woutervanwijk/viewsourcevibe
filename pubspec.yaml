@@ -52,6 +52,7 @@ flutter:
   
   assets:
     - assets/
+    - assets/icon.webp
 
 flutter_launcher_icons:
   android: "launcher_icon"

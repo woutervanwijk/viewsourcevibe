@@ -47,10 +47,24 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController ??= PrimaryScrollController.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'View\nSource\nVibe',
-          style: TextStyle(fontSize: 10),
-          // textAlign: TextAlign.center,
+        title: Row(
+          children: [
+            // App icon to the left of the title
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: Image.asset(
+                'assets/icon.webp',
+                width: 24,
+                height: 24,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const Text(
+              'View\nSource\nVibe',
+              style: TextStyle(fontSize: 10),
+              // textAlign: TextAlign.center,
+            ),
+          ],
         ),
         actions: const [
           Toolbar(),
