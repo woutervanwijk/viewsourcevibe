@@ -4,7 +4,7 @@ import 'package:htmlviewer/services/html_service.dart';
 
 void main() {
   group('File Loading Tests', () {
-    test('HTML Service loads files correctly', () {
+    test('HTML Service loads files correctly', () async {
       final htmlService = HtmlService();
 
       // Test initial state
@@ -19,7 +19,7 @@ void main() {
         size: 38,
       );
 
-      htmlService.loadFile(testFile);
+      await htmlService.loadFile(testFile);
       expect(htmlService.currentFile, testFile);
       expect(htmlService.currentFile?.name, 'test.html');
       expect(htmlService.currentFile?.content,
@@ -27,7 +27,7 @@ void main() {
       expect(htmlService.currentFile?.size, 38);
     });
 
-    test('HTML Service clears files correctly', () {
+    test('HTML Service clears files correctly', () async {
       final htmlService = HtmlService();
 
       // Load a file first
@@ -39,7 +39,7 @@ void main() {
         size: 13,
       );
 
-      htmlService.loadFile(testFile);
+      await htmlService.loadFile(testFile);
       expect(htmlService.currentFile, isNotNull);
 
       // Clear the file

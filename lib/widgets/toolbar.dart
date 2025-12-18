@@ -92,7 +92,7 @@ class Toolbar extends StatelessWidget {
           size: fileSize,
         );
 
-        Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+        await Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
       }
     } catch (e) {
       if (context.mounted) {
@@ -107,7 +107,7 @@ class Toolbar extends StatelessWidget {
     try {
       final htmlFile = await FileUtils.loadSampleFile(filename);
       if (context.mounted) {
-        Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+        await Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
       }
     } catch (e) {
       if (context.mounted) {

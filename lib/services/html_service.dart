@@ -24,25 +24,33 @@ import 'package:flutter/services.dart';
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
   ScrollController? _scrollController;
+  ScrollController? _horizontalScrollController;
+  GlobalKey? _codeEditorKey;
 
   HtmlFile? get currentFile => _currentFile;
   ScrollController? get scrollController => _scrollController;
+  ScrollController? get horizontalScrollController =>
+      _horizontalScrollController;
+  GlobalKey? get codeEditorKey => _codeEditorKey;
 
   HtmlService() {
     _scrollController = ScrollController();
+    _horizontalScrollController = ScrollController();
+    _codeEditorKey = GlobalKey();
   }
 
   @override
   void dispose() {
     _scrollController?.dispose();
+    _horizontalScrollController?.dispose();
     super.dispose();
   }
 
   /// Ensure filename has proper extension based on content
   String ensureHtmlExtension(String filename, String content) {
     // Handle empty or unclear filenames
-    if (filename.isEmpty || 
-        filename == '/' || 
+    if (filename.isEmpty ||
+        filename == '/' ||
         filename == 'index' ||
         !filename.contains('.') && !filename.contains('/')) {
       filename = 'file';
@@ -94,7 +102,7 @@ class HtmlService with ChangeNotifier {
     try {
       // Quick checks for XML-like content
       final trimmedContent = content.trim();
-      
+
       // Must start with XML-like content
       if (!trimmedContent.startsWith('<') || !trimmedContent.contains('>')) {
         return false;
@@ -102,24 +110,28 @@ class HtmlService with ChangeNotifier {
 
       // Check for common XML patterns
       final lowerContent = trimmedContent.toLowerCase();
-      
+
       // Common XML declarations and tags
       bool hasXmlDeclaration = lowerContent.startsWith('<?xml');
       bool hasXmlns = lowerContent.contains('xmlns=');
-      bool hasXmlTags = lowerContent.contains('<') && lowerContent.contains('>');
+      bool hasXmlTags =
+          lowerContent.contains('<') && lowerContent.contains('>');
       bool hasSelfClosingTags = lowerContent.contains('/>');
-      bool hasXmlComments = lowerContent.contains('<!--') && lowerContent.contains('-->');
-      
+      bool hasXmlComments =
+          lowerContent.contains('<!--') && lowerContent.contains('-->');
+
       // Common XML document structures
       bool hasRootElement = hasBalancedTags(trimmedContent);
-      
+
       // If it has XML declaration or namespace, it's definitely XML
       if (hasXmlDeclaration || hasXmlns) {
         return true;
       }
 
       // If it has balanced tags and XML-like structure, likely XML
-      if (hasXmlTags && hasRootElement && (hasSelfClosingTags || hasXmlComments)) {
+      if (hasXmlTags &&
+          hasRootElement &&
+          (hasSelfClosingTags || hasXmlComments)) {
         return true;
       }
 
@@ -130,10 +142,12 @@ class HtmlService with ChangeNotifier {
       if (lowerContent.contains('<svg ') || lowerContent.contains('<svg>')) {
         return true; // SVG
       }
-      if (lowerContent.contains('<soap:envelope') || lowerContent.contains('<soapenv:envelope')) {
+      if (lowerContent.contains('<soap:envelope') ||
+          lowerContent.contains('<soapenv:envelope')) {
         return true; // SOAP
       }
-      if (lowerContent.contains('<wsdl:definitions') || lowerContent.contains('<definitions ')) {
+      if (lowerContent.contains('<wsdl:definitions') ||
+          lowerContent.contains('<definitions ')) {
         return true; // WSDL
       }
 
@@ -150,7 +164,7 @@ class HtmlService with ChangeNotifier {
       // Simple tag balancing check
       int openTags = 0;
       int closeTags = 0;
-      
+
       for (int i = 0; i < content.length - 1; i++) {
         if (content[i] == '<' && content[i + 1] != '/') {
           // Opening tag (not closing tag)
@@ -171,13 +185,23 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  void loadFile(HtmlFile file) {
-    _currentFile = file;
-    // Reset scroll position when loading new file
-    if (_scrollController?.hasClients ?? false) {
-      _scrollController?.jumpTo(0);
-    }
+  Future<void> loadFile(HtmlFile file) async {
+    // First clear any existing file to force CodeEditor to reset
+    _currentFile = null;
     notifyListeners();
+
+    // Small delay to ensure UI updates and CodeEditor is properly reset
+    await Future.microtask(() {
+      _currentFile = file;
+      // Reset both vertical and horizontal scroll positions when loading new file
+      if (_scrollController?.hasClients ?? false) {
+        _scrollController?.jumpTo(0);
+      }
+      if (_horizontalScrollController?.hasClients ?? false) {
+        _horizontalScrollController?.jumpTo(0);
+      }
+      notifyListeners();
+    });
   }
 
   void clearFile() {
@@ -202,7 +226,7 @@ class HtmlService with ChangeNotifier {
         size: content.length,
       );
 
-      loadFile(htmlFile);
+      await loadFile(htmlFile);
     } catch (e) {
       debugPrint('Error loading sample file: $e');
       // Fallback to a simple HTML sample if asset loading fails
@@ -225,7 +249,7 @@ class HtmlService with ChangeNotifier {
         size: fallbackContent.length,
       );
 
-      loadFile(htmlFile);
+      await loadFile(htmlFile);
     }
   }
 
@@ -271,7 +295,7 @@ class HtmlService with ChangeNotifier {
           size: content.length,
         );
 
-        loadFile(htmlFile);
+        await loadFile(htmlFile);
       } else {
         throw Exception('Failed to load URL: ${response.statusCode}');
       }
@@ -484,17 +508,23 @@ class HtmlService with ChangeNotifier {
         languages: {languageName: CodeHighlightThemeMode(mode: mode)},
         theme: _getThemeByName(themeName));
 
+    // Wrap CodeEditor in a horizontal scrollable container
     return CodeEditor(
       controller: controller,
       readOnly: true,
       wordWrap: wrapText,
       padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
       scrollController: scrollController != null
-          ? CodeScrollController(verticalScroller: scrollController)
+          ? CodeScrollController(
+              verticalScroller: scrollController,
+              horizontalScroller: _horizontalScrollController)
           : (_scrollController != null
-              ? CodeScrollController(verticalScroller: _scrollController)
+              ? CodeScrollController(
+                  verticalScroller: _scrollController,
+                  horizontalScroller: _horizontalScrollController)
               : CodeScrollController(
-                  verticalScroller: PrimaryScrollController.of(context))),
+                  verticalScroller: PrimaryScrollController.of(context),
+                  horizontalScroller: _horizontalScrollController)),
       style: CodeEditorStyle(
         codeTheme: codeTheme,
         fontSize: fontSize,

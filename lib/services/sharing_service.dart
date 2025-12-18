@@ -157,7 +157,7 @@ class SharingService {
         size: text.length,
       );
 
-      htmlService.loadFile(htmlFile);
+      await htmlService.loadFile(htmlFile);
       _showSnackBar(context, 'Text loaded successfully!');
     } catch (e) {
       debugPrint('SharingService: Error handling shared text: $e');
@@ -187,7 +187,7 @@ class SharingService {
         size: bytes.length,
       );
 
-      htmlService.loadFile(htmlFile);
+      await htmlService.loadFile(htmlFile);
       _showSnackBar(context, 'File loaded successfully!');
     } catch (e) {
       debugPrint('SharingService: Error handling file bytes: $e');
@@ -225,7 +225,7 @@ class SharingService {
         size: await file.length(),
       );
 
-      htmlService.loadFile(htmlFile);
+      await htmlService.loadFile(htmlFile);
       _showSnackBar(context, 'File loaded successfully!');
     } catch (e) {
       debugPrint('SharingService: Error handling file path: $e');
