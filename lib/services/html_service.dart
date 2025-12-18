@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:htmlviewer/models/html_file.dart';
+import 'package:htmlviewer/widgets/code_editor_with_context_menu.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
@@ -501,6 +502,12 @@ class HtmlService with ChangeNotifier {
     // Create a controller for the code editor
     final controller = CodeLineEditingController.fromText(content);
 
+    // Create context menu controller (not used directly, but available for future enhancements)
+    // final contextMenuController = CodeEditorContextMenuController(
+    //   context: context,
+    //   editingController: controller,
+    // );
+
     // Create a code theme using the selected theme
     final mode =
         _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
@@ -508,23 +515,21 @@ class HtmlService with ChangeNotifier {
         languages: {languageName: CodeHighlightThemeMode(mode: mode)},
         theme: _getThemeByName(themeName));
 
-    // Wrap CodeEditor in a horizontal scrollable container
-    return CodeEditor(
+    // Create the scroll controller for CodeEditor
+    final codeScrollController = scrollController != null
+        ? CodeScrollController(verticalScroller: scrollController)
+        : (_scrollController != null
+            ? CodeScrollController(verticalScroller: _scrollController)
+            : CodeScrollController(
+                verticalScroller: PrimaryScrollController.of(context)));
+
+    // Return CodeEditor with context menu support
+    return CodeEditorWithContextMenu(
       controller: controller,
       readOnly: true,
       wordWrap: wrapText,
       padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
-      scrollController: scrollController != null
-          ? CodeScrollController(
-              verticalScroller: scrollController,
-              horizontalScroller: _horizontalScrollController)
-          : (_scrollController != null
-              ? CodeScrollController(
-                  verticalScroller: _scrollController,
-                  horizontalScroller: _horizontalScrollController)
-              : CodeScrollController(
-                  verticalScroller: PrimaryScrollController.of(context),
-                  horizontalScroller: _horizontalScrollController)),
+      scrollController: codeScrollController,
       style: CodeEditorStyle(
         codeTheme: codeTheme,
         fontSize: fontSize,
