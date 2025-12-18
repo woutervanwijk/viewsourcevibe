@@ -81,33 +81,27 @@ class AppSettings with ChangeNotifier {
   /// Automatically switch syntax theme based on current theme mode and dark mode
   void _autoSwitchThemeBasedOnMode() {
     final isDarkTheme = _getEffectiveDarkMode();
-    final currentThemeMeta = AppSettings.getThemeMetadata(_themeName);
+    final baseThemeName = AppSettings.getBaseThemeName(_themeName);
 
     debugPrint(
-        'Auto-switching theme: current=$currentThemeMeta, desiredDark=$isDarkTheme');
+        'Auto-switching theme: current=$_themeName, base=$baseThemeName, desiredDark=$isDarkTheme');
 
-    // Only auto-switch if the current theme doesn't match the desired darkness
-    if (currentThemeMeta.isDark != isDarkTheme) {
-      // Find an appropriate theme based on darkness
-      final availableThemes =
-          isDarkTheme ? AppSettings.darkThemes : AppSettings.lightThemes;
+    // Check if the current theme is part of a theme pair
+    if (AppSettings.isThemePair(baseThemeName)) {
+      // Get the appropriate variant for the current dark mode
+      final appropriateVariant = AppSettings.getThemeVariant(baseThemeName, isDarkTheme);
 
-      debugPrint('Available themes: $availableThemes');
+      debugPrint('Theme pair detected. Switching to variant: $appropriateVariant');
 
-      if (availableThemes.isNotEmpty) {
-        // Try to find a theme with similar name or use the first one
-        final similarTheme = availableThemes.firstWhere(
-          (theme) => theme.split('-').first == _themeName.split('-').first,
-          orElse: () => availableThemes.first,
-        );
-
-        debugPrint('Switching from $_themeName to $similarTheme');
-
-        _themeName = similarTheme;
-        _saveSetting(_prefsThemeName, similarTheme);
+      if (_themeName != appropriateVariant) {
+        _themeName = appropriateVariant;
+        _saveSetting(_prefsThemeName, appropriateVariant);
+        debugPrint('Switched from $_themeName to $appropriateVariant');
+      } else {
+        debugPrint('Already using correct variant: $appropriateVariant');
       }
     } else {
-      debugPrint('Theme already matches desired darkness: $_themeName');
+      debugPrint('Theme is not part of a pair, no auto-switching needed');
     }
   }
 
@@ -238,13 +232,18 @@ class AppSettings with ChangeNotifier {
   static final Map<String, ThemeMetadata> _themeMetadata = {
     // Light themes
     'github': ThemeMetadata(
-      name: 'GitHub Light',
-      description: 'Classic light theme inspired by GitHub',
+      name: 'GitHub',  // Single name for theme pairs
+      description: 'Classic theme inspired by GitHub (auto-switches)',
       isDark: false,
     ),
-    'atom-one-light': ThemeMetadata(
-      name: 'Atom One Light',
-      description: 'Clean and bright theme from Atom editor',
+    'atom-one': ThemeMetadata(
+      name: 'Atom One',  // Single name for theme pairs
+      description: 'Clean theme from Atom editor (auto-switches)',
+      isDark: false,
+    ),
+    'tokyo-night': ThemeMetadata(
+      name: 'Tokyo Night',  // Single name for theme pairs
+      description: 'Popular theme inspired by Tokyo nights (auto-switches)',
       isDark: false,
     ),
     'vs': ThemeMetadata(
@@ -262,13 +261,8 @@ class AppSettings with ChangeNotifier {
       description: 'Soft and pleasant light theme',
       isDark: false,
     ),
-    'tokyo-night-light': ThemeMetadata(
-      name: 'Tokyo Night Light',
-      description: 'Light variant of the popular Tokyo Night theme',
-      isDark: false,
-    ),
 
-    // Dark themes
+    // Dark themes (kept for internal use, but not shown in UI)
     'github-dark': ThemeMetadata(
       name: 'GitHub Dark',
       description: 'Dark theme inspired by GitHub',
@@ -277,11 +271,6 @@ class AppSettings with ChangeNotifier {
     'github-dark-dimmed': ThemeMetadata(
       name: 'GitHub Dark Dimmed',
       description: 'Softer dark theme with dimmed colors',
-      isDark: true,
-    ),
-    'androidstudio': ThemeMetadata(
-      name: 'Android Studio',
-      description: 'Dark theme based on Android Studio',
       isDark: true,
     ),
     'atom-one-dark': ThemeMetadata(
@@ -307,6 +296,11 @@ class AppSettings with ChangeNotifier {
     'tokyo-night-dark': ThemeMetadata(
       name: 'Tokyo Night Dark',
       description: 'Dark theme inspired by Tokyo nights',
+      isDark: true,
+    ),
+    'androidstudio': ThemeMetadata(
+      name: 'Android Studio',
+      description: 'Dark theme based on Android Studio',
       isDark: true,
     ),
     'dark': ThemeMetadata(
@@ -342,6 +336,46 @@ class AppSettings with ChangeNotifier {
 
   // Get dark themes
   static List<String> get darkThemes => getThemesByCategory(true);
+
+  // Theme pairs that have both light and dark variants
+  static final Map<String, Map<bool, String>> _themePairs = {
+    'github': {
+      false: 'github',      // Light variant
+      true: 'github-dark',  // Dark variant
+    },
+    'atom-one': {
+      false: 'atom-one-light',    // Light variant  
+      true: 'atom-one-dark',      // Dark variant
+    },
+    'tokyo-night': {
+      false: 'tokyo-night-light', // Light variant
+      true: 'tokyo-night-dark',   // Dark variant
+    },
+  };
+
+  // Get theme pairs (only themes that have both light and dark variants)
+  static List<String> get themePairs => _themePairs.keys.toList();
+
+  // Get the appropriate theme variant based on dark mode
+  static String getThemeVariant(String themePair, bool isDark) {
+    return _themePairs[themePair]?[isDark] ?? themePair;
+  }
+
+  // Check if a theme is a pair (has both light and dark variants)
+  static bool isThemePair(String themeName) {
+    return _themePairs.containsKey(themeName);
+  }
+
+  // Get the base theme name for a variant
+  static String getBaseThemeName(String themeVariant) {
+    // Check if this variant belongs to any theme pair
+    for (final entry in _themePairs.entries) {
+      if (entry.value.values.contains(themeVariant)) {
+        return entry.key;
+      }
+    }
+    return themeVariant; // Return as-is if not a variant
+  }
 
   // Available font sizes
   static List<double> get availableFontSizes =>

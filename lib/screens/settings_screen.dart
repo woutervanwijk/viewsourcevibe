@@ -42,7 +42,11 @@ class SettingsScreen extends StatelessWidget {
                       // Syntax Highlight Theme
                       ListTile(
                         title: const Text('Syntax Highlight Theme'),
-                        subtitle: Text(AppSettings.getThemeMetadata(settings.themeName).name),
+                        subtitle: Text(
+                          AppSettings.isThemePair(AppSettings.getBaseThemeName(settings.themeName))
+                              ? '${AppSettings.getThemeMetadata(AppSettings.getBaseThemeName(settings.themeName)).name} (Auto)'
+                              : AppSettings.getThemeMetadata(settings.themeName).name,
+                        ),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () => _showThemeDialog(context, settings),
                       ),
@@ -200,9 +204,8 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _showThemeDialog(BuildContext context, AppSettings settings) {
-    // Separate themes by category for better organization
-    final lightThemes = AppSettings.lightThemes;
-    final darkThemes = AppSettings.darkThemes;
+    // Get theme pairs that auto-switch based on dark mode
+    final themePairs = AppSettings.themePairs;
     
     showDialog(
       context: context,
@@ -211,67 +214,93 @@ class SettingsScreen extends StatelessWidget {
         content: SingleChildScrollView(
           child: Column(
             children: [
-              // Light themes section
-              if (lightThemes.isNotEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                  child: Text(
-                    'Light Themes',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(
+                  'Auto-Switching Themes (Recommended)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
-                ...lightThemes.map((theme) {
-                  final meta = AppSettings.getThemeMetadata(theme);
-                  return ListTile(
-                    title: Text(meta.name),
-                    subtitle: Text(
-                      meta.description,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    trailing: settings.themeName == theme 
-                        ? const Icon(Icons.check, color: Colors.blue)
-                        : null,
-                    onTap: () {
-                      settings.themeName = theme;
-                      Navigator.of(context).pop();
-                    },
-                  );
-                }),
-              ],
+              ),
+              const Text(
+                'These themes automatically switch between light/dark variants',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 8),
               
-              // Dark themes section
-              if (darkThemes.isNotEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                  child: Text(
-                    'Dark Themes',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+              // Theme pairs section
+              ...themePairs.map((themePair) {
+                final meta = AppSettings.getThemeMetadata(themePair);
+                final baseThemeName = AppSettings.getBaseThemeName(settings.themeName);
+                
+                return ListTile(
+                  title: Text(meta.name),
+                  subtitle: Text(
+                    meta.description,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: baseThemeName == themePair
+                      ? const Icon(Icons.check, color: Colors.blue)
+                      : null,
+                  onTap: () {
+                    // Set the base theme name, auto-switching will handle the variant
+                    final variant = AppSettings.getThemeVariant(themePair, settings.darkMode);
+                    settings.themeName = variant;
+                    Navigator.of(context).pop();
+                  },
+                );
+              }),
+              
+              const Divider(),
+              
+              // Individual themes section (for advanced users)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(
+                  'Individual Themes',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
                 ),
-                ...darkThemes.map((theme) {
-                  final meta = AppSettings.getThemeMetadata(theme);
-                  return ListTile(
-                    title: Text(meta.name),
-                    subtitle: Text(
-                      meta.description,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    trailing: settings.themeName == theme 
-                        ? const Icon(Icons.check, color: Colors.blue)
-                        : null,
-                    onTap: () {
-                      settings.themeName = theme;
-                      Navigator.of(context).pop();
-                    },
-                  );
-                }),
-              ],
+              ),
+              const Text(
+                'These themes do not auto-switch',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 8),
+              
+              // Individual themes (non-paired themes)
+              ...AppSettings.availableThemes.where((theme) => 
+                  !AppSettings.isThemePair(theme) && 
+                  !theme.contains('-') // Exclude variants
+              ).map((theme) {
+                final meta = AppSettings.getThemeMetadata(theme);
+                return ListTile(
+                  title: Text(meta.name),
+                  subtitle: Text(
+                    meta.description,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: settings.themeName == theme
+                      ? const Icon(Icons.check, color: Colors.blue)
+                      : null,
+                  onTap: () {
+                    settings.themeName = theme;
+                    Navigator.of(context).pop();
+                  },
+                );
+              }),
             ],
           ),
         ),
