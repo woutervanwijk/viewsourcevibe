@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Source Viewer
+Comment=A cross-platform source code viewer app
+Exec=info.wouter.sourceviewer
+Icon=info.wouter.sourceviewer
+Terminal=false
+Type=Application
+Categories=Development;Utility;
+StartupWMClass=Source Viewer
+MimeType=text/html;text/css;text/javascript;text/plain;
+Keywords=code;html;css;javascript;viewer;editor;
