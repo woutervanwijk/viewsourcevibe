@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:htmlviewer/models/settings.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import 'package:flutter/material.dart';
 
 void main() {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
-import 'package:htmlviewer/services/code_editor_context_menu.dart';
+import 'package:view_source_vibe/services/code_editor_context_menu.dart';
 
 /// A wrapper widget that adds context menu functionality to CodeEditor
 class CodeEditorWithContextMenu extends StatefulWidget {

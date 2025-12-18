@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:htmlviewer/services/sharing_service.dart';
+import 'package:view_source_vibe/services/sharing_service.dart';
 
 void main() {
   // Initialize Flutter binding for tests

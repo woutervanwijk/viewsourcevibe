@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:htmlviewer/services/html_service.dart';
+import 'package:view_source_vibe/services/html_service.dart';
 
 // Simple integration test to verify headers are being sent
 void main() {

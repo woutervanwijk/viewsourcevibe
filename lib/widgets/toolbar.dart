@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:htmlviewer/models/settings.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import 'package:provider/provider.dart';
-import 'package:htmlviewer/services/html_service.dart';
-import 'package:htmlviewer/services/sharing_service.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/sharing_service.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:htmlviewer/models/html_file.dart';
-import 'package:htmlviewer/utils/file_utils.dart';
-import 'package:htmlviewer/screens/settings_screen.dart';
+import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/utils/file_utils.dart';
+import 'package:view_source_vibe/screens/settings_screen.dart';
 import 'dart:io';
 
 class Toolbar extends StatelessWidget {

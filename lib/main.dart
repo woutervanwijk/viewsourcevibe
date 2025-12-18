@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:htmlviewer/screens/home_screen.dart';
-import 'package:htmlviewer/services/html_service.dart';
-import 'package:htmlviewer/models/settings.dart';
-import 'package:htmlviewer/services/platform_sharing_handler.dart';
-import 'package:htmlviewer/widgets/shared_content_wrapper.dart';
+import 'package:view_source_vibe/screens/home_screen.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/models/settings.dart';
+import 'package:view_source_vibe/services/platform_sharing_handler.dart';
+import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
 
 void main() async {
   // Initialize Flutter binding before any async operations

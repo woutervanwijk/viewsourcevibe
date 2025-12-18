@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:htmlviewer/services/html_service.dart';
+import 'package:view_source_vibe/services/html_service.dart';
 
 class UrlInput extends StatefulWidget {
   const UrlInput({super.key});

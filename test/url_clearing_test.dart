@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:htmlviewer/widgets/url_input.dart';
-import 'package:htmlviewer/services/html_service.dart';
-import 'package:htmlviewer/models/html_file.dart';
+import 'package:view_source_vibe/widgets/url_input.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/models/html_file.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 

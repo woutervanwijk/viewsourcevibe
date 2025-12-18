@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:htmlviewer/models/html_file.dart';
+import 'package:view_source_vibe/models/html_file.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:mockito/mockito.dart';
 

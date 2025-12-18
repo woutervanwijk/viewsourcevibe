@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:htmlviewer/models/settings.dart';
+import 'package:view_source_vibe/models/settings.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

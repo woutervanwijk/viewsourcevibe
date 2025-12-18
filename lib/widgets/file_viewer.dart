@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:htmlviewer/services/html_service.dart';
-import 'package:htmlviewer/models/html_file.dart';
-import 'package:htmlviewer/models/settings.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/settings.dart';
 
 class FileViewer extends StatelessWidget {
   final HtmlFile file;

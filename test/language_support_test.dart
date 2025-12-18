@@ -1,7 +1,7 @@
 // ignore_for_file: avoid_print
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:htmlviewer/services/html_service.dart';
+import 'package:view_source_vibe/services/html_service.dart';
 import 'package:re_highlight/languages/all.dart';
 
 void main() {

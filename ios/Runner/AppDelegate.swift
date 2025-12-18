@@ -51,7 +51,7 @@ import UIKit
     print("AppDelegate: open URL called with: \(url.absoluteString)")
 
     // Check if this is from our share extension
-    if url.scheme == "htmlviewer" {
+    if url.scheme == "viewsourcevibe" {
       if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
         let queryItems = components.queryItems
       {

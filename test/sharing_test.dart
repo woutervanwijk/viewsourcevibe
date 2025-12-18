@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:htmlviewer/services/sharing_service.dart';
-import 'package:htmlviewer/services/platform_sharing_handler.dart';
-import 'package:htmlviewer/services/shared_content_manager.dart';
+import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/platform_sharing_handler.dart';
+import 'package:view_source_vibe/services/shared_content_manager.dart';
 import 'package:mockito/mockito.dart';
 import 'package:flutter/material.dart';
 

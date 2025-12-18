@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Htmlviewer</string>
+	<string>View Source Vibe</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>htmlviewer</string>
+	<string>View Source Vibe</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -58,7 +58,7 @@
 			<string>info.wouter.sourceviewer</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>htmlviewer</string>
+				<string>viewsourcevibe</string>
 			</array>
 		</dict>
 		<dict>

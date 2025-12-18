@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
-import 'package:htmlviewer/models/settings.dart';
+import 'package:view_source_vibe/models/settings.dart';
 
 void main() {
   // Initialize Flutter binding for testing

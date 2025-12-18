@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:htmlviewer/models/html_file.dart';
-import 'package:htmlviewer/widgets/code_editor_with_context_menu.dart';
+import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/widgets/code_editor_with_context_menu.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';

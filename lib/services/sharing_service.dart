@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_io/io.dart';
-import 'package:htmlviewer/models/html_file.dart';
-import 'package:htmlviewer/services/html_service.dart';
+import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/services/html_service.dart';
 
 class SharingService {
   static const MethodChannel _channel =

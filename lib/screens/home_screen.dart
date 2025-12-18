@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:htmlviewer/services/html_service.dart';
-import 'package:htmlviewer/widgets/file_viewer.dart';
-import 'package:htmlviewer/widgets/toolbar.dart';
-import 'package:htmlviewer/widgets/url_input.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/widgets/file_viewer.dart';
+import 'package:view_source_vibe/widgets/toolbar.dart';
+import 'package:view_source_vibe/widgets/url_input.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

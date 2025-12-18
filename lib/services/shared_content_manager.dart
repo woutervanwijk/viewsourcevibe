@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:htmlviewer/services/sharing_service.dart';
-import 'package:htmlviewer/services/platform_sharing_handler.dart';
+import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/platform_sharing_handler.dart';
 
 class SharedContentManager {
   /// Initialize the shared content manager

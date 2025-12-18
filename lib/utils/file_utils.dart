@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-import 'package:htmlviewer/models/html_file.dart';
+import 'package:view_source_vibe/models/html_file.dart';
 
 class FileUtils {
   static Future<HtmlFile> loadSampleFile(String filename) async {

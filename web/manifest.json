@@ -1,6 +1,6 @@
 {
-    "name": "htmlviewer",
-    "short_name": "htmlviewer",
+    "name": "View Source Vibe",
+    "short_name": "View Source Vibe",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",

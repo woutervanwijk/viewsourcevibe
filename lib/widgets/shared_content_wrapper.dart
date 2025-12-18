@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:htmlviewer/services/shared_content_manager.dart';
+import 'package:view_source_vibe/services/shared_content_manager.dart';
 
 /// A wrapper widget that initializes shared content handling when the app starts
 class SharedContentWrapper extends StatefulWidget {

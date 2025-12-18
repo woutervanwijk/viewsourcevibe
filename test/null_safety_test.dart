@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:htmlviewer/models/html_file.dart';
-import 'package:htmlviewer/models/settings.dart';
-import 'package:htmlviewer/services/html_service.dart';
+import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/settings.dart';
+import 'package:view_source_vibe/services/html_service.dart';
 
 void main() {
   group('Null Safety Tests', () {
