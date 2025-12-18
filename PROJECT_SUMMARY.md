@@ -33,7 +33,7 @@ A cross-platform HTML source viewer app for iOS and Android built with Flutter. 
 ## Project Structure
 
 ```
-htmlviewer/
+viewsourcevibe/
 ├── lib/
 │   ├── main.dart                  # App entry point
 │   ├── models/

@@ -36,7 +36,7 @@ The issue was caused by incorrect Android activity configuration:
 
 ### 2. Enhanced Intent Handling
 
-**File**: `android/app/src/main/kotlin/com/example/htmlviewer/MainActivity.kt`
+**File**: `android/app/src/main/kotlin/com/example/viewsourcevibe/MainActivity.kt`
 
 ```kotlin
 override fun onNewIntent(intent: Intent) {
@@ -138,7 +138,7 @@ override fun onNewIntent(intent: Intent) {
    - Changed `launchMode` from `singleTop` to `singleTask`
    - Updated `taskAffinity` from `""` to `"info.wouter.sourceviewer"`
 
-2. **android/app/src/main/kotlin/com/example/htmlviewer/MainActivity.kt**
+2. **android/app/src/main/kotlin/com/example/viewsourcevibe/MainActivity.kt**
    - Enhanced `onNewIntent()` with explicit intent setting
    - Added debug logging for intent tracking
 

@@ -81,7 +81,7 @@ If manual cleanup is too complex, you can:
    ```bash
    cd ios
    rm -rf Runner.xcodeproj
-   flutter create --platforms ios --project-name htmlviewer .
+   flutter create --platforms ios --project-name viewsourcevibe .
    ```
 
 2. **Reapply necessary configurations:**

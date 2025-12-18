@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/settings.dart';
+import 'package:view_source_vibe/screens/about_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -97,6 +98,27 @@ class SettingsScreen extends StatelessWidget {
                         secondary: const Icon(Icons.wrap_text),
                       ),
                     ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // About Section
+              const Text(
+                'About',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ListTile(
+                    title: const Text('About View Source Vibe'),
+                    subtitle: const Text('Learn more about the app and development process'),
+                    trailing: const Icon(Icons.info_outline),
+                    onTap: () => _navigateToAboutScreen(context),
                   ),
                 ),
               ),
@@ -325,6 +347,14 @@ class SettingsScreen extends StatelessWidget {
             child: const Text('Cancel'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _navigateToAboutScreen(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const AboutScreen(),
       ),
     );
   }

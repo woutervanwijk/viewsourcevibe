@@ -15,7 +15,7 @@ This error occurs because Android's security model (starting with Android 7.0 / 
 The fix implements proper FileProvider usage with comprehensive error handling:
 
 ### 1. Updated SharingService.kt
-**File**: `android/app/src/main/kotlin/com/example/htmlviewer/SharingService.kt`
+**File**: `android/app/src/main/kotlin/com/example/viewsourcevibe/SharingService.kt`
 
 **Key Changes**:
 - Changed `shareHtml()` to use `context.cacheDir` instead of `Environment.DIRECTORY_DOCUMENTS` for temporary files
@@ -105,10 +105,10 @@ After this fix:
 5. Comprehensive error handling prevents crashes
 
 ## Files Modified
-1. `android/app/src/main/kotlin/com/example/htmlviewer/SharingService.kt` - Fixed duplicate imports and implemented FileProvider
+1. `android/app/src/main/kotlin/com/example/viewsourcevibe/SharingService.kt` - Fixed duplicate imports and implemented FileProvider
 2. `android/app/src/main/res/xml/file_paths.xml` - Added cache path configuration
 3. `android/app/src/main/AndroidManifest.xml` - Added FileProvider declaration
-4. `android/app/src/main/kotlin/com/example/htmlviewer/MainActivity.kt` - Registered SharingService
+4. `android/app/src/main/kotlin/com/example/viewsourcevibe/MainActivity.kt` - Registered SharingService
 5. `ios/Runner/AppDelegate.swift` - Registered SharingService
 6. `ios/Runner/SharingService.swift` - Implemented iOS sharing (new file)
 7. `lib/services/sharing_service.dart` - Simplified to use platform channels

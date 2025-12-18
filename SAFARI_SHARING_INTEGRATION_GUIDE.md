@@ -1,7 +1,7 @@
 # Safari Sharing Integration Guide
 
 ## 🎯 Objective
-Enable the app icon to appear in Safari's share sheet when sharing URLs, allowing users to directly share web content to the Htmlviewer app.
+Enable the app icon to appear in Safari's share sheet when sharing URLs, allowing users to directly share web content to the viewsourcevibe app.
 
 ## ✅ Completed Configuration Changes
 
@@ -59,7 +59,7 @@ Enable the app icon to appear in Safari's share sheet when sharing URLs, allowin
 #### Step 3: Configure Share Extension
 1. **Product Name:** `HtmlviewerShare`
 2. **Language:** Swift
-3. **Embed in Application:** Htmlviewer (main app target)
+3. **Embed in Application:** viewsourcevibe (main app target)
 4. Click **Finish**
 
 ### 3. Configure Share Extension Settings
@@ -178,7 +178,7 @@ class ShareViewController: SLComposeServiceViewController {
         userDefaults?.synchronize()
         
         // Open the main app with the URL
-        if let appUrl = URL(string: "htmlviewer://open?url=#{url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""}") {
+        if let appUrl = URL(string: "viewsourcevibe://open?url=#{url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""}") {
             var responder: UIResponder? = self as UIResponder
             while responder != nil {
                 if let application = responder as? UIApplication {
@@ -206,7 +206,7 @@ class ShareViewController: SLComposeServiceViewController {
 ### 4. Add App Groups Capability
 
 #### Step 1: Enable App Groups
-1. Select the **Htmlviewer** target
+1. Select the **viewsourcevibe** target
 2. Go to **Signing & Capabilities**
 3. Click **+ Capability**
 4. Add **App Groups**
@@ -231,7 +231,7 @@ override func application(_ application: UIApplication, open url: URL, options: 
     print("AppDelegate: open URL called with: \(url.absoluteString)")
     
     // Check if this is from our share extension
-    if url.scheme == "htmlviewer" {
+    if url.scheme == "viewsourcevibe" {
         if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
            let queryItems = components.queryItems {
             for item in queryItems {
@@ -348,8 +348,8 @@ Add App Groups entitlement:
 3. **Test Safari Sharing:**
    - Open Safari and navigate to a webpage
    - Tap the Share button
-   - Look for the Htmlviewer icon in the share sheet
-   - Select Htmlviewer and verify the URL is shared correctly
+   - Look for the viewsourcevibe icon in the share sheet
+   - Select viewsourcevibe and verify the URL is shared correctly
 
 4. **Test URL Handling:**
    - Verify the app opens and loads the shared URL
@@ -404,10 +404,10 @@ Add App Groups entitlement:
 
 After completing all the steps in this guide:
 
-1. **Htmlviewer app icon will appear in Safari's share sheet**
-2. **Users can share URLs directly to Htmlviewer**
+1. **viewsourcevibe app icon will appear in Safari's share sheet**
+2. **Users can share URLs directly to viewsourcevibe**
 3. **Shared URLs will open automatically in the app**
 4. **The app will display the shared web content**
 5. **Full integration with existing sharing functionality**
 
-The implementation provides a seamless user experience for sharing web content from Safari to Htmlviewer, matching the functionality available on Android and providing a consistent cross-platform experience.
+The implementation provides a seamless user experience for sharing web content from Safari to viewsourcevibe, matching the functionality available on Android and providing a consistent cross-platform experience.

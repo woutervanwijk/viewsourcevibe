@@ -8,7 +8,7 @@ This implementation adds the ability for the app to receive shared files and URL
 ### 1. Android Shared Content Receiving
 
 **Files Modified:**
-- `android/app/src/main/kotlin/com/example/htmlviewer/MainActivity.kt`
+- `android/app/src/main/kotlin/com/example/viewsourcevibe/MainActivity.kt`
 
 **Capabilities:**
 - ✅ Receive text content shared via `ACTION_SEND` with text MIME types
@@ -216,7 +216,7 @@ Potential improvements for future versions:
 ## Files Modified
 
 ### Android
-1. `android/app/src/main/kotlin/com/example/htmlviewer/MainActivity.kt` - Added shared content handling
+1. `android/app/src/main/kotlin/com/example/viewsourcevibe/MainActivity.kt` - Added shared content handling
 2. `android/app/src/main/AndroidManifest.xml` - Intent filters (already present)
 
 ### iOS

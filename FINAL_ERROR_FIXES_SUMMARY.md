@@ -54,11 +54,11 @@ final dynamic indicatorBuilder;
 ```dart
 // Before: Unused variable and import
 final contextMenuController = CodeEditorContextMenuController(...);
-import 'package:htmlviewer/services/code_editor_context_menu.dart';
+import 'package:viewsourcevibe/services/code_editor_context_menu.dart';
 
 // After: Clean code
 // final contextMenuController = CodeEditorContextMenuController(...);
-// import 'package:htmlviewer/services/code_editor_context_menu.dart';
+// import 'package:viewsourcevibe/services/code_editor_context_menu.dart';
 ```
 
 #### Test File (`test/context_menu_test.dart`)

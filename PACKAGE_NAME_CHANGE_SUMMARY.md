@@ -1,7 +1,7 @@
 # Package Name Change Summary
 
 ## Overview
-The package name has been successfully changed from `com.example.htmlviewer` to `info.wouter.sourceviewer`. This change affects the app's identity on both Android and iOS platforms.
+The package name has been successfully changed from `com.example.viewsourcevibe` to `info.wouter.sourceviewer`. This change affects the app's identity on both Android and iOS platforms.
 
 ## Changes Made
 
@@ -9,13 +9,13 @@ The package name has been successfully changed from `com.example.htmlviewer` to 
 
 **Files Updated:**
 - `android/app/build.gradle.kts` - Updated `applicationId`
-- `android/app/src/main/kotlin/com/example/htmlviewer/MainActivity.kt` - Updated package declaration
-- `android/app/src/main/kotlin/com/example/htmlviewer/SharingService.kt` - Updated package declaration
+- `android/app/src/main/kotlin/com/example/viewsourcevibe/MainActivity.kt` - Updated package declaration
+- `android/app/src/main/kotlin/com/example/viewsourcevibe/SharingService.kt` - Updated package declaration
 
 **Key Changes:**
 ```kotlin
 // Old package name
-package com.example.htmlviewer
+package com.example.viewsourcevibe
 
 // New package name  
 package info.wouter.sourceviewer

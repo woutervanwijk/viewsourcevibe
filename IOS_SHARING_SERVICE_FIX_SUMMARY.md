@@ -4,7 +4,7 @@
 The iOS SharingService was causing a compilation error:
 ```
 Swift Compiler Error (Xcode): Cannot find 'SharingService' in scope
-/Users/wouter/code/htmlviewer/ios/Runner/AppDelegate.swift:15:4
+/Users/wouter/code/viewsourcevibe/ios/Runner/AppDelegate.swift:15:4
 
 Argument type 'SharingService' does not conform to expected type 'FlutterPlugin'
 ```

@@ -193,7 +193,7 @@ static Future<Map<String, dynamic>?> checkForSharedContent() async {
 
 ## Files Modified
 
-1. **android/app/src/main/kotlin/com/example/htmlviewer/MainActivity.kt**
+1. **android/app/src/main/kotlin/com/example/viewsourcevibe/MainActivity.kt**
    - Added debug logging for intent handling
    - Enhanced URL detection logging
 

@@ -25,7 +25,7 @@
 **Impact**: Works with various indicator builder types
 
 #### 5. **Unused Import** (`lib/services/html_service.dart`)
-**Issue**: `import 'package:htmlviewer/services/code_editor_context_menu.dart'` was unused
+**Issue**: `import 'package:viewsourcevibe/services/code_editor_context_menu.dart'` was unused
 **Fix**: Removed the unused import
 **Impact**: Cleaner code, faster compilation
 
@@ -106,7 +106,7 @@ final dynamic indicatorBuilder;
 // Before: Multiple imports, some unused
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:htmlviewer/services/code_editor_context_menu.dart';
+import 'package:viewsourcevibe/services/code_editor_context_menu.dart';
 
 // After: Only necessary imports
 import 'package:flutter/material.dart';

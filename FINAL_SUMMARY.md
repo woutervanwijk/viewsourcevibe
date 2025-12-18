@@ -58,7 +58,7 @@ The HTML Viewer app is a **fully functional, cross-platform Flutter application*
 ## 📁 Project Structure
 
 ```
-htmlviewer/
+viewsourcevibe/
 ├── lib/
 │   ├── main.dart                  # App entry point
 │   ├── models/
