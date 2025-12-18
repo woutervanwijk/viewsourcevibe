@@ -71,7 +71,6 @@ void main() {
       expect(settings.fontSize, 16.0);
       expect(settings.showLineNumbers, true);
       expect(settings.wrapText, false);
-      expect(settings.autoDetectLanguage, true);
 
       // Test setting changes
       settings.darkMode = true;

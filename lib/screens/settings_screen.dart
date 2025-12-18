@@ -25,7 +25,7 @@ class SettingsScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              
+
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -38,14 +38,16 @@ class SettingsScreen extends StatelessWidget {
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () => _showThemeModeDialog(context, settings),
                       ),
-                      
+
                       // Syntax Highlight Theme
                       ListTile(
                         title: const Text('Syntax Highlight Theme'),
                         subtitle: Text(
-                          AppSettings.isThemePair(AppSettings.getBaseThemeName(settings.themeName))
+                          AppSettings.isThemePair(AppSettings.getBaseThemeName(
+                                  settings.themeName))
                               ? '${AppSettings.getThemeMetadata(AppSettings.getBaseThemeName(settings.themeName)).name} (Auto)'
-                              : AppSettings.getThemeMetadata(settings.themeName).name,
+                              : AppSettings.getThemeMetadata(settings.themeName)
+                                  .name,
                         ),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () => _showThemeDialog(context, settings),
@@ -54,16 +56,16 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Display Settings Section
               const Text(
                 'Display Settings',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              
+
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -76,7 +78,7 @@ class SettingsScreen extends StatelessWidget {
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () => _showFontSizeDialog(context, settings),
                       ),
-                      
+
                       // Line Numbers Toggle
                       SwitchListTile(
                         title: const Text('Show Line Numbers'),
@@ -85,7 +87,7 @@ class SettingsScreen extends StatelessWidget {
                         onChanged: (value) => settings.showLineNumbers = value,
                         secondary: const Icon(Icons.format_list_numbered),
                       ),
-                      
+
                       // Text Wrap Toggle
                       SwitchListTile(
                         title: const Text('Wrap Text'),
@@ -98,31 +100,9 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              
-              const SizedBox(height: 24),
-              
-              // Behavior Settings Section
-              const Text(
-                'Behavior Settings',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: SwitchListTile(
-                    title: const Text('Auto Detect Language'),
-                    subtitle: const Text('Automatically detect file language'),
-                    value: settings.autoDetectLanguage,
-                    onChanged: (value) => settings.autoDetectLanguage = value,
-                    secondary: const Icon(Icons.language),
-                  ),
-                ),
-              ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Reset and Close Buttons
               Center(
                 child: Row(
@@ -166,19 +146,19 @@ class SettingsScreen extends StatelessWidget {
         title: const Text('Select Theme Mode'),
         content: SingleChildScrollView(
           child: Column(
-            children: ThemeModeOption.values.map((mode) => 
-              ListTile(
-                title: Text(_getThemeModeLabel(mode)),
-                subtitle: Text(_getThemeModeDescription(mode)),
-                trailing: settings.themeMode == mode 
-                    ? const Icon(Icons.check, color: Colors.blue)
-                    : null,
-                onTap: () {
-                  settings.themeMode = mode;
-                  Navigator.of(context).pop();
-                },
-              )
-            ).toList(),
+            children: ThemeModeOption.values
+                .map((mode) => ListTile(
+                      title: Text(_getThemeModeLabel(mode)),
+                      subtitle: Text(_getThemeModeDescription(mode)),
+                      trailing: settings.themeMode == mode
+                          ? const Icon(Icons.check, color: Colors.blue)
+                          : null,
+                      onTap: () {
+                        settings.themeMode = mode;
+                        Navigator.of(context).pop();
+                      },
+                    ))
+                .toList(),
           ),
         ),
         actions: [
@@ -206,7 +186,7 @@ class SettingsScreen extends StatelessWidget {
   void _showThemeDialog(BuildContext context, AppSettings settings) {
     // Get theme pairs that auto-switch based on dark mode
     final themePairs = AppSettings.themePairs;
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -233,12 +213,13 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              
+
               // Theme pairs section
               ...themePairs.map((themePair) {
                 final meta = AppSettings.getThemeMetadata(themePair);
-                final baseThemeName = AppSettings.getBaseThemeName(settings.themeName);
-                
+                final baseThemeName =
+                    AppSettings.getBaseThemeName(settings.themeName);
+
                 return ListTile(
                   title: Text(meta.name),
                   subtitle: Text(
@@ -250,15 +231,16 @@ class SettingsScreen extends StatelessWidget {
                       : null,
                   onTap: () {
                     // Set the base theme name, auto-switching will handle the variant
-                    final variant = AppSettings.getThemeVariant(themePair, settings.darkMode);
+                    final variant = AppSettings.getThemeVariant(
+                        themePair, settings.darkMode);
                     settings.themeName = variant;
                     Navigator.of(context).pop();
                   },
                 );
               }),
-              
+
               const Divider(),
-              
+
               // Individual themes section (for advanced users)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -279,12 +261,14 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              
+
               // Individual themes (non-paired themes)
-              ...AppSettings.availableThemes.where((theme) => 
-                  !AppSettings.isThemePair(theme) && 
-                  !theme.contains('-') // Exclude variants
-              ).map((theme) {
+              ...AppSettings.availableThemes
+                  .where((theme) =>
+                          !AppSettings.isThemePair(theme) &&
+                          !theme.contains('-') // Exclude variants
+                      )
+                  .map((theme) {
                 final meta = AppSettings.getThemeMetadata(theme);
                 return ListTile(
                   title: Text(meta.name),
@@ -321,18 +305,18 @@ class SettingsScreen extends StatelessWidget {
         title: const Text('Select Font Size'),
         content: SingleChildScrollView(
           child: Column(
-            children: AppSettings.availableFontSizes.map((size) => 
-              ListTile(
-                title: Text('${size.toInt()}px'),
-                trailing: settings.fontSize == size 
-                    ? const Icon(Icons.check, color: Colors.blue)
-                    : null,
-                onTap: () {
-                  settings.fontSize = size;
-                  Navigator.of(context).pop();
-                },
-              )
-            ).toList(),
+            children: AppSettings.availableFontSizes
+                .map((size) => ListTile(
+                      title: Text('${size.toInt()}px'),
+                      trailing: settings.fontSize == size
+                          ? const Icon(Icons.check, color: Colors.blue)
+                          : null,
+                      onTap: () {
+                        settings.fontSize = size;
+                        Navigator.of(context).pop();
+                      },
+                    ))
+                .toList(),
           ),
         ),
         actions: [

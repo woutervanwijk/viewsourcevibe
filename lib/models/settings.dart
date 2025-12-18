@@ -24,7 +24,6 @@ class AppSettings with ChangeNotifier {
   static const String _prefsFontSize = 'fontSize';
   static const String _prefsShowLineNumbers = 'showLineNumbers';
   static const String _prefsWrapText = 'wrapText';
-  static const String _prefsAutoDetectLanguage = 'autoDetectLanguage';
 
   // Shared Preferences instance
   SharedPreferences? _prefs;
@@ -40,7 +39,6 @@ class AppSettings with ChangeNotifier {
 
   // Behavior settings
   bool _wrapText = false;
-  bool _autoDetectLanguage = true;
 
   // Getters
   ThemeModeOption get themeMode => _themeMode;
@@ -49,7 +47,6 @@ class AppSettings with ChangeNotifier {
   double get fontSize => _fontSize;
   bool get showLineNumbers => _showLineNumbers;
   bool get wrapText => _wrapText;
-  bool get autoDetectLanguage => _autoDetectLanguage;
 
   // Setters with notification and persistence
   set themeMode(ThemeModeOption value) {
@@ -89,9 +86,11 @@ class AppSettings with ChangeNotifier {
     // Check if the current theme is part of a theme pair
     if (AppSettings.isThemePair(baseThemeName)) {
       // Get the appropriate variant for the current dark mode
-      final appropriateVariant = AppSettings.getThemeVariant(baseThemeName, isDarkTheme);
+      final appropriateVariant =
+          AppSettings.getThemeVariant(baseThemeName, isDarkTheme);
 
-      debugPrint('Theme pair detected. Switching to variant: $appropriateVariant');
+      debugPrint(
+          'Theme pair detected. Switching to variant: $appropriateVariant');
 
       if (_themeName != appropriateVariant) {
         _themeName = appropriateVariant;
@@ -149,14 +148,6 @@ class AppSettings with ChangeNotifier {
     }
   }
 
-  set autoDetectLanguage(bool value) {
-    if (_autoDetectLanguage != value) {
-      _autoDetectLanguage = value;
-      _saveSetting(_prefsAutoDetectLanguage, value);
-      notifyListeners();
-    }
-  }
-
   // Initialize shared preferences
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -184,7 +175,6 @@ class AppSettings with ChangeNotifier {
     if (_themeMode == ThemeModeOption.system) {
       _autoSwitchThemeBasedOnMode();
     }
-    _autoDetectLanguage = _prefs!.getBool(_prefsAutoDetectLanguage) ?? true;
   }
 
   // Save a setting to shared preferences
@@ -208,7 +198,6 @@ class AppSettings with ChangeNotifier {
     _fontSize = 16.0;
     _showLineNumbers = true;
     _wrapText = false;
-    _autoDetectLanguage = true;
 
     // Save the default values
     _saveAllSettings();
@@ -225,24 +214,23 @@ class AppSettings with ChangeNotifier {
     await _saveSetting(_prefsFontSize, _fontSize);
     await _saveSetting(_prefsShowLineNumbers, _showLineNumbers);
     await _saveSetting(_prefsWrapText, _wrapText);
-    await _saveSetting(_prefsAutoDetectLanguage, _autoDetectLanguage);
   }
 
   // Theme categories and metadata
   static final Map<String, ThemeMetadata> _themeMetadata = {
     // Light themes
     'github': ThemeMetadata(
-      name: 'GitHub',  // Single name for theme pairs
+      name: 'GitHub', // Single name for theme pairs
       description: 'Classic theme inspired by GitHub (auto-switches)',
       isDark: false,
     ),
     'atom-one': ThemeMetadata(
-      name: 'Atom One',  // Single name for theme pairs
+      name: 'Atom One', // Single name for theme pairs
       description: 'Clean theme from Atom editor (auto-switches)',
       isDark: false,
     ),
     'tokyo-night': ThemeMetadata(
-      name: 'Tokyo Night',  // Single name for theme pairs
+      name: 'Tokyo Night', // Single name for theme pairs
       description: 'Popular theme inspired by Tokyo nights (auto-switches)',
       isDark: false,
     ),
@@ -340,16 +328,16 @@ class AppSettings with ChangeNotifier {
   // Theme pairs that have both light and dark variants
   static final Map<String, Map<bool, String>> _themePairs = {
     'github': {
-      false: 'github',      // Light variant
-      true: 'github-dark',  // Dark variant
+      false: 'github', // Light variant
+      true: 'github-dark', // Dark variant
     },
     'atom-one': {
-      false: 'atom-one-light',    // Light variant  
-      true: 'atom-one-dark',      // Dark variant
+      false: 'atom-one-light', // Light variant
+      true: 'atom-one-dark', // Dark variant
     },
     'tokyo-night': {
       false: 'tokyo-night-light', // Light variant
-      true: 'tokyo-night-dark',   // Dark variant
+      true: 'tokyo-night-dark', // Dark variant
     },
   };
 
