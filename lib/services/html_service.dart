@@ -265,13 +265,27 @@ class HtmlService with ChangeNotifier {
       // We'll make the request and then check if there were redirects
       final client = http.Client();
 
-      // Make the request
+      // Set proper headers to avoid 403 errors from websites that block non-browser clients
+      // Many websites like vn.nl and fiper.net require proper User-Agent headers
+      final headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+      };
+
+      // Make the request with proper headers
       // Note: The http package automatically follows redirects, but doesn't expose the final URL
       // For complete redirect tracking, consider using packages like:
       // - http_with_middleware
       // - dio
       // - http_client with custom redirect handling
-      final response = await client.get(Uri.parse(url));
+      final response = await client.get(
+        Uri.parse(url),
+        headers: headers,
+      );
 
       if (response.statusCode == 200) {
         final content = response.body;
@@ -537,7 +551,7 @@ class HtmlService with ChangeNotifier {
         fontFamilyFallback: const ['monospace', 'Courier New'],
         fontHeight: 1.2,
       ),
-      sperator: showLineNumbers ? SizedBox(width: fontSize / 3) : null,
+      sperator: showLineNumbers ? SizedBox(width: fontSize / 2) : null,
       indicatorBuilder: showLineNumbers
           ? (context, editingController, chunkController, notifier) {
               return DefaultCodeLineNumber(
