@@ -29,7 +29,7 @@ class SharedContentManager {
       }
       return null;
     } catch (e) {
-      print('Error checking for shared extension URL: $e');
+      debugPrint('Error checking for shared extension URL: $e');
       return null;
     }
   }
@@ -41,7 +41,9 @@ class SharedContentManager {
       final sharedData =
           await PlatformSharingHandler.checkForInitialSharedContent();
       if (sharedData != null) {
-        await _handleSharedContent(context, sharedData);
+        if (context.mounted) {
+          await _handleSharedContent(context, sharedData);
+        }
         return;
       }
 
@@ -54,7 +56,9 @@ class SharedContentManager {
           if (channelSharedData.containsKey('uri'))
             'filePath': channelSharedData['uri'],
         };
-        await _handleSharedContent(context, sharedDataFromChannel);
+        if (context.mounted) {
+          await _handleSharedContent(context, sharedDataFromChannel);
+        }
       }
     } catch (e) {
       debugPrint('Error checking initial shared content: $e');
@@ -87,10 +91,12 @@ class SharedContentManager {
       );
     } catch (e) {
       debugPrint('SharedContentManager: Error handling shared content: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Error processing shared content: ${e.toString()}')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error processing shared content: ${e.toString()}')),
+        );
+      }
     }
   }
 

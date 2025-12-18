@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class PlatformSharingHandler {
@@ -22,7 +23,7 @@ class PlatformSharingHandler {
                 'Method ${call.method} not implemented');
         }
       } catch (e) {
-        print('Error handling platform sharing: $e');
+        debugPrint('Error handling platform sharing: $e');
         return {'error': e.toString()};
       }
     });
@@ -85,7 +86,7 @@ class PlatformSharingHandler {
         final content = result['content'];
 
         if (type != null && content != null) {
-          print('Initial shared content found: $type');
+          debugPrint('Initial shared content found: $type');
           return {
             'type': type,
             'content': content,
@@ -96,7 +97,7 @@ class PlatformSharingHandler {
         }
       }
     } catch (e) {
-      print('No initial shared content or error checking: $e');
+      debugPrint('No initial shared content or error checking: $e');
     }
     return null;
   }
@@ -117,7 +118,7 @@ class PlatformSharingHandler {
       try {
         _sharedContentHandler!(sharedData);
       } catch (e) {
-        print('Error in shared content handler: $e');
+        debugPrint('Error in shared content handler: $e');
       }
     }
   }

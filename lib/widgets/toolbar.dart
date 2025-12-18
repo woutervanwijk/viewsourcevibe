@@ -92,7 +92,9 @@ class Toolbar extends StatelessWidget {
           size: fileSize,
         );
 
-        await Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+        if (context.mounted) {
+          await Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+        }
       }
     } catch (e) {
       if (context.mounted) {
@@ -162,9 +164,11 @@ class Toolbar extends StatelessWidget {
             filename: currentFile.name);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sharing: $e')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error sharing: $e')),
+        );
+      }
       debugPrint('Share error: $e');
     }
   }

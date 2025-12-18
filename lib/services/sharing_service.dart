@@ -14,7 +14,7 @@ class SharingService {
     try {
       await _channel.invokeMethod('shareText', {'text': text});
     } on PlatformException catch (e) {
-      print("Failed to share text: '${e.message}'.");
+      debugPrint("Failed to share text: '${e.message}'.");
       throw Exception("Sharing failed: ${e.message}");
     }
   }
@@ -25,7 +25,7 @@ class SharingService {
       await _channel.invokeMethod('shareHtml',
           {'html': html, 'filename': filename ?? 'shared_content.html'});
     } on PlatformException catch (e) {
-      print("Failed to share HTML: '${e.message}'.");
+      debugPrint("Failed to share HTML: '${e.message}'.");
       throw Exception("Sharing failed: ${e.message}");
     }
   }
@@ -36,7 +36,7 @@ class SharingService {
       await _channel.invokeMethod('shareFile',
           {'filePath': filePath, 'mimeType': mimeType ?? 'text/html'});
     } on PlatformException catch (e) {
-      print("Failed to share file: '${e.message}'.");
+      debugPrint("Failed to share file: '${e.message}'.");
       throw Exception("Sharing failed: ${e.message}");
     }
   }
@@ -46,7 +46,7 @@ class SharingService {
     try {
       await _channel.invokeMethod('shareUrl', {'url': url});
     } on PlatformException catch (e) {
-      print("Failed to share URL: '${e.message}'.");
+      debugPrint("Failed to share URL: '${e.message}'.");
       throw Exception("Sharing failed: ${e.message}");
     }
   }
@@ -95,12 +95,16 @@ class SharingService {
       } else {
         // No valid content found
         debugPrint('SharingService: No valid shared content found');
-        _showSnackBar(context, 'No valid content to display');
+        if (context.mounted) {
+          _showSnackBar(context, 'No valid content to display');
+        }
       }
     } catch (e, stackTrace) {
       debugPrint('SharingService: Error handling shared content: $e');
       debugPrint('Stack trace: $stackTrace');
-      _showSnackBar(context, 'Error loading shared content: ${e.toString()}');
+      if (context.mounted) {
+        _showSnackBar(context, 'Error loading shared content: ${e.toString()}');
+      }
     }
   }
 
@@ -114,27 +118,25 @@ class SharingService {
       debugPrint('SharingService: Loading URL: $url');
 
       // Show loading indicator
-      _showSnackBar(context, 'Loading URL...');
+      if (context.mounted) {
+        _showSnackBar(context, 'Loading URL...');
+      }
 
       // Load the URL using the existing HTML service
       await htmlService.loadFromUrl(url);
 
       // Show success message
-      _showSnackBar(context, 'URL loaded successfully!');
+      if (context.mounted) {
+        _showSnackBar(context, 'URL loaded successfully!');
+      }
 
-      // Ensure the content is displayed by notifying listeners
-      // This is a workaround to ensure the UI updates properly
-      htmlService.notifyListeners();
-
-      // Add a small delay to ensure the URL input field updates properly
-      // This gives the UI time to process the file change and update the URL display
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Force another notification to ensure URL input updates
-      htmlService.notifyListeners();
+      // The HTML service should handle its own notifications
+      // Remove direct notifyListeners calls as they're not safe here
     } catch (e) {
       debugPrint('SharingService: Error loading URL: $e');
-      _showSnackBar(context, 'Error loading URL: ${e.toString()}');
+      if (context.mounted) {
+        _showSnackBar(context, 'Error loading URL: ${e.toString()}');
+      }
       rethrow;
     }
   }
@@ -158,10 +160,14 @@ class SharingService {
       );
 
       await htmlService.loadFile(htmlFile);
-      _showSnackBar(context, 'Text loaded successfully!');
+      if (context.mounted) {
+        _showSnackBar(context, 'Text loaded successfully!');
+      }
     } catch (e) {
       debugPrint('SharingService: Error handling shared text: $e');
-      _showSnackBar(context, 'Error loading text: ${e.toString()}');
+      if (context.mounted) {
+        _showSnackBar(context, 'Error loading text: ${e.toString()}');
+      }
       rethrow;
     }
   }
@@ -188,10 +194,14 @@ class SharingService {
       );
 
       await htmlService.loadFile(htmlFile);
-      _showSnackBar(context, 'File loaded successfully!');
+      if (context.mounted) {
+        _showSnackBar(context, 'File loaded successfully!');
+      }
     } catch (e) {
       debugPrint('SharingService: Error handling file bytes: $e');
-      _showSnackBar(context, 'Error loading file: ${e.toString()}');
+      if (context.mounted) {
+        _showSnackBar(context, 'Error loading file: ${e.toString()}');
+      }
       rethrow;
     }
   }
@@ -206,7 +216,9 @@ class SharingService {
       debugPrint('SharingService: Handling file path: $filePath');
 
       // Show loading indicator
-      _showSnackBar(context, 'Loading file...');
+      if (context.mounted) {
+        _showSnackBar(context, 'Loading file...');
+      }
 
       // Read file from filesystem
       final file = File(filePath);
@@ -226,10 +238,14 @@ class SharingService {
       );
 
       await htmlService.loadFile(htmlFile);
-      _showSnackBar(context, 'File loaded successfully!');
+      if (context.mounted) {
+        _showSnackBar(context, 'File loaded successfully!');
+      }
     } catch (e) {
       debugPrint('SharingService: Error handling file path: $e');
-      _showSnackBar(context, 'Error loading file: ${e.toString()}');
+      if (context.mounted) {
+        _showSnackBar(context, 'Error loading file: ${e.toString()}');
+      }
       rethrow;
     }
   }
@@ -279,7 +295,7 @@ class SharingService {
       final result = await channel.invokeMethod('getSharedContent');
       return result != null ? Map<String, dynamic>.from(result) : null;
     } catch (e) {
-      print('Error checking for shared content: $e');
+      debugPrint('Error checking for shared content: $e');
       return null;
     }
   }

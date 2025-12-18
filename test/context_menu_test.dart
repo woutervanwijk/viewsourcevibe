@@ -1,6 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/material.dart';
-import 'package:htmlviewer/services/code_editor_context_menu.dart';
 import 'package:re_editor/re_editor.dart';
 
 void main() {

@@ -10,7 +10,7 @@ void main() {
 
       // Verify the method exists
       expect(htmlService.loadFromUrl, isNotNull);
-      expect(htmlService.loadFromUrl is Function, isTrue);
+      expect(htmlService.loadFromUrl, isA<Function>());
 
       // Verify the method can be called (it will fail without network, but that's expected)
       // The important thing is that the method signature now includes headers
@@ -59,7 +59,7 @@ void main() {
       });
 
       // Verify User-Agent contains browser-like string
-      expect(expectedHeaders['User-Agent'], contains('Curl'));
+      expect(expectedHeaders['User-Agent'], contains('curl'));
     });
   });
 }
