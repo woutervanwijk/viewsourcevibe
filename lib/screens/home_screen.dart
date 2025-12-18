@@ -47,10 +47,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController ??= PrimaryScrollController.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('View Source Vibe', style: TextStyle(fontSize: 18)),
+        title: const Text(
+          'View\nSource\nVibe',
+          style: TextStyle(fontSize: 10),
+          // textAlign: TextAlign.center,
+        ),
         actions: const [
           Toolbar(),
         ],
+        centerTitle: false,
       ),
       body: Column(
         children: [
