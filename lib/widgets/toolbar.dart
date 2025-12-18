@@ -93,7 +93,8 @@ class Toolbar extends StatelessWidget {
         );
 
         if (context.mounted) {
-          await Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+          await Provider.of<HtmlService>(context, listen: false)
+              .loadFile(htmlFile);
         }
       }
     } catch (e) {
@@ -109,7 +110,8 @@ class Toolbar extends StatelessWidget {
     try {
       final htmlFile = await FileUtils.loadSampleFile(filename);
       if (context.mounted) {
-        await Provider.of<HtmlService>(context, listen: false).loadFile(htmlFile);
+        await Provider.of<HtmlService>(context, listen: false)
+            .loadFile(htmlFile);
       }
     } catch (e) {
       if (context.mounted) {
@@ -243,16 +245,19 @@ class Toolbar extends StatelessWidget {
           builder: (context, settings, child) {
             return Container(
               decoration: BoxDecoration(
-                color: settings.wrapText 
-                    ? Colors.grey[200] 
+                color: settings.wrapText
+                    ? Theme.of(context).highlightColor
                     : Colors.transparent,
                 shape: BoxShape.circle,
               ),
               child: IconButton(
                 icon: Icon(
-                  settings.wrapText ? Icons.wrap_text : Icons.wrap_text_outlined,
+                  settings.wrapText
+                      ? Icons.wrap_text
+                      : Icons.wrap_text_outlined,
                 ),
-                tooltip: 'Toggle Word Wrap (${settings.wrapText ? 'ON' : 'OFF'})',
+                tooltip:
+                    'Toggle Word Wrap (${settings.wrapText ? 'ON' : 'OFF'})',
                 onPressed: () => _toggleWordWrap(context),
               ),
             );
