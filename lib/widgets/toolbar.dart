@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:htmlviewer/models/settings.dart';
 import 'package:provider/provider.dart';
 import 'package:htmlviewer/services/html_service.dart';
 import 'package:htmlviewer/services/sharing_service.dart';
@@ -125,6 +126,19 @@ class Toolbar extends StatelessWidget {
     );
   }
 
+  void _toggleWordWrap(BuildContext context) {
+    final settings = Provider.of<AppSettings>(context, listen: false);
+    final newValue = !settings.wrapText;
+    settings.wrapText = newValue;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Word wrap ${newValue ? 'enabled' : 'disabled'}'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
   Future<void> _shareCurrentFile(BuildContext context) async {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     final currentFile = htmlService.currentFile;
@@ -138,7 +152,8 @@ class Toolbar extends StatelessWidget {
 
     try {
       // Check if the current file is a URL (starts with http:// or https://)
-      if (currentFile.path.startsWith('http://') || currentFile.path.startsWith('https://')) {
+      if (currentFile.path.startsWith('http://') ||
+          currentFile.path.startsWith('https://')) {
         // Share as URL
         await SharingService.shareUrl(currentFile.path);
       } else {
@@ -220,6 +235,25 @@ class Toolbar extends StatelessWidget {
             tooltip: 'Sample Files',
             onPressed: () => _showSampleFilesMenu(context),
           ),
+        Consumer<AppSettings>(
+          builder: (context, settings, child) {
+            return Container(
+              decoration: BoxDecoration(
+                color: settings.wrapText 
+                    ? Colors.grey[200] 
+                    : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: Icon(
+                  settings.wrapText ? Icons.wrap_text : Icons.wrap_text_outlined,
+                ),
+                tooltip: 'Toggle Word Wrap (${settings.wrapText ? 'ON' : 'OFF'})',
+                onPressed: () => _toggleWordWrap(context),
+              ),
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.share),
           tooltip: 'Share',

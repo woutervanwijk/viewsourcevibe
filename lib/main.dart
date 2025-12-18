@@ -105,6 +105,8 @@ class MyApp extends StatelessWidget {
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
         ),
         brightness: Brightness.light,
       ),
@@ -117,6 +119,8 @@ class MyApp extends StatelessWidget {
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
+          backgroundColor: Color(0xFF1E1E1E), // Dark background for dark theme
+          surfaceTintColor: Color(0xFF1E1E1E),
         ),
         brightness: Brightness.dark,
       ),
