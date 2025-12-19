@@ -14,6 +14,7 @@ class ShareViewController: SLComposeServiceViewController {
 
     private var isProcessing = false
     private var processingError: Error?
+    private var hasProcessedContent = false
 
     override func isContentValid() -> Bool {
         // Do validation of contentText and/or NSExtensionContext attachments here
@@ -22,17 +23,17 @@ class ShareViewController: SLComposeServiceViewController {
 
     override func didSelectPost() {
         // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
-        if !isProcessing {
+        // If automatic processing didn't work, allow manual processing as fallback
+        if !isProcessing && !hasProcessedContent {
             processSharedContent()
         }
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        // Automatically process content when the view appears
-        // This provides a better user experience by not requiring the user to tap "Post"
-        // We use viewDidAppear instead of viewDidLoad to ensure the extension is fully initialized
-        if !isProcessing {
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // Start processing immediately when the view loads
+        // This helps minimize the visibility of the share extension UI
+        if !isProcessing && !hasProcessedContent {
             processSharedContent()
         }
     }
@@ -43,8 +44,14 @@ class ShareViewController: SLComposeServiceViewController {
     }
 
     func processSharedContent() {
+        // Prevent multiple processing attempts
+        if isProcessing || hasProcessedContent {
+            return
+        }
+        
         isProcessing = true
         processingError = nil
+        hasProcessedContent = true
         
         // Show loading indicator
         showLoadingIndicator()
@@ -170,7 +177,8 @@ class ShareViewController: SLComposeServiceViewController {
                 
                 // Give the main app a moment to open, then complete the request
                 // This provides a smoother user experience
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Use a slightly shorter delay since we're processing earlier
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     self.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
                 }
             } else {

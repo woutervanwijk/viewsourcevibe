@@ -124,20 +124,15 @@ class SharingService {
     String url,
   ) async {
     try {
-      debugPrint('SharingService: Loading URL: $url');
+      // debugPrint('SharingService: Loading URL: $url');
 
       // Show loading indicator
-      if (context.mounted) {
-        _showSnackBar(context, 'Loading URL...');
-      }
+      // if (context.mounted) {
+      //   _showSnackBar(context, 'Loading URL...');
+      // }
 
       // Load the URL using the existing HTML service
       await htmlService.loadFromUrl(url);
-
-      // Show success message
-      if (context.mounted) {
-        _showSnackBar(context, 'URL loaded successfully!');
-      }
 
       // The HTML service should handle its own notifications
       // Remove direct notifyListeners calls as they're not safe here
@@ -294,12 +289,12 @@ class SharingService {
   static bool isUrl(String text) {
     // Remove any surrounding whitespace and quotes
     final trimmedText = text.trim();
-    
+
     // Handle empty strings
     if (trimmedText.isEmpty) {
       return false;
     }
-    
+
     final cleanText = trimmedText.startsWith('"') && trimmedText.endsWith('"')
         ? trimmedText.substring(1, trimmedText.length - 1)
         : (trimmedText.startsWith("'") && trimmedText.endsWith("'"))
@@ -339,12 +334,12 @@ class SharingService {
   static bool isFilePath(String text) {
     // Remove any surrounding whitespace and quotes
     final trimmedText = text.trim();
-    
+
     // Handle empty strings
     if (trimmedText.isEmpty) {
       return false;
     }
-    
+
     final cleanText = trimmedText.startsWith('"') && trimmedText.endsWith('"')
         ? trimmedText.substring(1, trimmedText.length - 1)
         : (trimmedText.startsWith("'") && trimmedText.endsWith("'"))
