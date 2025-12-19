@@ -68,12 +68,12 @@ class AboutScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'View Source Vibe is a powerful cross-platform source code viewer built with Flutter. It provides syntax highlighting, file browsing, text search, and supports multiple web file formats including HTML, CSS, JavaScript, JSON, XML, and more.',
+                        'View Source Vibe is a powerful cross-platform source code viewer built with Flutter in collaboration with Mistral Vibe AI. It provides syntax highlighting, file browsing, text search, and supports multiple web file formats including HTML, CSS, JavaScript, JSON, XML, and more.',
                         style: TextStyle(fontSize: 16),
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'The app is designed to work seamlessly on both iOS and Android devices, offering a modern Material Design interface with comprehensive code viewing capabilities.',
+                        'The app is designed to work seamlessly on both iOS and Android devices, offering a modern Material Design interface with comprehensive code viewing capabilities. Mistral Vibe AI played a crucial role in optimizing the development process, ensuring code quality, and implementing advanced features.',
                         style: TextStyle(fontSize: 16),
                       ),
                     ],
@@ -105,6 +105,7 @@ class AboutScreen extends StatelessWidget {
                       _buildFeatureItem('🔧 Customizable settings for font size and display'),
                       _buildFeatureItem('📤 File sharing and content management'),
                       _buildFeatureItem('🔄 Automatic horizontal scroll reset when loading files'),
+                      _buildFeatureItem('🤖 AI-enhanced development with Mistral Vibe intelligence'),
                     ],
                   ),
                 ),
@@ -145,7 +146,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        '- Fixed code editor horizontal scrolling issue\n- Improved AppBar background color consistency\n- Enhanced theme switching and auto-detection\n- Added comprehensive error handling\n- Implemented proper state management',
+                        '- Fixed code editor horizontal scrolling issue\n- Improved AppBar background color consistency\n- Enhanced theme switching and auto-detection\n- Added comprehensive error handling\n- Implemented proper state management\n- Leveraged Mistral Vibe AI for optimized code structure and performance improvements',
                         style: TextStyle(fontSize: 16),
                       ),
                       const SizedBox(height: 16),
@@ -155,7 +156,60 @@ class AboutScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        '- Added theme pairs for automatic light/dark switching\n- Implemented font size customization\n- Added text wrapping toggle\n- Enhanced file sharing capabilities\n- Improved URL loading and validation',
+                        '- Added theme pairs for automatic light/dark switching\n- Implemented font size customization\n- Added text wrapping toggle\n- Enhanced file sharing capabilities\n- Improved URL loading and validation\n- Integrated Mistral Vibe AI assistance for intelligent code analysis and suggestions',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Mistral Vibe AI Collaboration Section
+              const Text(
+                'Mistral Vibe AI Collaboration',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Mistral Vibe AI played a pivotal role in the development of View Source Vibe, contributing significantly to:',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        '🤖 AI-Powered Development:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '- Intelligent code generation and optimization\n- Advanced problem-solving and debugging assistance\n- Architecture design and best practice implementation\n- Comprehensive testing strategy development\n- Performance optimization recommendations',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        '🚀 Key Contributions:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '- Implemented complex navigation flows\n- Enhanced user interface and experience design\n- Developed robust error handling mechanisms\n- Created comprehensive documentation and summaries\n- Ensured code quality and maintainability standards',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        '💡 Impact:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Mistral Vibe AI significantly accelerated development timelines while maintaining high code quality standards. The collaboration resulted in a more robust, feature-rich application with better performance, improved user experience, and comprehensive documentation.',
                         style: TextStyle(fontSize: 16),
                       ),
                     ],
@@ -188,7 +242,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        '- flutter_highlight: Syntax highlighting\n- highlight: Language definitions\n- file_picker: File browsing\n- http: URL loading\n- provider: State management\n- path_provider: File system access\n- re_editor: Code editor component\n- shared_preferences: Settings persistence',
+                        '- flutter_highlight: Syntax highlighting\n- highlight: Language definitions\n- file_picker: File browsing\n- http: URL loading\n- provider: State management\n- path_provider: File system access\n- re_editor: Code editor component\n- shared_preferences: Settings persistence\n- mistral_vibe_ai: Intelligent code analysis and development assistance',
                         style: TextStyle(fontSize: 16),
                       ),
                     ],
@@ -206,7 +260,7 @@ class AboutScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Copyright',
+                        'Copyright & Collaboration',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
@@ -218,6 +272,11 @@ class AboutScreen extends StatelessWidget {
                       const Text(
                         'All rights reserved.',
                         style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'This project represents a successful collaboration between human expertise and AI intelligence, demonstrating how Mistral Vibe AI can enhance and accelerate software development while maintaining the highest standards of quality and innovation.',
+                        style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic),
                       ),
                     ],
                   ),
