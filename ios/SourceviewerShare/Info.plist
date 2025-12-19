@@ -5,10 +5,19 @@
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
-		<dict>
-			<key>NSExtensionActivationRule</key>
-			<string>TRUEPREDICATE</string>
-		</dict>
+    <dict>
+        <key>NSExtensionActivationRule</key>
+        <dict>
+            <key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+            <integer>1</integer>
+            <key>NSExtensionActivationSupportsWebPageWithMaxCount</key>
+            <integer>1</integer>
+            <key>NSExtensionActivationSupportsText</key>
+            <integer>1</integer>
+            <key>NSExtensionActivationSupportsFileWithMaxCount</key>
+            <integer>1</integer>
+        </dict>
+    </dict>
 		<key>NSExtensionMainStoryboard</key>
 		<string>MainInterface</string>
 		<key>NSExtensionPointIdentifier</key>

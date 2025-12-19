@@ -30,7 +30,55 @@ import UIKit
       }
     }
 
+    // Check for shared content from UserDefaults (from share extension)
+    checkForSharedContentFromUserDefaults()
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  private func checkForSharedContentFromUserDefaults() {
+    let userDefaults = UserDefaults(suiteName: "group.info.wouter.sourceviewer")
+    
+    if let sharedData = userDefaults?.dictionary(forKey: "sharedContent") {
+      print("AppDelegate: Found shared content in UserDefaults: \(sharedData)")
+      
+      // Convert to the format expected by our app
+      if let contentType = sharedData["type"] as? String {
+        var processedData: [String: Any] = [
+          "type": contentType
+        ]
+        
+        // Map the shared content fields to our expected format
+        if let content = sharedData["content"] as? String {
+          processedData["content"] = content
+        }
+        
+        if let url = sharedData["url"] as? String {
+          processedData["content"] = url
+        }
+        
+        if let text = sharedData["text"] as? String {
+          processedData["content"] = text
+        }
+        
+        if let filePath = sharedData["filePath"] as? String {
+          processedData["filePath"] = filePath
+        }
+        
+        if let fileName = sharedData["fileName"] as? String {
+          processedData["fileName"] = fileName
+        }
+        
+        // Set this as the initial shared content
+        sharedContent = processedData
+        
+        // Clear the UserDefaults so we don't process it again
+        userDefaults?.removeObject(forKey: "sharedContent")
+        userDefaults?.synchronize()
+        
+        print("AppDelegate: Processed shared content from UserDefaults: \(processedData)")
+      }
+    }
   }
 
   private func handleSharedContent(result: FlutterResult) {
@@ -82,14 +130,44 @@ import UIKit
       if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
         let queryItems = components.queryItems
       {
+        var contentType: String? = nil
+        var content: String? = nil
+        var fileName: String? = nil
+        
         for item in queryItems {
-          if item.name == "url", let urlValue = item.value {
-            sharedContent = [
-              "type": "url",
-              "content": urlValue,
-            ]
-            break
+          if item.name == "type", let typeValue = item.value {
+            contentType = typeValue
           }
+          else if item.name == "content", let contentValue = item.value {
+            content = contentValue
+          }
+          else if item.name == "fileName", let fileNameValue = item.value {
+            fileName = fileNameValue
+          }
+          else if item.name == "url", let urlValue = item.value {
+            // Backward compatibility for old share extension format
+            contentType = "url"
+            content = urlValue
+          }
+        }
+        
+        if let type = contentType, let contentValue = content {
+          var sharedData: [String: Any] = [
+            "type": type,
+            "content": contentValue
+          ]
+          
+          if let name = fileName {
+            sharedData["fileName"] = name
+          }
+          
+          // Handle file paths specially
+          if type == "file", let filePath = contentValue as? String {
+            sharedData["filePath"] = filePath
+          }
+          
+          sharedContent = sharedData
+          print("AppDelegate: Share extension content received: \(sharedData)")
         }
       }
     } else {

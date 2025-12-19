@@ -98,12 +98,20 @@
 			);
 			target = 6CC72F3B2EF58F5B00C5AF9E /* SourceviewerShare */;
 		};
+		6CC72F662EF592AC00C5AF9E /* Exceptions for "SourceviewerShare" folder in "Runner" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				ShareViewController.swift,
+			);
+			target = 97C146ED1CF9000F007C117D /* Runner */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		6CC72F3D2EF58F5B00C5AF9E /* SourceviewerShare */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				6CC72F662EF592AC00C5AF9E /* Exceptions for "SourceviewerShare" folder in "Runner" target */,
 				6CC72F4A2EF58F5B00C5AF9E /* Exceptions for "SourceviewerShare" folder in "SourceviewerShare" target */,
 			);
 			explicitFileTypes = {
