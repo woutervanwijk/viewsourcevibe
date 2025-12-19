@@ -19,13 +19,15 @@ void main() {
     expect(find.text('About'), findsOneWidget);
     expect(find.text('Key Features'), findsOneWidget);
     expect(find.text('Development Process'), findsOneWidget);
+    expect(find.text('Mistral Vibe AI Collaboration'), findsOneWidget);
     expect(find.text('Technical Details'), findsOneWidget);
-    expect(find.text('Copyright'), findsOneWidget);
+    expect(find.text('Copyright & Collaboration'), findsOneWidget);
     
     // Verify some feature items are present
     expect(find.text('📱 Cross-platform support for iOS and Android'), findsOneWidget);
     expect(find.text('🎨 Beautiful syntax highlighting with multiple themes'), findsOneWidget);
     expect(find.text('🔍 Advanced text search with navigation'), findsOneWidget);
+    expect(find.text('🤖 AI-enhanced development with Mistral Vibe intelligence'), findsOneWidget);
     
     // Verify close button works
     await tester.tap(find.text('Close'));

@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const Text(
               'View\nSource\nVibe',
-              style: TextStyle(fontSize: 10),
+              style: TextStyle(fontSize: 10, height: 1),
               // textAlign: TextAlign.center,
             ),
           ],
