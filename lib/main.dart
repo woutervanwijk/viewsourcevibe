@@ -1,10 +1,119 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/platform_sharing_handler.dart';
 import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
+import 'package:uni_links/uni_links.dart';
+import 'package:universal_io/io.dart';
+
+/// Sets up URL scheme handling for deep linking
+Future<void> setupUrlHandling(HtmlService htmlService) async {
+  try {
+    // Handle initial URI when app is launched
+    final initialUri = await getInitialUri();
+    if (initialUri != null) {
+      await _handleDeepLink(initialUri, htmlService);
+    }
+
+    // Listen for URI changes while app is running
+    uriLinkStream.listen((Uri? uri) {
+      if (uri != null) {
+        _handleDeepLink(uri, htmlService);
+      }
+    }, onError: (err) {
+      debugPrint('Error in URI stream: $err');
+    });
+  } catch (e) {
+    debugPrint('Error setting up URL handling: $e');
+  }
+}
+
+/// Handles deep links from URL schemes
+Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
+  debugPrint('Handling deep link: $uri');
+
+  // Handle viewsourcevibe://open?url=... scheme
+  if (uri.scheme == 'viewsourcevibe' && uri.host == 'open') {
+    final url = uri.queryParameters['url'];
+    if (url != null && url.isNotEmpty) {
+      debugPrint('Opening URL from deep link: $url');
+      try {
+        await htmlService.loadFromUrl(url);
+      } catch (e) {
+        debugPrint('Error loading URL from deep link: $e');
+      }
+    }
+  }
+  // Handle viewsourcevibe://text?content=... scheme
+  else if (uri.scheme == 'viewsourcevibe' && uri.host == 'text') {
+    final content = uri.queryParameters['content'];
+    if (content != null && content.isNotEmpty) {
+      debugPrint('Opening text content from deep link: $content');
+      try {
+        final htmlFile = HtmlFile(
+          name: 'shared_text.txt',
+          path: 'shared://text',
+          content: content,
+          lastModified: DateTime.now(),
+          size: content.length,
+        );
+        await htmlService.loadFile(htmlFile);
+      } catch (e) {
+        debugPrint('Error loading text from deep link: $e');
+      }
+    }
+  }
+  // Handle viewsourcevibe://file?path=... scheme
+  else if (uri.scheme == 'viewsourcevibe' && uri.host == 'file') {
+    final filePath = uri.queryParameters['path'];
+    if (filePath != null && filePath.isNotEmpty) {
+      debugPrint('Opening file from deep link: $filePath');
+      try {
+        // Handle file:// URLs by converting to proper file paths
+        String normalizedFilePath = filePath;
+        if (filePath.startsWith('file:///')) {
+          normalizedFilePath = filePath.replaceFirst('file:///', '/');
+        } else if (filePath.startsWith('file///')) {
+          normalizedFilePath = filePath.replaceFirst('file///', '/');
+        } else if (filePath.startsWith('file://')) {
+          normalizedFilePath = filePath.replaceFirst('file://', '/');
+        }
+
+        // Read file from filesystem
+        final file = File(normalizedFilePath);
+        if (await file.exists()) {
+          final content = await file.readAsString();
+          final fileName = normalizedFilePath.split('/').last;
+
+          final htmlFile = HtmlFile(
+            name: fileName,
+            path: normalizedFilePath,
+            content: content,
+            lastModified: await file.lastModified(),
+            size: await file.length(),
+          );
+          await htmlService.loadFile(htmlFile);
+        } else {
+          debugPrint('File does not exist: $normalizedFilePath');
+        }
+      } catch (e) {
+        debugPrint('Error loading file from deep link: $e');
+      }
+    }
+  }
+  // Handle http/https URLs directly
+  else if (uri.scheme == 'http' || uri.scheme == 'https') {
+    debugPrint('Opening web URL: ${uri.toString()}');
+    try {
+      await htmlService.loadFromUrl(uri.toString());
+    } catch (e) {
+      debugPrint('Error loading web URL: $e');
+    }
+  }
+}
 
 void main() async {
   // Initialize Flutter binding before any async operations
@@ -46,6 +155,9 @@ void main() async {
 
   // Setup platform sharing handler
   PlatformSharingHandler.setup();
+
+  // Setup URL scheme handling for deep linking
+  setupUrlHandling(htmlService);
 
   // Load sample file in debug mode for easier testing
   if (const bool.fromEnvironment('dart.vm.product') == false) {

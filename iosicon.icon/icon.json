@@ -6,7 +6,7 @@
     {
       "layers" : [
         {
-          "image-name" : "icon.png",
+          "image-name" : "assets/icon.webp",
           "name" : "icon",
           "position" : {
             "scale" : 1,

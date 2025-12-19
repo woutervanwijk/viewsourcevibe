@@ -294,6 +294,12 @@ class SharingService {
   static bool isUrl(String text) {
     // Remove any surrounding whitespace and quotes
     final trimmedText = text.trim();
+    
+    // Handle empty strings
+    if (trimmedText.isEmpty) {
+      return false;
+    }
+    
     final cleanText = trimmedText.startsWith('"') && trimmedText.endsWith('"')
         ? trimmedText.substring(1, trimmedText.length - 1)
         : (trimmedText.startsWith("'") && trimmedText.endsWith("'"))
@@ -333,6 +339,12 @@ class SharingService {
   static bool isFilePath(String text) {
     // Remove any surrounding whitespace and quotes
     final trimmedText = text.trim();
+    
+    // Handle empty strings
+    if (trimmedText.isEmpty) {
+      return false;
+    }
+    
     final cleanText = trimmedText.startsWith('"') && trimmedText.endsWith('"')
         ? trimmedText.substring(1, trimmedText.length - 1)
         : (trimmedText.startsWith("'") && trimmedText.endsWith("'"))

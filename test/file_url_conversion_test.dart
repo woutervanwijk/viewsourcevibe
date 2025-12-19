@@ -1,14 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
 
 void main() {
   group('File URL Conversion Tests', () {
-    
     test('Should convert file:/// URLs to proper paths', () {
       // Test standard file:/// URLs
       final fileUrl1 = 'file:///Users/test/file.html';
       final expectedPath1 = '/Users/test/file.html';
-      
+
       final convertedPath1 = fileUrl1.replaceFirst('file:///', '/');
       expect(convertedPath1, expectedPath1);
     });
@@ -17,7 +15,7 @@ void main() {
       // Test non-standard file/// URLs (iOS specific)
       final fileUrl2 = 'file///Users/test/file.html';
       final expectedPath2 = '/Users/test/file.html';
-      
+
       final convertedPath2 = fileUrl2.replaceFirst('file///', '/');
       expect(convertedPath2, expectedPath2);
     });
@@ -26,17 +24,19 @@ void main() {
       // Test standard file:// URLs
       final fileUrl3 = 'file://Users/test/file.html';
       final expectedPath3 = '/Users/test/file.html';
-      
+
       final convertedPath3 = fileUrl3.replaceFirst('file://', '/');
       expect(convertedPath3, expectedPath3);
     });
 
     test('Should handle complex iOS file paths', () {
       // Test the actual iOS file path from the error
-      final iosFilePath = 'file///Users/wouter/Library/Developer/CoreSimulator/Devices/2C19D11B-BEF5-45B1-81FD-0919B6BFB505/data/Containers/Data/Application/DDE7D1D9-790B-429E-A07B-BCAE79AADB4F/tmp/info.wouter.sourceviewer-Inbox/index.html';
-      
-      final expectedPath = '/Users/wouter/Library/Developer/CoreSimulator/Devices/2C19D11B-BEF5-45B1-81FD-0919B6BFB505/data/Containers/Data/Application/DDE7D1D9-790B-429E-A07B-BCAE79AADB4F/tmp/info.wouter.sourceviewer-Inbox/index.html';
-      
+      final iosFilePath =
+          'file///Users/wouter/Library/Developer/CoreSimulator/Devices/2C19D11B-BEF5-45B1-81FD-0919B6BFB505/data/Containers/Data/Application/DDE7D1D9-790B-429E-A07B-BCAE79AADB4F/tmp/info.wouter.sourceviewer-Inbox/index.html';
+
+      final expectedPath =
+          '/Users/wouter/Library/Developer/CoreSimulator/Devices/2C19D11B-BEF5-45B1-81FD-0919B6BFB505/data/Containers/Data/Application/DDE7D1D9-790B-429E-A07B-BCAE79AADB4F/tmp/info.wouter.sourceviewer-Inbox/index.html';
+
       final convertedPath = iosFilePath.replaceFirst('file///', '/');
       expect(convertedPath, expectedPath);
       expect(convertedPath.startsWith('/'), true);
@@ -55,7 +55,8 @@ void main() {
     test('Should handle various file URL formats', () {
       final testCases = [
         {
-          'input': 'file:///var/mobile/Containers/Data/Application/app/file.txt',
+          'input':
+              'file:///var/mobile/Containers/Data/Application/app/file.txt',
           'expected': '/var/mobile/Containers/Data/Application/app/file.txt'
         },
         {
@@ -75,11 +76,11 @@ void main() {
           'expected': '/Library/Application Support/app/data.json'
         },
       ];
-      
+
       for (final testCase in testCases) {
         final input = testCase['input'] as String;
         final expected = testCase['expected'] as String;
-        
+
         String converted;
         if (input.startsWith('file:///')) {
           converted = input.replaceFirst('file:///', '/');
@@ -90,7 +91,7 @@ void main() {
         } else {
           converted = input;
         }
-        
+
         expect(converted, expected);
       }
     });
@@ -102,7 +103,7 @@ void main() {
         '/Library/Application Support/app/data.json',
         '/Applications/App.app/Contents/Resources/config.json',
       ];
-      
+
       for (final path in normalizedPaths) {
         expect(path.startsWith('file:///'), false);
         expect(path.startsWith('file///'), false);
@@ -110,6 +111,5 @@ void main() {
         expect(path.startsWith('/'), true);
       }
     });
-
   });
 }

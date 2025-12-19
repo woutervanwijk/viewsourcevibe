@@ -35,6 +35,9 @@ dependencies:
   # Platform-specific file handling
   universal_io: ^2.0.4
   
+  # Deep linking for URL schemes
+  uni_links: ^0.5.1
+  
   # Code editor
   re_editor: ^0.8.0
   re_highlight: ^0.0.3
@@ -57,20 +60,20 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "icon.png"
+  image_path: "assets/icon.webp"
   min_sdk_android: 21
   web:
     generate: true
-    image_path: "icon.png"
+    image_path: "assets/icon.webp"
     background_color: "#FFFFFF"
     theme_color: "#FFFFFF"
   windows:
     generate: true
-    image_path: "icon.png"
+    image_path: "assets/icon.webp"
     icon_size: 48
   macos:
     generate: true
-    image_path: "icon.png"
+    image_path: "assets/icon.webp"
   linux:
     generate: true
-    image_path: "icon.png"
+    image_path: "assets/icon.webp"

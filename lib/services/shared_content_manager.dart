@@ -23,35 +23,42 @@ class SharedContentManager {
     try {
       const MethodChannel channel =
           MethodChannel('info.wouter.sourceviewer/shared_content');
-      
+
       channel.setMethodCallHandler((MethodCall call) async {
         if (call.method == 'handleNewSharedContent') {
-          debugPrint('SharedContentManager: Received new shared content via method channel');
+          debugPrint(
+              'SharedContentManager: Received new shared content via method channel');
           debugPrint('SharedContentManager: Raw arguments: ${call.arguments}');
-          
+
           try {
             // Safely convert the arguments to the expected type
             final sharedData = convertToStringDynamicMap(call.arguments);
             if (sharedData != null) {
-              debugPrint('SharedContentManager: Converted shared data: $sharedData');
+              debugPrint(
+                  'SharedContentManager: Converted shared data: $sharedData');
               // Use a microtask to ensure we're not blocking the native thread
-              await Future.microtask(() => handleNewSharedContent(context, sharedData));
+              await Future.microtask(
+                  () => handleNewSharedContent(context, sharedData));
               return true;
             } else {
-              debugPrint('SharedContentManager: Failed to convert shared data to proper format');
+              debugPrint(
+                  'SharedContentManager: Failed to convert shared data to proper format');
               return false;
             }
           } catch (e) {
-            debugPrint('SharedContentManager: Error processing real-time shared content: $e');
+            debugPrint(
+                'SharedContentManager: Error processing real-time shared content: $e');
             return false;
           }
         }
         return null;
       });
-      
-      debugPrint('SharedContentManager: Real-time shared content handler set up');
+
+      debugPrint(
+          'SharedContentManager: Real-time shared content handler set up');
     } catch (e) {
-      debugPrint('SharedContentManager: Error setting up real-time handler: $e');
+      debugPrint(
+          'SharedContentManager: Error setting up real-time handler: $e');
     }
   }
 
@@ -65,12 +72,14 @@ class SharedContentManager {
       }
 
       if (arguments is Map<String, dynamic>) {
-        debugPrint('SharedContentManager: Arguments are already Map<String, dynamic>');
+        debugPrint(
+            'SharedContentManager: Arguments are already Map<String, dynamic>');
         return arguments;
       }
 
       if (arguments is Map) {
-        debugPrint('SharedContentManager: Converting Map to Map<String, dynamic>');
+        debugPrint(
+            'SharedContentManager: Converting Map to Map<String, dynamic>');
         final result = <String, dynamic>{};
         arguments.forEach((key, value) {
           if (key is String) {
@@ -83,7 +92,8 @@ class SharedContentManager {
         return result;
       }
 
-      debugPrint('SharedContentManager: Arguments are not a Map: ${arguments.runtimeType}');
+      debugPrint(
+          'SharedContentManager: Arguments are not a Map: ${arguments.runtimeType}');
       return null;
     } catch (e) {
       debugPrint('SharedContentManager: Error converting arguments: $e');
@@ -130,11 +140,13 @@ class SharedContentManager {
         if (channelSharedData['type'] == 'url' &&
             channelSharedData['content'] != null &&
             SharingService.isFilePath(channelSharedData['content'] as String)) {
-          debugPrint('SharedContentManager: Converting URL type with file path to file type');
+          debugPrint(
+              'SharedContentManager: Converting URL type with file path to file type');
           final sharedDataFromChannel = {
             'type': 'file',
             'filePath': channelSharedData['content'],
-            'fileName': extractFileNameFromPath(channelSharedData['content'] as String),
+            'fileName':
+                extractFileNameFromPath(channelSharedData['content'] as String),
           };
           if (context.mounted) {
             await _handleSharedContent(context, sharedDataFromChannel);
@@ -187,7 +199,8 @@ class SharedContentManager {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error processing shared content: ${e.toString()}')),
+              content:
+                  Text('Error processing shared content: ${e.toString()}')),
         );
       }
     }
@@ -205,30 +218,34 @@ class SharedContentManager {
     } else if (cleanPath.startsWith('file://')) {
       cleanPath = cleanPath.replaceFirst('file://', '/');
     }
-    
+
     // Extract the last component as file name
     final components = cleanPath.split('/');
-    final lastComponent = components.lastWhere((component) => component.isNotEmpty, orElse: () => '');
-    
+    final lastComponent = components
+        .lastWhere((component) => component.isNotEmpty, orElse: () => '');
+
     // If the path ends with a slash (directory), use fallback
     if (lastComponent.isEmpty || cleanPath.endsWith('/')) {
       return 'shared_file';
     }
-    
+
     return lastComponent;
   }
 
   /// Handle shared content that arrives while app is running
   /// This method can be called from native side when new content is shared
-  static Future<void> handleNewSharedContent(BuildContext context, Map<String, dynamic> sharedData) async {
+  static Future<void> handleNewSharedContent(
+      BuildContext context, Map<String, dynamic> sharedData) async {
     try {
-      debugPrint('SharedContentManager: Handling new shared content while app is running');
-      
+      debugPrint(
+          'SharedContentManager: Handling new shared content while app is running');
+
       // Handle the special case where URL content is actually a file path
       if (sharedData['type'] == 'url' &&
           sharedData['content'] != null &&
           SharingService.isFilePath(sharedData['content'] as String)) {
-        debugPrint('SharedContentManager: Converting URL type with file path to file type (real-time)');
+        debugPrint(
+            'SharedContentManager: Converting URL type with file path to file type (real-time)');
         final convertedData = {
           'type': 'file',
           'filePath': sharedData['content'],
@@ -242,7 +259,9 @@ class SharedContentManager {
       debugPrint('SharedContentManager: Error handling new shared content: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error processing shared content: ${e.toString()}')),
+          SnackBar(
+              content:
+                  Text('Error processing shared content: ${e.toString()}')),
         );
       }
     }
