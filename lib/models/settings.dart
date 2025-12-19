@@ -53,6 +53,11 @@ class AppSettings with ChangeNotifier {
     if (_themeMode != value) {
       _themeMode = value;
       _saveSetting(_prefsThemeMode, value.name);
+      
+      // Auto-switch theme based on the new theme mode
+      // This ensures theme switching works for all theme modes, not just system
+      _autoSwitchThemeBasedOnMode();
+      
       notifyListeners();
     }
   }
@@ -63,17 +68,42 @@ class AppSettings with ChangeNotifier {
       _darkMode = value;
       _saveSetting(_prefsDarkMode, value);
 
-      // Auto-switch theme based on dark mode if in system mode
-      if (_themeMode == ThemeModeOption.system) {
-        debugPrint('Theme mode is system, auto-switching theme');
-        _autoSwitchThemeBasedOnMode();
-      } else {
-        debugPrint('Theme mode is $_themeMode, not auto-switching');
-      }
+      // Auto-switch theme based on dark mode for ALL theme modes
+      // This ensures theme switching works whether theme mode is system, light, or dark
+      debugPrint('Auto-switching theme based on dark mode change');
+      _autoSwitchThemeBasedOnMode();
 
       notifyListeners();
     }
   }
+
+  /// Theme preferences for intelligent theme switching
+  /// Maps themes to their preferred light/dark counterparts
+  static final Map<String, String> _themePreferences = {
+    // Light themes → Dark preferences
+    'vs': 'monokai',           // VS light → Monokai dark
+    'vs2015': 'nord',          // VS2015 light → Nord dark
+    'lightfair': 'androidstudio', // Lightfair → Android Studio dark
+    
+    // Dark themes → Light preferences  
+    'monokai': 'vs',            // Monokai dark → VS light
+    'monokai-sublime': 'vs2015', // Monokai Sublime → VS2015 light
+    'nord': 'lightfair',        // Nord dark → Lightfair light
+    'androidstudio': 'github',  // Android Studio dark → GitHub light
+    'dark': 'github',           // Dark → GitHub light
+    
+    // Theme pairs are handled separately, but we can add preferences
+    'github': 'github-dark',    // GitHub light → GitHub dark
+    'github-dark': 'github',    // GitHub dark → GitHub light
+    'atom-one': 'atom-one-dark', // Atom One light → Atom One dark
+    'atom-one-dark': 'atom-one', // Atom One dark → Atom One light
+    'tokyo-night': 'tokyo-night-dark', // Tokyo Night light → Tokyo Night dark
+    'tokyo-night-dark': 'tokyo-night', // Tokyo Night dark → Tokyo Night light
+  };
+
+  /// Track whether the user has manually selected a specific theme
+  /// When true, preserve their exact theme choice regardless of light/dark mode
+  bool _preserveManualThemeSelection = false;
 
   /// Automatically switch syntax theme based on current theme mode and dark mode
   void _autoSwitchThemeBasedOnMode() {
@@ -81,7 +111,14 @@ class AppSettings with ChangeNotifier {
     final baseThemeName = AppSettings.getBaseThemeName(_themeName);
 
     debugPrint(
-        'Auto-switching theme: current=$_themeName, base=$baseThemeName, desiredDark=$isDarkTheme');
+        'Auto-switching theme: current=$_themeName, base=$baseThemeName, desiredDark=$isDarkTheme, preserveManual=$_preserveManualThemeSelection');
+
+    // If user has manually selected a specific theme, preserve their choice
+    // This is the PRIMARY check that should prevent ALL auto-switching for manual selections
+    if (_preserveManualThemeSelection) {
+      debugPrint('Preserving manually selected theme: $_themeName (blocking all auto-switching)');
+      return; // Don't auto-switch manual selections
+    }
 
     // Check if the current theme is part of a theme pair
     if (AppSettings.isThemePair(baseThemeName)) {
@@ -100,7 +137,48 @@ class AppSettings with ChangeNotifier {
         debugPrint('Already using correct variant: $appropriateVariant');
       }
     } else {
-      debugPrint('Theme is not part of a pair, no auto-switching needed');
+      // Theme is not part of a pair - check if we need to switch to maintain dark/light consistency
+      final currentThemeMeta = AppSettings.getThemeMetadata(_themeName);
+      
+      if (isDarkTheme && !currentThemeMeta.isDark) {
+        // We're in dark mode but using a light theme - switch to a dark theme
+        debugPrint('Dark mode enabled but using light theme, switching to dark theme');
+        
+        // Try to find the preferred dark theme for this light theme
+        final preferredDarkTheme = _themePreferences[_themeName] ?? _themePreferences[baseThemeName];
+        
+        if (preferredDarkTheme != null && AppSettings.getThemeMetadata(preferredDarkTheme).isDark) {
+          // Use the preferred dark theme
+          _themeName = preferredDarkTheme;
+          _saveSetting(_prefsThemeName, preferredDarkTheme);
+          debugPrint('Switched from light theme $_themeName to preferred dark theme $preferredDarkTheme');
+        } else {
+          // Fallback to a sensible default dark theme
+          _themeName = 'github-dark';
+          _saveSetting(_prefsThemeName, 'github-dark');
+          debugPrint('Switched from light theme $_themeName to default dark theme github-dark');
+        }
+      } else if (!isDarkTheme && currentThemeMeta.isDark) {
+        // We're in light mode but using a dark theme - switch to a light theme
+        debugPrint('Light mode enabled but using dark theme, switching to light theme');
+        
+        // Try to find the preferred light theme for this dark theme
+        final preferredLightTheme = _themePreferences[_themeName] ?? _themePreferences[baseThemeName];
+        
+        if (preferredLightTheme != null && !AppSettings.getThemeMetadata(preferredLightTheme).isDark) {
+          // Use the preferred light theme
+          _themeName = preferredLightTheme;
+          _saveSetting(_prefsThemeName, preferredLightTheme);
+          debugPrint('Switched from dark theme $_themeName to preferred light theme $preferredLightTheme');
+        } else {
+          // Fallback to a sensible default light theme
+          _themeName = 'github';
+          _saveSetting(_prefsThemeName, 'github');
+          debugPrint('Switched from dark theme $_themeName to default light theme github');
+        }
+      } else {
+        debugPrint('Theme matches current mode, no switching needed');
+      }
     }
   }
 
@@ -120,6 +198,19 @@ class AppSettings with ChangeNotifier {
     if (_themeName != value) {
       _themeName = value;
       _saveSetting(_prefsThemeName, value);
+      
+      // Check if this is a manual theme selection (not a theme pair)
+      final baseThemeName = AppSettings.getBaseThemeName(value);
+      if (!AppSettings.isThemePair(baseThemeName)) {
+        // User has selected a specific non-pair theme - preserve their choice
+        _preserveManualThemeSelection = true;
+        debugPrint('Manual theme selection detected: $value - will preserve this choice (blocking all auto-switching)');
+      } else {
+        // This is a theme pair - allow auto-switching
+        _preserveManualThemeSelection = false;
+        debugPrint('Theme pair selection detected: $value - will auto-switch variants');
+      }
+      
       notifyListeners();
     }
   }

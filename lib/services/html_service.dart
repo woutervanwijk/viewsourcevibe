@@ -527,7 +527,7 @@ class HtmlService with ChangeNotifier {
     final codeTheme = CodeHighlightTheme(
         languages: {languageName: CodeHighlightThemeMode(mode: mode)},
         theme: _getThemeByName(themeName));
-
+    debugPrint('theme: $themeName ${_getThemeByName(themeName)}');
     // Create the scroll controller for CodeEditor
     final codeScrollController = scrollController != null
         ? CodeScrollController(verticalScroller: scrollController)

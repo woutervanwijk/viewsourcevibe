@@ -100,11 +100,8 @@ void main() {
         size: veryLargeContent.length + 18,
       );
       
-      // Check the size
-      final sizeInKB = largeFile.size / 1024;
-      final sizeInMB = sizeInKB / 1024;
-      
-      print('Large file size: ${largeFile.size} bytes (${sizeInKB.toStringAsFixed(2)} KB, ${sizeInMB.toStringAsFixed(2)} MB)');
+      // Check the size directly
+      // Size calculations removed as they're not used in assertions
       
       // This should still be shareable but might be slow
       expect(largeFile.size, greaterThan(50 * 1024)); // > 50KB
