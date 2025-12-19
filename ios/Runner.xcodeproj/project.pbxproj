@@ -12,7 +12,7 @@
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		3F7EAABEEA40FE8A0AD35BF8 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9F78EA2DC5BE0849C9EF0FA9 /* Pods_Runner.framework */; };
 		6C2B5DCB2EF30B780091F558 /* SharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2B5DCA2EF30B780091F558 /* SharingService.swift */; };
-		6C50600E2EF5740F0079AFB0 /* SourceviewerShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6C5060042EF5740F0079AFB0 /* SourceviewerShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		6CC72F462EF58F5B00C5AF9E /* SourceviewerShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6CC72F3C2EF58F5B00C5AF9E /* SourceviewerShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
@@ -28,11 +28,11 @@
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
-		6C50600C2EF5740F0079AFB0 /* PBXContainerItemProxy */ = {
+		6CC72F442EF58F5B00C5AF9E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 6C5060032EF5740F0079AFB0;
+			remoteGlobalIDString = 6CC72F3B2EF58F5B00C5AF9E;
 			remoteInfo = SourceviewerShare;
 		};
 /* End PBXContainerItemProxy section */
@@ -44,7 +44,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				6C50600E2EF5740F0079AFB0 /* SourceviewerShare.appex in Embed Foundation Extensions */,
+				6CC72F462EF58F5B00C5AF9E /* SourceviewerShare.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 1;
@@ -72,7 +72,7 @@
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		6C0B68AE2EF3474200D3C081 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		6C2B5DCA2EF30B780091F558 /* SharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingService.swift; sourceTree = "<group>"; };
-		6C5060042EF5740F0079AFB0 /* SourceviewerShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SourceviewerShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6CC72F3C2EF58F5B00C5AF9E /* SourceviewerShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SourceviewerShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
@@ -91,20 +91,20 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		6C50600F2EF5740F0079AFB0 /* Exceptions for "SourceviewerShare" folder in "SourceviewerShare" target */ = {
+		6CC72F4A2EF58F5B00C5AF9E /* Exceptions for "SourceviewerShare" folder in "SourceviewerShare" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 6C5060032EF5740F0079AFB0 /* SourceviewerShare */;
+			target = 6CC72F3B2EF58F5B00C5AF9E /* SourceviewerShare */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		6C5060052EF5740F0079AFB0 /* SourceviewerShare */ = {
+		6CC72F3D2EF58F5B00C5AF9E /* SourceviewerShare */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				6C50600F2EF5740F0079AFB0 /* Exceptions for "SourceviewerShare" folder in "SourceviewerShare" target */,
+				6CC72F4A2EF58F5B00C5AF9E /* Exceptions for "SourceviewerShare" folder in "SourceviewerShare" target */,
 			);
 			explicitFileTypes = {
 			};
@@ -124,7 +124,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6C5060012EF5740F0079AFB0 /* Frameworks */ = {
+		6CC72F392EF58F5B00C5AF9E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -180,7 +180,7 @@
 				6C2B5DCA2EF30B780091F558 /* SharingService.swift */,
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
-				6C5060052EF5740F0079AFB0 /* SourceviewerShare */,
+				6CC72F3D2EF58F5B00C5AF9E /* SourceviewerShare */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
 				8CB60F89B16D2506F745A115 /* Pods */,
@@ -193,7 +193,7 @@
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
-				6C5060042EF5740F0079AFB0 /* SourceviewerShare.appex */,
+				6CC72F3C2EF58F5B00C5AF9E /* SourceviewerShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -245,24 +245,24 @@
 			productReference = 331C8081294A63A400263BE5 /* RunnerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		6C5060032EF5740F0079AFB0 /* SourceviewerShare */ = {
+		6CC72F3B2EF58F5B00C5AF9E /* SourceviewerShare */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 6C5060102EF5740F0079AFB0 /* Build configuration list for PBXNativeTarget "SourceviewerShare" */;
+			buildConfigurationList = 6CC72F4B2EF58F5B00C5AF9E /* Build configuration list for PBXNativeTarget "SourceviewerShare" */;
 			buildPhases = (
-				6C5060002EF5740F0079AFB0 /* Sources */,
-				6C5060012EF5740F0079AFB0 /* Frameworks */,
-				6C5060022EF5740F0079AFB0 /* Resources */,
+				6CC72F382EF58F5B00C5AF9E /* Sources */,
+				6CC72F392EF58F5B00C5AF9E /* Frameworks */,
+				6CC72F3A2EF58F5B00C5AF9E /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				6C5060052EF5740F0079AFB0 /* SourceviewerShare */,
+				6CC72F3D2EF58F5B00C5AF9E /* SourceviewerShare */,
 			);
 			name = SourceviewerShare;
 			productName = SourceviewerShare;
-			productReference = 6C5060042EF5740F0079AFB0 /* SourceviewerShare.appex */;
+			productReference = 6CC72F3C2EF58F5B00C5AF9E /* SourceviewerShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		97C146ED1CF9000F007C117D /* Runner */ = {
@@ -282,7 +282,7 @@
 			buildRules = (
 			);
 			dependencies = (
-				6C50600D2EF5740F0079AFB0 /* PBXTargetDependency */,
+				6CC72F452EF58F5B00C5AF9E /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -304,7 +304,7 @@
 						CreatedOnToolsVersion = 14.0;
 						TestTargetID = 97C146ED1CF9000F007C117D;
 					};
-					6C5060032EF5740F0079AFB0 = {
+					6CC72F3B2EF58F5B00C5AF9E = {
 						CreatedOnToolsVersion = 26.2;
 					};
 					97C146ED1CF9000F007C117D = {
@@ -328,7 +328,7 @@
 			targets = (
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
-				6C5060032EF5740F0079AFB0 /* SourceviewerShare */,
+				6CC72F3B2EF58F5B00C5AF9E /* SourceviewerShare */,
 			);
 		};
 /* End PBXProject section */
@@ -341,7 +341,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6C5060022EF5740F0079AFB0 /* Resources */ = {
+		6CC72F3A2EF58F5B00C5AF9E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -465,7 +465,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6C5060002EF5740F0079AFB0 /* Sources */ = {
+		6CC72F382EF58F5B00C5AF9E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -490,10 +490,10 @@
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
 		};
-		6C50600D2EF5740F0079AFB0 /* PBXTargetDependency */ = {
+		6CC72F452EF58F5B00C5AF9E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 6C5060032EF5740F0079AFB0 /* SourceviewerShare */;
-			targetProxy = 6C50600C2EF5740F0079AFB0 /* PBXContainerItemProxy */;
+			target = 6CC72F3B2EF58F5B00C5AF9E /* SourceviewerShare */;
+			targetProxy = 6CC72F442EF58F5B00C5AF9E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -642,7 +642,7 @@
 			};
 			name = Profile;
 		};
-		6C5060112EF5740F0079AFB0 /* Debug */ = {
+		6CC72F472EF58F5B00C5AF9E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -652,6 +652,7 @@
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = SourceviewerShare/SourceviewerShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = B6ZMLHLE79;
@@ -685,7 +686,7 @@
 			};
 			name = Debug;
 		};
-		6C5060122EF5740F0079AFB0 /* Release */ = {
+		6CC72F482EF58F5B00C5AF9E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -695,6 +696,7 @@
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = SourceviewerShare/SourceviewerShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = B6ZMLHLE79;
@@ -725,7 +727,7 @@
 			};
 			name = Release;
 		};
-		6C5060132EF5740F0079AFB0 /* Profile */ = {
+		6CC72F492EF58F5B00C5AF9E /* Profile */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -735,6 +737,7 @@
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = SourceviewerShare/SourceviewerShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = B6ZMLHLE79;
@@ -936,12 +939,12 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		6C5060102EF5740F0079AFB0 /* Build configuration list for PBXNativeTarget "SourceviewerShare" */ = {
+		6CC72F4B2EF58F5B00C5AF9E /* Build configuration list for PBXNativeTarget "SourceviewerShare" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				6C5060112EF5740F0079AFB0 /* Debug */,
-				6C5060122EF5740F0079AFB0 /* Release */,
-				6C5060132EF5740F0079AFB0 /* Profile */,
+				6CC72F472EF58F5B00C5AF9E /* Debug */,
+				6CC72F482EF58F5B00C5AF9E /* Release */,
+				6CC72F492EF58F5B00C5AF9E /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

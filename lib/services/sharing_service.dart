@@ -82,7 +82,8 @@ class SharingService {
           sharedText.isNotEmpty &&
           isFilePath(sharedText)) {
         // Handle text that looks like a file path
-        debugPrint('SharingService: Routing shared text as file path: $sharedText');
+        debugPrint(
+            'SharingService: Routing shared text as file path: $sharedText');
         await _processSharedFilePath(context, htmlService, sharedText);
       }
       // Priority 3: Handle regular text content
@@ -228,26 +229,24 @@ class SharingService {
       if (filePath.startsWith('file:///')) {
         // Standard file:/// URL - remove the scheme
         normalizedFilePath = filePath.replaceFirst('file:///', '/');
-        debugPrint('SharingService: Converted file:/// URL to path: $normalizedFilePath');
+        debugPrint(
+            'SharingService: Converted file:/// URL to path: $normalizedFilePath');
       } else if (filePath.startsWith('file///')) {
         // Non-standard file/// URL (iOS specific) - remove the scheme
         normalizedFilePath = filePath.replaceFirst('file///', '/');
-        debugPrint('SharingService: Converted file/// URL to path: $normalizedFilePath');
+        debugPrint(
+            'SharingService: Converted file/// URL to path: $normalizedFilePath');
       } else if (filePath.startsWith('file://')) {
         // Standard file:// URL - remove the scheme
         normalizedFilePath = filePath.replaceFirst('file://', '/');
-        debugPrint('SharingService: Converted file:// URL to path: $normalizedFilePath');
-      }
-
-      // Show loading indicator
-      if (context.mounted) {
-        _showSnackBar(context, 'Loading file...');
+        debugPrint(
+            'SharingService: Converted file:// URL to path: $normalizedFilePath');
       }
 
       // Read file from filesystem
       final file = File(normalizedFilePath);
       debugPrint('SharingService: Checking if file exists at: ${file.path}');
-      
+
       if (!await file.exists()) {
         debugPrint('SharingService: File does not exist at: ${file.path}');
         throw Exception('File does not exist: $normalizedFilePath');
@@ -256,7 +255,7 @@ class SharingService {
       debugPrint('SharingService: File exists, reading content...');
       final content = await file.readAsString();
       debugPrint('SharingService: Read ${content.length} characters from file');
-      
+
       final fileName = normalizedFilePath.split('/').last;
 
       final htmlFile = HtmlFile(
@@ -270,10 +269,6 @@ class SharingService {
       debugPrint('SharingService: Loading file into HtmlService...');
       await htmlService.loadFile(htmlFile);
       debugPrint('SharingService: File loaded into HtmlService');
-      
-      if (context.mounted) {
-        _showSnackBar(context, 'File loaded successfully!');
-      }
     } catch (e) {
       debugPrint('SharingService: Error handling file path: $e');
       if (context.mounted) {
@@ -306,7 +301,7 @@ class SharingService {
             : trimmedText;
 
     // Check if this is a file path (starts with / or contains file system patterns)
-    if (cleanText.startsWith('/') || 
+    if (cleanText.startsWith('/') ||
         cleanText.contains('file://') ||
         cleanText.contains('file///') ||
         cleanText.contains('Users/') ||
@@ -345,7 +340,7 @@ class SharingService {
             : trimmedText;
 
     // First, check if it's definitely NOT a file path (it's a URL)
-    if (cleanText.startsWith('http://') || 
+    if (cleanText.startsWith('http://') ||
         cleanText.startsWith('https://') ||
         cleanText.startsWith('www.') ||
         cleanText.startsWith('ftp://')) {
@@ -354,15 +349,16 @@ class SharingService {
 
     // Check for file path patterns - be more specific
     // First check for absolute paths and special prefixes
-    if (cleanText.startsWith('/') || 
+    if (cleanText.startsWith('/') ||
         cleanText.startsWith('file://') ||
         cleanText.startsWith('file///') ||
         cleanText.startsWith('./') ||
         cleanText.startsWith('../')) {
-      debugPrint('SharingService: Detected file path (absolute/relative): $cleanText');
+      debugPrint(
+          'SharingService: Detected file path (absolute/relative): $cleanText');
       return true;
     }
-    
+
     // Then check for paths containing directory separators and common directory names
     if (cleanText.contains('/Users/') ||
         cleanText.contains('/Library/') ||
@@ -386,21 +382,24 @@ class SharingService {
         cleanText.contains('documents/') ||
         cleanText.contains('images/') ||
         cleanText.contains('videos/')) {
-      debugPrint('SharingService: Detected file path (with directory): $cleanText');
+      debugPrint(
+          'SharingService: Detected file path (with directory): $cleanText');
       return true;
     }
-    
+
     // Check for simple filenames with extensions (but not URLs)
-    if (!cleanText.contains('/') && 
+    if (!cleanText.contains('/') &&
         !cleanText.contains('\\') && // Don't match Windows paths
         !cleanText.contains('://') &&
         cleanText.contains('.') &&
-        !cleanText.startsWith('.') && // Don't match hidden files like .gitignore
-        cleanText.length > 3) { // At least "a.b"
+        !cleanText
+            .startsWith('.') && // Don't match hidden files like .gitignore
+        cleanText.length > 3) {
+      // At least "a.b"
       debugPrint('SharingService: Detected simple filename: $cleanText');
       return true;
     }
-    
+
     return false;
   }
 

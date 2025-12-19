@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 class PlatformSharingHandler {
   static const MethodChannel _channel =
-      MethodChannel('info.wouter.sourceviewer/sharing');
+      MethodChannel('info.wouter.sourceviewer/shared_content');
 
   static void setup() {
     _channel.setMethodCallHandler((call) async {
@@ -80,7 +80,12 @@ class PlatformSharingHandler {
   /// Call this method when the app is ready to handle shared content
   static Future<Map<String, dynamic>?> checkForInitialSharedContent() async {
     try {
-      final result = await _channel.invokeMethod('getInitialSharedContent');
+      // Use the shared_content channel instead of the sharing channel
+      const MethodChannel sharedContentChannel =
+          MethodChannel('info.wouter.sourceviewer/shared_content');
+      final result =
+          await sharedContentChannel.invokeMethod('getSharedContent');
+
       if (result != null && result is Map) {
         final type = result['type'] as String?;
         final content = result['content'];
