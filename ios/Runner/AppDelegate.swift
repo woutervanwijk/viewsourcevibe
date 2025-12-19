@@ -100,6 +100,29 @@ import UIKit
       ]
     }
 
+    // Notify Flutter about the new shared content if app is running
+    if let sharedContent = sharedContent {
+      print("AppDelegate: Notifying Flutter about new shared content")
+      
+      // Get the root view controller to access the Flutter method channel
+      if let rootViewController = UIApplication.shared.keyWindow?.rootViewController as? FlutterViewController {
+        let channel = FlutterMethodChannel(
+          name: "info.wouter.sourceviewer/shared_content",
+          binaryMessenger: rootViewController.binaryMessenger
+        )
+        
+        channel.invokeMethod("handleNewSharedContent", arguments: sharedContent) { result in
+          if let success = result as? Bool, success {
+            print("AppDelegate: Flutter successfully processed shared content")
+          } else {
+            print("AppDelegate: Flutter failed to process shared content")
+          }
+        }
+      } else {
+        print("AppDelegate: Could not access Flutter method channel")
+      }
+    }
+
     return true
   }
 
