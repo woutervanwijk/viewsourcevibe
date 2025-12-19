@@ -92,7 +92,7 @@
 			<key>CFBundleTypeName</key>
 			<string>Text File</string>
 			<key>LSHandlerRank</key>
-			<string>Alternate</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>public.plain-text</string>
@@ -103,7 +103,7 @@
 			<key>CFBundleTypeName</key>
 			<string>CSS File</string>
 			<key>LSHandlerRank</key>
-			<string>Alternate</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>public.css</string>
@@ -113,7 +113,7 @@
 			<key>CFBundleTypeName</key>
 			<string>JavaScript File</string>
 			<key>LSHandlerRank</key>
-			<string>Alternate</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>public.javascript</string>
@@ -123,10 +123,24 @@
 			<key>CFBundleTypeName</key>
 			<string>Web URL</string>
 			<key>LSHandlerRank</key>
-			<string>Alternate</string>
+			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>public.url</string>
+			</array>
+		</dict>
+		<!-- Add support for additional web content types -->
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Web Content</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.url</string>
+				<string>public.html</string>
+				<string>public.plain-text</string>
+				<string>public.text</string>
 			</array>
 		</dict>
 	</array>
