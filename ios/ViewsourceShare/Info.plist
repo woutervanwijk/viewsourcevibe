@@ -7,12 +7,41 @@
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>NSExtensionActivationRule</key>
-			<string>TRUEPREDICATE</string>
+			<dict>
+				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsWebPageWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsText</key>
+				<true/>
+				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
+				<integer>10</integer>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsAudioWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsFileURL</key>
+				<true/>
+				<key>NSExtensionActivationSupportsHTML</key>
+				<true/>
+				<key>NSExtensionActivationSupportsCSS</key>
+				<true/>
+				<key>NSExtensionActivationSupportsJavaScript</key>
+				<true/>
+			</dict>
 		</dict>
 		<key>NSExtensionMainStoryboard</key>
 		<string>MainInterface</string>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.share-services</string>
 	</dict>
+	<key>CFBundleDisplayName</key>
+	<string>View Source Vibe</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
 </dict>
 </plist>
