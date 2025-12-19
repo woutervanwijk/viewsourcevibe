@@ -50,8 +50,35 @@ import UIKit
     // Handle URL sharing
     print("AppDelegate: open URL called with: \(url.absoluteString)")
 
+    // Check if this is a file URL (shared file)
+    // Handle both standard file URLs and file:/// URLs
+    if url.isFileURL || url.scheme == "file" {
+      print("AppDelegate: Handling file URL: \\(url.absoluteString)")
+      
+      // Convert file:// URL to file path
+      var filePath = url.path
+      if url.scheme == "file" && url.host != nil {
+        // Handle file:///host/path format
+        filePath = "/" + (url.host ?? "") + url.path
+      }
+      
+      print("AppDelegate: Extracted file path: \\(filePath)")
+      
+      // Check if file exists
+      if FileManager.default.fileExists(atPath: filePath) {
+        sharedContent = [
+          "type": "file",
+          "filePath": filePath,
+          "fileName": url.lastPathComponent
+        ]
+        print("AppDelegate: File shared successfully, path: \\(filePath)")
+      } else {
+        print("AppDelegate: File does not exist at path: \\(filePath)")
+        return false
+      }
+    }
     // Check if this is from our share extension
-    if url.scheme == "viewsourcevibe" {
+    else if url.scheme == "viewsourcevibe" {
       if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
         let queryItems = components.queryItems
       {

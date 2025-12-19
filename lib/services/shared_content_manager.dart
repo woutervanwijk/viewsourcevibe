@@ -50,14 +50,31 @@ class SharedContentManager {
       // Also check our new shared content channel
       final channelSharedData = await SharingService.checkForSharedContent();
       if (channelSharedData != null) {
-        final sharedDataFromChannel = {
-          'type': channelSharedData['type'],
-          'content': channelSharedData['content'],
-          if (channelSharedData.containsKey('uri'))
-            'filePath': channelSharedData['uri'],
-        };
-        if (context.mounted) {
-          await _handleSharedContent(context, sharedDataFromChannel);
+        // Handle special case: if type is "url" but content is a file URL, treat as file
+        if (channelSharedData['type'] == 'url' &&
+            channelSharedData['content'] != null &&
+            SharingService.isFilePath(channelSharedData['content'] as String)) {
+          debugPrint('SharedContentManager: Converting URL type with file path to file type');
+          final sharedDataFromChannel = {
+            'type': 'file',
+            'filePath': channelSharedData['content'],
+            'fileName': extractFileNameFromPath(channelSharedData['content'] as String),
+          };
+          if (context.mounted) {
+            await _handleSharedContent(context, sharedDataFromChannel);
+          }
+        } else {
+          final sharedDataFromChannel = {
+            'type': channelSharedData['type'],
+            'content': channelSharedData['content'],
+            if (channelSharedData.containsKey('filePath'))
+              'filePath': channelSharedData['filePath'],
+            if (channelSharedData.containsKey('fileName'))
+              'fileName': channelSharedData['fileName'],
+          };
+          if (context.mounted) {
+            await _handleSharedContent(context, sharedDataFromChannel);
+          }
         }
       }
     } catch (e) {
@@ -98,6 +115,31 @@ class SharedContentManager {
         );
       }
     }
+  }
+
+  /// Extract file name from a file path
+  @visibleForTesting
+  static String extractFileNameFromPath(String path) {
+    // Handle file:// URLs
+    var cleanPath = path;
+    if (cleanPath.startsWith('file:///')) {
+      cleanPath = cleanPath.replaceFirst('file:///', '/');
+    } else if (cleanPath.startsWith('file///')) {
+      cleanPath = cleanPath.replaceFirst('file///', '/');
+    } else if (cleanPath.startsWith('file://')) {
+      cleanPath = cleanPath.replaceFirst('file://', '/');
+    }
+    
+    // Extract the last component as file name
+    final components = cleanPath.split('/');
+    final lastComponent = components.lastWhere((component) => component.isNotEmpty, orElse: () => '');
+    
+    // If the path ends with a slash (directory), use fallback
+    if (lastComponent.isEmpty || cleanPath.endsWith('/')) {
+      return 'shared_file';
+    }
+    
+    return lastComponent;
   }
 
   /// Manually trigger shared content handling (for testing)
