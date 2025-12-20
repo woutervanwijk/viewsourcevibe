@@ -168,7 +168,7 @@ class SharingService {
           'SharingService: Handling shared text (${text.length} characters)');
 
       final htmlFile = HtmlFile(
-        name: 'shared_text.txt',
+        name: '', // Empty name for unknown filenames
         path: 'shared://text',
         content: text,
         lastModified: DateTime.now(),
@@ -177,7 +177,7 @@ class SharingService {
 
       await htmlService.loadFile(htmlFile);
       if (context.mounted) {
-        _showSnackBar(context, 'Text loaded successfully!');
+        _showSnackBar(context, 'Shared text');
       }
     } catch (e) {
       debugPrint('SharingService: Error handling shared text: $e');
@@ -199,7 +199,7 @@ class SharingService {
       debugPrint('SharingService: Handling file bytes (${bytes.length} bytes)');
 
       final content = String.fromCharCodes(bytes);
-      final name = fileName ?? 'shared_file.txt';
+      final name = fileName ?? ''; // Empty name for unknown filenames
 
       final htmlFile = HtmlFile(
         name: name,
@@ -211,7 +211,7 @@ class SharingService {
 
       await htmlService.loadFile(htmlFile);
       if (context.mounted) {
-        _showSnackBar(context, 'File loaded successfully!');
+        _showSnackBar(context, fileName?.isNotEmpty == true ? 'Shared file: $fileName' : 'Shared file');
       }
     } catch (e) {
       debugPrint('SharingService: Error handling file bytes: $e');

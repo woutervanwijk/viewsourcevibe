@@ -19,7 +19,7 @@ class FileViewer extends StatelessWidget {
     final fileName = file.name;
     final fileContent = file.content;
     final lines = fileContent.split('\n');
-    final fileExtension = file.extension;
+    final fileExtension = fileName.isNotEmpty ? file.name.split('.').last.toLowerCase() : '';
     final isHtmlFile = fileExtension == 'html' || fileExtension == 'htm';
 
     return Column(

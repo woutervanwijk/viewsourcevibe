@@ -53,7 +53,7 @@ class HtmlService with ChangeNotifier {
         filename == '/' ||
         filename == 'index' ||
         !filename.contains('.') && !filename.contains('/')) {
-      filename = 'file';
+      filename = 'File';
     }
 
     // If filename already has an extension, use it
@@ -64,24 +64,19 @@ class HtmlService with ChangeNotifier {
     // Try to detect content type from content
     final lowerContent = content.toLowerCase();
 
-    // Check for XML content first (more specific than HTML)
-    if (tryParseAsXml(content)) {
-      return '$filename.xml';
-    }
-
     // Check for HTML content
     if (lowerContent.contains('<html') ||
         lowerContent.contains('<!doctype html') ||
         lowerContent.contains('<head') ||
         lowerContent.contains('<body')) {
-      return '$filename.html';
+      return 'HTML File';
     }
 
     // Check for CSS content
     if (lowerContent.contains('body {') ||
         lowerContent.contains('@media') ||
         lowerContent.contains('/* css')) {
-      return '$filename.css';
+      return 'CSS File';
     }
 
     // Check for JavaScript content
@@ -89,11 +84,16 @@ class HtmlService with ChangeNotifier {
         lowerContent.contains('const ') ||
         lowerContent.contains('let ') ||
         lowerContent.contains('=>')) {
-      return '$filename.js';
+      return 'JavaScript File';
+    }
+
+    // Check for XML content first (more specific than HTML)
+    if (tryParseAsXml(content)) {
+      return 'XML File';
     }
 
     // Default to .txt if we can't detect the type
-    return '$filename.txt';
+    return 'Text File';
   }
 
   /// Try to parse content as XML
@@ -292,7 +292,7 @@ class HtmlService with ChangeNotifier {
 
         final uri = Uri.parse(finalUrl);
         final filename =
-            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'index.html';
+            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'HTML File';
 
         // Ensure the filename has a proper extension for HTML content
         final processedFilename = ensureHtmlExtension(filename, content);

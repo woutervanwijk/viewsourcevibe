@@ -86,7 +86,7 @@ class Toolbar extends StatelessWidget {
         }
 
         final htmlFile = HtmlFile(
-          name: file.name,
+          name: file.name.isNotEmpty ? file.name : '',
           path: file.path ?? '',
           content: content,
           lastModified: DateTime.now(),
@@ -160,11 +160,14 @@ class Toolbar extends StatelessWidget {
       // This ensures the actual source code is shared, not just URLs
       await SharingService.shareHtml(currentFile.content,
           filename: currentFile.name);
-      
+
       // Show success message
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Shared ${currentFile.name} as source code file')),
+          SnackBar(
+              content: Text(currentFile.name.isNotEmpty
+                  ? 'Shared ${currentFile.name} as source code file'
+                  : 'Shared file')),
         );
       }
     } catch (e) {

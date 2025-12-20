@@ -54,7 +54,7 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
       debugPrint('Opening text content from deep link: $content');
       try {
         final htmlFile = HtmlFile(
-          name: 'shared_text.txt',
+          name: '',
           path: 'shared://text',
           content: content,
           lastModified: DateTime.now(),
@@ -129,8 +129,6 @@ void main() async {
   final platformDispatcher = WidgetsBinding.instance.platformDispatcher;
   final systemBrightness = platformDispatcher.platformBrightness;
 
-  debugPrint('Initial system brightness: $systemBrightness');
-
   // Set initial dark mode based on system (only if in system mode)
   if (appSettings.themeMode == ThemeModeOption.system) {
     debugPrint('Theme mode is system, setting initial dark mode');
@@ -145,7 +143,7 @@ void main() async {
     final newBrightness = platformDispatcher.platformBrightness;
     final newDarkMode = newBrightness == Brightness.dark;
 
-    debugPrint('System brightness changed to: $newBrightness');
+    // debugPrint('System brightness changed to: $newBrightness');
 
     if (appSettings.darkMode != newDarkMode) {
       debugPrint('Updating app dark mode to: $newDarkMode');
