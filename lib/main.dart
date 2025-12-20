@@ -6,26 +6,33 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/platform_sharing_handler.dart';
 import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
-import 'package:uni_links/uni_links.dart';
+import 'package:app_links/app_links.dart';
 import 'package:universal_io/io.dart';
 
 /// Sets up URL scheme handling for deep linking
 Future<void> setupUrlHandling(HtmlService htmlService) async {
   try {
-    // Handle initial URI when app is launched
-    final initialUri = await getInitialUri();
+    // Initialize AppLinks
+    final appLinks = AppLinks();
+
+    // Handle initial link when app is launched
+    final initialUri = await appLinks.getInitialAppLink();
     if (initialUri != null) {
       await _handleDeepLink(initialUri, htmlService);
     }
 
-    // Listen for URI changes while app is running
-    uriLinkStream.listen((Uri? uri) {
+    // Listen for link changes while app is running
+    final subscription = appLinks.uriLinkStream.listen((Uri? uri) {
       if (uri != null) {
         _handleDeepLink(uri, htmlService);
       }
     }, onError: (err) {
       debugPrint('Error in URI stream: $err');
     });
+
+    // Store the subscription to keep it alive
+    // In a real app, you might want to manage this subscription lifecycle
+    // For this app, we'll let it run for the lifetime of the app
   } catch (e) {
     debugPrint('Error setting up URL handling: $e');
   }

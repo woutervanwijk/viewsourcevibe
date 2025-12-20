@@ -47,3 +47,5 @@ macos/Podfile.lock
 pubspec.lock
 
 /ios/build
+/android/build
+*.lock

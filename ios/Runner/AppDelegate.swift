@@ -1,6 +1,175 @@
 import Flutter
 import UIKit
 
+// Sharing Service for handling native sharing functionality
+class SharingService: NSObject {
+    private static let channelName = "info.wouter.sourceview.sharing"
+    private static var channel: FlutterMethodChannel?
+
+    static func register(with registrar: FlutterPluginRegistrar) {
+        let channel = FlutterMethodChannel(name: channelName, binaryMessenger: registrar.messenger())
+        let instance = SharingService()
+        channel.setMethodCallHandler(instance.handle)
+        self.channel = channel
+    }
+
+    private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        switch call.method {
+        case "shareText":
+            shareText(call: call, result: result)
+        case "shareHtml":
+            shareHtml(call: call, result: result)
+        case "shareFile":
+            shareFile(call: call, result: result)
+        case "shareUrl":
+            shareUrl(call: call, result: result)
+        default:
+            result(FlutterMethodNotImplemented)
+        }
+    }
+
+    private func shareText(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let text = args["text"] as? String else {
+            result(FlutterError(code: "INVALID_ARGUMENTS", 
+                                message: "Text argument is required", 
+                                details: nil))
+            return
+        }
+
+        let activityViewController = UIActivityViewController(
+            activityItems: [text], 
+            applicationActivities: nil
+        )
+        activityViewController.excludedActivityTypes = [
+            .assignToContact,
+            .saveToCameraRoll
+        ]
+
+        // Get the root view controller
+        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+            rootViewController.present(activityViewController, animated: true, completion: nil)
+            result(true)
+        } else {
+            result(FlutterError(code: "NO_ROOT_VC", 
+                                message: "Could not find root view controller", 
+                                details: nil))
+        }
+    }
+
+    private func shareHtml(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let html = args["html"] as? String else {
+            result(FlutterError(code: "INVALID_ARGUMENTS", 
+                                message: "HTML argument is required", 
+                                details: nil))
+            return
+        }
+
+        let filename = args["filename"] as? String ?? "shared_content.html"
+
+        // Create a temporary file
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempFileURL = tempDir.appendingPathComponent(filename)
+
+        do {
+            try html.write(to: tempFileURL, atomically: true, encoding: .utf8)
+            
+            let activityViewController = UIActivityViewController(
+                activityItems: [tempFileURL], 
+                applicationActivities: nil
+            )
+            activityViewController.excludedActivityTypes = [
+                .assignToContact,
+                .saveToCameraRoll
+            ]
+
+            // Get the root view controller
+            if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+                rootViewController.present(activityViewController, animated: true, completion: nil)
+                result(true)
+            } else {
+                result(FlutterError(code: "NO_ROOT_VC", 
+                                    message: "Could not find root view controller", 
+                                    details: nil))
+            }
+        } catch {
+            result(FlutterError(code: "SHARE_FAILED", 
+                                message: "Failed to share HTML: \(error.localizedDescription)", 
+                                details: nil))
+        }
+    }
+
+    private func shareFile(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let filePath = args["filePath"] as? String else {
+            result(FlutterError(code: "INVALID_ARGUMENTS", 
+                                message: "filePath argument is required", 
+                                details: nil))
+            return
+        }
+
+        let fileURL = URL(fileURLWithPath: filePath)
+
+        // Check if file exists
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            result(FlutterError(code: "FILE_NOT_FOUND", 
+                                message: "File not found at path: \(filePath)", 
+                                details: nil))
+            return
+        }
+
+        let activityViewController = UIActivityViewController(
+            activityItems: [fileURL], 
+            applicationActivities: nil
+        )
+        activityViewController.excludedActivityTypes = [
+            .assignToContact,
+            .saveToCameraRoll
+        ]
+
+        // Get the root view controller
+        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+            rootViewController.present(activityViewController, animated: true, completion: nil)
+            result(true)
+        } else {
+            result(FlutterError(code: "NO_ROOT_VC", 
+                                message: "Could not find root view controller", 
+                                details: nil))
+        }
+    }
+
+    private func shareUrl(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let urlString = args["url"] as? String,
+              let url = URL(string: urlString) else {
+            result(FlutterError(code: "INVALID_ARGUMENTS", 
+                                message: "Valid URL argument is required", 
+                                details: nil))
+            return
+        }
+
+        let activityViewController = UIActivityViewController(
+            activityItems: [url], 
+            applicationActivities: nil
+        )
+        activityViewController.excludedActivityTypes = [
+            .assignToContact,
+            .saveToCameraRoll
+        ]
+
+        // Get the root view controller
+        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+            rootViewController.present(activityViewController, animated: true, completion: nil)
+            result(true)
+        } else {
+            result(FlutterError(code: "NO_ROOT_VC", 
+                                message: "Could not find root view controller", 
+                                details: nil))
+        }
+    }
+}
+
 // Shared Content Handler for managing content shared from the share extension
 class SharedContentHandler {
     static let shared = SharedContentHandler()
@@ -65,6 +234,11 @@ class SharedContentHandler {
     
     // Set up shared content handler
     setupSharedContentHandler()
+    
+    // Register sharing service
+    if let controller = window?.rootViewController as? FlutterViewController {
+      SharingService.register(with: controller.registrar(forPlugin: "SharingService")!)
+    }
     
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
