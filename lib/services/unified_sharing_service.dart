@@ -150,6 +150,14 @@ class UnifiedSharingService {
     String url,
   ) async {
     try {
+      // Check if this URL is actually a file path in disguise
+      // This can happen with iOS file sharing where file paths are passed as URLs
+      if (isFilePath(url)) {
+        debugPrint('UnifiedSharingService: URL is actually a file path, routing to file handler: $url');
+        await _processSharedFilePath(context, htmlService, url);
+        return;
+      }
+      
       await htmlService.loadFromUrl(url);
     } catch (e) {
       debugPrint('UnifiedSharingService: Error loading URL: $e');
@@ -235,19 +243,56 @@ class UnifiedSharingService {
       debugPrint('UnifiedSharingService: Handling file path: $filePath');
 
       // Security: Validate file path
-      if (filePath.contains('..') || filePath.contains('\\') || filePath.contains('\0')) {
-        debugPrint('UnifiedSharingService: Invalid file path detected');
+      // For file:// URLs, we need to be careful with URL decoding
+      String decodedFilePath = filePath;
+      
+      // Only decode if it's not already a file:// URL, as those are already properly formatted
+      if (!filePath.startsWith('file://')) {
+        try {
+          decodedFilePath = Uri.decodeFull(filePath);
+        } catch (e) {
+          // If decoding fails, use the original path
+        }
+      }
+
+      // Check for directory traversal patterns in the decoded path
+      // Only check for actual directory traversal patterns, not legitimate path components
+      bool hasDirectoryTraversal = false;
+      if (decodedFilePath.contains('..')) {
+        hasDirectoryTraversal = true;
+      }
+      if (decodedFilePath.contains('\\')) {
+        hasDirectoryTraversal = true;
+      }
+      // Check for actual null bytes (ASCII 0) - this is the only real security concern
+      for (int i = 0; i < filePath.length; i++) {
+        if (filePath.codeUnitAt(i) == 0) {
+          hasDirectoryTraversal = true;
+          break;
+        }
+      }
+
+      if (hasDirectoryTraversal) {
         throw Exception('Invalid file path');
       }
 
       // Convert file:// URLs to proper file paths
-      String normalizedFilePath = filePath;
-      if (filePath.startsWith('file:///')) {
-        normalizedFilePath = filePath.replaceFirst('file:///', '/');
-      } else if (filePath.startsWith('file///')) {
-        normalizedFilePath = filePath.replaceFirst('file///', '/');
-      } else if (filePath.startsWith('file://')) {
-        normalizedFilePath = filePath.replaceFirst('file://', '/');
+      // Use the decoded path for URL conversion
+      String normalizedFilePath = decodedFilePath;
+      if (decodedFilePath.startsWith('file:///')) {
+        normalizedFilePath = decodedFilePath.replaceFirst('file:///', '/');
+      } else if (decodedFilePath.startsWith('file///')) {
+        normalizedFilePath = decodedFilePath.replaceFirst('file///', '/');
+      } else if (decodedFilePath.startsWith('file://')) {
+        normalizedFilePath = decodedFilePath.replaceFirst('file://', '/');
+      } else if (decodedFilePath.startsWith('https://file///')) {
+        // Handle the specific iOS case where file paths are passed as https://file/// URLs
+        normalizedFilePath = decodedFilePath.replaceFirst('https://file///', '/');
+        debugPrint('UnifiedSharingService: Converted iOS file URL to path: $normalizedFilePath');
+      } else if (decodedFilePath.startsWith('https://file:///')) {
+        // Handle another iOS variant
+        normalizedFilePath = decodedFilePath.replaceFirst('https://file:///', '/');
+        debugPrint('UnifiedSharingService: Converted iOS file URL to path: $normalizedFilePath');
       }
 
       // Security: Check if path is absolute
@@ -259,9 +304,39 @@ class UnifiedSharingService {
       const maxFileSize = 10 * 1024 * 1024; // 10MB
 
       final file = File(normalizedFilePath);
+      debugPrint('UnifiedSharingService: Checking file at decoded path: $normalizedFilePath');
 
       if (!await file.exists()) {
-        debugPrint('UnifiedSharingService: File does not exist at: ${file.path}');
+        debugPrint('UnifiedSharingService: File does not exist at: $normalizedFilePath');
+        
+        // Special handling for iOS file provider storage paths that might not be directly accessible
+        if (filePath.contains('File Provider Storage') || 
+            filePath.contains('Library/Developer/CoreSimulator') ||
+            filePath.contains('Containers/Shared/AppGroup')) {
+          debugPrint('UnifiedSharingService: This is an iOS sandboxed file path that cannot be accessed directly');
+          
+          // Try to extract the filename and show a helpful message
+          final fileName = extractFileNameFromPath(filePath);
+          final errorContent = '''File could not be loaded
+
+This file is located in iOS sandboxed storage:
+$filePath
+
+The file exists but cannot be accessed directly by this app due to iOS security restrictions.''';
+          
+          final htmlFile = HtmlFile(
+            name: fileName,
+            path: 'sandboxed://$fileName',
+            content: errorContent,
+            lastModified: DateTime.now(),
+            size: errorContent.length,
+            isUrl: false,
+          );
+          
+          await htmlService.loadFile(htmlFile);
+          return;
+        }
+        
         throw Exception('File does not exist: $normalizedFilePath');
       }
 
@@ -296,9 +371,14 @@ class UnifiedSharingService {
   /// Show snackbar message
   static void _showSnackBar(BuildContext context, String message) {
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      // Check if we can show a snackbar (context is mounted and has ScaffoldMessenger)
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      } else {
+        debugPrint('UnifiedSharingService: Cannot show snackbar - context not mounted: $message');
+      }
     } catch (e) {
       debugPrint('UnifiedSharingService: Error showing snackbar: $e');
     }
@@ -386,6 +466,10 @@ class UnifiedSharingService {
     if (cleanText.startsWith('http://') ||
         cleanText.startsWith('https://') ||
         cleanText.startsWith('www.')) {
+      // But make an exception for file:// URLs which are actually file paths
+      if (cleanText.startsWith('file://') || cleanText.startsWith('file///')) {
+        return true;
+      }
       return false;
     }
 
@@ -395,6 +479,13 @@ class UnifiedSharingService {
         cleanText.startsWith('file///') ||
         cleanText.startsWith('./') ||
         cleanText.startsWith('../')) {
+      return true;
+    }
+
+    // Check for iOS-specific file provider storage paths
+    if (cleanText.contains('File Provider Storage') ||
+        cleanText.contains('Library/Developer/CoreSimulator') ||
+        cleanText.contains('Containers/Shared/AppGroup')) {
       return true;
     }
 
