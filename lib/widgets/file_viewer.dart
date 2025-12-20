@@ -70,7 +70,6 @@ class FileViewer extends StatelessWidget {
             themeName: settings.themeName,
             wrapText: settings.wrapText,
             showLineNumbers: settings.showLineNumbers,
-            scrollController: scrollController,
           ),
         ),
       ],

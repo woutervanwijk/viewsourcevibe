@@ -13,38 +13,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  ScrollController? _scrollController;
-
-  @override
-  void initState() {
-    super.initState();
-    // Listen to HTML service changes to scroll to top when file loads
-    final htmlService = context.read<HtmlService>();
-    htmlService.addListener(_onFileLoaded);
-  }
-
-  @override
-  void dispose() {
-    final htmlService = context.read<HtmlService>();
-    htmlService.removeListener(_onFileLoaded);
-    _scrollController?.dispose();
-    super.dispose();
-  }
-
-  void _onFileLoaded() {
-    // Scroll to top when a new file is loaded
-    if (_scrollController!.hasClients) {
-      _scrollController?.animateTo(
-        0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    _scrollController ??= PrimaryScrollController.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -54,8 +24,8 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.only(right: 8.0),
               child: Image.asset(
                 'assets/icon.webp',
-                width: 24,
-                height: 24,
+                width: 28,
+                height: 28,
                 fit: BoxFit.contain,
               ),
             ),
@@ -128,7 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: currentFile != null
                           ? FileViewer(
                               file: currentFile,
-                              scrollController: _scrollController,
                             )
                           : const Center(
                               child: Text('File data is not available'),

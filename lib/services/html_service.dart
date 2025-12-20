@@ -24,25 +24,24 @@ import 'package:flutter/services.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
-  ScrollController? _scrollController;
+  ScrollController? _verticalScrollController;
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
 
   HtmlFile? get currentFile => _currentFile;
-  ScrollController? get scrollController => _scrollController;
+  ScrollController? get scrollController => _verticalScrollController;
   ScrollController? get horizontalScrollController =>
       _horizontalScrollController;
   GlobalKey? get codeEditorKey => _codeEditorKey;
 
   HtmlService() {
-    _scrollController = ScrollController();
     _horizontalScrollController = ScrollController();
     _codeEditorKey = GlobalKey();
   }
 
   @override
   void dispose() {
-    _scrollController?.dispose();
+    _verticalScrollController?.dispose();
     _horizontalScrollController?.dispose();
     super.dispose();
   }
@@ -187,30 +186,27 @@ class HtmlService with ChangeNotifier {
   }
 
   Future<void> loadFile(HtmlFile file) async {
-    // First clear any existing file to force CodeEditor to reset
-    _currentFile = null;
+    await clearFile();
+    _currentFile = file;
     notifyListeners();
-
-    // Small delay to ensure UI updates and CodeEditor is properly reset
-    await Future.microtask(() {
-      _currentFile = file;
-      // Reset both vertical and horizontal scroll positions when loading new file
-      if (_scrollController?.hasClients ?? false) {
-        _scrollController?.jumpTo(0);
-      }
-      if (_horizontalScrollController?.hasClients ?? false) {
-        _horizontalScrollController?.jumpTo(0);
-      }
-      notifyListeners();
-    });
+    await scrollToZero();
   }
 
-  void clearFile() {
-    _currentFile = null;
-    // Reset scroll position when clearing file
-    if (_scrollController?.hasClients ?? false) {
-      _scrollController?.jumpTo(0);
+  Future<void> scrollToZero() async {
+    // Reset both vertical and horizontal scroll positions when loading new file
+    if (_verticalScrollController?.hasClients ?? false) {
+      _verticalScrollController?.jumpTo(0);
     }
+    await Future.delayed(const Duration(milliseconds: 10));
+    if (_horizontalScrollController?.hasClients ?? false) {
+      _horizontalScrollController?.jumpTo(0);
+    }
+    await Future.delayed(const Duration(milliseconds: 10));
+  }
+
+  Future<void> clearFile() async {
+    await scrollToZero();
+    _currentFile = null;
     notifyListeners();
   }
 
@@ -507,8 +503,7 @@ class HtmlService with ChangeNotifier {
       {double fontSize = 16.0,
       String themeName = 'github',
       bool wrapText = false,
-      bool showLineNumbers = true,
-      ScrollController? scrollController}) {
+      bool showLineNumbers = true}) {
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
 
@@ -520,7 +515,7 @@ class HtmlService with ChangeNotifier {
     //   context: context,
     //   editingController: controller,
     // );
-
+    _verticalScrollController ??= PrimaryScrollController.of(context);
     // Create a code theme using the selected theme
     final mode =
         _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
@@ -528,12 +523,10 @@ class HtmlService with ChangeNotifier {
         languages: {languageName: CodeHighlightThemeMode(mode: mode)},
         theme: _getThemeByName(themeName));
     // Create the scroll controller for CodeEditor
-    final codeScrollController = scrollController != null
-        ? CodeScrollController(verticalScroller: scrollController)
-        : (_scrollController != null
-            ? CodeScrollController(verticalScroller: _scrollController)
-            : CodeScrollController(
-                verticalScroller: PrimaryScrollController.of(context)));
+    final codeScrollController = CodeScrollController(
+        verticalScroller:
+            _verticalScrollController ?? PrimaryScrollController.of(context),
+        horizontalScroller: _horizontalScrollController);
 
     // Return CodeEditor with context menu support
     return CodeEditorWithContextMenu(
