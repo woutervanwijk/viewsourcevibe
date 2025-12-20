@@ -78,12 +78,14 @@ class SharingService {
           final uri = Uri.tryParse(sharedText);
           if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
             // This is a valid HTTP/HTTPS URL, treat it as a URL
-            debugPrint('SharingService: Shared text is a valid URL: $sharedText');
+            debugPrint(
+                'SharingService: Shared text is a valid URL: $sharedText');
             // ignore: use_build_context_synchronously
             await _processSharedUrl(context, htmlService, sharedText);
           } else {
             // Not a valid URL, treat as text content
-            debugPrint('SharingService: Shared text is not a URL, treating as text: $sharedText');
+            debugPrint(
+                'SharingService: Shared text is not a URL, treating as text: $sharedText');
             // ignore: use_build_context_synchronously
             await _processSharedText(context, htmlService, sharedText);
           }
@@ -136,13 +138,6 @@ class SharingService {
     String url,
   ) async {
     try {
-      // debugPrint('SharingService: Loading URL: $url');
-
-      // Show loading indicator
-      // if (context.mounted) {
-      //   _showSnackBar(context, 'Loading URL...');
-      // }
-
       // Load the URL using the existing HTML service
       await htmlService.loadFromUrl(url);
 
@@ -177,9 +172,6 @@ class SharingService {
       );
 
       await htmlService.loadFile(htmlFile);
-      if (context.mounted) {
-        _showSnackBar(context, 'Shared text');
-      }
     } catch (e) {
       debugPrint('SharingService: Error handling shared text: $e');
       if (context.mounted) {
@@ -213,7 +205,11 @@ class SharingService {
 
       await htmlService.loadFile(htmlFile);
       if (context.mounted) {
-        _showSnackBar(context, fileName?.isNotEmpty == true ? 'Shared file: $fileName' : 'Shared file');
+        _showSnackBar(
+            context,
+            fileName?.isNotEmpty == true
+                ? 'Shared file: $fileName'
+                : 'Shared file');
       }
     } catch (e) {
       debugPrint('SharingService: Error handling file bytes: $e');

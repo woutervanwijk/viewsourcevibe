@@ -137,13 +137,6 @@ class Toolbar extends StatelessWidget {
     final settings = Provider.of<AppSettings>(context, listen: false);
     final newValue = !settings.wrapText;
     settings.wrapText = newValue;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Word wrap ${newValue ? 'enabled' : 'disabled'}'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
   }
 
   Future<void> _shareCurrentFile(BuildContext context) async {
