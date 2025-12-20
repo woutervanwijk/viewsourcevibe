@@ -8,7 +8,7 @@ import 'package:view_source_vibe/services/html_service.dart';
 /// Unified Sharing Service that consolidates all sharing functionality
 class UnifiedSharingService {
   static const MethodChannel _channel =
-      MethodChannel('info.wouter.sourceviewer.sharing');
+      MethodChannel('info.wouter.sourceview.sharing');
   static const MethodChannel _sharedContentChannel =
       MethodChannel('info.wouter.sourceviewer/shared_content');
 
@@ -67,7 +67,7 @@ class UnifiedSharingService {
         if (call.method == 'handleNewSharedContent') {
           debugPrint(
               'UnifiedSharingService: Received new shared content via method channel');
-          
+
           try {
             final sharedData = _convertToStringDynamicMap(call.arguments);
             if (sharedData != null && context.mounted) {
@@ -93,20 +93,22 @@ class UnifiedSharingService {
   /// Check for initial shared content when app launches
   static Future<void> _checkInitialSharedContent(BuildContext context) async {
     try {
-      final result = await _sharedContentChannel.invokeMethod('getSharedContent');
-      
+      final result =
+          await _sharedContentChannel.invokeMethod('getSharedContent');
+
       if (result != null && result is Map && context.mounted) {
         final sharedData = Map<String, dynamic>.from(result);
         await handleSharedContent(context, sharedData);
       }
     } catch (e) {
-      debugPrint('UnifiedSharingService: No initial shared content or error checking: $e');
+      debugPrint(
+          'UnifiedSharingService: No initial shared content or error checking: $e');
     }
   }
 
   /// Handle shared content by routing to the appropriate processing method
   static Future<void> handleSharedContent(
-    BuildContext context, 
+    BuildContext context,
     Map<String, dynamic> sharedData,
   ) async {
     try {
@@ -116,7 +118,8 @@ class UnifiedSharingService {
       final filePath = sharedData['filePath'] as String?;
       final fileBytes = sharedData['fileBytes'] as List<int>?;
 
-      debugPrint('UnifiedSharingService: Handling shared content of type: $type');
+      debugPrint(
+          'UnifiedSharingService: Handling shared content of type: $type');
 
       final htmlService = Provider.of<HtmlService>(context, listen: false);
 
@@ -126,7 +129,8 @@ class UnifiedSharingService {
       } else if (type == 'text' && content != null) {
         await _processSharedText(context, htmlService, content);
       } else if (fileBytes != null && fileBytes.isNotEmpty) {
-        await _processSharedFileBytes(context, htmlService, fileBytes, fileName);
+        await _processSharedFileBytes(
+            context, htmlService, fileBytes, fileName);
       } else if (filePath != null && filePath.isNotEmpty) {
         await _processSharedFilePath(context, htmlService, filePath);
       } else {
@@ -138,7 +142,8 @@ class UnifiedSharingService {
     } catch (e) {
       debugPrint('UnifiedSharingService: Error handling shared content: $e');
       if (context.mounted) {
-        _showSnackBar(context, 'Error processing shared content: ${e.toString()}');
+        _showSnackBar(
+            context, 'Error processing shared content: ${e.toString()}');
       }
     }
   }
@@ -153,11 +158,12 @@ class UnifiedSharingService {
       // Check if this URL is actually a file path in disguise
       // This can happen with iOS file sharing where file paths are passed as URLs
       if (isFilePath(url)) {
-        debugPrint('UnifiedSharingService: URL is actually a file path, routing to file handler: $url');
+        debugPrint(
+            'UnifiedSharingService: URL is actually a file path, routing to file handler: $url');
         await _processSharedFilePath(context, htmlService, url);
         return;
       }
-      
+
       await htmlService.loadFromUrl(url);
     } catch (e) {
       debugPrint('UnifiedSharingService: Error loading URL: $e');
@@ -175,7 +181,8 @@ class UnifiedSharingService {
     String text,
   ) async {
     try {
-      debugPrint('UnifiedSharingService: Handling shared text (${text.length} characters)');
+      debugPrint(
+          'UnifiedSharingService: Handling shared text (${text.length} characters)');
 
       final htmlFile = HtmlFile(
         name: '',
@@ -204,10 +211,12 @@ class UnifiedSharingService {
     String? fileName,
   ) async {
     try {
-      debugPrint('UnifiedSharingService: Handling file bytes (${bytes.length} bytes)');
+      debugPrint(
+          'UnifiedSharingService: Handling file bytes (${bytes.length} bytes)');
 
       // Security: Limit maximum file size
-      if (bytes.length > 10 * 1024 * 1024) { // 10MB
+      if (bytes.length > 10 * 1024 * 1024) {
+        // 10MB
         throw Exception('File size exceeds maximum limit (10MB)');
       }
 
@@ -245,7 +254,7 @@ class UnifiedSharingService {
       // Security: Validate file path
       // For file:// URLs, we need to be careful with URL decoding
       String decodedFilePath = filePath;
-      
+
       // Only decode if it's not already a file:// URL, as those are already properly formatted
       if (!filePath.startsWith('file://')) {
         try {
@@ -287,12 +296,16 @@ class UnifiedSharingService {
         normalizedFilePath = decodedFilePath.replaceFirst('file://', '/');
       } else if (decodedFilePath.startsWith('https://file///')) {
         // Handle the specific iOS case where file paths are passed as https://file/// URLs
-        normalizedFilePath = decodedFilePath.replaceFirst('https://file///', '/');
-        debugPrint('UnifiedSharingService: Converted iOS file URL to path: $normalizedFilePath');
+        normalizedFilePath =
+            decodedFilePath.replaceFirst('https://file///', '/');
+        debugPrint(
+            'UnifiedSharingService: Converted iOS file URL to path: $normalizedFilePath');
       } else if (decodedFilePath.startsWith('https://file:///')) {
         // Handle another iOS variant
-        normalizedFilePath = decodedFilePath.replaceFirst('https://file:///', '/');
-        debugPrint('UnifiedSharingService: Converted iOS file URL to path: $normalizedFilePath');
+        normalizedFilePath =
+            decodedFilePath.replaceFirst('https://file:///', '/');
+        debugPrint(
+            'UnifiedSharingService: Converted iOS file URL to path: $normalizedFilePath');
       }
 
       // Security: Check if path is absolute
@@ -304,17 +317,20 @@ class UnifiedSharingService {
       const maxFileSize = 10 * 1024 * 1024; // 10MB
 
       final file = File(normalizedFilePath);
-      debugPrint('UnifiedSharingService: Checking file at decoded path: $normalizedFilePath');
+      debugPrint(
+          'UnifiedSharingService: Checking file at decoded path: $normalizedFilePath');
 
       if (!await file.exists()) {
-        debugPrint('UnifiedSharingService: File does not exist at: $normalizedFilePath');
-        
+        debugPrint(
+            'UnifiedSharingService: File does not exist at: $normalizedFilePath');
+
         // Special handling for iOS file provider storage paths that might not be directly accessible
-        if (filePath.contains('File Provider Storage') || 
+        if (filePath.contains('File Provider Storage') ||
             filePath.contains('Library/Developer/CoreSimulator') ||
             filePath.contains('Containers/Shared/AppGroup')) {
-          debugPrint('UnifiedSharingService: This is an iOS sandboxed file path that cannot be accessed directly');
-          
+          debugPrint(
+              'UnifiedSharingService: This is an iOS sandboxed file path that cannot be accessed directly');
+
           // Try to extract the filename and show a helpful message
           final fileName = extractFileNameFromPath(filePath);
           final errorContent = '''File could not be loaded
@@ -323,7 +339,7 @@ This file is located in iOS sandboxed storage:
 $filePath
 
 The file exists but cannot be accessed directly by this app due to iOS security restrictions.''';
-          
+
           final htmlFile = HtmlFile(
             name: fileName,
             path: 'sandboxed://$fileName',
@@ -332,11 +348,11 @@ The file exists but cannot be accessed directly by this app due to iOS security 
             size: errorContent.length,
             isUrl: false,
           );
-          
+
           await htmlService.loadFile(htmlFile);
           return;
         }
-        
+
         throw Exception('File does not exist: $normalizedFilePath');
       }
 
@@ -377,7 +393,8 @@ The file exists but cannot be accessed directly by this app due to iOS security 
           SnackBar(content: Text(message)),
         );
       } else {
-        debugPrint('UnifiedSharingService: Cannot show snackbar - context not mounted: $message');
+        debugPrint(
+            'UnifiedSharingService: Cannot show snackbar - context not mounted: $message');
       }
     } catch (e) {
       debugPrint('UnifiedSharingService: Error showing snackbar: $e');
@@ -438,9 +455,10 @@ The file exists but cannot be accessed directly by this app due to iOS security 
 
     // Try to parse as URI
     try {
-      final uri = cleanText.startsWith('http://') || cleanText.startsWith('https://')
-          ? Uri.parse(cleanText)
-          : Uri.parse('https://$cleanText');
+      final uri =
+          cleanText.startsWith('http://') || cleanText.startsWith('https://')
+              ? Uri.parse(cleanText)
+              : Uri.parse('https://$cleanText');
 
       return uri.hasScheme && uri.hasAuthority && !uri.path.contains(' ');
     } catch (e) {
