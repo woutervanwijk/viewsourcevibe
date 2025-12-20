@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/widgets/file_viewer.dart';
 import 'package:view_source_vibe/widgets/toolbar.dart';
@@ -17,24 +18,33 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            // App icon to the left of the title
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: Image.asset(
-                'assets/icon.webp',
-                width: 28,
-                height: 28,
-                fit: BoxFit.contain,
+        title: GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const AboutScreen(),
               ),
-            ),
-            const Text(
-              'View\nSource\nVibe',
-              style: TextStyle(fontSize: 10, height: 1),
-              // textAlign: TextAlign.center,
-            ),
-          ],
+            );
+          },
+          child: Row(
+            children: [
+              // App icon to the left of the title
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: Image.asset(
+                  'assets/icon.webp',
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const Text(
+                'View\nSource\nVibe',
+                style: TextStyle(fontSize: 10, height: 1),
+                // textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
         actions: const [
           Toolbar(),
