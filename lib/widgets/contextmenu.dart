@@ -29,6 +29,7 @@ class ContextMenuControllerImpl implements SelectionToolbarController {
     required ValueNotifier<bool> visibility,
   }) {
     showMenu(
+        requestFocus: false,
         context: context,
         position: RelativeRect.fromLTRB(
           anchors.primaryAnchor.dx,
