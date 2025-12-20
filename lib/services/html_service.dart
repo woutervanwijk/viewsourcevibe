@@ -276,23 +276,27 @@ class HtmlService with ChangeNotifier {
 
       // Set proper headers to avoid 403 errors from websites that block non-browser clients
       final headers = {
-        'User-Agent': 'Mozilla/5.0 (compatible; ViewSourceVibe/1.0; +https://github.com/wouterviewsource/viewsourcevibe)',
+        'User-Agent':
+            'Mozilla/5.0 (compatible; ViewSourceVibe/1.0; +https://github.com/wouterviewsource/viewsourcevibe)',
         'Accept':
             'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
       };
 
       // Make the request with timeout
-      final response = await client.get(
-        uri,
-        headers: headers,
-      ).timeout(const Duration(seconds: 30));
+      final response = await client
+          .get(
+            uri,
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final content = response.body;
 
         // Security: Limit maximum content size to prevent memory issues
-        if (content.length > 10 * 1024 * 1024) { // 10MB limit
+        if (content.length > 10 * 1024 * 1024) {
+          // 10MB limit
           throw Exception('File size exceeds maximum limit (10MB)');
         }
 
@@ -316,7 +320,8 @@ class HtmlService with ChangeNotifier {
 
         await loadFile(htmlFile);
       } else {
-        throw Exception('Failed to load URL: ${response.statusCode} ${response.reasonPhrase}');
+        throw Exception(
+            'Failed to load URL: ${response.statusCode} ${response.reasonPhrase}');
       }
     } catch (e) {
       // Provide more specific error messages
@@ -547,6 +552,7 @@ class HtmlService with ChangeNotifier {
     // Return CodeEditor with context menu support
     return CodeEditor(
       controller: controller,
+      showCursorWhenReadOnly: false,
       readOnly: true,
       toolbarController: const ContextMenuControllerImpl(),
       wordWrap: wrapText,
