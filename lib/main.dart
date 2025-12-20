@@ -59,6 +59,7 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
           content: content,
           lastModified: DateTime.now(),
           size: content.length,
+          isUrl: false,
         );
         await htmlService.loadFile(htmlFile);
       } catch (e) {
@@ -94,6 +95,7 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
             content: content,
             lastModified: await file.lastModified(),
             size: await file.length(),
+            isUrl: false,
           );
           await htmlService.loadFile(htmlFile);
         } else {

@@ -38,6 +38,7 @@ void main() {
         content: '<html><body>Test</body></html>',
         lastModified: DateTime.now(),
         size: 32,
+        isUrl: true,
       );
 
       htmlService.loadFile(webFile);
@@ -77,6 +78,7 @@ void main() {
         content: '<html><body>Local</body></html>',
         lastModified: DateTime.now(),
         size: 30,
+        isUrl: false,
       );
 
       htmlService.loadFile(localFile);
@@ -107,6 +109,7 @@ void main() {
         content: '<html><body>Test</body></html>',
         lastModified: DateTime.now(),
         size: 32,
+        isUrl: true,
       );
 
       htmlService.loadFile(webFile);
@@ -124,6 +127,7 @@ void main() {
         content: '<html><body>Local</body></html>',
         lastModified: DateTime.now(),
         size: 30,
+        isUrl: false,
       );
 
       htmlService.loadFile(localFile);
@@ -153,10 +157,10 @@ void main() {
 
       // Test various file path formats
       final testCases = [
-        HtmlFile(name: 'file.html', path: 'file:///path/to/file.html', content: '', lastModified: DateTime.now(), size: 0),
-        HtmlFile(name: 'file.html', path: '/absolute/path/file.html', content: '', lastModified: DateTime.now(), size: 0),
-        HtmlFile(name: 'file.html', path: 'relative/path/file.html', content: '', lastModified: DateTime.now(), size: 0),
-        HtmlFile(name: 'file.html', path: 'assets/sample.html', content: '', lastModified: DateTime.now(), size: 0),
+        HtmlFile(name: 'file.html', path: 'file:///path/to/file.html', content: '', lastModified: DateTime.now(), size: 0, isUrl: false),
+        HtmlFile(name: 'file.html', path: '/absolute/path/file.html', content: '', lastModified: DateTime.now(), size: 0, isUrl: false),
+        HtmlFile(name: 'file.html', path: 'relative/path/file.html', content: '', lastModified: DateTime.now(), size: 0, isUrl: false),
+        HtmlFile(name: 'file.html', path: 'assets/sample.html', content: '', lastModified: DateTime.now(), size: 0, isUrl: false),
       ];
 
       for (final file in testCases) {
@@ -192,7 +196,7 @@ void main() {
       ];
 
       for (final url in testCases) {
-        final file = HtmlFile(name: 'test.html', path: url, content: '', lastModified: DateTime.now(), size: 0);
+        final file = HtmlFile(name: 'test.html', path: url, content: '', lastModified: DateTime.now(), size: 0, isUrl: true);
         htmlService.loadFile(file);
         await tester.pumpAndSettle();
 

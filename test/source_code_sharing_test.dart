@@ -19,6 +19,7 @@ void main() {
         content: '<html><body><h1>Test Content</h1></body></html>',
         lastModified: DateTime.now(),
         size: 42,
+        isUrl: false,
       );
       
       // Verify the file has content
@@ -43,6 +44,7 @@ void main() {
         content: '<html><body>$largeContent</body></html>',
         lastModified: DateTime.now(),
         size: largeContent.length + 18, // +18 for <html><body></body></html>
+        isUrl: false,
       );
       
       // Verify the file is reasonably sized
@@ -62,6 +64,7 @@ void main() {
         content: '<html><body><h1>Web Page Content</h1></body></html>',
         lastModified: DateTime.now(),
         size: 45,
+        isUrl: true,
       );
       
       // Verify it's a URL-based file
@@ -82,6 +85,7 @@ void main() {
         content: '',
         lastModified: DateTime.now(),
         size: 0,
+        isUrl: false,
       );
       
       // Empty content should be handled gracefully
@@ -98,6 +102,7 @@ void main() {
         content: '<html><body>$veryLargeContent</body></html>',
         lastModified: DateTime.now(),
         size: veryLargeContent.length + 18,
+        isUrl: false,
       );
       
       // Check the size directly

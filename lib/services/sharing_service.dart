@@ -173,6 +173,7 @@ class SharingService {
         content: text,
         lastModified: DateTime.now(),
         size: text.length,
+        isUrl: false,
       );
 
       await htmlService.loadFile(htmlFile);
@@ -207,6 +208,7 @@ class SharingService {
         content: content,
         lastModified: DateTime.now(),
         size: bytes.length,
+        isUrl: false,
       );
 
       await htmlService.loadFile(htmlFile);
@@ -271,6 +273,7 @@ class SharingService {
         content: content,
         lastModified: await file.lastModified(),
         size: await file.length(),
+        isUrl: false,
       );
 
       debugPrint('SharingService: Loading file into HtmlService...');

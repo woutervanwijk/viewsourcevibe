@@ -10,6 +10,7 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/utils/file_utils.dart';
 import 'package:view_source_vibe/screens/settings_screen.dart';
 import 'dart:io';
+import 'package:flutter/services.dart';
 
 class Toolbar extends StatelessWidget {
   const Toolbar({super.key});
@@ -91,6 +92,7 @@ class Toolbar extends StatelessWidget {
           content: content,
           lastModified: DateTime.now(),
           size: fileSize,
+          isUrl: false,
         );
 
         if (context.mounted) {
@@ -156,18 +158,32 @@ class Toolbar extends StatelessWidget {
     }
 
     try {
-      // Always share as HTML file content (source code)
-      // This ensures the actual source code is shared, not just URLs
-      await SharingService.shareHtml(currentFile.content,
-          filename: currentFile.name);
+      // Try to share using the platform sharing method
+      // If that fails, fall back to copying to clipboard
+      try {
+        await SharingService.shareHtml(currentFile.content,
+            filename: currentFile.name);
+      } catch (e) {
+        debugPrint('Platform sharing failed, falling back to clipboard: $e');
+        // Fall back to copying to clipboard
+        await Clipboard.setData(ClipboardData(text: currentFile.content));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Content copied to clipboard')),
+          );
+        }
+        return;
+      }
 
       // Show success message
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(currentFile.name.isNotEmpty
-                  ? 'Shared ${currentFile.name} as source code file'
-                  : 'Shared file')),
+              content: Text(currentFile.isUrl
+                  ? 'Shared web page URL'
+                  : currentFile.name.isNotEmpty
+                      ? 'Shared ${currentFile.name} as source code file'
+                      : 'Shared file')),
         );
       }
     } catch (e) {

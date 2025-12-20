@@ -21,17 +21,17 @@ class _UrlInputState extends State<UrlInput> {
 
   Future<void> _loadUrl() async {
     final url = _urlController.text.trim();
-    if (url.isEmpty) {
-      setState(() => _errorMessage = 'Please enter a URL');
-      return;
-    }
+    // if (url.isEmpty) {
+    //   setState(() => _errorMessage = 'Please enter a URL');
+    //   return;
+    // }
 
     setState(() => _errorMessage = '');
 
     try {
       await Provider.of<HtmlService>(context, listen: false).loadFromUrl(url);
       // Clear the input after successful load
-      _urlController.clear();
+      // _urlController.clear();
     } catch (e) {
       if (mounted) {
         setState(() => _errorMessage = 'Error: $e');
@@ -44,8 +44,10 @@ class _UrlInputState extends State<UrlInput> {
     return Consumer<HtmlService>(
       builder: (context, htmlService, child) {
         // Update URL display when file changes
+        debugPrint(
+            'url ${htmlService.currentFile?.path} ${htmlService.currentFile?.extension}');
         if (htmlService.currentFile != null) {
-          if (htmlService.currentFile!.path.startsWith('http')) {
+          if (htmlService.currentFile!.isUrl) {
             // Show URL for web content
             if (_urlController.text != htmlService.currentFile!.path) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -71,13 +73,13 @@ class _UrlInputState extends State<UrlInput> {
                 controller: _urlController,
                 decoration: InputDecoration(
                   labelText: htmlService.currentFile != null &&
-                          htmlService.currentFile!.path.startsWith('http')
+                          htmlService.currentFile!.isUrl
                       ? 'Current URL'
                       : htmlService.currentFile != null
                           ? 'Local File Loaded'
                           : 'Enter URL',
                   hintText: htmlService.currentFile != null &&
-                          htmlService.currentFile!.path.startsWith('http')
+                          htmlService.currentFile!.isUrl
                       ? ''
                       : htmlService.currentFile != null
                           ? ''
@@ -100,7 +102,8 @@ class _UrlInputState extends State<UrlInput> {
                 onSubmitted: (_) => _loadUrl(),
                 style: const TextStyle(fontSize: 14),
               ),
-              if (_errorMessage.isNotEmpty) ...[
+              if (_errorMessage.isNotEmpty &&
+                  htmlService.currentFile != null) ...[
                 const SizedBox(height: 2),
                 Text(
                   _errorMessage,

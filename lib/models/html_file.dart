@@ -4,6 +4,7 @@ class HtmlFile {
   final String content;
   final DateTime lastModified;
   final int size;
+  final bool isUrl;
 
   HtmlFile({
     required this.name,
@@ -11,15 +12,17 @@ class HtmlFile {
     required this.content,
     required this.lastModified,
     required this.size,
+    this.isUrl = false,
   });
 
-  factory HtmlFile.fromContent(String name, String content) {
+  factory HtmlFile.fromContent(String name, String content, {bool isUrl = false}) {
     return HtmlFile(
       name: name,
       path: '',
       content: content,
       lastModified: DateTime.now(),
       size: content.length,
+      isUrl: isUrl,
     );
   }
 

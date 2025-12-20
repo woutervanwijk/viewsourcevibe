@@ -68,7 +68,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 final currentFile = htmlService.currentFile;
                 final isSampleFile = currentFile != null &&
                     (currentFile.path.contains('sample.html') ||
-                        currentFile.path.contains('assets'));
+                        currentFile.path.contains('assets') ||
+                        currentFile.path.contains('fallback'));
 
                 return Column(
                   children: [

@@ -221,6 +221,7 @@ class HtmlService with ChangeNotifier {
         content: content,
         lastModified: DateTime.now(),
         size: content.length,
+        isUrl: false,
       );
 
       await loadFile(htmlFile);
@@ -244,6 +245,7 @@ class HtmlService with ChangeNotifier {
         content: fallbackContent,
         lastModified: DateTime.now(),
         size: fallbackContent.length,
+        isUrl: false,
       );
 
       await loadFile(htmlFile);
@@ -303,6 +305,7 @@ class HtmlService with ChangeNotifier {
           content: content,
           lastModified: DateTime.now(),
           size: content.length,
+          isUrl: true,
         );
 
         await loadFile(htmlFile);
