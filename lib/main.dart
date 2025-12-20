@@ -5,7 +5,7 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
-import 'package:view_source_vibe/services/platform_sharing_handler.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
 import 'package:app_links/app_links.dart';
 import 'package:universal_io/io.dart';
@@ -23,7 +23,7 @@ Future<void> setupUrlHandling(HtmlService htmlService) async {
     }
 
     // Listen for link changes while app is running
-    final subscription = appLinks.uriLinkStream.listen((Uri? uri) {
+    appLinks.uriLinkStream.listen((Uri? uri) {
       if (uri != null) {
         _handleDeepLink(uri, htmlService);
       }
@@ -31,9 +31,7 @@ Future<void> setupUrlHandling(HtmlService htmlService) async {
       debugPrint('Error in URI stream: $err');
     });
 
-    // Store the subscription to keep it alive
-    // In a real app, you might want to manage this subscription lifecycle
-    // For this app, we'll let it run for the lifetime of the app
+    // The subscription is kept alive by the appLinks object
   } catch (e) {
     debugPrint('Error setting up URL handling: $e');
   }
@@ -161,8 +159,8 @@ void main() async {
     }
   };
 
-  // Setup platform sharing handler
-  PlatformSharingHandler.setup();
+  // Setup unified sharing service (will be initialized in MyApp)
+  // UnifiedSharingService.initialize(context);
 
   // Setup URL scheme handling for deep linking
   setupUrlHandling(htmlService);
@@ -195,6 +193,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
+
+    // Initialize unified sharing service when the app starts
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UnifiedSharingService.initialize(context);
+    });
 
     // Determine the effective theme mode based on user preference
     ThemeMode effectiveThemeMode;

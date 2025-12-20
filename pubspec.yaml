@@ -12,8 +12,7 @@ dependencies:
   # Core packages
   cupertino_icons: ^1.0.2
   
-  # HTML viewing and syntax highlighting
-  highlight: ^0.7.0
+
   
   # File handling
   file_picker: ^10.3.7
@@ -30,7 +29,6 @@ dependencies:
 
   # UI enhancements
   flutter_svg: ^2.0.7
-  flutter_highlight: ^0.7.0
   
   # Platform-specific file handling
   universal_io: ^2.0.4
@@ -41,7 +39,6 @@ dependencies:
   # Code editor
   re_editor: ^0.8.0
   re_highlight: ^0.0.3
-  async: ^2.13.0
   
 dev_dependencies:
   flutter_test:

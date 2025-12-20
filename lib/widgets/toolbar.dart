@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/utils/file_utils.dart';
@@ -154,7 +154,7 @@ class Toolbar extends StatelessWidget {
       // Try to share using the platform sharing method
       // If that fails, fall back to copying to clipboard
       try {
-        await SharingService.shareHtml(currentFile.content,
+        await UnifiedSharingService.shareHtml(currentFile.content,
             filename: currentFile.name);
       } catch (e) {
         debugPrint('Platform sharing failed, falling back to clipboard: $e');

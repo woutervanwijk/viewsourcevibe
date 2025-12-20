@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_editor/re_editor.dart';
+import 'dart:async';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/styles/vs.dart';
@@ -254,45 +255,50 @@ class HtmlService with ChangeNotifier {
 
   Future<void> loadFromUrl(String url) async {
     try {
-      // Validate URL
+      // Validate and sanitize URL
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://$url';
       }
 
-      // Use the http package's built-in redirect following
-      // We'll make the request and then check if there were redirects
+      // Parse and validate the URL
+      final uri = Uri.tryParse(url);
+      if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+        throw Exception('Invalid URL format');
+      }
+
+      // Security: Only allow http and https schemes
+      if (uri.scheme != 'http' && uri.scheme != 'https') {
+        throw Exception('Only http and https URLs are supported');
+      }
+
+      // Use the http package with timeout and security settings
       final client = http.Client();
 
       // Set proper headers to avoid 403 errors from websites that block non-browser clients
-      // Many websites like vn.nl and fiper.net require proper User-Agent headers
       final headers = {
-        'User-Agent': 'curl/7.54.1',
+        'User-Agent': 'Mozilla/5.0 (compatible; ViewSourceVibe/1.0; +https://github.com/wouterviewsource/viewsourcevibe)',
         'Accept':
             'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
-        'Upgrade-Insecure-Requests': '1',
       };
 
-      // Make the request with proper headers
-      // Note: The http package automatically follows redirects, but doesn't expose the final URL
-      // For complete redirect tracking, consider using packages like:
-      // - http_with_middleware
-      // - dio
-      // - http_client with custom redirect handling
+      // Make the request with timeout
       final response = await client.get(
-        Uri.parse(url),
+        uri,
         headers: headers,
-      );
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final content = response.body;
 
-        // Use the original URL since we can't get the final URL after redirects
-        // with the standard http package
-        // TODO: Consider upgrading to a more advanced HTTP client for full redirect support
-        final finalUrl = url;
+        // Security: Limit maximum content size to prevent memory issues
+        if (content.length > 10 * 1024 * 1024) { // 10MB limit
+          throw Exception('File size exceeds maximum limit (10MB)');
+        }
 
-        final uri = Uri.parse(finalUrl);
+        // Use the final URL after redirects
+        final finalUrl = response.request?.url.toString() ?? url;
+
         final filename =
             uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'HTML File';
 
@@ -310,10 +316,17 @@ class HtmlService with ChangeNotifier {
 
         await loadFile(htmlFile);
       } else {
-        throw Exception('Failed to load URL: ${response.statusCode}');
+        throw Exception('Failed to load URL: ${response.statusCode} ${response.reasonPhrase}');
       }
     } catch (e) {
-      throw Exception('Error loading URL: $e');
+      // Provide more specific error messages
+      if (e is TimeoutException) {
+        throw Exception('Request timed out');
+      } else if (e is FormatException) {
+        throw Exception('Invalid URL format');
+      } else {
+        throw Exception('Error loading URL: $e');
+      }
     }
   }
 

@@ -222,6 +222,12 @@ class SharingService {
     try {
       debugPrint('SharingService: Handling file path: $filePath');
 
+      // Security: Validate file path to prevent directory traversal attacks
+      if (filePath.contains('..') || filePath.contains('\\') || filePath.contains('\0')) {
+        debugPrint('SharingService: Invalid file path detected (potential directory traversal)');
+        throw Exception('Invalid file path');
+      }
+
       // Convert file:// URLs to proper file paths
       String normalizedFilePath = filePath;
       if (filePath.startsWith('file:///')) {
@@ -240,6 +246,15 @@ class SharingService {
         debugPrint(
             'SharingService: Converted file:// URL to path: $normalizedFilePath');
       }
+
+      // Security: Check if path is absolute and within reasonable bounds
+      if (!normalizedFilePath.startsWith('/')) {
+        debugPrint('SharingService: Only absolute file paths are supported');
+        throw Exception('Only absolute file paths are supported');
+      }
+
+      // Security: Limit maximum file size to prevent memory issues
+      const maxFileSize = 10 * 1024 * 1024; // 10MB
 
       // Read file from filesystem
       final file = File(normalizedFilePath);
@@ -275,6 +290,13 @@ class SharingService {
         throw Exception('File does not exist: $normalizedFilePath');
       }
 
+      // Security: Check file size before reading
+      final fileSize = await file.length();
+      if (fileSize > maxFileSize) {
+        debugPrint('SharingService: File size exceeds maximum limit (10MB)');
+        throw Exception('File size exceeds maximum limit (10MB)');
+      }
+
       debugPrint('SharingService: File exists, reading content...');
       final content = await file.readAsString();
       debugPrint('SharingService: Read ${content.length} characters from file');
@@ -286,7 +308,7 @@ class SharingService {
         path: normalizedFilePath,
         content: content,
         lastModified: await file.lastModified(),
-        size: await file.length(),
+        size: fileSize,
         isUrl: false,
       );
 
