@@ -288,7 +288,17 @@ class ShareViewController: SLComposeServiceViewController {
 
             if let url = item as? URL {
                 print("Received file URL: \(url.absoluteString)")
-                completion(.success(url.absoluteString))
+                
+                // Try to read the file content directly
+                do {
+                    let fileContent = try String(contentsOf: url, encoding: .utf8)
+                    print("Successfully read file content, length: \(fileContent.count)")
+                    completion(.success(fileContent))
+                } catch {
+                    print("Error reading file content: \(error.localizedDescription)")
+                    // If we can't read the content, fall back to passing the URL
+                    completion(.success(url.absoluteString))
+                }
             } else {
                 completion(.failure(NSError(domain: "ViewsourceShare", code: 8, userInfo: [NSLocalizedDescriptionKey: "Invalid file URL format"])))
             }
@@ -326,16 +336,32 @@ class ShareViewController: SLComposeServiceViewController {
     }
 
     func openFileInMainApp(filePath: String) {
-        // Use URL scheme to open the main app with file content
-        let encodedFilePath = filePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        if let appURL = URL(string: "viewsourcevibe://file?path=\(encodedFilePath)") {
-            var responder = self as UIResponder?
-            while responder != nil {
-                if let application = responder as? UIApplication {
-                    application.open(appURL, options: [:], completionHandler: nil)
-                    break
+        // Check if the content looks like actual file content (not a URL)
+        if filePath.hasPrefix("file://") || filePath.contains("/Users/") || filePath.contains("/Library/") {
+            // This is a file path, use the original URL scheme
+            let encodedFilePath = filePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            if let appURL = URL(string: "viewsourcevibe://file?path=\(encodedFilePath)") {
+                var responder = self as UIResponder?
+                while responder != nil {
+                    if let application = responder as? UIApplication {
+                        application.open(appURL, options: [:], completionHandler: nil)
+                        break
+                    }
+                    responder = responder?.next
                 }
-                responder = responder?.next
+            }
+        } else {
+            // This looks like actual file content, pass it as text
+            let encodedContent = filePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            if let appURL = URL(string: "viewsourcevibe://text?content=\(encodedContent)") {
+                var responder = self as UIResponder?
+                while responder != nil {
+                    if let application = responder as? UIApplication {
+                        application.open(appURL, options: [:], completionHandler: nil)
+                        break
+                    }
+                    responder = responder?.next
+                }
             }
         }
     }

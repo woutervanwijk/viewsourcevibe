@@ -247,6 +247,31 @@ class SharingService {
 
       if (!await file.exists()) {
         debugPrint('SharingService: File does not exist at: ${file.path}');
+        
+        // If file doesn't exist, check if this might be a file path that should have been
+        // handled as text content (common issue with iOS share extension)
+        if (filePath.contains('File Provider Storage') || 
+            filePath.contains('%20') || 
+            filePath.contains('Library/Developer/CoreSimulator')) {
+          debugPrint('SharingService: This looks like a sandboxed file path that should have been handled as text content');
+          
+          // Try to extract the filename and treat the path as content
+          final fileName = normalizedFilePath.split('/').last;
+          final fakeContent = 'File content could not be loaded. The file was located at: $filePath';
+          
+          final htmlFile = HtmlFile(
+            name: fileName,
+            path: 'shared://unavailable',
+            content: fakeContent,
+            lastModified: DateTime.now(),
+            size: fakeContent.length,
+            isUrl: false,
+          );
+          
+          await htmlService.loadFile(htmlFile);
+          return;
+        }
+        
         throw Exception('File does not exist: $normalizedFilePath');
       }
 

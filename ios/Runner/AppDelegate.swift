@@ -282,27 +282,45 @@ class SharedContentHandler {
       case "open":
         if let urlItem = queryItems.first(where: { $0.name == "url" }), 
            let urlValue = urlItem.value {
-          sharedData = [
-            "type": "url",
-            "content": urlValue
-          ]
+          // Decode the URL value
+          if let decodedUrl = urlValue.removingPercentEncoding {
+            sharedData = [
+              "type": "url",
+              "content": decodedUrl
+            ]
+          }
         }
       case "text":
         if let contentItem = queryItems.first(where: { $0.name == "content" }), 
            let contentValue = contentItem.value {
-          sharedData = [
-            "type": "text",
-            "content": contentValue
-          ]
+          // Decode the content value
+          if let decodedContent = contentValue.removingPercentEncoding {
+            sharedData = [
+              "type": "text",
+              "content": decodedContent
+            ]
+          }
         }
       case "file":
         if let pathItem = queryItems.first(where: { $0.name == "path" }), 
            let pathValue = pathItem.value {
-          sharedData = [
-            "type": "file",
-            "filePath": pathValue,
-            "fileName": URL(fileURLWithPath: pathValue).lastPathComponent
-          ]
+          // Decode the path value and handle file URLs properly
+          if let decodedPath = pathValue.removingPercentEncoding {
+            var filePath = decodedPath
+            
+            // Handle file:// URLs by converting to proper paths
+            if filePath.hasPrefix("file:///") {
+                filePath = String(filePath.dropFirst(7)) // Remove "file:///"
+            } else if filePath.hasPrefix("file://") {
+                filePath = String(filePath.dropFirst(6)) // Remove "file://"
+            }
+            
+            sharedData = [
+              "type": "file",
+              "filePath": filePath,
+              "fileName": URL(fileURLWithPath: filePath).lastPathComponent
+            ]
+          }
         }
       default:
         break
