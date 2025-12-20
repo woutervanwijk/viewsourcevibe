@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:view_source_vibe/models/html_file.dart';
-import 'package:view_source_vibe/widgets/code_editor_with_context_menu.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
@@ -21,6 +20,7 @@ import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import 'package:view_source_vibe/widgets/contextmenu.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -532,9 +532,10 @@ class HtmlService with ChangeNotifier {
         horizontalScroller: _horizontalScrollController);
 
     // Return CodeEditor with context menu support
-    return CodeEditorWithContextMenu(
+    return CodeEditor(
       controller: controller,
       readOnly: true,
+      toolbarController: const ContextMenuControllerImpl(),
       wordWrap: wrapText,
       padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
       scrollController: codeScrollController,
