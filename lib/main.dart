@@ -13,33 +13,27 @@ import 'package:universal_io/io.dart';
 /// Sets up URL scheme handling for deep linking
 Future<void> setupUrlHandling(HtmlService htmlService) async {
   try {
-    // Initialize AppLinks in a non-blocking way to prevent startup delays
-    Future(() async {
-      try {
-        final appLinks = AppLinks();
+    // Initialize AppLinks
+    final appLinks = AppLinks();
 
-        // Handle initial link when app is launched
-        final initialUri = await appLinks.getInitialAppLink();
-        if (initialUri != null) {
-          await _handleDeepLink(initialUri, htmlService);
-        }
+    // Handle initial link when app is launched
+    final initialUri = await appLinks.getInitialAppLink();
+    if (initialUri != null) {
+      await _handleDeepLink(initialUri, htmlService);
+    }
 
-        // Listen for link changes while app is running
-        final subscription = appLinks.uriLinkStream.listen((Uri? uri) {
-          if (uri != null) {
-            _handleDeepLink(uri, htmlService);
-          }
-        }, onError: (err) {
-          debugPrint('Error in URI stream: $err');
-        });
-
-        // Store the subscription to keep it alive
-        // In a real app, you might want to manage this subscription lifecycle
-        // For this app, we'll let it run for the lifetime of the app
-      } catch (e) {
-        debugPrint('Error in background URL handling setup: $e');
+    // Listen for link changes while app is running
+    final subscription = appLinks.uriLinkStream.listen((Uri? uri) {
+      if (uri != null) {
+        _handleDeepLink(uri, htmlService);
       }
+    }, onError: (err) {
+      debugPrint('Error in URI stream: $err');
     });
+
+    // Store the subscription to keep it alive
+    // In a real app, you might want to manage this subscription lifecycle
+    // For this app, we'll let it run for the lifetime of the app
   } catch (e) {
     debugPrint('Error setting up URL handling: $e');
   }
@@ -177,12 +171,7 @@ void main() async {
   if (kDebugMode) {
     // We're in debug mode
     try {
-      // Add timeout to prevent hanging
-      await htmlService.loadSampleFile().timeout(const Duration(seconds: 3),
-          onTimeout: () {
-        debugPrint('Sample file loading timed out after 3 seconds');
-        // Continue without sample file
-      });
+      await htmlService.loadSampleFile();
     } catch (e) {
       debugPrint('Failed to load sample file: $e');
       // Continue anyway - app will work without sample file
