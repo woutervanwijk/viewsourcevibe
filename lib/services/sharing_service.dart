@@ -61,7 +61,7 @@ class SharingService {
     String? fileName,
   }) async {
     try {
-      debugPrint('shared $sharedText - $sharedUrl');
+      // debugPrint('shared $sharedText - $sharedUrl');
       final htmlService = Provider.of<HtmlService>(context, listen: false);
 
       // Process the shared content based on type
@@ -204,13 +204,6 @@ class SharingService {
       );
 
       await htmlService.loadFile(htmlFile);
-      if (context.mounted) {
-        _showSnackBar(
-            context,
-            fileName?.isNotEmpty == true
-                ? 'Shared file: $fileName'
-                : 'Shared file');
-      }
     } catch (e) {
       debugPrint('SharingService: Error handling file bytes: $e');
       if (context.mounted) {

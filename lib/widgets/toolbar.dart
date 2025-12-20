@@ -167,18 +167,6 @@ class Toolbar extends StatelessWidget {
         }
         return;
       }
-
-      // Show success message
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(currentFile.isUrl
-                  ? 'Shared web page URL'
-                  : currentFile.name.isNotEmpty
-                      ? 'Shared ${currentFile.name} as source code file'
-                      : 'Shared file')),
-        );
-      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
