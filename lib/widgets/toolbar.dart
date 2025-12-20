@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -265,7 +266,10 @@ class Toolbar extends StatelessWidget {
           },
         ),
         IconButton(
-          icon: const Icon(Icons.share),
+          icon: Icon(
+            Platform.isIOS ? CupertinoIcons.share : Icons.share,
+            size: 24,
+          ),
           tooltip: 'Share',
           onPressed: () => _shareCurrentFile(context),
         ),
