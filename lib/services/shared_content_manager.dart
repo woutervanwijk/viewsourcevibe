@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:view_source_vibe/services/sharing_service.dart';
 import 'package:view_source_vibe/services/platform_sharing_handler.dart';
+import 'dart:convert';
 
 class SharedContentManager {
   /// Initialize the shared content manager
@@ -152,16 +153,32 @@ class SharedContentManager {
             await _handleSharedContent(context, sharedDataFromChannel);
           }
         } else {
-          final sharedDataFromChannel = {
-            'type': channelSharedData['type'],
-            'content': channelSharedData['content'],
-            if (channelSharedData.containsKey('filePath'))
-              'filePath': channelSharedData['filePath'],
-            if (channelSharedData.containsKey('fileName'))
+          // Check if we have file content directly (from Android)
+          if (channelSharedData['type'] == 'file' && 
+              channelSharedData.containsKey('content') &&
+              channelSharedData['content'] != null) {
+            debugPrint('SharedContentManager: Android provided file content directly');
+            final sharedDataFromChannel = {
+              'type': 'file',
+              'fileBytes': utf8.encode(channelSharedData['content'] as String),
               'fileName': channelSharedData['fileName'],
-          };
-          if (context.mounted) {
-            await _handleSharedContent(context, sharedDataFromChannel);
+              'filePath': channelSharedData['filePath'],
+            };
+            if (context.mounted) {
+              await _handleSharedContent(context, sharedDataFromChannel);
+            }
+          } else {
+            final sharedDataFromChannel = {
+              'type': channelSharedData['type'],
+              'content': channelSharedData['content'],
+              if (channelSharedData.containsKey('filePath'))
+                'filePath': channelSharedData['filePath'],
+              if (channelSharedData.containsKey('fileName'))
+                'fileName': channelSharedData['fileName'],
+            };
+            if (context.mounted) {
+              await _handleSharedContent(context, sharedDataFromChannel);
+            }
           }
         }
       }

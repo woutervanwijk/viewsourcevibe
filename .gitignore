@@ -49,3 +49,4 @@ pubspec.lock
 /ios/build
 /android/build
 *.lock
+android/.kotlin/sessions/
