@@ -22,8 +22,13 @@ class SharingService {
   /// Share HTML content with optional filename
   static Future<void> shareHtml(String html, {String? filename}) async {
     try {
+      // Handle empty or null filenames by providing a sensible default
+      final effectiveFilename = filename?.isNotEmpty == true 
+          ? filename! 
+          : 'shared_content.html';
+      
       await _channel.invokeMethod('shareHtml',
-          {'html': html, 'filename': filename ?? 'shared_content.html'});
+          {'html': html, 'filename': effectiveFilename});
     } on PlatformException catch (e) {
       debugPrint("Failed to share HTML: '${e.message}'.");
       throw Exception("Sharing failed: ${e.message}");
