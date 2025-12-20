@@ -357,32 +357,44 @@ class SharingService {
             ? trimmedText.substring(1, trimmedText.length - 1)
             : trimmedText;
 
-    // Check if this is a file path (starts with / or contains file system patterns)
-    if (cleanText.startsWith('/') ||
-        cleanText.contains('file://') ||
-        cleanText.contains('file///') ||
-        cleanText.contains('Users/') ||
-        cleanText.contains('Library/') ||
-        cleanText.contains('Containers/') ||
-        cleanText.contains('Applications/')) {
-      debugPrint('SharingService: Detected file path, not URL: $cleanText');
-      return false; // This is a file path, not a URL
+    // First, check if this is explicitly a file URL (file:// protocol)
+    if (cleanText.startsWith('file://') || cleanText.startsWith('file///')) {
+      debugPrint('SharingService: Detected file URL, not HTTP URL: $cleanText');
+      return false; // This is a file URL, not an HTTP URL
+    }
+
+    // Check if this is likely a file path (starts with /) - do this early to avoid false positives
+    if (cleanText.startsWith('/')) {
+      debugPrint('SharingService: Detected absolute file path, not URL: $cleanText');
+      return false; // This is an absolute file path, not a URL
     }
 
     // Try to parse as URI - this is more robust than regex
+    // Check if it's a valid HTTP/HTTPS URL first
     try {
-      // Handle URLs with or without protocol
-      final uri =
-          cleanText.startsWith('http://') || cleanText.startsWith('https://')
-              ? Uri.parse(cleanText)
-              : Uri.parse('https://$cleanText'); // Add https:// if missing
-
-      // Check if it's a valid URL
-      return uri.hasScheme && uri.hasAuthority && !uri.path.contains(' ');
+      final uri = Uri.tryParse(cleanText);
+      if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+        // This is a valid HTTP/HTTPS URL
+        return true;
+      }
     } catch (e) {
-      // If parsing fails, it's not a valid URL
-      return false;
+      // If parsing fails, continue with other checks
     }
+
+    // Don't try to detect URLs without http:// or https:// schemes
+    // This prevents false positives for text like "example.com" or "www.example.com"
+    // Only explicit http:// or https:// URLs should be detected as URLs
+
+    // Check for file path patterns in the text
+    if (cleanText.contains('Users/') ||
+        cleanText.contains('Library/') ||
+        cleanText.contains('Containers/') ||
+        cleanText.contains('Applications/')) {
+      debugPrint('SharingService: Detected file path pattern, not URL: $cleanText');
+      return false; // This contains file path patterns, not a URL
+    }
+
+    return false; // Not a URL
   }
 
   /// Check if a string is a file path

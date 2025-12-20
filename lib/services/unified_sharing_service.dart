@@ -451,24 +451,39 @@ The file exists but cannot be accessed directly by this app due to iOS security 
             ? trimmedText.substring(1, trimmedText.length - 1)
             : trimmedText);
 
-    // Check if this is a file path
-    if (cleanText.startsWith('/') ||
-        cleanText.contains('file://') ||
-        cleanText.contains('file///')) {
+    // First, check if this is explicitly a file URL (file:// protocol)
+    if (cleanText.startsWith('file://') || cleanText.startsWith('file///')) {
       return false;
     }
 
-    // Try to parse as URI
+    // Check if this is likely a file path (starts with /) - do this early to avoid false positives
+    if (cleanText.startsWith('/')) {
+      return false;
+    }
+
+    // Try to parse as URI - check if it's a valid HTTP/HTTPS URL first
     try {
-      final uri =
-          cleanText.startsWith('http://') || cleanText.startsWith('https://')
-              ? Uri.parse(cleanText)
-              : Uri.parse('https://$cleanText');
-
-      return uri.hasScheme && uri.hasAuthority && !uri.path.contains(' ');
+      final uri = Uri.tryParse(cleanText);
+      if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+        return true;
+      }
     } catch (e) {
+      // If parsing fails, continue with other checks
+    }
+
+    // Don't try to detect URLs without http:// or https:// schemes
+    // This prevents false positives for text like "example.com" or "www.example.com"
+    // Only explicit http:// or https:// URLs should be detected as URLs
+
+    // Check for file path patterns in the text
+    if (cleanText.contains('Users/') ||
+        cleanText.contains('Library/') ||
+        cleanText.contains('Containers/') ||
+        cleanText.contains('Applications/')) {
       return false;
     }
+
+    return false;
   }
 
   /// Check if a string is a file path
