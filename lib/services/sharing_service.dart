@@ -75,28 +75,19 @@ class SharingService {
         // Handle shared URL
         await _processSharedUrl(context, htmlService, sharedUrl);
       }
-      // Priority 2: Check if shared text is a valid URL using Dart URL parsing
+      // Priority 2: Check if shared text is a valid URL using the fixed isUrl method
       else if (sharedText != null && sharedText.isNotEmpty) {
-        // First, check if the text is a valid URL using Dart's URI parsing
-        // This is more reliable than regex-based URL detection
-        try {
-          final uri = Uri.tryParse(sharedText);
-          if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-            // This is a valid HTTP/HTTPS URL, treat it as a URL
-            debugPrint(
-                'SharingService: Shared text is a valid URL: $sharedText');
-            // ignore: use_build_context_synchronously
-            await _processSharedUrl(context, htmlService, sharedText);
-          } else {
-            // Not a valid URL, treat as text content
-            debugPrint(
-                'SharingService: Shared text is not a URL, treating as text: $sharedText');
-            // ignore: use_build_context_synchronously
-            await _processSharedText(context, htmlService, sharedText);
-          }
-        } catch (e) {
-          // If URL parsing fails, treat as text content
-          debugPrint('SharingService: URL parsing failed for shared text: $e');
+        // Use the fixed isUrl method for consistent URL detection
+        if (isUrl(sharedText)) {
+          // This is a valid HTTP/HTTPS URL, treat it as a URL
+          debugPrint(
+              'SharingService: Shared text is a valid URL: $sharedText');
+          // ignore: use_build_context_synchronously
+          await _processSharedUrl(context, htmlService, sharedText);
+        } else {
+          // Not a valid URL, treat as text content
+          debugPrint(
+              'SharingService: Shared text is not a URL, treating as text: $sharedText');
           // ignore: use_build_context_synchronously
           await _processSharedText(context, htmlService, sharedText);
         }

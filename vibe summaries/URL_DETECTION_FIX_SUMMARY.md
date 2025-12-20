@@ -30,16 +30,19 @@ Fixed the URL detection logic by:
 - Added early detection for file paths and file URLs
 - Removed the aggressive URL scheme addition logic
 - Maintained file path pattern detection but moved it after URL validation
+- Updated `handleSharedContent()` to use the fixed `isUrl()` method for consistency
 
 ### `lib/services/unified_sharing_service.dart`
 - Applied the same fixes to the `isUrl()` method
 - Ensured consistency with the `SharingService` implementation
+- **Added URL detection to `handleSharedContent()` method**: Now checks if text content shared as `type: 'text'` is actually a URL and routes it appropriately
 
 ## Test Coverage
 
 ### New Tests Created
 - `test/url_detection_edge_cases_test.dart`: Tests URLs that were previously misclassified
 - `test/url_detection_regression_test.dart`: Regression tests to ensure the fix works
+- `test/unified_sharing_url_detection_test.dart`: Tests URL detection in the UnifiedSharingService
 
 ### Test Cases Covered
 
@@ -81,6 +84,7 @@ All existing tests continue to pass:
 New tests verify the fix:
 - `test/url_detection_edge_cases_test.dart` ✅
 - `test/url_detection_regression_test.dart` ✅
+- `test/unified_sharing_url_detection_test.dart` ✅
 
 ## Impact
 
@@ -89,5 +93,6 @@ This fix ensures that:
 2. **File paths are still correctly identified** and not treated as URLs
 3. **User experience is improved** as shared URLs will now be loaded correctly instead of being misclassified as file paths
 4. **Security is maintained** as file path detection still works correctly to prevent directory traversal attacks
+5. **Text content routing is improved** in UnifiedSharingService to detect URLs shared as text content
 
 The fix is backward compatible and doesn't break any existing functionality while solving the URL detection issue.

@@ -132,7 +132,16 @@ class UnifiedSharingService {
       if (type == 'url' && content != null) {
         await _processSharedUrl(context, htmlService, content);
       } else if (type == 'text' && content != null) {
-        await _processSharedText(context, htmlService, content);
+        // Check if the text content is actually a URL
+        if (isUrl(content)) {
+          debugPrint(
+              'UnifiedSharingService: Shared text is actually a URL: $content');
+          await _processSharedUrl(context, htmlService, content);
+        } else {
+          debugPrint(
+              'UnifiedSharingService: Shared text is not a URL, treating as text: $content');
+          await _processSharedText(context, htmlService, content);
+        }
       } else if (fileBytes != null && fileBytes.isNotEmpty) {
         await _processSharedFileBytes(
             context, htmlService, fileBytes, fileName);
