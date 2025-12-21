@@ -146,7 +146,13 @@ class UnifiedSharingService {
         await _processSharedFileBytes(
             context, htmlService, fileBytes, fileName);
       } else if (filePath != null && filePath.isNotEmpty) {
-        await _processSharedFilePath(context, htmlService, filePath);
+        // Check if this is a content URI that failed to be read
+        if (filePath.startsWith('content://') && (fileBytes == null || fileBytes.isEmpty)) {
+          debugPrint('UnifiedSharingService: Content URI failed to be read: $filePath');
+          await _handleContentUriError(context, htmlService, filePath, fileName);
+        } else {
+          await _processSharedFilePath(context, htmlService, filePath);
+        }
       } else {
         debugPrint('UnifiedSharingService: No valid shared content found');
         if (context.mounted) {
@@ -251,6 +257,55 @@ class UnifiedSharingService {
       debugPrint('UnifiedSharingService: Error handling file bytes: $e');
       if (context.mounted) {
         _showSnackBar(context, 'Error loading file: ${e.toString()}');
+      }
+      rethrow;
+    }
+  }
+
+  /// Handle content URI errors by showing a helpful error message
+  static Future<void> _handleContentUriError(
+    BuildContext context,
+    HtmlService htmlService,
+    String uri,
+    String? fileName,
+  ) async {
+    try {
+      debugPrint('UnifiedSharingService: Handling content URI error for: $uri');
+
+      final effectiveFileName = fileName ?? 'Content File';
+      final errorContent = '''Content File Could Not Be Loaded
+
+This file was shared from an Android app using a content URI:
+
+$uri
+
+The Android sharing handler tried to process this file but failed to read its content. Possible reasons:
+
+1. The file is protected by Android security restrictions
+2. The sharing app doesn't provide proper file access permissions
+3. The file format is not supported
+4. The file is too large or corrupted
+
+Try these solutions:
+- Open the file in the original app and use "Share as text" instead
+- Save the file to your device storage first, then share it
+- Use a different app to share the file
+- Contact the app developer for support''';
+
+      final htmlFile = HtmlFile(
+        name: effectiveFileName,
+        path: uri,
+        content: errorContent,
+        lastModified: DateTime.now(),
+        size: errorContent.length,
+        isUrl: false,
+      );
+
+      await htmlService.loadFile(htmlFile);
+    } catch (e) {
+      debugPrint('UnifiedSharingService: Error handling content URI error: $e');
+      if (context.mounted) {
+        _showSnackBar(context, 'Error displaying content URI error: ${e.toString()}');
       }
       rethrow;
     }
@@ -462,6 +517,11 @@ The file exists but cannot be accessed directly by this app due to iOS security 
 
     // First, check if this is explicitly a file URL (file:// protocol)
     if (cleanText.startsWith('file://') || cleanText.startsWith('file///')) {
+      return false;
+    }
+
+    // Check if this is an Android content:// URI - these should be treated as file shares
+    if (cleanText.startsWith('content://')) {
       return false;
     }
 

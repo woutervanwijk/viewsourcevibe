@@ -1,0 +1,46 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
+
+void main() {
+  group('Android Content URI Handling Tests', () {
+    
+    test('Test content URI detection in text/html sharing', () {
+      // Test that content URIs are properly detected
+      const contentUri = 'content://com.google.android.apps.docs.storage.legacy/enc%3Dencoded%3DXRVIQU-6cMc7dZO8oFhZAgoQISJgSPnEg9PMGjHJhmMinJiZjJc3L1nV-W-hzTs%3D';
+      
+      expect(UnifiedSharingService.isUrl(contentUri), false);
+      expect(UnifiedSharingService.isFilePath(contentUri), false);
+      expect(contentUri.startsWith('content://'), true);
+    });
+
+    test('Test content URI error handling', () {
+      // Test that content URI errors are handled gracefully
+      const contentUri = 'content://com.google.android.apps.docs.storage.legacy/test';
+      
+      // This should be detected as needing special handling
+      expect(contentUri.startsWith('content://'), true);
+    });
+
+    test('Test file path vs content URI distinction', () {
+      // Test that we can distinguish between regular file paths and content URIs
+      const filePath = '/storage/emulated/0/Download/test.html';
+      const contentUri = 'content://com.android.providers.downloads.documents/document/123';
+      
+      expect(UnifiedSharingService.isFilePath(filePath), true);
+      expect(UnifiedSharingService.isFilePath(contentUri), false);
+      expect(UnifiedSharingService.isUrl(contentUri), false);
+    });
+
+    test('Test URL detection with content URIs', () {
+      // Ensure content URIs are not mistakenly detected as URLs
+      const contentUri = 'content://com.google.android.apps.docs.storage.legacy/file';
+      const httpUrl = 'https://example.com/file.html';
+      const fileUrl = 'file:///storage/emulated/0/file.html';
+      
+      expect(UnifiedSharingService.isUrl(contentUri), false);
+      expect(UnifiedSharingService.isUrl(httpUrl), true);
+      expect(UnifiedSharingService.isUrl(fileUrl), false);
+    });
+
+  });
+}

@@ -112,6 +112,50 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
       }
     }
   }
+  // Handle content:// URIs (Android content provider)
+  else if (uri.scheme == 'content') {
+    debugPrint('Opening content URI: ${uri.toString()}');
+    try {
+      // Content URIs should be handled by the Android native code
+      // This typically happens when files are shared from Google Docs, etc.
+      // The Android code should have already processed this and provided file content
+      // If we get here, it means the Android code didn't handle it properly
+      debugPrint('Content URI not handled by Android: ${uri.toString()}');
+      
+      // Fallback: try to load it as a file if possible
+      // This is a last resort and may not work for all content URIs
+      final errorContent = '''Content File Could Not Be Loaded
+
+This file was shared from an Android app using a content URI:
+
+${uri.toString()}
+
+The Android sharing handler should have processed this file and extracted its content, but this failed. Possible reasons:
+
+1. The file is protected by Android security restrictions
+2. The sharing app doesn't provide proper file access permissions
+3. The file format is not supported
+4. The file is too large or corrupted
+
+Try these solutions:
+- Open the file in the original app and use "Share as text" instead
+- Save the file to your device storage first, then share it
+- Use a different app to share the file
+- Contact the app developer for support''';
+      
+      final htmlFile = HtmlFile(
+        name: 'Content File Error',
+        path: uri.toString(),
+        content: errorContent,
+        lastModified: DateTime.now(),
+        size: errorContent.length,
+        isUrl: false,
+      );
+      await htmlService.loadFile(htmlFile);
+    } catch (e) {
+      debugPrint('Error loading content URI: $e');
+    }
+  }
   // Handle http/https URLs directly
   else if (uri.scheme == 'http' || uri.scheme == 'https') {
     debugPrint('Opening web URL: ${uri.toString()}');

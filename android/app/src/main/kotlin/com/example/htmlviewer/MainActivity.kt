@@ -43,6 +43,119 @@ class MainActivity : FlutterActivity() {
         if (intent.data != null) {
             println("MainActivity: onNewIntent - URL detected: ${intent.data}")
         }
+        
+        // Handle content:// URIs immediately in onNewIntent
+        if (intent.action == Intent.ACTION_VIEW && intent.data != null) {
+            val dataString = intent.data.toString()
+            if (dataString.startsWith("content://")) {
+                println("MainActivity: onNewIntent - Handling content:// URI immediately")
+                
+                // Try to read the file content from the content URI
+                val fileContent = try {
+                    readFileContentFromUri(intent.data!!)
+                } catch (e: Exception) {
+                    println("MainActivity: Error reading content from URI: ${e.message}")
+                    null
+                }
+                
+                // Try to get file info
+                val fileName = getFileNameFromUri(intent.data!!) ?: "shared_file.html"
+                val filePath = getRealPathFromURI(intent.data!!) ?: dataString
+                
+                // Create a shared data map
+                val sharedData = if (fileContent != null) {
+                    mapOf(
+                        "type" to "file",
+                        "content" to fileContent,
+                        "fileName" to fileName,
+                        "filePath" to filePath,
+                        "uri" to dataString
+                    )
+                } else {
+                    mapOf(
+                        "type" to "file",
+                        "content" to null,
+                        "fileName" to fileName,
+                        "filePath" to filePath,
+                        "uri" to dataString,
+                        "error" to "Failed to read content from content URI"
+                    )
+                }
+                
+                // Send this to Flutter via the method channel if engine is ready
+                if (flutterEngine != null) {
+                    try {
+                        val channel = MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, SHARED_CONTENT_CHANNEL)
+                        channel.invokeMethod("handleNewSharedContent", sharedData)
+                        println("MainActivity: Successfully sent content URI to Flutter via handleNewSharedContent")
+                        
+                        // Don't store this intent since we've processed it
+                        return
+                    } catch (e: Exception) {
+                        println("MainActivity: Error sending to Flutter, will store for later: ${e.message}")
+                    }
+                } else {
+                    println("MainActivity: Flutter engine not ready, storing intent for later processing")
+                }
+            }
+        }
+        
+        // Also handle content URIs that come via ACTION_SEND with EXTRA_STREAM
+        if (intent.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true) {
+            val streamUri = intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+            if (streamUri != null && streamUri.toString().startsWith("content://")) {
+                println("MainActivity: onNewIntent - Handling content:// URI from ACTION_SEND")
+                
+                // Try to read the file content from the content URI
+                val fileContent = try {
+                    readFileContentFromUri(streamUri)
+                } catch (e: Exception) {
+                    println("MainActivity: Error reading content from URI: ${e.message}")
+                    null
+                }
+                
+                // Try to get file info
+                val fileName = getFileNameFromUri(streamUri) ?: "shared_file.html"
+                val filePath = getRealPathFromURI(streamUri) ?: streamUri.toString()
+                
+                // Create a shared data map
+                val sharedData = if (fileContent != null) {
+                    mapOf(
+                        "type" to "file",
+                        "content" to fileContent,
+                        "fileName" to fileName,
+                        "filePath" to filePath,
+                        "uri" to streamUri.toString()
+                    )
+                } else {
+                    mapOf(
+                        "type" to "file",
+                        "content" to null,
+                        "fileName" to fileName,
+                        "filePath" to filePath,
+                        "uri" to streamUri.toString(),
+                        "error" to "Failed to read content from content URI"
+                    )
+                }
+                
+                // Send this to Flutter via the method channel if engine is ready
+                if (flutterEngine != null) {
+                    try {
+                        val channel = MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, SHARED_CONTENT_CHANNEL)
+                        channel.invokeMethod("handleNewSharedContent", sharedData)
+                        println("MainActivity: Successfully sent content URI to Flutter via handleNewSharedContent")
+                        
+                        // Don't store this intent since we've processed it
+                        return
+                    } catch (e: Exception) {
+                        println("MainActivity: Error sending to Flutter, will store for later: ${e.message}")
+                    }
+                } else {
+                    println("MainActivity: Flutter engine not ready, storing intent for later processing")
+                }
+            }
+        }
+        
         sharedIntent = intent
         // When using singleTask, we need to explicitly set the intent
         // to ensure it's processed when the activity is brought to front
@@ -59,10 +172,40 @@ class MainActivity : FlutterActivity() {
             Intent.ACTION_SEND -> {
                 if (intent.type?.startsWith("text/") == true) {
                     val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                    result.success(mapOf(
-                        "type" to "text",
-                        "content" to sharedText
-                    ))
+                    
+                    // Check if there's also a stream URI (content URI) for text/html sharing
+                    val streamUri = intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+                    
+                    if (streamUri != null && streamUri.toString().startsWith("content://")) {
+                        // This is a content URI being shared as text/html
+                        println("MainActivity: Detected content URI in text/html sharing")
+                        
+                        // Try to get the actual file path from the content URI
+                        val filePath = getRealPathFromURI(streamUri)
+                        val fileName = getFileNameFromUri(streamUri)
+                        
+                        // Try to read the file content directly
+                        val fileContent = try {
+                            readFileContentFromUri(streamUri)
+                        } catch (e: Exception) {
+                            println("MainActivity: Error reading file content: ${e.message}")
+                            null
+                        }
+                        
+                        result.success(mapOf(
+                            "type" to "file",
+                            "filePath" to filePath,
+                            "fileName" to fileName,
+                            "uri" to streamUri.toString(),
+                            "content" to fileContent
+                        ))
+                    } else if (sharedText != null) {
+                        // Regular text sharing
+                        result.success(mapOf(
+                            "type" to "text",
+                            "content" to sharedText
+                        ))
+                    }
                 } else if (intent.type?.startsWith("image/") == true) {
                     // Handle image sharing
                     val streamUri = intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
@@ -99,10 +242,56 @@ class MainActivity : FlutterActivity() {
             Intent.ACTION_VIEW -> {
                 val data = intent.data
                 if (data != null) {
-                    result.success(mapOf(
-                        "type" to "url",
-                        "content" to data.toString()
-                    ))
+                    val dataString = data.toString()
+                    
+                    // Check if this is a content:// URI (Android content provider)
+                    if (dataString.startsWith("content://")) {
+                        println("MainActivity: Detected content:// URI in ACTION_VIEW")
+                        
+                        // Try to get file info
+                        val fileName = getFileNameFromUri(data) ?: "shared_file.html"
+                        val filePath = getRealPathFromURI(data) ?: dataString
+                        
+                        // Try to read the file content from the content URI
+                        val fileContent = try {
+                            readFileContentFromUri(data)
+                        } catch (e: Exception) {
+                            println("MainActivity: Error reading content from URI: ${e.message}")
+                            null
+                        }
+                        
+                        if (fileContent != null) {
+                            result.success(mapOf(
+                                "type" to "file",
+                                "content" to fileContent,
+                                "fileName" to fileName,
+                                "filePath" to filePath,
+                                "uri" to dataString
+                            ))
+                        } else {
+                            // Even if we can't read content, provide file info
+                            result.success(mapOf(
+                                "type" to "file",
+                                "content" to null,
+                                "fileName" to fileName,
+                                "filePath" to filePath,
+                                "uri" to dataString,
+                                "error" to "Failed to read content from content URI"
+                            ))
+                        }
+                    } else if (dataString.startsWith("http://") || dataString.startsWith("https://")) {
+                        // Regular HTTP/HTTPS URL
+                        result.success(mapOf(
+                            "type" to "url",
+                            "content" to dataString
+                        ))
+                    } else {
+                        // Other types of URIs (file://, etc.)
+                        result.success(mapOf(
+                            "type" to "url",
+                            "content" to dataString
+                        ))
+                    }
                 }
             }
             else -> {
