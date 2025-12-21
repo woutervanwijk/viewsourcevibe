@@ -23,7 +23,6 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
-import 'package:view_source_vibe/services/file_type_detector.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -339,7 +338,8 @@ class HtmlService with ChangeNotifier {
   }
 
   /// Detect file type and generate appropriate filename using robust detection
-  Future<String> detectFileTypeAndGenerateFilename(String filename, String content) async {
+  Future<String> detectFileTypeAndGenerateFilename(
+      String filename, String content) async {
     try {
       // Use the robust file type detector
       final detectedType = await fileTypeDetector.detectFileType(
@@ -386,7 +386,8 @@ class HtmlService with ChangeNotifier {
     // Simple content-based detection
     final lowerContent = content.toLowerCase();
 
-    if (lowerContent.contains('<html') || lowerContent.contains('<!doctype html')) {
+    if (lowerContent.contains('<html') ||
+        lowerContent.contains('<!doctype html')) {
       return 'HTML File';
     }
     if (lowerContent.contains('body {') || lowerContent.contains('@media')) {
@@ -408,10 +409,12 @@ class HtmlService with ChangeNotifier {
     if (tryParseAsXml(content)) {
       return 'XML File';
     }
-    if (lowerContent.contains('public class ') || lowerContent.contains('system.out.println')) {
+    if (lowerContent.contains('public class ') ||
+        lowerContent.contains('system.out.println')) {
       return 'Java File';
     }
-    if (lowerContent.contains('#include ') || lowerContent.contains('int main(')) {
+    if (lowerContent.contains('#include ') ||
+        lowerContent.contains('int main(')) {
       return 'C++ File';
     }
     if (lowerContent.contains('def ') || lowerContent.contains('print(')) {
@@ -644,7 +647,8 @@ class HtmlService with ChangeNotifier {
             : generateDescriptiveFilename(uri, content);
 
         // Use robust file type detection to generate appropriate filename
-        final processedFilename = await detectFileTypeAndGenerateFilename(filename, content);
+        final processedFilename =
+            await detectFileTypeAndGenerateFilename(filename, content);
 
         final htmlFile = HtmlFile(
           name: processedFilename,

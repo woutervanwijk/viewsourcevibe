@@ -126,8 +126,13 @@ class UnifiedSharingService {
       final filePath = sharedData['filePath'] as String?;
       final fileBytes = sharedData['fileBytes'] as List<int>?;
 
+      final error = sharedData['error'] as String?;
+
       debugPrint(
           'UnifiedSharingService: Handling shared content of type: $type');
+      if (error != null) {
+        debugPrint('UnifiedSharingService: Native error reported: $error');
+      }
 
       final htmlService = Provider.of<HtmlService>(context, listen: false);
 
@@ -160,8 +165,8 @@ class UnifiedSharingService {
         if (filePath.startsWith('content://')) {
           debugPrint(
               'UnifiedSharingService: Content URI failed to be read: $filePath');
-          await _handleContentUriError(
-              context, htmlService, filePath, fileName);
+          await _handleContentUriError(context, htmlService, filePath, fileName,
+              error: error);
         } else {
           await _processSharedFilePath(context, htmlService, filePath);
         }
@@ -345,8 +350,9 @@ class UnifiedSharingService {
     BuildContext context,
     HtmlService htmlService,
     String uri,
-    String? fileName,
-  ) async {
+    String? fileName, {
+    String? error,
+  }) async {
     try {
       debugPrint('UnifiedSharingService: Handling content URI error for: $uri');
 
@@ -354,6 +360,8 @@ class UnifiedSharingService {
 
       // Provide Google Drive/Docs-specific guidance if this is a Google URI
       String errorContent;
+      final errorSnippet = error != null ? '\n\nTechnical Error: $error' : '';
+
       if (uri.contains('com.google.android.apps.docs')) {
         // Check if this is likely Google Drive (most common case)
         if (uri.contains('storage') || uri.contains('enc%3Dencoded')) {
@@ -363,6 +371,8 @@ This file was shared from Google Drive using a content URI:
 
 $uri
 
+$errorSnippet
+ 
 Google Drive uses security measures that may prevent direct file access. Here's how to share this file:
 
 📱 Google Drive Sharing Guide:
@@ -396,6 +406,8 @@ This file was shared from Google Docs using an encrypted content URI:
 
 $uri
 
+$errorSnippet
+ 
 Google Docs uses special security measures that prevent direct file access. Here's how to share this file:
 
 📱 Google Docs Sharing Guide:
@@ -420,6 +432,8 @@ This file was shared from an Android app using a content URI:
 
 $uri
 
+$errorSnippet
+ 
 The Android sharing handler tried to process this file but failed to read its content. Possible reasons:
 
 1. The file is protected by Android security restrictions

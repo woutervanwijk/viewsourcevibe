@@ -64,23 +64,17 @@ class MainActivity : FlutterActivity() {
                 val filePath = getRealPathFromURI(intent.data!!) ?: dataString
                 
                 // Create a shared data map
-                val sharedData = if (fileContent != null) {
-                    mapOf(
-                        "type" to "file",
-                        "content" to fileContent,
-                        "fileName" to fileName,
-                        "filePath" to filePath,
-                        "uri" to dataString
-                    )
-                } else {
-                    mapOf(
-                        "type" to "file",
-                        "content" to null,
-                        "fileName" to fileName,
-                        "filePath" to filePath,
-                        "uri" to dataString,
-                        "error" to "Failed to read content from content URI"
-                    )
+                val sharedData = mutableMapOf(
+                    "type" to "file",
+                    "content" to fileContent,
+                    "fileName" to fileName,
+                    "filePath" to filePath,
+                    "uri" to dataString
+                )
+                
+                if (fileContent == null) {
+                    sharedData["error"] = "Failed to read content from content URI. See logs for details."
+                    // Include the last error if we can track it
                 }
                 
                 // Send this to Flutter via the method channel if engine is ready
@@ -365,14 +359,15 @@ class MainActivity : FlutterActivity() {
         try {
             println("MainActivity: Starting to read content from URI: $uri")
             
-            // Try standard reading first - this is the most reliable method for content URIs
-            val content = readFileContentFromUriStandard(uri)
-            if (content != null) {
-                return content
-            }
+            // 1. Try standard reading first (most common for regular files)
+            var content = readFileContentFromUriStandard(uri)
+            if (content != null) return content
             
-            // If standard reading failed and it's a Google Drive/Docs URI, 
-            // try to get persistent permissions (might help in some cases)
+            // 2. Try as a "virtual" file if it's a Google Doc/Sheet
+            content = readVirtualFile(uri)
+            if (content != null) return content
+            
+            // 3. Try with persistent permissions attempt
             val uriString = uri.toString()
             if (uriString.contains("com.google.android.apps.docs")) {
                 println("MainActivity: Standard read failed for Google URI, trying with permissions")
@@ -382,6 +377,51 @@ class MainActivity : FlutterActivity() {
             println("MainActivity: Error in readFileContentFromUri: ${e.message}")
         }
         
+        return null
+    }
+
+    /**
+     * Handles Google Drive "Virtual" files by attempting to export them to text or HTML
+     */
+    private fun readVirtualFile(uri: Uri): String? {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            try {
+                // Check if it's a virtual file
+                val cursor = contentResolver.query(uri, null, null, null, null)
+                var isVirtual = false
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val index = it.getColumnIndex("is_virtual")
+                        if (index != -1) {
+                            isVirtual = it.getInt(index) != 0
+                        }
+                    }
+                }
+                
+                if (isVirtual) {
+                    println("MainActivity: Detected virtual file, attempting export")
+                    // Try to export as text/html first, then plain text
+                    val types = contentResolver.getStreamTypes(uri, "*/*") ?: emptyArray()
+                    val targetType = when {
+                        types.contains("text/html") -> "text/html"
+                        types.contains("text/plain") -> "text/plain"
+                        types.isNotEmpty() && types[0].startsWith("text/") -> types[0]
+                        else -> null
+                    }
+                    
+                    if (targetType != null) {
+                        println("MainActivity: Exporting virtual file as $targetType")
+                        contentResolver.openTypedAssetFileDescriptor(uri, targetType, null)?.use { afd ->
+                            afd.createInputStream().use { stream ->
+                                return stream.bufferedReader().readText()
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("MainActivity: Error reading virtual file: ${e.message}")
+            }
+        }
         return null
     }
 
@@ -397,7 +437,7 @@ class MainActivity : FlutterActivity() {
                 contentResolver.takePersistableUriPermission(uri, takeFlags)
                 println("MainActivity: Obtained persistent permissions for URI: $uri")
             } catch (e: SecurityException) {
-                println("MainActivity: Could not obtain persistent permissions (normal for one-time shares): ${e.message}")
+                println("MainActivity: Could not obtain persistent permissions: ${e.message}")
             }
             
             // Try reading again after permission attempt
@@ -414,33 +454,42 @@ class MainActivity : FlutterActivity() {
     private fun readFileContentFromUriStandard(uri: Uri): String? {
         try {
             println("MainActivity: Opening input stream for URI: $uri")
-            val inputStream = contentResolver.openInputStream(uri) ?: run {
-                println("MainActivity: openInputStream returned null for URI: $uri")
-                return null
+            // Try openInputStream first
+            val inputStream = try {
+                contentResolver.openInputStream(uri)
+            } catch (e: Exception) {
+                println("MainActivity: openInputStream failed, will try FD: ${e.message}")
+                null
             }
 
-            inputStream.use { stream ->
-                val buffer = ByteArray(1024 * 16) // 16KB buffer
-                val outputStream = ByteArrayOutputStream()
-                var bytesRead: Int
-                
-                while (stream.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
-                }
-                
-                val bytes = outputStream.toByteArray()
-                println("MainActivity: Successfully read ${bytes.size} bytes from URI: $uri")
-                
-                if (bytes.isEmpty()) {
-                    return ""
-                }
+            if (inputStream != null) {
+                inputStream.use { stream ->
+                    val buffer = ByteArray(1024 * 16) // 16KB buffer
+                    val outputStream = ByteArrayOutputStream()
+                    var bytesRead: Int
+                    
+                    while (stream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                    }
+                    
+                    val bytes = outputStream.toByteArray()
+                    println("MainActivity: Successfully read ${bytes.size} bytes from URI: $uri")
+                    
+                    if (bytes.isEmpty()) return ""
 
-                // Try UTF-8 first
-                try {
-                    return String(bytes, Charset.forName("UTF-8"))
-                } catch (e: Exception) {
-                    println("MainActivity: UTF-8 decoding failed, falling back to ISO-8859-1")
-                    return String(bytes, Charset.forName("ISO-8859-1"))
+                    try {
+                        return String(bytes, Charset.forName("UTF-8"))
+                    } catch (e: Exception) {
+                        return String(bytes, Charset.forName("ISO-8859-1"))
+                    }
+                }
+            }
+
+            // Fallback: Try openFileDescriptor
+            println("MainActivity: Attempting openFileDescriptor for URI: $uri")
+            contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                java.io.FileInputStream(pfd.fileDescriptor).use { fis ->
+                    return fis.bufferedReader().readText()
                 }
             }
         } catch (e: SecurityException) {
