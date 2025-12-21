@@ -296,8 +296,38 @@ class ShareViewController: SLComposeServiceViewController {
                     completion(.success(fileContent))
                 } catch {
                     print("Error reading file content: \(error.localizedDescription)")
-                    // If we can't read the content, fall back to passing the URL
-                    completion(.success(url.absoluteString))
+                    
+                    // Enhanced error handling for sandboxed files
+                    let errorMessage = "File could not be loaded. This file is located in iOS sandboxed storage: \(url.absoluteString)"
+                    
+                    // Check if this is a sandboxed file location
+                    let filePath = url.path
+                    if filePath.contains("File Provider Storage") || 
+                       filePath.contains("Library/Developer/CoreSimulator") ||
+                       filePath.contains("Containers/Shared/AppGroup") {
+                        
+                        let enhancedErrorMessage = """
+File could not be loaded
+
+This file is located in iOS sandboxed storage:
+\(url.absoluteString)
+
+The file exists but cannot be accessed directly by the main app due to iOS security restrictions.
+
+To view this file:
+1. Open the file in the original app
+2. Use "Save to Files" to save it to your iCloud Drive or local storage
+3. Then share the saved file from the Files app
+
+Alternatively:
+- Use "Open with" and choose this app to open directly
+- Use "Make available offline" then share the local copy
+- Use a different file manager app to share the file
+"""
+                        completion(.success(enhancedErrorMessage))
+                    } else {
+                        completion(.success(errorMessage))
+                    }
                 }
             } else {
                 completion(.failure(NSError(domain: "ViewsourceShare", code: 8, userInfo: [NSLocalizedDescriptionKey: "Invalid file URL format"])))

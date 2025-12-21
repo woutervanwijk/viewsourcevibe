@@ -214,6 +214,25 @@ class UnifiedSharingService {
       debugPrint(
           'UnifiedSharingService: Handling shared text content (${text.length} characters)');
 
+      // Check if this text content is actually an error message about sandboxed files
+      if (isSandboxedFileError(text)) {
+        debugPrint('UnifiedSharingService: Detected sandboxed file error message');
+        // Extract filename from the error message if possible
+        final extractedFileName = extractFileNameFromError(text) ?? fileName ?? 'sandboxed_file';
+        
+        final htmlFile = HtmlFile(
+          name: extractedFileName,
+          path: path ?? 'sandboxed://$extractedFileName',
+          content: text,
+          lastModified: DateTime.now(),
+          size: text.length,
+          isUrl: false,
+        );
+
+        await htmlService.loadFile(htmlFile);
+        return;
+      }
+
       final htmlFile = HtmlFile(
         name: fileName ?? '',
         path: path ?? 'shared://text',
@@ -231,6 +250,47 @@ class UnifiedSharingService {
       }
       rethrow;
     }
+  }
+
+  /// Check if text content is an error message about sandboxed files
+  @visibleForTesting
+  static bool isSandboxedFileError(String text) {
+    return text.contains('iOS sandboxed storage') ||
+           text.contains('File Provider Storage') ||
+           text.contains('Library/Developer/CoreSimulator') ||
+           text.contains('Containers/Shared/AppGroup') ||
+           text.contains('cannot be accessed directly');
+  }
+
+  /// Extract filename from sandboxed file error message
+  @visibleForTesting
+  static String? extractFileNameFromError(String text) {
+    try {
+      // Try to find the last occurrence of a filename in the text
+      // This is more reliable than regex for complex file paths with spaces
+      final lastSlashIndex = text.lastIndexOf('/');
+      
+      if (lastSlashIndex != -1) {
+        final lastPart = text.substring(lastSlashIndex + 1);
+        final endOfFilename = lastPart.indexOf(RegExp(r'[\s\n]'));
+        
+        final filename = endOfFilename != -1 
+            ? lastPart.substring(0, endOfFilename)
+            : lastPart;
+        
+        // Clean up the filename by removing URL encoding
+        final decodedFileName = Uri.decodeFull(filename);
+        
+        debugPrint('UnifiedSharingService: Extracted filename from error: $decodedFileName');
+        
+        if (decodedFileName.isNotEmpty) {
+          return decodedFileName;
+        }
+      }
+    } catch (e) {
+      debugPrint('UnifiedSharingService: Error extracting filename from error: $e');
+    }
+    return null;
   }
 
   /// Process shared file bytes by creating a file and loading it
