@@ -205,5 +205,82 @@ void main() {
         expect(textField.controller?.text, url, reason: 'URL should be shown for URL: $url');
       }
     });
+
+    testWidgets('Clean button is visible when URL is loaded', (WidgetTester tester) async {
+      final htmlService = HtmlService();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChangeNotifierProvider<HtmlService>(
+              create: (_) => htmlService,
+              child: const UrlInput(),
+            ),
+          ),
+        ),
+      );
+
+      // Load a web URL
+      final webFile = HtmlFile(
+        name: 'test.html',
+        path: 'https://example.com/test.html',
+        content: '<html><body>Test</body></html>',
+        lastModified: DateTime.now(),
+        size: 32,
+        isUrl: true,
+      );
+
+      htmlService.loadFile(webFile);
+      await tester.pumpAndSettle();
+
+      // Verify clean button is visible
+      final urlField = find.byType(TextField);
+      final textField = tester.widget<TextField>(urlField);
+      expect(textField.decoration?.suffixIcon, isNotNull, reason: 'Clean button should be visible when URL is loaded');
+    });
+
+    testWidgets('Clean button clears URL and unloads file', (WidgetTester tester) async {
+      final htmlService = HtmlService();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChangeNotifierProvider<HtmlService>(
+              create: (_) => htmlService,
+              child: const UrlInput(),
+            ),
+          ),
+        ),
+      );
+
+      // Load a web URL
+      final webFile = HtmlFile(
+        name: 'test.html',
+        path: 'https://example.com/test.html',
+        content: '<html><body>Test</body></html>',
+        lastModified: DateTime.now(),
+        size: 32,
+        isUrl: true,
+      );
+
+      htmlService.loadFile(webFile);
+      await tester.pumpAndSettle();
+
+      // Verify URL is loaded
+      expect(htmlService.currentFile, isNotNull);
+      expect(htmlService.currentFile?.isUrl, isTrue);
+
+      // Find and tap the clean button
+      final cleanButton = find.byIcon(Icons.clear);
+      expect(cleanButton, findsOneWidget);
+      await tester.tap(cleanButton);
+      await tester.pumpAndSettle();
+
+      // Verify URL is cleared from both text field and service
+      final urlField = find.byType(TextField);
+      final textField = tester.widget<TextField>(urlField);
+      expect(textField.controller?.text, '', reason: 'Text field should be cleared');
+      expect(htmlService.currentFile, isNull, reason: 'File should be cleared from service');
+    });
   });
 }

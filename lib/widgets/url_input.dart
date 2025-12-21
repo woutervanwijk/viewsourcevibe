@@ -87,10 +87,18 @@ class _UrlInputState extends State<UrlInput> {
                   prefixIcon: const Icon(Icons.link, size: 20),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6)),
-                  suffixIcon: _urlController.text.isNotEmpty
+                  suffixIcon: (_urlController.text.isNotEmpty ||
+                          (htmlService.currentFile != null &&
+                              htmlService.currentFile!.isUrl))
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 20),
-                          onPressed: () => _urlController.clear(),
+                          onPressed: () {
+                    _urlController.clear();
+                    // If there's a URL file loaded, clear it from the service too
+                    if (htmlService.currentFile != null && htmlService.currentFile!.isUrl) {
+                      htmlService.clearFile();
+                    }
+                  },
                         )
                       : null,
                   contentPadding:
