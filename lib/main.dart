@@ -125,7 +125,40 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
       // Fallback: try to load it as a file if possible
       // This is a last resort and may not work for all content URIs
       final errorContent = uri.toString().contains('com.google.android.apps.docs')
-        ? '''Google Docs File Could Not Be Loaded
+        ? (uri.toString().contains('storage') || uri.toString().contains('enc%3Dencoded')
+            ? '''Google Drive File Could Not Be Loaded
+
+This file was shared from Google Drive using a content URI:
+
+${uri.toString()}
+
+Google Drive uses security measures that may prevent direct file access. Here's how to share this file:
+
+📱 Google Drive Sharing Guide:
+
+1. Open Google Drive app
+2. Find and open the file
+3. Tap the three-dot menu (⋮) in the top-right corner
+4. Select "Download" to save the file to your device
+5. Then share the downloaded file from your file manager
+
+Alternative methods:
+- Use "Share link" to create a shareable web link
+- Use "Send a copy" to email the file
+- Use "Open with" and choose this app to open directly
+- Use "Make available offline" then share the local copy
+
+💡 Tip: Google Drive files shared directly may not be accessible due to Google's security policies. Download first, then share!
+
+🔧 Advanced Option:
+If you're sharing from Google Drive:
+1. Long-press the file
+2. Tap "Share"
+3. Choose "Save to Files" or "Download"
+4. Then share the downloaded file
+
+If you continue to have issues, try using a different file manager app to share the file.'''
+            : '''Google Docs File Could Not Be Loaded
 
 This file was shared from Google Docs using an encrypted content URI:
 
@@ -146,7 +179,7 @@ Alternative methods:
 - Use "Send a copy" to email the file to yourself
 - Use "Print" and save as PDF, then share the PDF
 
-💡 Tip: Google Docs files shared directly may not be accessible due to Google's security policies. Always save a copy first!'''
+💡 Tip: Google Docs files shared directly may not be accessible due to Google's security policies. Always save a copy first!''')
         : '''Content File Could Not Be Loaded
 
 This file was shared from an Android app using a content URI:

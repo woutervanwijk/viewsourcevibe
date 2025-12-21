@@ -363,11 +363,17 @@ class MainActivity : FlutterActivity() {
      */
     private fun readFileContentFromUri(uri: Uri): String? {
         try {
-            // Special handling for Google Docs encrypted URIs
+            // Special handling for Google Drive/Docs encrypted URIs
             val uriString = uri.toString()
-            if (uriString.contains("com.google.android.apps.docs.storage") && 
-                uriString.contains("enc%3Dencoded")) {
-                println("MainActivity: Detected Google Docs encrypted URI, attempting special handling")
+            if (uriString.contains("com.google.android.apps.docs.storage")) {
+                println("MainActivity: Detected Google Drive/Docs content URI, attempting special handling")
+                
+                // Check if this is an encrypted URI (both Drive and Docs use this format)
+                if (uriString.contains("enc%3Dencoded")) {
+                    println("MainActivity: This is an encrypted Google Drive/Docs URI")
+                } else {
+                    println("MainActivity: This is a regular Google Drive/Docs URI")
+                }
                 
                 // Try to get the actual file path from the encrypted URI
                 val realPath = getRealPathFromURI(uri)

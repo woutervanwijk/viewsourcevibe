@@ -274,10 +274,45 @@ class UnifiedSharingService {
 
       final effectiveFileName = fileName ?? 'Content File';
       
-      // Provide Google Docs-specific guidance if this is a Google Docs URI
+      // Provide Google Drive/Docs-specific guidance if this is a Google URI
       String errorContent;
       if (uri.contains('com.google.android.apps.docs')) {
-        errorContent = '''Google Docs File Could Not Be Loaded
+        // Check if this is likely Google Drive (most common case)
+        if (uri.contains('storage') || uri.contains('enc%3Dencoded')) {
+            errorContent = '''Google Drive File Could Not Be Loaded
+
+This file was shared from Google Drive using a content URI:
+
+$uri
+
+Google Drive uses security measures that may prevent direct file access. Here's how to share this file:
+
+📱 Google Drive Sharing Guide:
+
+1. Open Google Drive app
+2. Find and open the file
+3. Tap the three-dot menu (⋮) in the top-right corner
+4. Select "Download" to save the file to your device
+5. Then share the downloaded file from your file manager
+
+Alternative methods:
+- Use "Share link" to create a shareable web link
+- Use "Send a copy" to email the file
+- Use "Open with" and choose this app to open directly
+- Use "Make available offline" then share the local copy
+
+💡 Tip: Google Drive files shared directly may not be accessible due to Google's security policies. Download first, then share!
+
+🔧 Advanced Option:
+If you're sharing from Google Drive:
+1. Long-press the file
+2. Tap "Share"
+3. Choose "Save to Files" or "Download"
+4. Then share the downloaded file
+
+If you continue to have issues, try using a different file manager app to share the file.''';
+        } else {
+            errorContent = '''Google Docs File Could Not Be Loaded
 
 This file was shared from Google Docs using an encrypted content URI:
 
@@ -298,9 +333,8 @@ Alternative methods:
 - Use "Send a copy" to email the file to yourself
 - Use "Print" and save as PDF, then share the PDF
 
-💡 Tip: Google Docs files shared directly may not be accessible due to Google's security policies. Always save a copy first!
-
-If you continue to have issues, try using a different app to open and share the file.''';
+💡 Tip: Google Docs files shared directly may not be accessible due to Google's security policies. Always save a copy first!''';
+        }
       } else {
         errorContent = '''Content File Could Not Be Loaded
 

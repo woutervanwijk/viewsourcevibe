@@ -60,5 +60,33 @@ void main() {
       expect(regularUri.contains('enc%3Dencoded'), false);
     });
 
+    test('Test Google Drive URI detection', () {
+      // Test detection of Google Drive URIs (most common case)
+      const googleDriveUri = 'content://com.google.android.apps.docs.storage.legacy/enc%3Dencoded%3DXRVIQU-6cMc7dZO8oFhZAgoQISJgSPnEg9PMGjHJhmMinJiZjJc3L1nV-W-hzTs%3D';
+      const googleDocsUri = 'content://com.google.android.apps.docs/document/123';
+      
+      // Both contain the docs package, but Drive has storage/encrypted pattern
+      expect(googleDriveUri.contains('com.google.android.apps.docs'), true);
+      expect(googleDriveUri.contains('storage'), true);
+      expect(googleDriveUri.contains('enc%3Dencoded'), true);
+      
+      expect(googleDocsUri.contains('com.google.android.apps.docs'), true);
+      expect(googleDocsUri.contains('storage'), false);
+      expect(googleDocsUri.contains('enc%3Dencoded'), false);
+    });
+
+    test('Test Google Drive vs Docs URI distinction', () {
+      // Test that we can distinguish between Google Drive and Google Docs URIs
+      const driveUri = 'content://com.google.android.apps.docs.storage.legacy/enc%3Dencoded%3Dtest';
+      const docsUri = 'content://com.google.android.apps.docs.document/123';
+      
+      // Google Drive detection logic
+      final isLikelyDrive1 = driveUri.contains('storage') || driveUri.contains('enc%3Dencoded');
+      final isLikelyDrive2 = docsUri.contains('storage') || docsUri.contains('enc%3Dencoded');
+      
+      expect(isLikelyDrive1, true);  // Should be identified as Drive
+      expect(isLikelyDrive2, false); // Should be identified as Docs
+    });
+
   });
 }
