@@ -75,8 +75,12 @@ class UnifiedSharingService {
           try {
             final sharedData = _convertToStringDynamicMap(call.arguments);
             if (sharedData != null && context.mounted) {
-              await Future.microtask(
-                  () => handleSharedContent(context, sharedData));
+              await Future.microtask(() {
+                // Double-check that context is still mounted before using it
+                if (context.mounted) {
+                  handleSharedContent(context, sharedData);
+                }
+              });
               return true;
             }
           } catch (e) {
@@ -619,7 +623,8 @@ Try these solutions:
     }
   }
 
-  /// Safely convert method channel arguments to Map<String, dynamic>
+  /// Safely convert method channel arguments to Map of String dynamic
+  /// This method handles various input types and converts them to the expected format
   static Map<String, dynamic>? _convertToStringDynamicMap(dynamic arguments) {
     try {
       if (arguments == null) {

@@ -5,12 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   group('Manual Theme Preservation with System Dark Mode Changes', () {
     late AppSettings settings;
-    late SharedPreferences mockPrefs;
 
     setUp(() async {
       // Initialize SharedPreferences for testing
       SharedPreferences.setMockInitialValues({});
-      mockPrefs = await SharedPreferences.getInstance();
 
       settings = AppSettings();
       await settings.initialize();

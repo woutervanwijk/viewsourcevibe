@@ -64,18 +64,16 @@ void main() {
 
     test('Should handle edge cases with mixed patterns', () async {
       // Test edge cases that might confuse the detection logic
-      final edgeCases = [
-        // These should be URLs
-        'https://example.com/Users/profile.html',
-        'https://example.com/Library/docs.pdf',
-        'https://example.com/Applications/web/index.html',
-        'https://example.com/Containers/data/file.js',
-        
-        // These should NOT be URLs (file paths)
-        '/Users/test/Applications/web/index.html',
-        '/Library/Application Support/Containers/data/file.js',
-        'file:///Users/test/Library/docs.pdf',
-      ];
+      // These should be URLs
+      // 'https://example.com/Users/profile.html',
+      // 'https://example.com/Library/docs.pdf',
+      // 'https://example.com/Applications/web/index.html',
+      // 'https://example.com/Containers/data/file.js',
+      
+      // These should NOT be URLs (file paths)
+      // '/Users/test/Applications/web/index.html',
+      // '/Library/Application Support/Containers/data/file.js',
+      // 'file:///Users/test/Library/docs.pdf',
 
       // Test URLs (should be true)
       expect(SharingService.isUrl('https://example.com/Users/profile.html'), true);

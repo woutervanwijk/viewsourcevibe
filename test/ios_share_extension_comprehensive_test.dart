@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/shared_content_manager.dart';
 import 'package:view_source_vibe/services/sharing_service.dart';
-import 'package:flutter/material.dart';
 
 void main() {
   group('iOS Share Extension Comprehensive Tests', () {

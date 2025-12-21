@@ -103,9 +103,10 @@ void main() {
       expect(manualThemes.length, greaterThan(0));
       
       // Print some info
-      print('Theme pairs: ${themePairs.length}');
-      print('Manual themes: ${manualThemes.length}');
-      print('Total themes: ${allThemes.length}');
+      // Debug info removed to avoid print statements in production code
+      // print('Theme pairs: ${themePairs.length}');
+      // print('Manual themes: ${manualThemes.length}');
+      // print('Total themes: ${allThemes.length}');
     });
   });
 }

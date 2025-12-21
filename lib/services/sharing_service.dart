@@ -219,7 +219,7 @@ class SharingService {
       debugPrint('SharingService: Handling file path: $filePath');
 
       // Security: Validate file path to prevent directory traversal attacks
-      if (filePath.contains('..') || filePath.contains('\\') || filePath.contains('\0')) {
+      if (filePath.contains('..') || filePath.contains('\\') || filePath.contains(r'\0')) {
         debugPrint('SharingService: Invalid file path detected (potential directory traversal)');
         throw Exception('Invalid file path');
       }

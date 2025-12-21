@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 import 'package:flutter/services.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 

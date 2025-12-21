@@ -58,7 +58,6 @@ void main() {
       ];
 
       for (final testCase in testCases) {
-        final type = testCase['type'] as String;
         final content = testCase['content'] as String;
         final shouldBeUrl = testCase['shouldBeUrl'] as bool;
         final reason = testCase['reason'] as String;
@@ -68,7 +67,8 @@ void main() {
         expect(isUrlResult, shouldBeUrl, reason: 'isUrl should return $shouldBeUrl for: $reason');
         
         // Print debug info
-        print('Testing: $content (type: $type) -> isUrl: $isUrlResult, expected: $shouldBeUrl');
+        // Debug info removed to avoid print statements in production code
+        // print('Testing: $content (type: $type) -> isUrl: $isUrlResult, expected: $shouldBeUrl');
       }
     });
 
@@ -100,7 +100,8 @@ void main() {
       
       expect(isUrlResult, true, reason: 'Shared text content should be detected as URL');
       
-      print('Problematic URL test: $problematicUrl -> isUrl: $isUrlResult');
+      // Debug info removed to avoid print statements in production code
+      // print('Problematic URL test: $problematicUrl -> isUrl: $isUrlResult');
     });
 
   });

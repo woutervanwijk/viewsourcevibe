@@ -38,8 +38,12 @@ class SharedContentManager {
               debugPrint(
                   'SharedContentManager: Converted shared data: $sharedData');
               // Use a microtask to ensure we're not blocking the native thread
-              await Future.microtask(
-                  () => handleNewSharedContent(context, sharedData));
+              await Future.microtask(() {
+                // Check if context is still mounted before using it
+                if (context.mounted) {
+                  handleNewSharedContent(context, sharedData);
+                }
+              });
               return true;
             } else {
               debugPrint(
@@ -63,7 +67,8 @@ class SharedContentManager {
     }
   }
 
-  /// Safely convert method channel arguments to Map<String, dynamic>
+  /// Safely convert method channel arguments to Map of String dynamic
+  /// This method handles various input types and converts them to the expected format
   @visibleForTesting
   static Map<String, dynamic>? convertToStringDynamicMap(dynamic arguments) {
     try {
@@ -140,7 +145,7 @@ class SharedContentManager {
         // Handle special case: if type is "url" but content is a file URL, treat as file
         if (channelSharedData['type'] == 'url' &&
             channelSharedData['content'] != null &&
-            SharingService.isFilePath(channelSharedData['content'] as String)) {
+            isFilePath(channelSharedData['content'] as String)) {
           debugPrint(
               'SharedContentManager: Converting URL type with file path to file type');
           final sharedDataFromChannel = {
@@ -223,6 +228,87 @@ class SharedContentManager {
     }
   }
 
+  /// Check if a string is a file path
+  @visibleForTesting
+  static bool isFilePath(String text) {
+    // Remove any surrounding whitespace and quotes
+    final trimmedText = text.trim();
+
+    // Handle empty strings
+    if (trimmedText.isEmpty) {
+      return false;
+    }
+
+    final cleanText = trimmedText.startsWith('"') && trimmedText.endsWith('"')
+        ? trimmedText.substring(1, trimmedText.length - 1)
+        : (trimmedText.startsWith("'") && trimmedText.endsWith("'"))
+            ? trimmedText.substring(1, trimmedText.length - 1)
+            : trimmedText;
+
+    // First, check if it's definitely NOT a file path (it's a URL)
+    if (cleanText.startsWith('http://') ||
+        cleanText.startsWith('https://') ||
+        cleanText.startsWith('www.') ||
+        cleanText.startsWith('ftp://')) {
+      return false;
+    }
+
+    // Check for file path patterns - be more specific
+    // First check for absolute paths and special prefixes
+    if (cleanText.startsWith('/') ||
+        cleanText.startsWith('file://') ||
+        cleanText.startsWith('file///') ||
+        cleanText.startsWith('./') ||
+        cleanText.startsWith('../')) {
+      debugPrint(
+          'SharedContentManager: Detected file path (absolute/relative): $cleanText');
+      return true;
+    }
+
+    // Then check for paths containing directory separators and common directory names
+    if (cleanText.contains('/Users/') ||
+        cleanText.contains('/Library/') ||
+        cleanText.contains('/Containers/') ||
+        cleanText.contains('/Applications/') ||
+        cleanText.contains('/var/mobile/') ||
+        cleanText.contains('/private/var/') ||
+        cleanText.contains('.app/') ||
+        cleanText.contains('/Documents/') ||
+        cleanText.contains('/Downloads/') ||
+        cleanText.contains('/Desktop/') ||
+        cleanText.contains('Documents/') ||
+        cleanText.contains('Downloads/') ||
+        cleanText.contains('Desktop/') ||
+        cleanText.contains('assets/') ||
+        cleanText.contains('resources/') ||
+        cleanText.contains('temp/') ||
+        cleanText.contains('cache/') ||
+        cleanText.contains('data/') ||
+        cleanText.contains('files/') ||
+        cleanText.contains('documents/') ||
+        cleanText.contains('images/') ||
+        cleanText.contains('videos/')) {
+      debugPrint(
+          'SharedContentManager: Detected file path (with directory): $cleanText');
+      return true;
+    }
+
+    // Check for simple filenames with extensions (but not URLs)
+    if (!cleanText.contains('/') &&
+        !cleanText.contains('\\') && // Don't match Windows paths
+        !cleanText.contains('://') &&
+        cleanText.contains('.') &&
+        !cleanText
+            .startsWith('.') && // Don't match hidden files like .gitignore
+        cleanText.length > 3) {
+      // At least "a.b"
+      debugPrint('SharedContentManager: Detected simple filename: $cleanText');
+      return true;
+    }
+
+    return false;
+  }
+
   /// Extract file name from a file path
   @visibleForTesting
   static String extractFileNameFromPath(String path) {
@@ -260,7 +346,7 @@ class SharedContentManager {
       // Handle the special case where URL content is actually a file path
       if (sharedData['type'] == 'url' &&
           sharedData['content'] != null &&
-          SharingService.isFilePath(sharedData['content'] as String)) {
+          isFilePath(sharedData['content'] as String)) {
         debugPrint(
             'SharedContentManager: Converting URL type with file path to file type (real-time)');
         final convertedData = {
