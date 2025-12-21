@@ -363,59 +363,23 @@ class MainActivity : FlutterActivity() {
      */
     private fun readFileContentFromUri(uri: Uri): String? {
         try {
-            // Special handling for Google Drive/Docs encrypted URIs
-            val uriString = uri.toString()
-            if (uriString.contains("com.google.android.apps.docs.storage")) {
-                println("MainActivity: Detected Google Drive/Docs content URI, attempting special handling")
-                
-                // Check if this is an encrypted URI (both Drive and Docs use this format)
-                if (uriString.contains("enc%3Dencoded")) {
-                    println("MainActivity: This is an encrypted Google Drive/Docs URI")
-                } else {
-                    println("MainActivity: This is a regular Google Drive/Docs URI")
-                }
-                
-                // Try to get the actual file path from the encrypted URI
-                val realPath = getRealPathFromURI(uri)
-                if (realPath != null && !realPath.startsWith("content://")) {
-                    // If we can get a real path, try reading from that
-                    try {
-                        val file = File(realPath)
-                        if (file.exists()) {
-                            val content = file.readText(Charset.forName("UTF-8"))
-                            println("MainActivity: Successfully read Google Docs file from real path: $realPath")
-                            return content
-                        }
-                    } catch (e: Exception) {
-                        println("MainActivity: Failed to read Google Docs file from real path: ${e.message}")
-                    }
-                }
-                
-                // If we can't get a real path, try the standard content resolver approach
-                // but with additional permissions
-                return readFileContentFromUriWithPermissions(uri)
-            }
+            println("MainActivity: Starting to read content from URI: $uri")
             
-            // Standard content URI reading for non-Google Docs URIs
-            val inputStream = contentResolver.openInputStream(uri)
-            inputStream?.use { stream ->
-                val buffer = ByteArray(1024)
-                val outputStream = ByteArrayOutputStream()
-                var bytesRead: Int
-                
-                while (stream.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
-                }
-                
-                val bytes = outputStream.toByteArray()
-                val content = String(bytes, Charset.forName("UTF-8"))
-                
-                println("MainActivity: Read ${bytes.size} bytes from URI $uri")
+            // Try standard reading first - this is the most reliable method for content URIs
+            val content = readFileContentFromUriStandard(uri)
+            if (content != null) {
                 return content
             }
+            
+            // If standard reading failed and it's a Google Drive/Docs URI, 
+            // try to get persistent permissions (might help in some cases)
+            val uriString = uri.toString()
+            if (uriString.contains("com.google.android.apps.docs")) {
+                println("MainActivity: Standard read failed for Google URI, trying with permissions")
+                return readFileContentFromUriWithPermissions(uri)
+            }
         } catch (e: Exception) {
-            println("MainActivity: Error reading file content from URI: ${e.message}")
-            return null
+            println("MainActivity: Error in readFileContentFromUri: ${e.message}")
         }
         
         return null
@@ -426,28 +390,18 @@ class MainActivity : FlutterActivity() {
      */
     private fun readFileContentFromUriWithPermissions(uri: Uri): String? {
         try {
-            // Try to get persistent read permissions
-            val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                          Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            // Try to get persistent read permissions if possible
+            val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
             
-            // Check if we have permission
-            contentResolver.getPersistedUriPermissions().forEach { permission ->
-                if (permission.uri == uri) {
-                    println("MainActivity: Already have persisted permissions for URI: $uri")
-                    return readFileContentFromUriStandard(uri)
-                }
-            }
-            
-            // Request persistent permissions
             try {
                 contentResolver.takePersistableUriPermission(uri, takeFlags)
-                println("MainActivity: Successfully obtained persistent permissions for URI: $uri")
-                return readFileContentFromUriStandard(uri)
+                println("MainActivity: Obtained persistent permissions for URI: $uri")
             } catch (e: SecurityException) {
-                println("MainActivity: Failed to get persistent permissions: ${e.message}")
-                // Fall back to temporary permissions
-                return readFileContentFromUriStandard(uri)
+                println("MainActivity: Could not obtain persistent permissions (normal for one-time shares): ${e.message}")
             }
+            
+            // Try reading again after permission attempt
+            return readFileContentFromUriStandard(uri)
         } catch (e: Exception) {
             println("MainActivity: Error in permission handling: ${e.message}")
             return null
@@ -455,13 +409,18 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Standard content URI reading method
+     * Standard content URI reading method with robust stream handling
      */
     private fun readFileContentFromUriStandard(uri: Uri): String? {
         try {
-            val inputStream = contentResolver.openInputStream(uri)
-            inputStream?.use { stream ->
-                val buffer = ByteArray(1024)
+            println("MainActivity: Opening input stream for URI: $uri")
+            val inputStream = contentResolver.openInputStream(uri) ?: run {
+                println("MainActivity: openInputStream returned null for URI: $uri")
+                return null
+            }
+
+            inputStream.use { stream ->
+                val buffer = ByteArray(1024 * 16) // 16KB buffer
                 val outputStream = ByteArrayOutputStream()
                 var bytesRead: Int
                 
@@ -470,28 +429,24 @@ class MainActivity : FlutterActivity() {
                 }
                 
                 val bytes = outputStream.toByteArray()
+                println("MainActivity: Successfully read ${bytes.size} bytes from URI: $uri")
                 
+                if (bytes.isEmpty()) {
+                    return ""
+                }
+
                 // Try UTF-8 first
                 try {
-                    val content = String(bytes, Charset.forName("UTF-8"))
-                    println("MainActivity: Read ${bytes.size} bytes from URI $uri (UTF-8)")
-                    return content
+                    return String(bytes, Charset.forName("UTF-8"))
                 } catch (e: Exception) {
-                    println("MainActivity: UTF-8 decoding failed, trying ISO-8859-1")
-                    // Fallback to ISO-8859-1 if UTF-8 fails
-                    try {
-                        val content = String(bytes, Charset.forName("ISO-8859-1"))
-                        println("MainActivity: Read ${bytes.size} bytes from URI $uri (ISO-8859-1)")
-                        return content
-                    } catch (e2: Exception) {
-                        println("MainActivity: Both UTF-8 and ISO-8859-1 decoding failed")
-                        return null
-                    }
+                    println("MainActivity: UTF-8 decoding failed, falling back to ISO-8859-1")
+                    return String(bytes, Charset.forName("ISO-8859-1"))
                 }
             }
+        } catch (e: SecurityException) {
+            println("MainActivity: SecurityException reading URI $uri: ${e.message}")
         } catch (e: Exception) {
-            println("MainActivity: Error reading file content from URI (standard): ${e.message}")
-            return null
+            println("MainActivity: Error reading URI $uri: ${e.message}")
         }
         
         return null

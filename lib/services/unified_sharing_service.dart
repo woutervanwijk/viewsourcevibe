@@ -26,12 +26,11 @@ class UnifiedSharingService {
   static Future<void> shareHtml(String html, {String? filename}) async {
     try {
       // Handle empty or null filenames by providing a sensible default
-      final effectiveFilename = filename?.isNotEmpty == true 
-          ? filename! 
-          : 'shared_content.html';
-      
-      await _channel.invokeMethod('shareHtml',
-          {'html': html, 'filename': effectiveFilename});
+      final effectiveFilename =
+          filename?.isNotEmpty == true ? filename! : 'shared_content.html';
+
+      await _channel.invokeMethod(
+          'shareHtml', {'html': html, 'filename': effectiveFilename});
     } on PlatformException catch (e) {
       debugPrint("Failed to share HTML: '${e.message}'.");
       throw Exception("Sharing failed: ${e.message}");
@@ -131,25 +130,34 @@ class UnifiedSharingService {
       // Route to the appropriate processing method
       if (type == 'url' && content != null) {
         await _processSharedUrl(context, htmlService, content);
-      } else if (type == 'text' && content != null) {
-        // Check if the text content is actually a URL
-        if (isUrl(content)) {
-          debugPrint(
-              'UnifiedSharingService: Shared text is actually a URL: $content');
+      } else if (content != null) {
+        // Handle content provided directly (either as text or as a read file)
+        debugPrint(
+            'UnifiedSharingService: Handling shared content (${content.length} characters)');
+
+        // If it's a URL in text form, handle it as a URL
+        if (type == 'text' && isUrl(content)) {
           await _processSharedUrl(context, htmlService, content);
         } else {
-          debugPrint(
-              'UnifiedSharingService: Shared text is not a URL, treating as text: $content');
-          await _processSharedText(context, htmlService, content);
+          // Otherwise handle it as text content (could be a file read by native side)
+          await _processSharedText(
+            context,
+            htmlService,
+            content,
+            fileName: fileName,
+            path: filePath ?? 'shared://${type ?? "content"}',
+          );
         }
       } else if (fileBytes != null && fileBytes.isNotEmpty) {
         await _processSharedFileBytes(
             context, htmlService, fileBytes, fileName);
       } else if (filePath != null && filePath.isNotEmpty) {
         // Check if this is a content URI that failed to be read
-        if (filePath.startsWith('content://') && (fileBytes == null || fileBytes.isEmpty)) {
-          debugPrint('UnifiedSharingService: Content URI failed to be read: $filePath');
-          await _handleContentUriError(context, htmlService, filePath, fileName);
+        if (filePath.startsWith('content://')) {
+          debugPrint(
+              'UnifiedSharingService: Content URI failed to be read: $filePath');
+          await _handleContentUriError(
+              context, htmlService, filePath, fileName);
         } else {
           await _processSharedFilePath(context, htmlService, filePath);
         }
@@ -198,15 +206,17 @@ class UnifiedSharingService {
   static Future<void> _processSharedText(
     BuildContext context,
     HtmlService htmlService,
-    String text,
-  ) async {
+    String text, {
+    String? fileName,
+    String? path,
+  }) async {
     try {
       debugPrint(
-          'UnifiedSharingService: Handling shared text (${text.length} characters)');
+          'UnifiedSharingService: Handling shared text content (${text.length} characters)');
 
       final htmlFile = HtmlFile(
-        name: '',
-        path: 'shared://text',
+        name: fileName ?? '',
+        path: path ?? 'shared://text',
         content: text,
         lastModified: DateTime.now(),
         size: text.length,
@@ -273,13 +283,13 @@ class UnifiedSharingService {
       debugPrint('UnifiedSharingService: Handling content URI error for: $uri');
 
       final effectiveFileName = fileName ?? 'Content File';
-      
+
       // Provide Google Drive/Docs-specific guidance if this is a Google URI
       String errorContent;
       if (uri.contains('com.google.android.apps.docs')) {
         // Check if this is likely Google Drive (most common case)
         if (uri.contains('storage') || uri.contains('enc%3Dencoded')) {
-            errorContent = '''Google Drive File Could Not Be Loaded
+          errorContent = '''Google Drive File Could Not Be Loaded
 
 This file was shared from Google Drive using a content URI:
 
@@ -312,7 +322,7 @@ If you're sharing from Google Drive:
 
 If you continue to have issues, try using a different file manager app to share the file.''';
         } else {
-            errorContent = '''Google Docs File Could Not Be Loaded
+          errorContent = '''Google Docs File Could Not Be Loaded
 
 This file was shared from Google Docs using an encrypted content URI:
 
@@ -369,7 +379,8 @@ Try these solutions:
     } catch (e) {
       debugPrint('UnifiedSharingService: Error handling content URI error: $e');
       if (context.mounted) {
-        _showSnackBar(context, 'Error displaying content URI error: ${e.toString()}');
+        _showSnackBar(
+            context, 'Error displaying content URI error: ${e.toString()}');
       }
       rethrow;
     }
