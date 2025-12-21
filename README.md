@@ -89,6 +89,56 @@ Built with modern Flutter framework and leveraging powerful packages:
 - **shared_preferences**: Settings persistence
 - **mistral_vibe_ai**: Intelligent code analysis and development assistance
 
+### Comprehensive File Type Support
+
+View Source Vibe supports **188+ file types** with full syntax highlighting through the re_highlight package:
+
+#### Web Development
+- HTML, HTM, XHTML (as XML)
+- CSS, SCSS, SASS, LESS, Stylus
+- JavaScript, TypeScript, JSX, TSX
+- JSON, JSON5
+- XML, XSD, XSL, SVG
+- YAML, YML
+- Vue, Svelte
+- Markdown, AsciiDoc
+
+#### Programming Languages
+- Dart, Python, Java, Kotlin, Swift
+- Go, Rust, PHP, Ruby, C/C++
+- C#, Scala, Haskell, Lua, Perl
+- R, Bash, PowerShell, Elixir, Elm
+- Clojure, Crystal, D, Erlang, F#
+- Julia, Objective-C, OCaml, Prolog
+- And many more (100+ languages)
+
+#### Configuration & Data
+- INI, Properties, TOML
+- SQL, GraphQL, Dockerfile
+- Makefile, CMake, GN
+- Excel, CSV, XML-based formats
+
+#### Other Formats
+- Diff/Patch, Gitignore
+- LaTeX, Vim, Assembly
+- And many specialized formats
+
+#### Content Detection
+The app intelligently detects file types even without extensions:
+- HTML, CSS, JavaScript, JSON
+- YAML, Markdown, XML
+- Python, Java, C++, PHP, Ruby
+- SQL and other common formats
+
+## 🎯 Usage
+
+1. **Open files**: Use the file picker to browse and open source code files
+2. **View code**: Enjoy syntax highlighting with line numbers
+3. **Customize**: Adjust theme, font size, and other settings
+4. **Share**: Share files and code snippets with others
+5. **Auto-detect**: The app automatically detects file types even without extensions
+=======
+
 ## 📸 Screenshots
 
 ![App Screenshot 1](assets/screenshot1.png)

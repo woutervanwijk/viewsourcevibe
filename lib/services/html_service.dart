@@ -184,9 +184,152 @@ class HtmlService with ChangeNotifier {
       return 'CSS File';
     }
 
+    // Check for Java content (more specific patterns first)
+    if (lowerContent.contains('public class ') ||
+        lowerContent.contains('import java.') ||
+        lowerContent.contains('package ') ||
+        lowerContent.contains('system.out.println')) {
+      return 'Java File';
+    }
+
+    // Check for C/C++ content (more specific patterns)
+    if (lowerContent.contains('#include ') ||
+        lowerContent.contains('int main(') ||
+        lowerContent.contains('cout <<') ||
+        lowerContent.contains('cin >>') ||
+        lowerContent.contains('namespace ')) {
+      return 'C++ File';
+    }
+
+    // Check for Ruby content (more specific patterns)
+    if (lowerContent.contains('puts ') ||
+        lowerContent.contains('require ') ||
+        lowerContent.contains('gem ') ||
+        lowerContent.contains('bundle ')) {
+      return 'Ruby File';
+    }
+
+    // Check for SQL content (more specific patterns)
+    if (lowerContent.contains('select ') ||
+        lowerContent.contains('from ') ||
+        lowerContent.contains('where ') ||
+        lowerContent.contains('insert into ') ||
+        lowerContent.contains('update ') ||
+        lowerContent.contains('delete from ') ||
+        lowerContent.contains('join ') ||
+        lowerContent.contains('group by ') ||
+        lowerContent.contains('order by ')) {
+      return 'SQL File';
+    }
+
+    // Check for Python content (more specific patterns)
+    if (lowerContent.contains('def ') ||
+        lowerContent.contains('class ') ||
+        lowerContent.contains('import ') ||
+        lowerContent.contains('from ') ||
+        lowerContent.contains('print(') ||
+        lowerContent.contains('#!/usr/bin/env python')) {
+      return 'Python File';
+    }
+
+    // Check for JavaScript content (less specific patterns)
+    if (lowerContent.contains('function ') ||
+        lowerContent.contains('function(') ||
+        lowerContent.contains('const ') ||
+        lowerContent.contains('let ') ||
+        lowerContent.contains('=>') ||
+        lowerContent.contains('export ') ||
+        lowerContent.contains('// ') ||
+        lowerContent.contains('/*')) {
+      return 'JavaScript File';
+    }
+
+    // Check for JSON content
+    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
+        (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
+      if (lowerContent.contains('"') || lowerContent.contains(":")) {
+        return 'JSON File';
+      }
+    }
+
+    // Check for YAML content
+    if (lowerContent.startsWith('---') ||
+        lowerContent.contains(': ') ||
+        lowerContent.contains('  - ') ||
+        lowerContent.contains('key: value')) {
+      return 'YAML File';
+    }
+
+    // Check for Markdown content
+    if (lowerContent.startsWith('# ') ||
+        lowerContent.contains('## ') ||
+        lowerContent.contains('### ') ||
+        lowerContent.contains('#### ') ||
+        lowerContent.contains('##### ') ||
+        lowerContent.contains('###### ') ||
+        lowerContent.contains('**') ||
+        lowerContent.contains('* ') ||
+        lowerContent.contains('1. ')) {
+      return 'Markdown File';
+    }
+
     // Check for XML content first (more specific than HTML)
     if (tryParseAsXml(content)) {
       return 'XML File';
+    }
+
+    // Check for Python content
+    if (lowerContent.contains('def ') ||
+        lowerContent.contains('class ') ||
+        lowerContent.contains('import ') ||
+        lowerContent.contains('from ') ||
+        lowerContent.contains('print(') ||
+        lowerContent.contains('#!/usr/bin/env python')) {
+      return 'Python File';
+    }
+
+    // Check for Java content
+    if (lowerContent.contains('public class ') ||
+        lowerContent.contains('import java.') ||
+        lowerContent.contains('package ') ||
+        lowerContent.contains('System.out.println')) {
+      return 'Java File';
+    }
+
+    // Check for C/C++ content
+    if (lowerContent.contains('#include ') ||
+        lowerContent.contains('int main(') ||
+        lowerContent.contains('cout <<') ||
+        lowerContent.contains('cin >>') ||
+        lowerContent.contains('namespace ')) {
+      return 'C++ File';
+    }
+
+    // Check for PHP content
+    if (lowerContent.contains('<?php') ||
+        lowerContent.contains('<?=') ||
+        lowerContent.contains(r'$') ||
+        lowerContent.contains('echo ')) {
+      return 'PHP File';
+    }
+
+    // Check for Ruby content
+    if (lowerContent.contains('def ') ||
+        lowerContent.contains('class ') ||
+        lowerContent.contains('require ') ||
+        lowerContent.contains('puts ') ||
+        lowerContent.contains('end')) {
+      return 'Ruby File';
+    }
+
+    // Check for SQL content
+    if (lowerContent.contains('select ') ||
+        lowerContent.contains('from ') ||
+        lowerContent.contains('where ') ||
+        lowerContent.contains('insert into ') ||
+        lowerContent.contains('update ') ||
+        lowerContent.contains('delete from ')) {
+      return 'SQL File';
     }
 
     // Default to .txt if we can't detect the type
@@ -571,6 +714,8 @@ class HtmlService with ChangeNotifier {
         return 'makefile';
       case 'cmake':
         return 'cmake';
+      case 'gn':
+        return 'gn';
 
       // Styling & Preprocessors
       case 'scss':
@@ -592,9 +737,326 @@ class HtmlService with ChangeNotifier {
       case 'editorconfig':
         return 'ini';
 
-      // Default fallback
+      // Additional re_highlight supported languages
+      case '1c':
+        return '1c';
+      case 'abnf':
+        return 'abnf';
+      case 'accesslog':
+        return 'accesslog';
+      case 'actionscript':
+        return 'actionscript';
+      case 'ada':
+        return 'ada';
+      case 'angelscript':
+        return 'angelscript';
+      case 'apache':
+        return 'apache';
+      case 'applescript':
+        return 'applescript';
+      case 'arcade':
+        return 'arcade';
+      case 'arduino':
+        return 'arduino';
+      case 'armasm':
+        return 'armasm';
+      case 'aspectj':
+        return 'aspectj';
+      case 'autohotkey':
+        return 'autohotkey';
+      case 'autoit':
+        return 'autoit';
+      case 'avrasm':
+        return 'avrasm';
+      case 'awk':
+        return 'awk';
+      case 'axapta':
+        return 'axapta';
+      case 'basic':
+        return 'basic';
+      case 'bnf':
+        return 'bnf';
+      case 'brainfuck':
+        return 'brainfuck';
+      case 'cal':
+        return 'cal';
+      case 'capnproto':
+        return 'capnproto';
+      case 'ceylon':
+        return 'ceylon';
+      case 'clean':
+        return 'clean';
+      case 'coq':
+        return 'coq';
+      case 'cos':
+        return 'cos';
+      case 'crmsh':
+        return 'crmsh';
+      case 'csp':
+        return 'csp';
+      case 'd':
+        return 'd';
+      case 'delphi':
+      case 'pas':
+        return 'delphi';
+      case 'django':
+        return 'django';
+      case 'dns':
+        return 'dns';
+      case 'dos':
+        return 'dos';
+      case 'dsconfig':
+        return 'dsconfig';
+      case 'dts':
+        return 'dts';
+      case 'dust':
+        return 'dust';
+      case 'ebnf':
+        return 'ebnf';
+      case 'erb':
+        return 'erb';
+      case 'excel':
+      case 'xls':
+      case 'xlsx':
+        return 'excel';
+      case 'fix':
+        return 'fix';
+      case 'flix':
+        return 'flix';
+      case 'fortran':
+      case 'f':
+      case 'f77':
+      case 'f90':
+      case 'f95':
+        return 'fortran';
+      case 'gams':
+        return 'gams';
+      case 'gauss':
+        return 'gauss';
+      case 'gcode':
+        return 'gcode';
+      case 'gherkin':
+        return 'gherkin';
+      case 'glsl':
+        return 'glsl';
+      case 'gml':
+        return 'gml';
+      case 'golo':
+        return 'golo';
+      case 'gradle':
+        return 'gradle';
+      case 'groovy':
+        return 'groovy';
+      case 'haml':
+        return 'haml';
+      case 'handlebars':
+      case 'hbs':
+        return 'handlebars';
+      case 'hsp':
+        return 'hsp';
+      case 'http':
+        return 'http';
+      case 'hy':
+        return 'hy';
+      case 'inform7':
+        return 'inform7';
+      case 'irpf90':
+        return 'irpf90';
+      case 'isbl':
+        return 'isbl';
+      case 'jboss-cli':
+        return 'jboss-cli';
+      case 'julia':
+      case 'jl':
+        return 'julia';
+      case 'lasso':
+        return 'lasso';
+      case 'latex':
+      case 'tex':
+        return 'latex';
+      case 'ldif':
+        return 'ldif';
+      case 'leaf':
+        return 'leaf';
+      case 'lisp':
+      case 'lsp':
+        return 'lisp';
+      case 'livescript':
+        return 'livescript';
+      case 'llvm':
+        return 'llvm';
+      case 'lsl':
+        return 'lsl';
+      case 'mathematica':
+      case 'nb':
+        return 'mathematica';
+      case 'matlab':
+      case 'm':
+        return 'matlab';
+      case 'maxima':
+        return 'maxima';
+      case 'mel':
+        return 'mel';
+      case 'mercury':
+        return 'mercury';
+      case 'mipsasm':
+        return 'mipsasm';
+      case 'mizar':
+        return 'mizar';
+      case 'mojolicious':
+        return 'mojolicious';
+      case 'monkey':
+        return 'monkey';
+      case 'moonscript':
+        return 'moonscript';
+      case 'n1ql':
+        return 'n1ql';
+      case 'nestedtext':
+        return 'nestedtext';
+      case 'nginx':
+        return 'nginx';
+      case 'nim':
+        return 'nim';
+      case 'nix':
+        return 'nix';
+      case 'nsis':
+        return 'nsis';
+      case 'objectivec':
+      case 'mm':
+        return 'objectivec';
+      case 'ocaml':
+      case 'ml':
+      case 'mli':
+        return 'ocaml';
+      case 'openscad':
+      case 'scad':
+        return 'openscad';
+      case 'oxygene':
+        return 'oxygene';
+      case 'parser3':
+        return 'parser3';
+      case 'pf':
+        return 'pf';
+      case 'pgsql':
+        return 'pgsql';
+      case 'php-template':
+        return 'php-template';
+      case 'pony':
+        return 'pony';
+      case 'processing':
+        return 'processing';
+      case 'profile':
+        return 'profile';
+      case 'prolog':
+        return 'prolog';
+      case 'protobuf':
+      case 'proto':
+        return 'protobuf';
+      case 'puppet':
+      case 'pp':
+        return 'puppet';
+      case 'purebasic':
+      case 'pb':
+        return 'purebasic';
+      case 'python-repl':
+        return 'python-repl';
+      case 'q':
+        return 'q';
+      case 'qml':
+        return 'qml';
+      case 'reasonml':
+      case 're':
+        return 'reasonml';
+      case 'rib':
+        return 'rib';
+      case 'roboconf':
+        return 'roboconf';
+      case 'routeros':
+        return 'routeros';
+      case 'rsl':
+        return 'rsl';
+      case 'ruleslanguage':
+        return 'ruleslanguage';
+      case 'sas':
+        return 'sas';
+      case 'scheme':
+      case 'scm':
+      case 'ss':
+        return 'scheme';
+      case 'scilab':
+      case 'sci':
+        return 'scilab';
+      case 'smali':
+        return 'smali';
+      case 'smalltalk':
+      case 'st':
+        return 'smalltalk';
+      case 'sml':
+        return 'sml';
+      case 'sqf':
+        return 'sqf';
+      case 'stan':
+        return 'stan';
+      case 'stata':
+      case 'do':
+      case 'ado':
+        return 'stata';
+      case 'step21':
+      case 'stp':
+        return 'step21';
+      case 'subunit':
+        return 'subunit';
+      case 'taggerscript':
+        return 'taggerscript';
+      case 'tap':
+        return 'tap';
+      case 'tcl':
+        return 'tcl';
+      case 'thrift':
+        return 'thrift';
+      case 'tp':
+        return 'tp';
+      case 'twig':
+        return 'twig';
+      case 'vala':
+      case 'vapi':
+        return 'vala';
+      case 'vbnet':
+      case 'vb':
+        return 'vbnet';
+      case 'vbscript':
+      case 'vbs':
+        return 'vbscript';
+      case 'vbscript-html':
+        return 'vbscript-html';
+      case 'verilog':
+      case 'v':
+        return 'verilog';
+      case 'vhdl':
+      case 'vhd':
+        return 'vhdl';
+      case 'vim':
+      case 'vimrc':
+        return 'vim';
+      case 'wren':
+        return 'wren';
+      case 'x86asm':
+      case 'asm':
+        return 'x86asm';
+      case 'xl':
+        return 'xl';
+      case 'xquery':
+      case 'xq':
+      case 'xql':
+      case 'xqy':
+        return 'xquery';
+      case 'zephir':
+      case 'zep':
+        return 'zephir';
+
+      // Default fallback - try to detect from content
       default:
-        return 'xml';
+        return 'plaintext'; // Changed from 'xml' to 'plaintext' for better fallback
     }
   }
 
