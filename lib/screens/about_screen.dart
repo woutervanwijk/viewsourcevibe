@@ -68,7 +68,7 @@ class AboutScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'View Source Vibe is a powerful cross-platform source code viewer built with Flutter in collaboration with Mistral Vibe AI. It provides syntax highlighting, file browsing, text search, and supports multiple web file formats including HTML, CSS, JavaScript, JSON, XML, and more.',
+                        'View Source Vibe is a powerful cross-platform source code viewer built with Flutter in collaboration with Mistral Vibe AI. It provides syntax highlighting, file browsing, and supports multiple web file formats including HTML, CSS, JavaScript, JSON, XML, and more.',
                         style: TextStyle(fontSize: 16),
                       ),
                       const SizedBox(height: 12),
@@ -95,17 +95,26 @@ class AboutScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildFeatureItem('📱 Cross-platform support for iOS and Android'),
-                      _buildFeatureItem('🎨 Beautiful syntax highlighting with multiple themes'),
-                      _buildFeatureItem('📁 File browsing and URL loading capabilities'),
-                      _buildFeatureItem('🔍 Advanced text search with navigation'),
-                      _buildFeatureItem('📊 Line numbers and file information display'),
-                      _buildFeatureItem('🌓 Light and dark theme support with auto-switching'),
-                      _buildFeatureItem('📱 Responsive design with smooth scrolling'),
-                      _buildFeatureItem('🔧 Customizable settings for font size and display'),
-                      _buildFeatureItem('📤 File sharing and content management'),
-                      _buildFeatureItem('🔄 Automatic horizontal scroll reset when loading files'),
-                      _buildFeatureItem('🤖 AI-enhanced development with Mistral Vibe intelligence'),
+                      _buildFeatureItem(
+                          '📱 Cross-platform support for iOS and Android'),
+                      _buildFeatureItem(
+                          '🎨 Beautiful syntax highlighting with multiple themes'),
+                      _buildFeatureItem(
+                          '📁 File browsing and URL loading capabilities'),
+                      _buildFeatureItem(
+                          '📊 Line numbers and file information display'),
+                      _buildFeatureItem(
+                          '🌓 Light and dark theme support with auto-switching'),
+                      _buildFeatureItem(
+                          '📱 Responsive design with smooth scrolling'),
+                      _buildFeatureItem(
+                          '🔧 Customizable settings for font size and display'),
+                      _buildFeatureItem(
+                          '📤 File sharing and content management'),
+                      _buildFeatureItem(
+                          '🔄 Automatic horizontal scroll reset when loading files'),
+                      _buildFeatureItem(
+                          '🤖 AI-enhanced development with Mistral Vibe intelligence'),
                     ],
                   ),
                 ),
@@ -132,17 +141,19 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       const Text(
                         '🎯 Core Implementation',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        '- Built cross-platform foundation with Flutter\n- Implemented file browsing and syntax highlighting\n- Added text search and navigation features\n- Created responsive UI with Material Design',
+                        '- Built cross-platform foundation with Flutter\n- Implemented file browsing and syntax highlighting\n- Added navigation features\n- Created responsive UI with Material Design',
                         style: TextStyle(fontSize: 16),
                       ),
                       const SizedBox(height: 16),
                       const Text(
                         '🔧 Key Fixes and Enhancements',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -152,7 +163,8 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       const Text(
                         '🎨 Advanced Features',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -185,7 +197,8 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       const Text(
                         '🤖 AI-Powered Development:',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -195,7 +208,8 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       const Text(
                         '🚀 Key Contributions:',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -205,7 +219,8 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       const Text(
                         '💡 Impact:',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -238,7 +253,8 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       const Text(
                         '📦 Key Dependencies:',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -261,12 +277,14 @@ class AboutScreen extends StatelessWidget {
                     children: [
                       const Text(
                         'Copyright & Collaboration',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       const Text(
                         '© 2025 Wouter van Wijk & Mistral Vibe',
-                        style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+                        style: TextStyle(
+                            fontSize: 16, fontStyle: FontStyle.italic),
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -276,7 +294,8 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       const Text(
                         'This project represents a successful collaboration between human expertise and AI intelligence, demonstrating how Mistral Vibe AI can enhance and accelerate software development while maintaining the highest standards of quality and innovation.',
-                        style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic),
+                        style: TextStyle(
+                            fontSize: 14, fontStyle: FontStyle.italic),
                       ),
                     ],
                   ),
