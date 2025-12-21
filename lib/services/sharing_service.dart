@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:universal_io/io.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/file_type_detector.dart';
 
 class SharingService {
   static const MethodChannel _channel =
@@ -186,6 +187,22 @@ class SharingService {
   ) async {
     try {
       debugPrint('SharingService: Handling file bytes (${bytes.length} bytes)');
+
+      // Check for binary files before processing
+      try {
+        await fileTypeDetector.detectFileType(
+          filename: fileName,
+          bytes: Uint8List.fromList(bytes),
+        );
+      } catch (e) {
+        if (e is FileTypeError) {
+          debugPrint('SharingService: Binary file detected: ${e.message}');
+          if (context.mounted) {
+            _showSnackBar(context, e.message);
+          }
+          return; // Don't process binary files
+        }
+      }
 
       final content = String.fromCharCodes(bytes);
       final name = fileName ?? ''; // Empty name for unknown filenames

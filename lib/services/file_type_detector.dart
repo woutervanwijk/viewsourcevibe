@@ -1,6 +1,17 @@
 import 'dart:typed_data';
 import 'package:mime_type/mime_type.dart';
 
+// Extension method for comparing lists
+extension ListEquals on List<int> {
+  bool equals(List<int> other) {
+    if (length != other.length) return false;
+    for (int i = 0; i < length; i++) {
+      if (this[i] != other[i]) return false;
+    }
+    return true;
+  }
+}
+
 /// Robust file type detection service using multiple strategies
 class FileTypeDetector {
   // Cache for detection results to improve performance
@@ -8,6 +19,7 @@ class FileTypeDetector {
 
   /// Detect file type using multiple strategies
   /// Returns a file type identifier (e.g., 'HTML', 'JavaScript', 'Python')
+  /// Throws FileTypeError for binary/unsupported files
   Future<String> detectFileType({
     String? filename,
     String? content,
@@ -23,7 +35,19 @@ class FileTypeDetector {
 
     String detectedType = 'Text';
 
-    // Strategy 1: Extension-based detection (fastest)
+    // Strategy 1: Check for binary files first
+    if (bytes != null && bytes.isNotEmpty) {
+      try {
+        // Check if this is a binary file
+        if (await _isBinaryFile(bytes, filename: filename)) {
+          throw FileTypeError('Binary files are not supported. Only text files can be loaded.');
+        }
+      } catch (e) {
+        // If binary detection fails, continue with text detection
+      }
+    }
+
+    // Strategy 2: Extension-based detection (fastest)
     if (filename != null && filename.contains('.')) {
       detectedType = _detectByExtension(filename);
       if (detectedType != 'Text') {
@@ -32,7 +56,7 @@ class FileTypeDetector {
       }
     }
 
-    // Strategy 2: MIME type detection from bytes
+    // Strategy 3: MIME type detection from bytes
     if (bytes != null && bytes.isNotEmpty) {
       try {
         final mimeType = _detectMimeFromBytes(bytes);
@@ -48,14 +72,28 @@ class FileTypeDetector {
       }
     }
 
-    // Strategy 3: Content-based detection with scoring
+    // Strategy 4: Content-based detection with scoring
     if (content != null && content.isNotEmpty) {
       detectedType = _detectByContent(content);
       _detectionCache[cacheKey] = detectedType;
       return detectedType;
     }
 
-    // Fallback
+    // If we have bytes but no content, check if it's binary
+    if (bytes != null && bytes.isNotEmpty && content == null) {
+      try {
+        if (await _isBinaryFile(bytes, filename: filename)) {
+          throw FileTypeError('Binary files are not supported. Only text files can be loaded.');
+        }
+      } catch (e) {
+        if (e is FileTypeError) {
+          rethrow;
+        }
+        // Continue with fallback for other errors
+      }
+    }
+
+    // Final fallback
     _detectionCache[cacheKey] = detectedType;
     return detectedType;
   }
@@ -395,6 +433,75 @@ class FileTypeDetector {
     return 'Text';
   }
 
+  /// Check if file content represents a binary file
+  Future<bool> _isBinaryFile(Uint8List bytes, {String? filename}) async {
+    // Check for null bytes (common in binary files)
+    if (bytes.contains(0)) {
+      return true;
+    }
+
+    // Check for common binary file signatures
+    final binarySignatures = [
+      // PDF
+      Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      // ZIP
+      Uint8List.fromList([0x50, 0x4B, 0x03, 0x04]),
+      // PNG
+      Uint8List.fromList([0x89, 0x50, 0x4E, 0x47]),
+      // JPEG
+      Uint8List.fromList([0xFF, 0xD8, 0xFF]),
+      // GIF
+      Uint8List.fromList([0x47, 0x49, 0x46, 0x38]),
+      // EXE (Windows)
+      Uint8List.fromList([0x4D, 0x5A]),
+      // ELF (Linux)
+      Uint8List.fromList([0x7F, 0x45, 0x4C, 0x46]),
+      // Mach-O (macOS)
+      Uint8List.fromList([0xFE, 0xED, 0xFA, 0xCE]),
+      // MP3
+      Uint8List.fromList([0x49, 0x44, 0x33]),
+      // MP4
+      Uint8List.fromList([0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70]),
+    ];
+
+    // Check if file starts with any binary signature
+    for (final signature in binarySignatures) {
+      if (bytes.length >= signature.length &&
+          bytes.sublist(0, signature.length).toList().equals(signature.toList())) {
+        return true;
+      }
+    }
+
+    // Check for high frequency of non-text characters
+    final textChars = RegExp(r'[\x20-\x7E\r\n\t]');
+    final textCharCount = bytes.where((byte) => textChars.hasMatch(String.fromCharCode(byte))).length;
+    final textRatio = textCharCount / bytes.length;
+    
+    // If less than 80% of characters are text-like, it's probably binary
+    if (textRatio < 0.8) {
+      return true;
+    }
+
+    // Check for common binary file extensions
+    if (filename != null && filename.contains('.')) {
+      final ext = filename.split('.').last.toLowerCase();
+      final binaryExtensions = [
+        'pdf', 'zip', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp',
+        'mp3', 'mp4', 'avi', 'mov', 'mkv', 'wav', 'flac',
+        'exe', 'dll', 'so', 'dylib', 'bin', 'img', 'iso',
+        'class', 'jar', 'war', 'ear', 'apk', 'ipa',
+        'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        'psd', 'ai', 'indd', 'eps', 'ttf', 'otf',
+      ];
+      
+      if (binaryExtensions.contains(ext)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /// Generate cache key for detection results
   String _generateCacheKey({String? filename, String? content, Uint8List? bytes}) {
     final parts = <String>[];
@@ -410,6 +517,17 @@ class FileTypeDetector {
   void clearCache() {
     _detectionCache.clear();
   }
+}
+
+/// Custom error for file type detection failures
+class FileTypeError extends Error {
+  final String message;
+  final String? details;
+
+  FileTypeError(this.message, [this.details]);
+
+  @override
+  String toString() => 'FileTypeError: $message${details != null ? ' (${details!})' : ''}';
 }
 
 /// Singleton instance for easy access

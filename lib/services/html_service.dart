@@ -23,6 +23,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
+import 'package:view_source_vibe/services/file_type_detector.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;

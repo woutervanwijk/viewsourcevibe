@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'dart:typed_data';
 
 void main() {
   group('File Type Detection Tests', () {
@@ -195,6 +196,114 @@ void main() {
         
         // Test with random text
         expect(await detector.detectFileType(content: 'random text without specific patterns'), 'Text');
+      });
+    });
+
+    group('Binary File Detection', () {
+      test('Should detect PDF files as binary', () async {
+        // PDF file signature: %PDF
+        final pdfBytes = Uint8List.fromList([0x25, 0x50, 0x44, 0x46, 0x2D]);
+        
+        expect(
+          () => detector.detectFileType(bytes: pdfBytes),
+          throwsA(isA<FileTypeError>()),
+        );
+      });
+
+      test('Should detect ZIP files as binary', () async {
+        // ZIP file signature: PK\x03\x04
+        final zipBytes = Uint8List.fromList([0x50, 0x4B, 0x03, 0x04]);
+        
+        expect(
+          () => detector.detectFileType(bytes: zipBytes),
+          throwsA(isA<FileTypeError>()),
+        );
+      });
+
+      test('Should detect PNG files as binary', () async {
+        // PNG file signature
+        final pngBytes = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        
+        expect(
+          () => detector.detectFileType(bytes: pngBytes),
+          throwsA(isA<FileTypeError>()),
+        );
+      });
+
+      test('Should detect JPEG files as binary', () async {
+        // JPEG file signature: FF D8 FF
+        final jpegBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]);
+        
+        expect(
+          () => detector.detectFileType(bytes: jpegBytes),
+          throwsA(isA<FileTypeError>()),
+        );
+      });
+
+      test('Should detect files with null bytes as binary', () async {
+        // Files with null bytes are definitely binary
+        final binaryBytes = Uint8List.fromList([0x48, 0x65, 0x6C, 0x6C, 0x00, 0x57, 0x6F, 0x72, 0x6C, 0x64]);
+        
+        expect(
+          () => detector.detectFileType(bytes: binaryBytes),
+          throwsA(isA<FileTypeError>()),
+        );
+      });
+
+      test('Should detect files with low text ratio as binary', () async {
+        // File with mostly non-text characters
+        final binaryBytes = Uint8List.fromList(List.generate(100, (i) => i % 256));
+        
+        expect(
+          () => detector.detectFileType(bytes: binaryBytes),
+          throwsA(isA<FileTypeError>()),
+        );
+      });
+
+      test('Should detect binary files by extension', () async {
+        // Test various binary file extensions
+        expect(
+          () => detector.detectFileType(filename: 'document.pdf', bytes: Uint8List.fromList([0x25, 0x50, 0x44, 0x46])),
+          throwsA(isA<FileTypeError>()),
+        );
+        
+        expect(
+          () => detector.detectFileType(filename: 'image.png', bytes: Uint8List.fromList([0x89, 0x50, 0x4E, 0x47])),
+          throwsA(isA<FileTypeError>()),
+        );
+        
+        expect(
+          () => detector.detectFileType(filename: 'archive.zip', bytes: Uint8List.fromList([0x50, 0x4B, 0x03, 0x04])),
+          throwsA(isA<FileTypeError>()),
+        );
+      });
+
+      test('Should allow text files with binary extensions if content is text', () async {
+        // This is a text file but has a .pdf extension
+        // The content detection should override the extension
+        const textContent = 'This is plain text content';
+        final textBytes = Uint8List.fromList(textContent.codeUnits);
+        
+        // Should not throw because content is text
+        final result = await detector.detectFileType(
+          filename: 'document.pdf',
+          bytes: textBytes,
+          content: textContent,
+        );
+        
+        expect(result, 'Text');
+      });
+
+      test('Should provide meaningful error messages for binary files', () async {
+        final pdfBytes = Uint8List.fromList([0x25, 0x50, 0x44, 0x46]);
+        
+        try {
+          await detector.detectFileType(bytes: pdfBytes);
+          fail('Should have thrown FileTypeError');
+        } catch (e) {
+          expect(e, isA<FileTypeError>());
+          expect(e.toString(), contains('Binary files are not supported'));
+        }
       });
     });
   });
