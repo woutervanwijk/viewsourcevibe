@@ -22,6 +22,7 @@ import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
+import 'package:view_source_vibe/services/file_type_detector.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -336,6 +337,92 @@ class HtmlService with ChangeNotifier {
     return 'Text File';
   }
 
+  /// Detect file type and generate appropriate filename using robust detection
+  Future<String> detectFileTypeAndGenerateFilename(String filename, String content) async {
+    try {
+      // Use the robust file type detector
+      final detectedType = await fileTypeDetector.detectFileType(
+        filename: filename,
+        content: content,
+      );
+
+      // Handle empty or unclear filenames
+      if (filename.isEmpty ||
+          filename == '/' ||
+          filename == 'index' ||
+          !filename.contains('.') && !filename.contains('/')) {
+        return '$detectedType File';
+      }
+
+      // If filename already has an extension, use it
+      if (filename.contains('.')) {
+        return filename;
+      }
+
+      // Generate filename based on detected type
+      return '$detectedType File';
+    } catch (e) {
+      // Fallback to simple detection if robust detection fails
+      return _fallbackContentDetection(filename, content);
+    }
+  }
+
+  /// Fallback content detection when robust detection fails
+  String _fallbackContentDetection(String filename, String content) {
+    // Handle empty or unclear filenames
+    if (filename.isEmpty ||
+        filename == '/' ||
+        filename == 'index' ||
+        !filename.contains('.') && !filename.contains('/')) {
+      filename = 'File';
+    }
+
+    // If filename already has an extension, use it
+    if (filename.contains('.')) {
+      return filename;
+    }
+
+    // Simple content-based detection
+    final lowerContent = content.toLowerCase();
+
+    if (lowerContent.contains('<html') || lowerContent.contains('<!doctype html')) {
+      return 'HTML File';
+    }
+    if (lowerContent.contains('body {') || lowerContent.contains('@media')) {
+      return 'CSS File';
+    }
+    if (lowerContent.contains('function ') || lowerContent.contains('const ')) {
+      return 'JavaScript File';
+    }
+    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
+        (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
+      return 'JSON File';
+    }
+    if (lowerContent.startsWith('---') || lowerContent.contains(': ')) {
+      return 'YAML File';
+    }
+    if (lowerContent.startsWith('# ') || lowerContent.contains('## ')) {
+      return 'Markdown File';
+    }
+    if (tryParseAsXml(content)) {
+      return 'XML File';
+    }
+    if (lowerContent.contains('public class ') || lowerContent.contains('system.out.println')) {
+      return 'Java File';
+    }
+    if (lowerContent.contains('#include ') || lowerContent.contains('int main(')) {
+      return 'C++ File';
+    }
+    if (lowerContent.contains('def ') || lowerContent.contains('print(')) {
+      return 'Python File';
+    }
+    if (lowerContent.contains('select ') || lowerContent.contains('from ')) {
+      return 'SQL File';
+    }
+
+    return 'Text File';
+  }
+
   /// Try to parse content as XML
   /// Returns true if content appears to be valid XML
   bool tryParseAsXml(String content) {
@@ -555,8 +642,8 @@ class HtmlService with ChangeNotifier {
             ? pathFilename
             : generateDescriptiveFilename(uri, content);
 
-        // Ensure the filename has a proper extension for HTML content
-        final processedFilename = ensureHtmlExtension(filename, content);
+        // Use robust file type detection to generate appropriate filename
+        final processedFilename = await detectFileTypeAndGenerateFilename(filename, content);
 
         final htmlFile = HtmlFile(
           name: processedFilename,
