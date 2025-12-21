@@ -47,6 +47,110 @@ class HtmlService with ChangeNotifier {
     super.dispose();
   }
 
+  /// Generate a descriptive filename for URLs without clear filenames
+  /// Uses domain name, path segments, and content type to create meaningful names
+  String generateDescriptiveFilename(Uri uri, String content) {
+    // Extract domain name (remove www. if present)
+    String domain = uri.host;
+    if (domain.startsWith('www.')) {
+      domain = domain.substring(4);
+    }
+
+    // Clean domain name (remove common TLDs and subdomains)
+    final domainParts = domain.split('.');
+    if (domainParts.length >= 2) {
+      // Keep main domain and first subdomain if it's meaningful
+      // Remove common TLDs like com, org, net, io, etc.
+      final commonTlds = {
+        'com',
+        'org',
+        'net',
+        'io',
+        'co',
+        'dev',
+        'app',
+        'tech',
+        'info'
+      };
+      if (domainParts.length >= 3 &&
+          commonTlds.contains(domainParts[domainParts.length - 2])) {
+        // Pattern like example.co.uk or example.com.br
+        domain = domainParts.sublist(domainParts.length - 3).join('.');
+      } else {
+        domain = domainParts.sublist(domainParts.length - 2).join('.');
+      }
+    }
+
+    // Extract meaningful path segments (avoid common path segments)
+    final pathSegments = uri.pathSegments
+        .where((segment) =>
+            segment.isNotEmpty &&
+            !segment.startsWith('_') &&
+            segment != 'index' &&
+            segment != 'home' &&
+            segment != 'page' &&
+            segment != 'view')
+        .toList();
+
+    // Generate base filename
+    String baseFilename;
+    if (pathSegments.isNotEmpty) {
+      // Use the last meaningful path segment
+      baseFilename = pathSegments.last;
+    } else {
+      // Use domain name as base
+      baseFilename = domain;
+    }
+
+    // Clean up the base filename
+    baseFilename = baseFilename
+        .replaceAll(RegExp(r'[^a-zA-Z0-9\-_.]'),
+            '-') // Replace special chars with hyphens
+        .replaceAll(RegExp(r'-+'), '-') // Collapse multiple hyphens
+        .replaceAll(RegExp(r'^-|-$'), ''); // Remove leading/trailing hyphens
+
+    // Ensure reasonable length (max 40 characters for base, leaving room for content type suffix)
+    if (baseFilename.length > 40) {
+      baseFilename = baseFilename.substring(0, 40);
+    }
+
+    // If we end up with an empty filename, use a default
+    if (baseFilename.isEmpty) {
+      baseFilename = domain;
+      if (baseFilename.isEmpty) {
+        baseFilename = 'WebPage';
+      }
+    }
+
+    // Detect content type and add appropriate suffix
+    final lowerContent = content.toLowerCase();
+    String contentTypeSuffix = '';
+
+    if (lowerContent.contains('<html') ||
+        lowerContent.contains('<!doctype html') ||
+        lowerContent.contains('<head') ||
+        lowerContent.contains('<body')) {
+      contentTypeSuffix = ' HTML';
+    } else if (lowerContent.contains('body {') ||
+        lowerContent.contains('@media') ||
+        lowerContent.contains('/* css')) {
+      contentTypeSuffix = ' CSS';
+    } else if (lowerContent.contains('function ') ||
+        lowerContent.contains('function(') ||
+        lowerContent.contains('const ') ||
+        lowerContent.contains('let ') ||
+        lowerContent.contains('=>')) {
+      contentTypeSuffix = ' JavaScript';
+    } else if (tryParseAsXml(content)) {
+      contentTypeSuffix = ' XML';
+    }
+
+    // Combine base filename with content type suffix
+    final filename = '$baseFilename$contentTypeSuffix';
+
+    return filename;
+  }
+
   /// Ensure filename has proper extension based on content
   String ensureHtmlExtension(String filename, String content) {
     // Handle empty or unclear filenames
@@ -78,14 +182,6 @@ class HtmlService with ChangeNotifier {
         lowerContent.contains('@media') ||
         lowerContent.contains('/* css')) {
       return 'CSS File';
-    }
-
-    // Check for JavaScript content
-    if (lowerContent.contains('function(') ||
-        lowerContent.contains('const ') ||
-        lowerContent.contains('let ') ||
-        lowerContent.contains('=>')) {
-      return 'JavaScript File';
     }
 
     // Check for XML content first (more specific than HTML)
@@ -303,8 +399,18 @@ class HtmlService with ChangeNotifier {
         // Use the final URL after redirects
         final finalUrl = response.request?.url.toString() ?? url;
 
-        final filename =
-            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'HTML File';
+        // Extract filename from URL path segments
+        final pathFilename =
+            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+
+        // Generate descriptive filename if the path segment is not a clear filename
+        final filename = pathFilename.isNotEmpty &&
+                pathFilename.contains('.') &&
+                !pathFilename.startsWith('_') &&
+                pathFilename != 'index' &&
+                pathFilename != 'home'
+            ? pathFilename
+            : generateDescriptiveFilename(uri, content);
 
         // Ensure the filename has a proper extension for HTML content
         final processedFilename = ensureHtmlExtension(filename, content);
