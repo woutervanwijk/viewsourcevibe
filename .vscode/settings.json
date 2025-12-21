@@ -1,12 +1,11 @@
 {
   // Flutter specific settings
-  "dart.flutterSdkPath": ".",
+  // "dart.flutterSdkPath": ".",
   "dart.flutterHotReloadOnSave": "allIfDirty",
   // "dart.flutterHotRestartOnSave": "always",
   "dart.flutterRunLogFile": "debug.log",
   "dart.flutterTestLogFile": "test.log",
   "dart.flutterDaemonLogFile": "daemon.log",
-  
   // Launch configuration
   "launch": {
     "configurations": [
@@ -19,13 +18,11 @@
     ],
     "compounds": []
   },
-  
   // Debug console settings
   "debug.console": {
     "fontSize": 12,
     "fontFamily": "Consolas, 'Courier New', monospace"
   },
-  
   // Editor settings
   "editor.fontSize": 14,
   "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
@@ -33,15 +30,12 @@
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
   "editor.detectIndentation": false,
-  
   // Format on save
   "editor.formatOnSave": true,
   "editor.formatOnPaste": true,
-  
   // Dart specific formatting
   "dart.formatOnSave": true,
   "dart.formatOnType": true,
-  
   // Exclude patterns
   "files.exclude": {
     "**/.dart_tool": true,
@@ -53,11 +47,9 @@
     "**/.idea": true,
     "**/.vscode": false
   },
-  
   // Terminal settings
   "terminal.integrated.fontSize": 12,
   "terminal.integrated.fontFamily": "Consolas, 'Courier New', monospace",
-  
   // Workspace settings
   "files.autoSave": "onFocusChange",
   "explorer.autoReveal": false,
