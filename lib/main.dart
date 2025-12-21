@@ -124,7 +124,30 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
       
       // Fallback: try to load it as a file if possible
       // This is a last resort and may not work for all content URIs
-      final errorContent = '''Content File Could Not Be Loaded
+      final errorContent = uri.toString().contains('com.google.android.apps.docs')
+        ? '''Google Docs File Could Not Be Loaded
+
+This file was shared from Google Docs using an encrypted content URI:
+
+${uri.toString()}
+
+Google Docs uses special security measures that prevent direct file access. Here's how to share this file:
+
+📱 Google Docs Sharing Guide:
+
+1. Open the file in Google Docs
+2. Tap the three-dot menu (⋮) in the top-right corner
+3. Select "Share & export"
+4. Choose "Save as" to download the file to your device
+5. Then share the downloaded file from your file manager
+
+Alternative methods:
+- Use "Copy to" to save to Google Drive, then share from Drive
+- Use "Send a copy" to email the file to yourself
+- Use "Print" and save as PDF, then share the PDF
+
+💡 Tip: Google Docs files shared directly may not be accessible due to Google's security policies. Always save a copy first!'''
+        : '''Content File Could Not Be Loaded
 
 This file was shared from an Android app using a content URI:
 

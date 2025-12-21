@@ -42,5 +42,23 @@ void main() {
       expect(UnifiedSharingService.isUrl(fileUrl), false);
     });
 
+    test('Test Google Docs content URI detection', () {
+      // Test that Google Docs URIs are properly detected
+      const googleDocsUri = 'content://com.google.android.apps.docs.storage.legacy/enc%3Dencoded%3DXRVIQU-6cMc7dZO8oFhZAgoQISJgSPnEg9PMGjHJhmMinJiZjJc3L1nV-W-hzTs%3D';
+      const regularContentUri = 'content://com.android.providers.downloads.documents/document/123';
+      
+      expect(googleDocsUri.contains('com.google.android.apps.docs'), true);
+      expect(regularContentUri.contains('com.google.android.apps.docs'), false);
+    });
+
+    test('Test Google Docs encrypted URI pattern', () {
+      // Test detection of Google Docs encrypted URI pattern
+      const encryptedUri = 'content://com.google.android.apps.docs.storage.legacy/enc%3Dencoded%3DXRVIQU-6cMc7dZO8oFhZAgoQISJgSPnEg9PMGjHJhmMinJiZjJc3L1nV-W-hzTs%3D';
+      const regularUri = 'content://com.google.android.apps.docs.storage.legacy/document/123';
+      
+      expect(encryptedUri.contains('enc%3Dencoded'), true);
+      expect(regularUri.contains('enc%3Dencoded'), false);
+    });
+
   });
 }
