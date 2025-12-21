@@ -74,8 +74,21 @@ class ShareViewController: SLComposeServiceViewController {
             for attachment in attachments {
                 dispatchGroup.enter()
                 
+                // Check for file content first (to handle file URLs properly)
+                if attachment.hasItemConformingToTypeIdentifier("public.file-url") {
+                    handleFileURL(attachment: attachment) { result in
+                        switch result {
+                        case .success(let content):
+                            processedContent["file"] = content
+                            hasValidContent = true
+                        case .failure(let error):
+                            print("Error handling file URL: \(error.localizedDescription)")
+                        }
+                        dispatchGroup.leave()
+                    }
+                }
                 // Check for URL content
-                if attachment.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                else if attachment.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                     handleURL(attachment: attachment) { result in
                         switch result {
                         case .success(let content):
@@ -136,19 +149,6 @@ class ShareViewController: SLComposeServiceViewController {
                             hasValidContent = true
                         case .failure(let error):
                             print("Error handling JavaScript: \(error.localizedDescription)")
-                        }
-                        dispatchGroup.leave()
-                    }
-                }
-                // Check for file content
-                else if attachment.hasItemConformingToTypeIdentifier("public.file-url") {
-                    handleFileURL(attachment: attachment) { result in
-                        switch result {
-                        case .success(let content):
-                            processedContent["file"] = content
-                            hasValidContent = true
-                        case .failure(let error):
-                            print("Error handling file URL: \(error.localizedDescription)")
                         }
                         dispatchGroup.leave()
                     }
@@ -289,18 +289,36 @@ class ShareViewController: SLComposeServiceViewController {
             if let url = item as? URL {
                 print("Received file URL: \(url.absoluteString)")
                 
+                // Handle security-scoped resource access
+                let isSecurityScoped = url.startAccessingSecurityScopedResource()
+                defer {
+                    if isSecurityScoped {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
+                
                 // Try to read the file content directly
                 do {
+                    // Try to read as UTF-8 string first
                     let fileContent = try String(contentsOf: url, encoding: .utf8)
                     print("Successfully read file content, length: \(fileContent.count)")
                     completion(.success(fileContent))
                 } catch {
-                    print("Error reading file content: \(error.localizedDescription)")
+                    print("Error reading file content as UTF-8: \(error.localizedDescription)")
                     
-                    // Enhanced error handling for sandboxed files
-                    let errorMessage = "File could not be loaded. This file is located in iOS sandboxed storage: \(url.absoluteString)"
+                    // Fallback: Try reading as data and converting to string
+                    do {
+                        let data = try Data(contentsOf: url)
+                        if let content = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) {
+                            print("Successfully read file content via Data fallback, length: \(content.count)")
+                            completion(.success(content))
+                            return
+                        }
+                    } catch {
+                        print("Error reading file content as data: \(error.localizedDescription)")
+                    }
                     
-                    // Check if this is a sandboxed file location
+                    // Enhanced error handling for sandboxed files if reading failed
                     let filePath = url.path
                     if filePath.contains("File Provider Storage") || 
                        filePath.contains("Library/Developer/CoreSimulator") ||
@@ -312,7 +330,7 @@ File could not be loaded
 This file is located in iOS sandboxed storage:
 \(url.absoluteString)
 
-The file exists but cannot be accessed directly by the main app due to iOS security restrictions.
+The file exists but could not be read directly by the share extension even with security-scoped access.
 
 To view this file:
 1. Open the file in the original app
@@ -326,7 +344,7 @@ Alternatively:
 """
                         completion(.success(enhancedErrorMessage))
                     } else {
-                        completion(.success(errorMessage))
+                        completion(.success("Error reading file: \(error.localizedDescription)\n\nPath: \(url.absoluteString)"))
                     }
                 }
             } else {

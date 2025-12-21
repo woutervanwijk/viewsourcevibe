@@ -216,10 +216,12 @@ class UnifiedSharingService {
 
       // Check if this text content is actually an error message about sandboxed files
       if (isSandboxedFileError(text)) {
-        debugPrint('UnifiedSharingService: Detected sandboxed file error message');
+        debugPrint(
+            'UnifiedSharingService: Detected sandboxed file error message');
         // Extract filename from the error message if possible
-        final extractedFileName = extractFileNameFromError(text) ?? fileName ?? 'sandboxed_file';
-        
+        final extractedFileName =
+            extractFileNameFromError(text) ?? fileName ?? 'sandboxed_file';
+
         final htmlFile = HtmlFile(
           name: extractedFileName,
           path: path ?? 'sandboxed://$extractedFileName',
@@ -256,10 +258,10 @@ class UnifiedSharingService {
   @visibleForTesting
   static bool isSandboxedFileError(String text) {
     return text.contains('iOS sandboxed storage') ||
-           text.contains('File Provider Storage') ||
-           text.contains('Library/Developer/CoreSimulator') ||
-           text.contains('Containers/Shared/AppGroup') ||
-           text.contains('cannot be accessed directly');
+        text.contains('File Provider Storage') ||
+        text.contains('Library/Developer/CoreSimulator') ||
+        text.contains('Containers/Shared/AppGroup') ||
+        text.contains('cannot be accessed directly');
   }
 
   /// Extract filename from sandboxed file error message
@@ -269,26 +271,28 @@ class UnifiedSharingService {
       // Try to find the last occurrence of a filename in the text
       // This is more reliable than regex for complex file paths with spaces
       final lastSlashIndex = text.lastIndexOf('/');
-      
+
       if (lastSlashIndex != -1) {
         final lastPart = text.substring(lastSlashIndex + 1);
         final endOfFilename = lastPart.indexOf(RegExp(r'[\s\n]'));
-        
-        final filename = endOfFilename != -1 
+
+        final filename = endOfFilename != -1
             ? lastPart.substring(0, endOfFilename)
             : lastPart;
-        
+
         // Clean up the filename by removing URL encoding
         final decodedFileName = Uri.decodeFull(filename);
-        
-        debugPrint('UnifiedSharingService: Extracted filename from error: $decodedFileName');
-        
+
+        debugPrint(
+            'UnifiedSharingService: Extracted filename from error: $decodedFileName');
+
         if (decodedFileName.isNotEmpty) {
           return decodedFileName;
         }
       }
     } catch (e) {
-      debugPrint('UnifiedSharingService: Error extracting filename from error: $e');
+      debugPrint(
+          'UnifiedSharingService: Error extracting filename from error: $e');
     }
     return null;
   }
@@ -542,7 +546,17 @@ Try these solutions:
 This file is located in iOS sandboxed storage:
 $filePath
 
-The file exists but cannot be accessed directly by this app due to iOS security restrictions.''';
+The file could not be read directly by the app due to iOS security restrictions.
+
+The Share Extension tried to process this file but may have failed if:
+1. The file format is not supported
+2. The file is too large to pass through the sharing mechanism
+3. The file is protected by additional security policies
+
+Try these solutions:
+- Use "Save to Files" to save the file to your device first, then share it from the Files app
+- Open the file in the original app and use "Share as text" or "Copy" instead
+- Use "Open with" and choose this app to open directly''';
 
           final htmlFile = HtmlFile(
             name: fileName,
