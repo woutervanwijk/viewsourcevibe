@@ -23,6 +23,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:file_picker/file_picker.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -31,6 +34,8 @@ class HtmlService with ChangeNotifier {
   ScrollController? _verticalScrollController;
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
+  bool _editMode = false; // Track if we're in edit mode
+  String? _originalContent; // Store original content for comparison when saving
 
   HtmlFile? get currentFile => _currentFile;
   String? get selectedContentType => _selectedContentType;
@@ -38,6 +43,8 @@ class HtmlService with ChangeNotifier {
   ScrollController? get horizontalScrollController =>
       _horizontalScrollController;
   GlobalKey? get codeEditorKey => _codeEditorKey;
+  bool get editMode => _editMode;
+  bool get hasUnsavedChanges => _currentFile?.content != _originalContent;
 
   HtmlService() {
     _horizontalScrollController = ScrollController();
@@ -523,6 +530,8 @@ class HtmlService with ChangeNotifier {
     await clearFile();
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
+    _originalContent = file.content; // Store original content for edit mode
+    _editMode = false; // Reset edit mode when loading new file
     notifyListeners();
     await scrollToZero();
   }
@@ -613,6 +622,170 @@ class HtmlService with ChangeNotifier {
     // Update current file
     _currentFile = updatedFile;
     notifyListeners();
+  }
+
+  /// Toggle edit mode
+  void toggleEditMode() {
+    if (_currentFile == null) return;
+    
+    if (_editMode) {
+      // If we're exiting edit mode, check if there are unsaved changes
+      if (hasUnsavedChanges) {
+        // User should be prompted to save changes
+        // This will be handled by the UI layer
+        // For now, just exit edit mode (UI will handle the prompt)
+        _editMode = false;
+        notifyListeners();
+      } else {
+        // No changes, just exit edit mode
+        _editMode = false;
+        notifyListeners();
+      }
+    } else {
+      // Entering edit mode
+      _editMode = true;
+      notifyListeners();
+    }
+  }
+
+  /// Save changes made in edit mode
+  Future<void> saveChanges({BuildContext? context, bool saveToFile = false}) async {
+    if (_currentFile == null || !_editMode) return;
+    
+    if (saveToFile && context != null) {
+      await saveFileToDevice(context);
+    } else {
+      // Just save changes in memory
+      _originalContent = _currentFile!.content;
+      _editMode = false;
+      notifyListeners();
+    }
+  }
+
+  /// Discard changes and exit edit mode
+  /// Returns true if changes were discarded, false if user cancelled
+  Future<bool> discardChanges({BuildContext? context, bool showConfirmation = true}) async {
+    if (_currentFile == null || !_editMode) return false;
+    
+    // If there are unsaved changes and we should show confirmation
+    if (hasUnsavedChanges && showConfirmation && context != null) {
+      final shouldDiscard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Discard Changes'),
+          content: const Text('You have unsaved changes. Are you sure you want to discard them?'),
+          actions: [
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            TextButton(
+              child: const Text('Discard'),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      ) ?? false;
+      
+      if (!shouldDiscard) {
+        return false; // User cancelled
+      }
+    }
+    
+    // Revert to original content
+    if (_originalContent != null) {
+      final currentFile = _currentFile!;
+      final revertedFile = HtmlFile(
+        name: currentFile.name,
+        path: currentFile.path,
+        content: _originalContent!,
+        lastModified: DateTime.now(),
+        size: _originalContent!.length,
+        isUrl: currentFile.isUrl,
+      );
+      
+      _currentFile = revertedFile;
+    }
+    
+    _editMode = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// Test method to simulate content changes (for testing only)
+  @visibleForTesting
+  void simulateContentChange(String newContent) {
+    if (_currentFile == null) return;
+    
+    final currentFile = _currentFile!;
+    final updatedFile = HtmlFile(
+      name: currentFile.name,
+      path: currentFile.path,
+      content: newContent,
+      lastModified: DateTime.now(),
+      size: newContent.length,
+      isUrl: currentFile.isUrl,
+    );
+    
+    _currentFile = updatedFile;
+    notifyListeners();
+  }
+
+  /// Save the current file content to a file
+  /// Returns the path where the file was saved, or null if cancelled/saved
+  Future<String?> saveFileToDevice(BuildContext context) async {
+    if (_currentFile == null) return null;
+    
+    try {
+      // Show file save dialog
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Save file to...',
+      );
+
+      if (selectedDirectory == null) {
+        // User cancelled directory selection
+        return null;
+      }
+
+      // Create the file path
+      String fileName = _currentFile!.name;
+      if (!fileName.contains('.')) {
+        // Add appropriate extension if missing
+        fileName = '$fileName.txt';
+      }
+
+      String filePath = '$selectedDirectory/$fileName';
+      
+      // Write the file
+      final file = File(filePath);
+      await file.writeAsString(_currentFile!.content);
+      
+      // Update the current file with the new path
+      final updatedFile = HtmlFile(
+        name: _currentFile!.name,
+        path: filePath,
+        content: _currentFile!.content,
+        lastModified: DateTime.now(),
+        size: _currentFile!.size,
+        isUrl: false,
+      );
+      
+      _currentFile = updatedFile;
+      _originalContent = _currentFile!.content; // Update original content
+      _editMode = false; // Exit edit mode after saving
+      
+      notifyListeners();
+      
+      return filePath;
+      
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving file: $e')),
+        );
+      }
+      return null;
+    }
   }
 
   Future<void> loadSampleFile() async {
@@ -1287,7 +1460,7 @@ class HtmlService with ChangeNotifier {
     return CodeEditor(
       controller: controller,
       showCursorWhenReadOnly: false,
-      readOnly: true,
+      readOnly: !editMode, // Make editable when in edit mode
       toolbarController: const ContextMenuControllerImpl(),
       wordWrap: wrapText,
       padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),

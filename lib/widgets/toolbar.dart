@@ -16,6 +16,16 @@ class Toolbar extends StatelessWidget {
   const Toolbar({super.key});
 
   Future<void> _pickFile(BuildContext context) async {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    
+    // Check if we have unsaved changes in edit mode
+    if (htmlService.editMode && htmlService.hasUnsavedChanges) {
+      final shouldContinue = await _showUnsavedChangesDialog(context);
+      if (!shouldContinue) {
+        return; // User cancelled the operation
+      }
+    }
+    
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -109,7 +119,37 @@ class Toolbar extends StatelessWidget {
     }
   }
 
+  Future<bool> _showUnsavedChangesDialog(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text('You have unsaved changes. Do you want to discard them and load a new file?'),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          TextButton(
+            child: const Text('Discard Changes'),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
   Future<void> _loadSampleFile(BuildContext context, String filename) async {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    
+    // Check if we have unsaved changes in edit mode
+    if (htmlService.editMode && htmlService.hasUnsavedChanges) {
+      final shouldContinue = await _showUnsavedChangesDialog(context);
+      if (!shouldContinue) {
+        return; // User cancelled the operation
+      }
+    }
+    
     try {
       final htmlFile = await FileUtils.loadSampleFile(filename);
       if (context.mounted) {
@@ -230,8 +270,63 @@ class Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final htmlService = Provider.of<HtmlService>(context);
+    final currentFile = htmlService.currentFile;
+    
     return Row(
       children: [
+        // Edit button - first position as requested
+        if (currentFile != null && !htmlService.editMode)
+          Consumer<HtmlService>(
+            builder: (context, htmlService, child) {
+              return IconButton(
+                icon: const Icon(Icons.edit),
+                tooltip: 'Edit File',
+                onPressed: () {
+                  // Enter edit mode
+                  htmlService.toggleEditMode();
+                },
+              );
+            },
+          ),
+        
+        // Save and Cancel buttons - shown when in edit mode
+        if (currentFile != null && htmlService.editMode) ...[
+          Consumer<HtmlService>(
+            builder: (context, htmlService, child) {
+              return IconButton(
+                icon: const Icon(Icons.save, color: Colors.green),
+                tooltip: 'Save Changes',
+                onPressed: () {
+                  htmlService.saveChanges(context: context);
+                },
+              );
+            },
+          ),
+          Consumer<HtmlService>(
+            builder: (context, htmlService, child) {
+              return IconButton(
+                icon: const Icon(Icons.save_as, color: Colors.blue),
+                tooltip: 'Save to File',
+                onPressed: () async {
+                  await htmlService.saveChanges(context: context, saveToFile: true);
+                },
+              );
+            },
+          ),
+          Consumer<HtmlService>(
+            builder: (context, htmlService, child) {
+              return IconButton(
+                icon: const Icon(Icons.cancel, color: Colors.red),
+                tooltip: 'Cancel Edits',
+                onPressed: () async {
+                  await htmlService.discardChanges(context: context);
+                },
+              );
+            },
+          ),
+        ],
+        
         IconButton(
           icon: const Icon(Icons.folder_open),
           tooltip: 'Open File',

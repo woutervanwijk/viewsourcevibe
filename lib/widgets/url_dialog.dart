@@ -23,11 +23,21 @@ class _UrlDialogState extends State<UrlDialog> {
   Future<void> _loadUrl() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    
+    // Check if we have unsaved changes in edit mode
+    if (htmlService.editMode && htmlService.hasUnsavedChanges) {
+      final shouldContinue = await _showUnsavedChangesDialog(context);
+      if (!shouldContinue) {
+        return; // User cancelled the operation
+      }
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final url = _urlController.text.trim();
-      await Provider.of<HtmlService>(context, listen: false).loadFromUrl(url);
+      await htmlService.loadFromUrl(url);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -38,6 +48,26 @@ class _UrlDialogState extends State<UrlDialog> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<bool> _showUnsavedChangesDialog(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text('You have unsaved changes. Do you want to discard them and load a new URL?'),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          TextButton(
+            child: const Text('Discard Changes'),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   @override

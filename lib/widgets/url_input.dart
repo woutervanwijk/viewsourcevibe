@@ -26,10 +26,20 @@ class _UrlInputState extends State<UrlInput> {
     //   return;
     // }
 
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    
+    // Check if we have unsaved changes in edit mode
+    if (htmlService.editMode && htmlService.hasUnsavedChanges) {
+      final shouldContinue = await _showUnsavedChangesDialog(context);
+      if (!shouldContinue) {
+        return; // User cancelled the operation
+      }
+    }
+
     setState(() => _errorMessage = '');
 
     try {
-      await Provider.of<HtmlService>(context, listen: false).loadFromUrl(url);
+      await htmlService.loadFromUrl(url);
       // Clear the input after successful load
       // _urlController.clear();
     } catch (e) {
@@ -37,6 +47,26 @@ class _UrlInputState extends State<UrlInput> {
         setState(() => _errorMessage = 'Error: $e');
       }
     }
+  }
+
+  Future<bool> _showUnsavedChangesDialog(BuildContext context) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved Changes'),
+        content: const Text('You have unsaved changes. Do you want to discard them and load a new URL?'),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          TextButton(
+            child: const Text('Discard Changes'),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   @override
