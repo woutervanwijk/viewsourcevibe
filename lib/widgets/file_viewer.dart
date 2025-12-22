@@ -13,7 +13,8 @@ class FileViewer extends StatelessWidget {
   void _showContentTypeMenu(BuildContext context, HtmlService htmlService) {
     final availableContentTypes = htmlService.getAvailableContentTypes();
     final selectedContentType = htmlService.selectedContentType;
-    final fileExtension = htmlService.currentFile?.extension.toLowerCase() ?? 'plaintext';
+    final fileExtension =
+        htmlService.currentFile?.extension.toLowerCase() ?? 'plaintext';
 
     showModalBottomSheet(
       context: context,
@@ -43,9 +44,11 @@ class FileViewer extends StatelessWidget {
                     final contentType = availableContentTypes[index];
 
                     // Determine if this content type is selected
-                    final isSelected = selectedContentType != null 
+                    final isSelected = selectedContentType != null
                         ? contentType == selectedContentType
-                        : contentType == fileExtension || (contentType == 'automatic' && selectedContentType == null);
+                        : contentType == fileExtension ||
+                            (contentType == 'automatic' &&
+                                selectedContentType == null);
 
                     return ListTile(
                       leading: _getIconForContentType(contentType),
@@ -143,7 +146,7 @@ class FileViewer extends StatelessWidget {
       case 'json':
         return 'JSON';
       case 'xml':
-        return 'XML';
+        return 'XML/HTML';
       case 'yaml':
         return 'YAML';
       case 'markdown':

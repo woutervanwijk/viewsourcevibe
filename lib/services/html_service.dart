@@ -130,22 +130,46 @@ class HtmlService with ChangeNotifier {
     final lowerContent = content.toLowerCase();
     String contentTypeSuffix = '';
 
-    if (lowerContent.contains('<html') ||
-        lowerContent.contains('<!doctype html') ||
-        lowerContent.contains('<head') ||
-        lowerContent.contains('<body')) {
+    // HTML detection - prioritize HTML detection and make it more robust
+    // Check for HTML-specific patterns first, before checking for JavaScript
+    bool isHtml = lowerContent.contains('<html') ||
+                  lowerContent.contains('<!doctype html') ||
+                  lowerContent.contains('<head') ||
+                  lowerContent.contains('<body') ||
+                  lowerContent.contains('<!doctype');
+    
+    // CSS detection - look for CSS-specific patterns
+    bool isCss = lowerContent.contains('body {') ||
+                 lowerContent.contains('@media') ||
+                 lowerContent.contains('/* css') ||
+                 (lowerContent.contains('{') && 
+                  lowerContent.contains('}') &&
+                  lowerContent.contains(':') &&
+                  !lowerContent.contains('<') &&
+                  !lowerContent.contains('>'));
+    
+    // JavaScript detection - only detect JS if it's not HTML
+    // Make JS detection more specific to avoid false positives in HTML files
+    bool isJavaScript = !isHtml && (
+        (lowerContent.contains('function ') && lowerContent.contains('{')) ||
+        (lowerContent.contains('const ') && lowerContent.contains('=')) ||
+        (lowerContent.contains('let ') && lowerContent.contains('=')) ||
+        (lowerContent.contains('=>') && lowerContent.contains('{')) ||
+        (lowerContent.contains('class ') && lowerContent.contains('extends')) ||
+        (lowerContent.contains('import ') && lowerContent.contains('from'))
+    );
+    
+    // XML detection
+    bool isXml = !isHtml && tryParseAsXml(content);
+    
+    // Assign content type based on detection (priority: HTML > CSS > JS > XML)
+    if (isHtml) {
       contentTypeSuffix = ' HTML';
-    } else if (lowerContent.contains('body {') ||
-        lowerContent.contains('@media') ||
-        lowerContent.contains('/* css')) {
+    } else if (isCss) {
       contentTypeSuffix = ' CSS';
-    } else if (lowerContent.contains('function ') ||
-        lowerContent.contains('function(') ||
-        lowerContent.contains('const ') ||
-        lowerContent.contains('let ') ||
-        lowerContent.contains('=>')) {
+    } else if (isJavaScript) {
       contentTypeSuffix = ' JavaScript';
-    } else if (tryParseAsXml(content)) {
+    } else if (isXml) {
       contentTypeSuffix = ' XML';
     }
 
@@ -214,170 +238,142 @@ class HtmlService with ChangeNotifier {
     // Try to detect content type from content
     final lowerContent = content.toLowerCase();
 
-    // Check for HTML content
-    if (lowerContent.contains('<html') ||
-        lowerContent.contains('<!doctype html') ||
-        lowerContent.contains('<head') ||
-        lowerContent.contains('<body')) {
+    // HTML detection - prioritize and make more robust
+    // Check for HTML-specific patterns first, before other languages
+    bool isHtml = lowerContent.contains('<html') ||
+                  lowerContent.contains('<!doctype html') ||
+                  lowerContent.contains('<!doctype') ||
+                  lowerContent.contains('<head') ||
+                  lowerContent.contains('<body') ||
+                  lowerContent.contains('<div') ||
+                  lowerContent.contains('<span') ||
+                  lowerContent.contains('<script') ||
+                  lowerContent.contains('<style') ||
+                  lowerContent.contains('</html>') ||
+                  lowerContent.contains('</head>') ||
+                  lowerContent.contains('</body>');
+    
+    // CSS detection - only if not HTML
+    bool isCss = !isHtml && (lowerContent.contains('body {') ||
+                            lowerContent.contains('@media') ||
+                            lowerContent.contains('/* css') ||
+                            (lowerContent.contains('{') && 
+                             lowerContent.contains('}') &&
+                             lowerContent.contains(':') &&
+                             !lowerContent.contains('<') &&
+                             !lowerContent.contains('>')));
+    
+    // JavaScript detection - only if not HTML, and more specific patterns
+    bool isJavaScript = !isHtml && !isCss && (
+        (lowerContent.contains('function ') && lowerContent.contains('{')) ||
+        (lowerContent.contains('const ') && lowerContent.contains('=') && lowerContent.contains(';')) ||
+        (lowerContent.contains('let ') && lowerContent.contains('=') && lowerContent.contains(';')) ||
+        (lowerContent.contains('=>') && lowerContent.contains('{')) ||
+        (lowerContent.contains('class ') && lowerContent.contains('extends')) ||
+        (lowerContent.contains('import ') && lowerContent.contains('from')) ||
+        (lowerContent.contains('export ') && lowerContent.contains('{'))
+    );
+    
+    // XML detection - only if not HTML
+    bool isXml = !isHtml && tryParseAsXml(content);
+    
+    // Assign file type based on detection (priority: HTML > CSS > JS > other languages)
+    if (isHtml) {
       return 'HTML File';
-    }
-
-    // Check for CSS content
-    if (lowerContent.contains('body {') ||
-        lowerContent.contains('@media') ||
-        lowerContent.contains('/* css')) {
+    } else if (isCss) {
       return 'CSS File';
-    }
-
-    // Check for Java content (more specific patterns first)
-    if (lowerContent.contains('public class ') ||
-        lowerContent.contains('import java.') ||
-        lowerContent.contains('package ') ||
-        lowerContent.contains('system.out.println')) {
-      return 'Java File';
-    }
-
-    // Check for C/C++ content (more specific patterns)
-    if (lowerContent.contains('#include ') ||
-        lowerContent.contains('int main(') ||
-        lowerContent.contains('cout <<') ||
-        lowerContent.contains('cin >>') ||
-        lowerContent.contains('namespace ')) {
-      return 'C++ File';
-    }
-
-    // Check for Ruby content (more specific patterns)
-    if (lowerContent.contains('puts ') ||
-        lowerContent.contains('require ') ||
-        lowerContent.contains('gem ') ||
-        lowerContent.contains('bundle ')) {
-      return 'Ruby File';
-    }
-
-    // Check for SQL content (more specific patterns)
-    if (lowerContent.contains('select ') ||
-        lowerContent.contains('from ') ||
-        lowerContent.contains('where ') ||
-        lowerContent.contains('insert into ') ||
-        lowerContent.contains('update ') ||
-        lowerContent.contains('delete from ') ||
-        lowerContent.contains('join ') ||
-        lowerContent.contains('group by ') ||
-        lowerContent.contains('order by ')) {
-      return 'SQL File';
-    }
-
-    // Check for Python content (more specific patterns)
-    if (lowerContent.contains('def ') ||
-        lowerContent.contains('class ') ||
-        lowerContent.contains('import ') ||
-        lowerContent.contains('from ') ||
-        lowerContent.contains('print(') ||
-        lowerContent.contains('#!/usr/bin/env python')) {
-      return 'Python File';
-    }
-
-    // Check for JavaScript content (less specific patterns)
-    if (lowerContent.contains('function ') ||
-        lowerContent.contains('function(') ||
-        lowerContent.contains('const ') ||
-        lowerContent.contains('let ') ||
-        lowerContent.contains('=>') ||
-        lowerContent.contains('export ') ||
-        lowerContent.contains('// ') ||
-        lowerContent.contains('/*')) {
+    } else if (isJavaScript) {
       return 'JavaScript File';
+    } else if (isXml) {
+      return 'XML File';
     }
+    
+    // Other language detections (only if not HTML/CSS/JS)
+    if (!isHtml && !isCss && !isJavaScript) {
+      // Check for Java content
+      if (lowerContent.contains('public class ') ||
+          lowerContent.contains('import java.') ||
+          lowerContent.contains('package ') ||
+          lowerContent.contains('system.out.println')) {
+        return 'Java File';
+      }
 
-    // Check for JSON content
-    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
-        (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
-      if (lowerContent.contains('"') || lowerContent.contains(":")) {
-        return 'JSON File';
+      // Check for C/C++ content
+      if (lowerContent.contains('#include ') ||
+          lowerContent.contains('int main(') ||
+          lowerContent.contains('cout <<') ||
+          lowerContent.contains('cin >>') ||
+          lowerContent.contains('namespace ')) {
+        return 'C++ File';
+      }
+
+      // Check for Python content
+      if (lowerContent.contains('def ') ||
+          lowerContent.contains('class ') ||
+          lowerContent.contains('import ') ||
+          lowerContent.contains('from ') ||
+          lowerContent.contains('print(') ||
+          lowerContent.contains('#!/usr/bin/env python')) {
+        return 'Python File';
+      }
+
+      // Check for Ruby content
+      if (lowerContent.contains('puts ') ||
+          lowerContent.contains('require ') ||
+          lowerContent.contains('gem ') ||
+          lowerContent.contains('bundle ')) {
+        return 'Ruby File';
+      }
+
+      // Check for SQL content
+      if (lowerContent.contains('select ') ||
+          lowerContent.contains('from ') ||
+          lowerContent.contains('where ') ||
+          lowerContent.contains('insert into ') ||
+          lowerContent.contains('update ') ||
+          lowerContent.contains('delete from ')) {
+        return 'SQL File';
+      }
+
+      // Check for PHP content
+      if (lowerContent.contains('<?php') ||
+          lowerContent.contains('<?=') ||
+          lowerContent.contains(r'$') ||
+          lowerContent.contains('echo ')) {
+        return 'PHP File';
+      }
+
+      // Check for JSON content
+      if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
+          (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
+        if (lowerContent.contains('"') || lowerContent.contains(":")) {
+          return 'JSON File';
+        }
+      }
+
+      // Check for YAML content
+      if (lowerContent.startsWith('---') ||
+          lowerContent.contains(': ') ||
+          lowerContent.contains('  - ') ||
+          lowerContent.contains('key: value')) {
+        return 'YAML File';
+      }
+
+      // Check for Markdown content
+      if (lowerContent.startsWith('# ') ||
+          lowerContent.contains('## ') ||
+          lowerContent.contains('### ') ||
+          lowerContent.contains('#### ') ||
+          lowerContent.contains('##### ') ||
+          lowerContent.contains('###### ') ||
+          lowerContent.contains('**') ||
+          lowerContent.contains('* ') ||
+          lowerContent.contains('1. ')) {
+        return 'Markdown File';
       }
     }
 
-    // Check for YAML content
-    if (lowerContent.startsWith('---') ||
-        lowerContent.contains(': ') ||
-        lowerContent.contains('  - ') ||
-        lowerContent.contains('key: value')) {
-      return 'YAML File';
-    }
-
-    // Check for Markdown content
-    if (lowerContent.startsWith('# ') ||
-        lowerContent.contains('## ') ||
-        lowerContent.contains('### ') ||
-        lowerContent.contains('#### ') ||
-        lowerContent.contains('##### ') ||
-        lowerContent.contains('###### ') ||
-        lowerContent.contains('**') ||
-        lowerContent.contains('* ') ||
-        lowerContent.contains('1. ')) {
-      return 'Markdown File';
-    }
-
-    // Check for XML content first (more specific than HTML)
-    if (tryParseAsXml(content)) {
-      return 'XML File';
-    }
-
-    // Check for Python content
-    if (lowerContent.contains('def ') ||
-        lowerContent.contains('class ') ||
-        lowerContent.contains('import ') ||
-        lowerContent.contains('from ') ||
-        lowerContent.contains('print(') ||
-        lowerContent.contains('#!/usr/bin/env python')) {
-      return 'Python File';
-    }
-
-    // Check for Java content
-    if (lowerContent.contains('public class ') ||
-        lowerContent.contains('import java.') ||
-        lowerContent.contains('package ') ||
-        lowerContent.contains('System.out.println')) {
-      return 'Java File';
-    }
-
-    // Check for C/C++ content
-    if (lowerContent.contains('#include ') ||
-        lowerContent.contains('int main(') ||
-        lowerContent.contains('cout <<') ||
-        lowerContent.contains('cin >>') ||
-        lowerContent.contains('namespace ')) {
-      return 'C++ File';
-    }
-
-    // Check for PHP content
-    if (lowerContent.contains('<?php') ||
-        lowerContent.contains('<?=') ||
-        lowerContent.contains(r'$') ||
-        lowerContent.contains('echo ')) {
-      return 'PHP File';
-    }
-
-    // Check for Ruby content
-    if (lowerContent.contains('def ') ||
-        lowerContent.contains('class ') ||
-        lowerContent.contains('require ') ||
-        lowerContent.contains('puts ') ||
-        lowerContent.contains('end')) {
-      return 'Ruby File';
-    }
-
-    // Check for SQL content
-    if (lowerContent.contains('select ') ||
-        lowerContent.contains('from ') ||
-        lowerContent.contains('where ') ||
-        lowerContent.contains('insert into ') ||
-        lowerContent.contains('update ') ||
-        lowerContent.contains('delete from ')) {
-      return 'SQL File';
-    }
-
-    // Default to .txt if we can't detect the type
+    // Default to text file if we can't detect the type
     return 'Text File';
   }
 
@@ -564,6 +560,7 @@ class HtmlService with ChangeNotifier {
     await clearFile();
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
+    _selectedContentType = null; // Always reset to Automatic when loading new file
     notifyListeners();
     await scrollToZero();
   }
@@ -592,10 +589,12 @@ class HtmlService with ChangeNotifier {
     final availableLanguages = builtinAllLanguages.keys.toList();
     
     // Filter and sort the list to show most common types first
+    // HTML/XML moved to top after Automatic for better UX
     final commonTypes = [
-      'plaintext', 'html', 'css', 'javascript', 'typescript', 'json',
-      'xml', 'yaml', 'markdown', 'python', 'java', 'dart', 'c',
-      'cpp', 'csharp', 'php', 'ruby', 'swift', 'go', 'rust', 'sql'
+      'html', 'xml', 'css', 'javascript', 'typescript', 'json',
+      'yaml', 'markdown', 'python', 'java', 'dart', 'c',
+      'cpp', 'csharp', 'php', 'ruby', 'swift', 'go', 'rust', 'sql',
+      'plaintext'
     ];
     
     // Add common types first, then add remaining types
@@ -604,9 +603,16 @@ class HtmlService with ChangeNotifier {
     // Add "Automatic" as the first option
     result.add('automatic');
     
-    // Add common types that exist in re_highlight
+    // Add HTML/XML first (right after Automatic) if they exist
+    for (final type in ['html', 'xml']) {
+      if (availableLanguages.contains(type) && !result.contains(type)) {
+        result.add(type);
+      }
+    }
+    
+    // Add other common types that exist in re_highlight
     for (final type in commonTypes) {
-      if (availableLanguages.contains(type)) {
+      if (type != 'html' && type != 'xml' && availableLanguages.contains(type) && !result.contains(type)) {
         result.add(type);
       }
     }
@@ -800,12 +806,13 @@ class HtmlService with ChangeNotifier {
     final ext = extension.toLowerCase();
 
     // Comprehensive language mapping for common file extensions
+    // Prioritize HTML detection and make it more accurate
     switch (ext) {
-      // Web Development
+      // Web Development - HTML first with better handling
       case 'html':
       case 'htm':
       case 'xhtml':
-        return 'xml'; // HTML is handled as XML in re_highlight
+        return 'html'; // Use 'html' mode if available, otherwise fall back to 'xml'
       case 'css':
         return 'css';
       case 'js':
