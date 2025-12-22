@@ -275,57 +275,44 @@ class Toolbar extends StatelessWidget {
     
     return Row(
       children: [
-        // Edit button - first position as requested
-        if (currentFile != null && !htmlService.editMode)
+        // Edit/Save button - first position as requested
+        if (currentFile != null)
           Consumer<HtmlService>(
             builder: (context, htmlService, child) {
               return IconButton(
-                icon: const Icon(Icons.edit),
-                tooltip: 'Edit File',
-                onPressed: () {
-                  // Enter edit mode
-                  htmlService.toggleEditMode();
+                icon: Icon(
+                  htmlService.editMode ? Icons.save : Icons.edit,
+                  color: htmlService.editMode ? Colors.green : null,
+                ),
+                tooltip: htmlService.editMode ? 'Save Changes' : 'Edit File',
+                onPressed: () async {
+                  if (htmlService.editMode) {
+                    // If in edit mode, save changes (with option to save to file)
+                    await htmlService.saveChanges(context: context, saveToFile: true);
+                  } else {
+                    // If not in edit mode, enter edit mode
+                    htmlService.toggleEditMode();
+                  }
                 },
               );
             },
           ),
         
-        // Save and Cancel buttons - shown when in edit mode
-        if (currentFile != null && htmlService.editMode) ...[
+        // Cancel button - shown when in edit mode (smaller, less prominent)
+        if (currentFile != null && htmlService.editMode)
           Consumer<HtmlService>(
             builder: (context, htmlService, child) {
               return IconButton(
-                icon: const Icon(Icons.save, color: Colors.green),
-                tooltip: 'Save Changes',
-                onPressed: () {
-                  htmlService.saveChanges(context: context);
-                },
-              );
-            },
-          ),
-          Consumer<HtmlService>(
-            builder: (context, htmlService, child) {
-              return IconButton(
-                icon: const Icon(Icons.save_as, color: Colors.blue),
-                tooltip: 'Save to File',
-                onPressed: () async {
-                  await htmlService.saveChanges(context: context, saveToFile: true);
-                },
-              );
-            },
-          ),
-          Consumer<HtmlService>(
-            builder: (context, htmlService, child) {
-              return IconButton(
-                icon: const Icon(Icons.cancel, color: Colors.red),
+                icon: const Icon(Icons.close, size: 20, color: Colors.grey),
                 tooltip: 'Cancel Edits',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 onPressed: () async {
                   await htmlService.discardChanges(context: context);
                 },
               );
             },
           ),
-        ],
         
         IconButton(
           icon: const Icon(Icons.folder_open),

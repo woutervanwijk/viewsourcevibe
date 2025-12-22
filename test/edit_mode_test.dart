@@ -119,6 +119,33 @@ void main() {
       expect(htmlService.currentFile?.content, 'Hello World'); // Should revert to original
     });
 
+    test('Save changes with file saving should work', () async {
+      final testFile = HtmlFile(
+        name: 'test.txt',
+        path: 'test',
+        content: 'Hello World',
+        lastModified: DateTime.now(),
+        size: 11,
+        isUrl: false,
+      );
+      await htmlService.loadFile(testFile);
+
+      // Enter edit mode
+      htmlService.toggleEditMode();
+      expect(htmlService.editMode, true);
+
+      // Simulate content change using test method
+      htmlService.simulateContentChange('Hello World Updated');
+
+      expect(htmlService.hasUnsavedChanges, true);
+
+      // Save changes with file saving (will fail without context, but should still save in memory)
+      await htmlService.saveChanges(saveToFile: true);
+      expect(htmlService.editMode, false);
+      expect(htmlService.hasUnsavedChanges, false);
+      expect(htmlService.currentFile?.content, 'Hello World Updated'); // Should keep updated content
+    });
+
     test('Discard changes should revert to original content', () async {
       final testFile = HtmlFile(
         name: 'test.txt',
