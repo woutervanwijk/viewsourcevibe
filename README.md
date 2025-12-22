@@ -147,7 +147,7 @@ The app intelligently detects file types even without extensions:
 ## 📥 Installation
 
 ### Android
-1. Download the APK from the [releases page](https://github.com/your-repo/releases)
+1. Download the APK from the [releases page](https://github.com/woutervanwijk/viewsourcevibe/releases)
 2. Install on your Android device
 3. Grant necessary file permissions
 
@@ -159,7 +159,7 @@ The app intelligently detects file types even without extensions:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/viewsourcevibe.git
+git clone https://github.com/woutervanwijk/viewsourcevibe.git
 cd viewsourcevibe
 
 # Install dependencies
@@ -192,7 +192,7 @@ Contributions are welcome! Please read our [contributing guidelines](CONTRIBUTIN
 
 For questions or support, please contact:
 - Email: support@viewsourcevibe.com
-- GitHub Issues: https://github.com/your-repo/issues
+- GitHub Issues: https://github.com/woutervanwijk/viewsourcevibe/issues
 
 ---
 
