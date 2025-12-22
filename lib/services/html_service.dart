@@ -155,6 +155,47 @@ class HtmlService with ChangeNotifier {
     return filename;
   }
 
+  /// Get the final URL after following all redirects manually
+  /// This ensures we get the actual redirected URL, not the original
+  Future<String> _getFinalUrlAfterRedirects(
+      Uri uri, http.Client client, Map<String, String> headers) async {
+    try {
+      // Create a request that doesn't automatically follow redirects
+      final request = http.Request('GET', uri)
+        ..followRedirects = false;
+      
+      // Add headers to the request
+      headers.forEach((key, value) {
+        request.headers[key] = value;
+      });
+      
+      // Send the request
+      final response = await client.send(request).timeout(const Duration(seconds: 30));
+      
+      // Check if this is a redirect response
+      if (response.isRedirect) {
+        // Get the redirect location from headers
+        final locationHeader = response.headers['location'];
+        
+        if (locationHeader != null && locationHeader.isNotEmpty) {
+          // Handle relative redirects by resolving against the original URI
+          final redirectUri = uri.resolve(locationHeader);
+          
+          // Recursively follow the redirect to get the final URL
+          return await _getFinalUrlAfterRedirects(redirectUri, client, headers);
+        }
+      }
+      
+      // If not a redirect, return the original URL
+      return uri.toString();
+      
+    } catch (e) {
+      // If redirect handling fails, fall back to the original URL
+      debugPrint('Error handling redirects: $e');
+      return uri.toString();
+    }
+  }
+
   /// Ensure filename has proper extension based on content
   String ensureHtmlExtension(String filename, String content) {
     // Handle empty or unclear filenames
@@ -687,10 +728,13 @@ class HtmlService with ChangeNotifier {
         'Accept-Language': 'en-US,en;q=0.5',
       };
 
-      // Make the request with timeout
+      // Manual redirect handling to get the actual redirected URL
+      final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers);
+      
+      // Make the request to the final URL with timeout
       final response = await client
           .get(
-            uri,
+            Uri.parse(finalUrl),
             headers: headers,
           )
           .timeout(const Duration(seconds: 30));
@@ -704,12 +748,12 @@ class HtmlService with ChangeNotifier {
           throw Exception('File size exceeds maximum limit (10MB)');
         }
 
-        // Use the final URL after redirects
-        final finalUrl = response.request?.url.toString() ?? url;
-
-        // Extract filename from URL path segments
+        // Parse the final URL to extract filename and other information
+        final finalUri = Uri.parse(finalUrl);
+        
+        // Extract filename from final URL path segments
         final pathFilename =
-            uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+            finalUri.pathSegments.isNotEmpty ? finalUri.pathSegments.last : '';
 
         // Generate descriptive filename if the path segment is not a clear filename
         final filename = pathFilename.isNotEmpty &&
@@ -718,7 +762,7 @@ class HtmlService with ChangeNotifier {
                 pathFilename != 'index' &&
                 pathFilename != 'home'
             ? pathFilename
-            : generateDescriptiveFilename(uri, content);
+            : generateDescriptiveFilename(finalUri, content);
 
         // Use robust file type detection to generate appropriate filename
         final processedFilename =
