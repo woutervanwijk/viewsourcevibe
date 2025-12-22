@@ -26,11 +26,14 @@ import 'package:view_source_vibe/services/file_type_detector.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
+  HtmlFile? _originalFile; // Store original file for "Automatic" option
+  String? _selectedContentType; // Track the selected content type for syntax highlighting
   ScrollController? _verticalScrollController;
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
 
   HtmlFile? get currentFile => _currentFile;
+  String? get selectedContentType => _selectedContentType;
   ScrollController? get scrollController => _verticalScrollController;
   ScrollController? get horizontalScrollController =>
       _horizontalScrollController;
@@ -519,6 +522,7 @@ class HtmlService with ChangeNotifier {
   Future<void> loadFile(HtmlFile file) async {
     await clearFile();
     _currentFile = file;
+    _originalFile = file; // Store original file for "Automatic" option
     notifyListeners();
     await scrollToZero();
   }
@@ -538,6 +542,76 @@ class HtmlService with ChangeNotifier {
   Future<void> clearFile() async {
     await scrollToZero();
     _currentFile = null;
+    notifyListeners();
+  }
+
+  /// Get a list of available content types for syntax highlighting
+  List<String> getAvailableContentTypes() {
+    // Get all available language keys from re_highlight
+    final availableLanguages = builtinAllLanguages.keys.toList();
+    
+    // Filter and sort the list to show most common types first
+    final commonTypes = [
+      'plaintext', 'html', 'css', 'javascript', 'typescript', 'json',
+      'xml', 'yaml', 'markdown', 'python', 'java', 'dart', 'c',
+      'cpp', 'csharp', 'php', 'ruby', 'swift', 'go', 'rust', 'sql'
+    ];
+    
+    // Add common types first, then add remaining types
+    final result = <String>[];
+    
+    // Add "Automatic" as the first option
+    result.add('automatic');
+    
+    // Add common types that exist in re_highlight
+    for (final type in commonTypes) {
+      if (availableLanguages.contains(type)) {
+        result.add(type);
+      }
+    }
+    
+    // Add remaining types (excluding duplicates)
+    for (final type in availableLanguages) {
+      if (!result.contains(type)) {
+        result.add(type);
+      }
+    }
+    
+    return result;
+  }
+
+  /// Update the current file's content type for syntax highlighting without changing filename
+  void updateFileContentType(String newContentType) {
+    if (_currentFile == null) return;
+    
+    // Handle "Automatic" option - revert to original file and clear selected content type
+    if (newContentType == 'automatic') {
+      if (_originalFile != null) {
+        _currentFile = _originalFile!;
+        _selectedContentType = null; // Clear selected content type
+        notifyListeners();
+      }
+      return;
+    }
+    
+    // Update the selected content type for syntax highlighting
+    _selectedContentType = newContentType;
+    
+    // Create a new file with the same name but trigger UI update
+    final currentFile = _currentFile!;
+    
+    // Create updated file with same name (filename doesn't change)
+    final updatedFile = HtmlFile(
+      name: currentFile.name, // Keep original filename
+      path: currentFile.path,
+      content: currentFile.content,
+      lastModified: DateTime.now(),
+      size: currentFile.size,
+      isUrl: currentFile.isUrl,
+    );
+    
+    // Update current file
+    _currentFile = updatedFile;
     notifyListeners();
   }
 
