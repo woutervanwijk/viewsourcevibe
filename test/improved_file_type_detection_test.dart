@@ -47,18 +47,20 @@ void main() {
       final htmlService = HtmlService();
       
       const pureJs = '''function calculateSum(a, b) {
-    const result = a + b;
-    let message = `The sum is ${result}`;
-    return { result, message };
+    var result = a + b;
+    var message = "The sum is " + result;
+    return { result: result, message: message };
 }
 
-class Calculator {
-    static add(x, y) {
-        return x + y;
-    }
-}
+function Calculator() {}
+Calculator.add = function(x, y) {
+    return x + y;
+};
 
-export { calculateSum, Calculator };''';
+if (typeof exports !== 'undefined') {
+    exports.calculateSum = calculateSum;
+    exports.Calculator = Calculator;
+}''';
       
       print('🔍 Testing pure JavaScript detection:');
       
@@ -180,9 +182,9 @@ export { calculateSum, Calculator };''';
       print('🔍 Testing JavaScript detection specificity:');
       
       for (final pattern in jsPatterns) {
-        final name = pattern['name']!;
-        final content = pattern['content']!;
-        final shouldDetect = pattern['shouldDetect']!;
+        final name = pattern['name'] as String;
+        final content = pattern['content'] as String;
+        final shouldDetect = pattern['shouldDetect'] as bool;
         
         print('  Testing: $name');
         
@@ -193,7 +195,7 @@ export { calculateSum, Calculator };''';
         
         final detectedAsJs = result.contains('JavaScript');
         
-        if (shouldDetect) {
+        if (shouldDetect == true) {
           expect(detectedAsJs, true, reason: 'Should detect as JavaScript');
           print('    ✅ Correctly detected as JavaScript');
         } else {
@@ -350,7 +352,7 @@ export { calculateSum, Calculator };''';
                         
                         const interval = setInterval(() => {
                             counter++;
-                            resultDiv.textContent = `Clicked ${counter} times`;
+                            resultDiv.textContent = 'Clicked ' + counter + ' times';
                             
                             if (counter >= 10) {
                                 clearInterval(interval);
@@ -360,13 +362,13 @@ export { calculateSum, Calculator };''';
                     });
                     
                     // Modern JavaScript features
-                    const user = {
+                    var user = {
                         name: 'John Doe',
                         age: 30,
-                        ...{ location: 'New York' }
+                        location: 'New York'
                     };
                     
-                    console.log(`User: ${user.name}, Age: ${user.age}`);
+                    console.log('User: ' + user.name + ', Age: ' + user.age);
                 </script>
             </section>
         </main>

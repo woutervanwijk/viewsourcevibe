@@ -130,33 +130,69 @@ class HtmlService with ChangeNotifier {
     final lowerContent = content.toLowerCase();
     String contentTypeSuffix = '';
 
-    // HTML detection - prioritize HTML detection and make it more robust
+    // HTML detection - prioritize HTML detection and make it extremely robust
     // Check for HTML-specific patterns first, before checking for JavaScript
-    bool isHtml = lowerContent.contains('<html') ||
-                  lowerContent.contains('<!doctype html') ||
-                  lowerContent.contains('<head') ||
-                  lowerContent.contains('<body') ||
-                  lowerContent.contains('<!doctype');
+    // Use a scoring system to be more accurate with complex files
+    int htmlScore = 0;
+    
+    // Strong HTML indicators (high score)
+    if (lowerContent.contains('<html') || lowerContent.contains('<!doctype html')) htmlScore += 10;
+    if (lowerContent.contains('<!doctype')) htmlScore += 8;
+    if (lowerContent.contains('<head') || lowerContent.contains('<body')) htmlScore += 8;
+    if (lowerContent.contains('</html>') || lowerContent.contains('</head>') || lowerContent.contains('</body>')) htmlScore += 8;
+    
+    // Medium HTML indicators
+    if (lowerContent.contains('<div') || lowerContent.contains('<span')) htmlScore += 5;
+    if (lowerContent.contains('<script') || lowerContent.contains('<style')) htmlScore += 5;
+    if (lowerContent.contains('<meta') || lowerContent.contains('<link')) htmlScore += 5;
+    if (lowerContent.contains('<title') || lowerContent.contains('<noscript')) htmlScore += 5;
+    if (lowerContent.contains('<button') || lowerContent.contains('<input')) htmlScore += 5;
+    if (lowerContent.contains('<form') || lowerContent.contains('<table')) htmlScore += 5;
+    if (lowerContent.contains('<ul') || lowerContent.contains('<li')) htmlScore += 5;
+    if (lowerContent.contains('<nav') || lowerContent.contains('<footer')) htmlScore += 5;
+    if (lowerContent.contains('<header') || lowerContent.contains('<main')) htmlScore += 5;
+    if (lowerContent.contains('<article') || lowerContent.contains('<section')) htmlScore += 5;
+    
+    // Weak HTML indicators
+    if (lowerContent.contains('<!')) htmlScore += 3;
+    if (lowerContent.contains('</')) htmlScore += 3;
+    if (lowerContent.contains('<img') || lowerContent.contains('<a ')) htmlScore += 3;
+    if (lowerContent.contains('<p') || lowerContent.contains('<h') || lowerContent.contains('<br')) htmlScore += 3;
+    if (lowerContent.contains('<hr') || lowerContent.contains('<strong')) htmlScore += 3;
+    if (lowerContent.contains('<em') || lowerContent.contains('<code')) htmlScore += 3;
+    
+    // Consider it HTML if we have strong evidence
+    bool isHtml = htmlScore >= 5; // Lower threshold since we prioritize HTML
     
     // CSS detection - look for CSS-specific patterns
-    bool isCss = lowerContent.contains('body {') ||
-                 lowerContent.contains('@media') ||
-                 lowerContent.contains('/* css') ||
-                 (lowerContent.contains('{') && 
-                  lowerContent.contains('}') &&
-                  lowerContent.contains(':') &&
-                  !lowerContent.contains('<') &&
-                  !lowerContent.contains('>'));
+    // Only detect as CSS if it's NOT HTML and has CSS-specific patterns
+    bool isCss = !isHtml && (
+        lowerContent.contains('body {') ||
+        lowerContent.contains('@media') ||
+        lowerContent.contains('/* css') ||
+        lowerContent.contains('@import') ||
+        lowerContent.contains('@font-face') ||
+        lowerContent.contains('@keyframes') ||
+        (lowerContent.contains('{') && 
+         lowerContent.contains('}') &&
+         lowerContent.contains(':') &&
+         lowerContent.contains(';') &&
+         !lowerContent.contains('<') &&
+         !lowerContent.contains('>') &&
+         !lowerContent.contains('function') &&
+         !lowerContent.contains('const ') &&
+         !lowerContent.contains('let '))
+    );
     
     // JavaScript detection - only detect JS if it's not HTML
     // Make JS detection more specific to avoid false positives in HTML files
     bool isJavaScript = !isHtml && (
-        (lowerContent.contains('function ') && lowerContent.contains('{')) ||
-        (lowerContent.contains('const ') && lowerContent.contains('=')) ||
-        (lowerContent.contains('let ') && lowerContent.contains('=')) ||
-        (lowerContent.contains('=>') && lowerContent.contains('{')) ||
-        (lowerContent.contains('class ') && lowerContent.contains('extends')) ||
-        (lowerContent.contains('import ') && lowerContent.contains('from'))
+        (lowerContent.contains('function ') && lowerContent.contains('{') && lowerContent.contains('}')) ||
+        (lowerContent.contains('const ') && lowerContent.contains('=') && lowerContent.contains(';') && !lowerContent.contains('onclick=') && !lowerContent.contains('onload=') && !lowerContent.contains('onclick =')) ||
+        (lowerContent.contains('let ') && lowerContent.contains('=') && lowerContent.contains(';') && !lowerContent.contains('onclick=') && !lowerContent.contains('onload=') && !lowerContent.contains('onclick =')) ||
+        (lowerContent.contains('=>') && lowerContent.contains('{') && lowerContent.contains('}')) ||
+        (lowerContent.contains('class ') && lowerContent.contains('extends') && lowerContent.contains('{')) ||
+        (lowerContent.contains('import ') && lowerContent.contains('from') && lowerContent.contains(';'))
     );
     
     // XML detection
@@ -238,40 +274,58 @@ class HtmlService with ChangeNotifier {
     // Try to detect content type from content
     final lowerContent = content.toLowerCase();
 
-    // HTML detection - prioritize and make more robust
+    // HTML detection - prioritize and make extremely robust using scoring system
     // Check for HTML-specific patterns first, before other languages
-    bool isHtml = lowerContent.contains('<html') ||
-                  lowerContent.contains('<!doctype html') ||
-                  lowerContent.contains('<!doctype') ||
-                  lowerContent.contains('<head') ||
-                  lowerContent.contains('<body') ||
-                  lowerContent.contains('<div') ||
-                  lowerContent.contains('<span') ||
-                  lowerContent.contains('<script') ||
-                  lowerContent.contains('<style') ||
-                  lowerContent.contains('</html>') ||
-                  lowerContent.contains('</head>') ||
-                  lowerContent.contains('</body>');
+    int htmlScore = 0;
+    
+    // Strong HTML indicators (high score)
+    if (lowerContent.contains('<html') || lowerContent.contains('<!doctype html')) htmlScore += 10;
+    if (lowerContent.contains('<!doctype')) htmlScore += 8;
+    if (lowerContent.contains('<head') || lowerContent.contains('<body')) htmlScore += 8;
+    if (lowerContent.contains('</html>') || lowerContent.contains('</head>') || lowerContent.contains('</body>')) htmlScore += 8;
+    
+    // Medium HTML indicators
+    if (lowerContent.contains('<div') || lowerContent.contains('<span')) htmlScore += 5;
+    if (lowerContent.contains('<script') || lowerContent.contains('<style')) htmlScore += 5;
+    if (lowerContent.contains('<meta') || lowerContent.contains('<link')) htmlScore += 5;
+    if (lowerContent.contains('<title') || lowerContent.contains('<noscript')) htmlScore += 5;
+    
+    // Weak HTML indicators
+    if (lowerContent.contains('<!')) htmlScore += 3;
+    if (lowerContent.contains('</')) htmlScore += 3;
+    if (lowerContent.contains('<img') || lowerContent.contains('<a ')) htmlScore += 3;
+    if (lowerContent.contains('<p') || lowerContent.contains('<h') || lowerContent.contains('<section')) htmlScore += 3;
+    
+    // Consider it HTML if we have strong evidence
+    bool isHtml = htmlScore >= 5;
     
     // CSS detection - only if not HTML
     bool isCss = !isHtml && (lowerContent.contains('body {') ||
                             lowerContent.contains('@media') ||
                             lowerContent.contains('/* css') ||
+                            lowerContent.contains('@import') ||
+                            lowerContent.contains('@font-face') ||
+                            lowerContent.contains('@keyframes') ||
                             (lowerContent.contains('{') && 
                              lowerContent.contains('}') &&
                              lowerContent.contains(':') &&
+                             lowerContent.contains(';') &&
                              !lowerContent.contains('<') &&
-                             !lowerContent.contains('>')));
+                             !lowerContent.contains('>') &&
+                             !lowerContent.contains('function') &&
+                             !lowerContent.contains('const ') &&
+                             !lowerContent.contains('let ')));
     
-    // JavaScript detection - only if not HTML, and more specific patterns
+    // JavaScript detection - only if not HTML, and much more specific patterns
+    // Avoid false positives from JavaScript in HTML attributes
     bool isJavaScript = !isHtml && !isCss && (
-        (lowerContent.contains('function ') && lowerContent.contains('{')) ||
-        (lowerContent.contains('const ') && lowerContent.contains('=') && lowerContent.contains(';')) ||
-        (lowerContent.contains('let ') && lowerContent.contains('=') && lowerContent.contains(';')) ||
-        (lowerContent.contains('=>') && lowerContent.contains('{')) ||
-        (lowerContent.contains('class ') && lowerContent.contains('extends')) ||
-        (lowerContent.contains('import ') && lowerContent.contains('from')) ||
-        (lowerContent.contains('export ') && lowerContent.contains('{'))
+        (lowerContent.contains('function ') && lowerContent.contains('{') && lowerContent.contains('}')) ||
+        (lowerContent.contains('const ') && lowerContent.contains('=') && lowerContent.contains(';') && !lowerContent.contains('onclick=') && !lowerContent.contains('onload=') && !lowerContent.contains('onclick =')) ||
+        (lowerContent.contains('let ') && lowerContent.contains('=') && lowerContent.contains(';') && !lowerContent.contains('onclick=') && !lowerContent.contains('onload=') && !lowerContent.contains('onclick =')) ||
+        (lowerContent.contains('=>') && lowerContent.contains('{') && lowerContent.contains('}')) ||
+        (lowerContent.contains('class ') && lowerContent.contains('extends') && lowerContent.contains('{')) ||
+        (lowerContent.contains('import ') && lowerContent.contains('from') && lowerContent.contains(';')) ||
+        (lowerContent.contains('export ') && lowerContent.contains('{') && lowerContent.contains('}'))
     );
     
     // XML detection - only if not HTML

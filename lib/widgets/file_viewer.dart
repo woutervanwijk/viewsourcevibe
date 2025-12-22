@@ -146,7 +146,7 @@ class FileViewer extends StatelessWidget {
       case 'json':
         return 'JSON';
       case 'xml':
-        return 'XML/HTML';
+        return 'HTML/XML';
       case 'yaml':
         return 'YAML';
       case 'markdown':
