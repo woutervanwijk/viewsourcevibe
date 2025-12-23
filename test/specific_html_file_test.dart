@@ -259,7 +259,8 @@ void main() {
       print('  Result: $result');
       
       // This should be detected as HTML, not CSS
-      expect(result, contains('HTML'));
+      // With the new filename generation, it should have a proper .html extension
+      expect(result, endsWith('.html'));
       expect(result, isNot(contains('CSS')));
       
       print('  ✅ Complex HTML file correctly detected as HTML');
@@ -295,7 +296,8 @@ void main() {
       print('  Result: $result');
       
       // Should still be detected as HTML
-      expect(result, contains('HTML'));
+      // With the new filename generation, it should preserve the .html extension
+      expect(result, endsWith('.html'));
       expect(result, isNot(contains('CSS')));
       
       print('  ✅ HTML tags take priority over CSS content');

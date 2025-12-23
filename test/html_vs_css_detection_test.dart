@@ -51,7 +51,8 @@ void main() {
         print('    Result: $result');
         
         // Should be detected as HTML, not CSS
-        expect(result, contains('HTML'));
+        // With the new filename generation, it should have a proper .html extension
+        expect(result, endsWith('.html'));
         expect(result, isNot(contains('CSS')));
         
         print('    ✅ Correctly detected as HTML');
@@ -105,7 +106,8 @@ void main() {
         print('    Result: $result');
         
         // Should be detected as CSS, not HTML
-        expect(result, contains('CSS'));
+        // With the new filename generation, it should preserve the .css extension
+        expect(result, endsWith('.css'));
         expect(result, isNot(contains('HTML')));
         
         print('    ✅ Correctly detected as CSS');
@@ -172,7 +174,14 @@ void main() {
         print('    Result: $result');
         
         // Should be detected as expected type
-        expect(result, contains(expected));
+        // With the new filename generation, it should have the proper extension
+        if (expected == 'HTML') {
+          expect(result, endsWith('.html'));
+        } else if (expected == 'CSS') {
+          expect(result, endsWith('.css'));
+        } else if (expected == 'JavaScript') {
+          expect(result, endsWith('.js'));
+        }
         
         print('    ✅ Correctly detected as $expected');
       }
@@ -222,7 +231,14 @@ void main() {
         print('    Result: $result');
         
         // Should be detected as expected type
-        expect(result, contains(expected));
+        // With the new filename generation, it should have the proper extension
+        if (expected == 'HTML') {
+          expect(result, endsWith('.html'));
+        } else if (expected == 'CSS') {
+          expect(result, endsWith('.css'));
+        } else if (expected == 'JavaScript') {
+          expect(result, endsWith('.js'));
+        }
         
         print('    ✅ Correctly detected as $expected');
       }
@@ -240,7 +256,8 @@ void main() {
           htmlWithCssLikeContent
       );
       
-      expect(htmlResult, contains('HTML'));
+      // With the new filename generation, it should preserve the .html extension
+      expect(htmlResult, endsWith('.html'));
       expect(htmlResult, isNot(contains('CSS')));
       print('  ✅ HTML prioritized over CSS');
       

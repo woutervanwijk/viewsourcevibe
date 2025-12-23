@@ -126,93 +126,116 @@ class HtmlService with ChangeNotifier {
       }
     }
 
-    // Detect content type and add appropriate suffix
+    // Check if base filename already has a proper file extension
+    // If it does, we still need to verify it matches the content type
+    final baseFilenameLower = baseFilename.toLowerCase();
+    
+    // First, detect the content type
     final lowerContent = content.toLowerCase();
-    String contentTypeSuffix = '';
-
-    // HTML detection - prioritize HTML detection and make it extremely robust
-    // Check for HTML-specific patterns first, before checking for JavaScript
-    // Use a scoring system to be more accurate with complex files
-    int htmlScore = 0;
+    String detectedExtension = '';
     
-    // Strong HTML indicators (high score)
-    if (lowerContent.contains('<html') || lowerContent.contains('<!doctype html')) htmlScore += 10;
-    if (lowerContent.contains('<!doctype')) htmlScore += 8;
-    if (lowerContent.contains('<head') || lowerContent.contains('<body')) htmlScore += 8;
-    if (lowerContent.contains('</html>') || lowerContent.contains('</head>') || lowerContent.contains('</body>')) htmlScore += 8;
+    // HTML detection - prioritize HTML detection strongly
+    // Check for any HTML tags, not just specific ones
+    bool isHtml = lowerContent.contains('<html') ||
+                  lowerContent.contains('<!doctype') ||
+                  lowerContent.contains('<head') ||
+                  lowerContent.contains('<body') ||
+                  lowerContent.contains('<div') ||
+                  lowerContent.contains('<span') ||
+                  lowerContent.contains('<script') ||
+                  lowerContent.contains('<style') ||
+                  lowerContent.contains('<meta') ||
+                  lowerContent.contains('<link') ||
+                  lowerContent.contains('<title') ||
+                  lowerContent.contains('<p') ||
+                  lowerContent.contains('<h') ||
+                  lowerContent.contains('<a ') ||
+                  lowerContent.contains('<img') ||
+                  lowerContent.contains('<table') ||
+                  lowerContent.contains('<ul') ||
+                  lowerContent.contains('<li') ||
+                  lowerContent.contains('<nav') ||
+                  lowerContent.contains('<footer') ||
+                  lowerContent.contains('<header') ||
+                  lowerContent.contains('<main') ||
+                  lowerContent.contains('<article') ||
+                  lowerContent.contains('<section') ||
+                  lowerContent.contains('<button') ||
+                  lowerContent.contains('<input') ||
+                  lowerContent.contains('<form') ||
+                  lowerContent.contains('<br') ||
+                  lowerContent.contains('<hr');
     
-    // Medium HTML indicators
-    if (lowerContent.contains('<div') || lowerContent.contains('<span')) htmlScore += 5;
-    if (lowerContent.contains('<script') || lowerContent.contains('<style')) htmlScore += 5;
-    if (lowerContent.contains('<meta') || lowerContent.contains('<link')) htmlScore += 5;
-    if (lowerContent.contains('<title') || lowerContent.contains('<noscript')) htmlScore += 5;
-    if (lowerContent.contains('<button') || lowerContent.contains('<input')) htmlScore += 5;
-    if (lowerContent.contains('<form') || lowerContent.contains('<table')) htmlScore += 5;
-    if (lowerContent.contains('<ul') || lowerContent.contains('<li')) htmlScore += 5;
-    if (lowerContent.contains('<nav') || lowerContent.contains('<footer')) htmlScore += 5;
-    if (lowerContent.contains('<header') || lowerContent.contains('<main')) htmlScore += 5;
-    if (lowerContent.contains('<article') || lowerContent.contains('<section')) htmlScore += 5;
+    // CSS detection - only if not HTML
+    bool isCss = !isHtml && (lowerContent.contains('body {') || lowerContent.contains('@media'));
     
-    // Weak HTML indicators
-    if (lowerContent.contains('<!')) htmlScore += 3;
-    if (lowerContent.contains('</')) htmlScore += 3;
-    if (lowerContent.contains('<img') || lowerContent.contains('<a ')) htmlScore += 3;
-    if (lowerContent.contains('<p') || lowerContent.contains('<h') || lowerContent.contains('<br')) htmlScore += 3;
-    if (lowerContent.contains('<hr') || lowerContent.contains('<strong')) htmlScore += 3;
-    if (lowerContent.contains('<em') || lowerContent.contains('<code')) htmlScore += 3;
-    
-    // Consider it HTML if we have strong evidence
-    bool isHtml = htmlScore >= 5; // Lower threshold since we prioritize HTML
-    
-    // CSS detection - look for CSS-specific patterns
-    // Only detect as CSS if it's NOT HTML and has CSS-specific patterns
-    bool isCss = !isHtml && (
-        lowerContent.contains('body {') ||
-        lowerContent.contains('@media') ||
-        lowerContent.contains('/* css') ||
-        lowerContent.contains('@import') ||
-        lowerContent.contains('@font-face') ||
-        lowerContent.contains('@keyframes') ||
-        (lowerContent.contains('{') && 
-         lowerContent.contains('}') &&
-         lowerContent.contains(':') &&
-         lowerContent.contains(';') &&
-         !lowerContent.contains('<') &&
-         !lowerContent.contains('>') &&
-         !lowerContent.contains('function') &&
-         !lowerContent.contains('const ') &&
-         !lowerContent.contains('let '))
-    );
-    
-    // JavaScript detection - only detect JS if it's not HTML
-    // Make JS detection more specific to avoid false positives in HTML files
-    bool isJavaScript = !isHtml && (
+    // JavaScript detection - only if not HTML or CSS
+    // Be very careful to avoid false positives in HTML files with script tags
+    bool isJavaScript = !isHtml && !isCss && (
         (lowerContent.contains('function ') && lowerContent.contains('{') && lowerContent.contains('}')) ||
-        (lowerContent.contains('const ') && lowerContent.contains('=') && lowerContent.contains(';') && !lowerContent.contains('onclick=') && !lowerContent.contains('onload=') && !lowerContent.contains('onclick =')) ||
-        (lowerContent.contains('let ') && lowerContent.contains('=') && lowerContent.contains(';') && !lowerContent.contains('onclick=') && !lowerContent.contains('onload=') && !lowerContent.contains('onclick =')) ||
-        (lowerContent.contains('=>') && lowerContent.contains('{') && lowerContent.contains('}')) ||
-        (lowerContent.contains('class ') && lowerContent.contains('extends') && lowerContent.contains('{')) ||
-        (lowerContent.contains('import ') && lowerContent.contains('from') && lowerContent.contains(';'))
+        (lowerContent.contains('const ') && lowerContent.contains('=') && lowerContent.contains(';') && 
+         !lowerContent.contains('<script') && !lowerContent.contains('</script>')) ||
+        (lowerContent.contains('let ') && lowerContent.contains('=') && lowerContent.contains(';') &&
+         !lowerContent.contains('<script') && !lowerContent.contains('</script>'))
     );
     
-    // XML detection
-    bool isXml = !isHtml && tryParseAsXml(content);
-    
-    // Assign content type based on detection (priority: HTML > CSS > JS > XML)
+    // Determine the correct extension based on content
     if (isHtml) {
-      contentTypeSuffix = ' HTML';
+      detectedExtension = '.html';
     } else if (isCss) {
-      contentTypeSuffix = ' CSS';
+      detectedExtension = '.css';
     } else if (isJavaScript) {
-      contentTypeSuffix = ' JavaScript';
-    } else if (isXml) {
-      contentTypeSuffix = ' XML';
+      detectedExtension = '.js';
+    }
+    
+    // If the filename already has an extension that matches the content type, use it
+    if (detectedExtension.isNotEmpty) {
+      if (baseFilenameLower.endsWith(detectedExtension)) {
+        return baseFilename; // Extension matches content type
+      } else {
+        // Extension doesn't match content type, replace it
+        // Remove any existing extension first
+        final baseWithoutExt = baseFilename.split('.').first;
+        return '$baseWithoutExt$detectedExtension';
+      }
+    }
+    
+    // If no specific content type detected, check if filename has a proper extension
+    final hasProperExtension = baseFilenameLower.endsWith('.html') ||
+                                baseFilenameLower.endsWith('.htm') ||
+                                baseFilenameLower.endsWith('.css') ||
+                                baseFilenameLower.endsWith('.js') ||
+                                baseFilenameLower.endsWith('.json') ||
+                                baseFilenameLower.endsWith('.xml') ||
+                                baseFilenameLower.endsWith('.yaml') ||
+                                baseFilenameLower.endsWith('.yml') ||
+                                baseFilenameLower.endsWith('.md') ||
+                                baseFilenameLower.endsWith('.txt') ||
+                                baseFilenameLower.endsWith('.py') ||
+                                baseFilenameLower.endsWith('.java') ||
+                                baseFilenameLower.endsWith('.dart') ||
+                                baseFilenameLower.endsWith('.cpp') ||
+                                baseFilenameLower.endsWith('.c') ||
+                                baseFilenameLower.endsWith('.cs') ||
+                                baseFilenameLower.endsWith('.php') ||
+                                baseFilenameLower.endsWith('.rb') ||
+                                baseFilenameLower.endsWith('.swift') ||
+                                baseFilenameLower.endsWith('.go') ||
+                                baseFilenameLower.endsWith('.rs') ||
+                                baseFilenameLower.endsWith('.sql');
+    
+    if (hasProperExtension) {
+      return baseFilename;
     }
 
-    // Combine base filename with content type suffix
-    final filename = '$baseFilename$contentTypeSuffix';
-
-    return filename;
+    // If we get here, the filename doesn't have a proper extension or the extension doesn't match content
+    // Use the detected extension from earlier, or fall back to .txt
+    if (detectedExtension.isNotEmpty) {
+      return '$baseFilename$detectedExtension';
+    } else {
+      // Fallback to .txt if no specific content type detected
+      return '$baseFilename.txt';
+    }
   }
 
   /// Get the final URL after following all redirects manually
@@ -446,16 +469,188 @@ class HtmlService with ChangeNotifier {
           filename == '/' ||
           filename == 'index' ||
           !filename.contains('.') && !filename.contains('/')) {
-        return '$detectedType File';
+        // Map detected types to proper file extensions
+        String properFilename;
+        switch (detectedType.toLowerCase()) {
+          case 'html':
+            properFilename = 'document.html';
+            break;
+          case 'css':
+            properFilename = 'styles.css';
+            break;
+          case 'javascript':
+            properFilename = 'script.js';
+            break;
+          case 'typescript':
+            properFilename = 'script.ts';
+            break;
+          case 'json':
+            properFilename = 'data.json';
+            break;
+          case 'xml':
+            properFilename = 'data.xml';
+            break;
+          case 'yaml':
+          case 'yml':
+            properFilename = 'config.yaml';
+            break;
+          case 'markdown':
+          case 'md':
+            properFilename = 'document.md';
+            break;
+          case 'python':
+            properFilename = 'script.py';
+            break;
+          case 'java':
+            properFilename = 'Main.java';
+            break;
+          case 'dart':
+            properFilename = 'main.dart';
+            break;
+          case 'c':
+          case 'cpp':
+          case 'c++':
+            properFilename = 'program.cpp';
+            break;
+          case 'csharp':
+          case 'cs':
+            properFilename = 'Program.cs';
+            break;
+          case 'php':
+            properFilename = 'index.php';
+            break;
+          case 'ruby':
+            properFilename = 'script.rb';
+            break;
+          case 'swift':
+            properFilename = 'main.swift';
+            break;
+          case 'go':
+            properFilename = 'main.go';
+            break;
+          case 'rust':
+            properFilename = 'main.rs';
+            break;
+          case 'sql':
+            properFilename = 'query.sql';
+            break;
+          case 'plaintext':
+          case 'txt':
+          case 'text':
+            properFilename = 'document.txt';
+            break;
+          default:
+            properFilename = 'document.$detectedType';
+            break;
+        }
+        return properFilename;
       }
 
-      // If filename already has an extension, use it
-      if (filename.contains('.')) {
+      // If filename already has a proper file extension, use it
+      // Check for common file extensions to avoid false positives
+      final filenameLower = filename.toLowerCase();
+      final hasProperExtension = filenameLower.endsWith('.html') ||
+                                  filenameLower.endsWith('.htm') ||
+                                  filenameLower.endsWith('.css') ||
+                                  filenameLower.endsWith('.js') ||
+                                  filenameLower.endsWith('.json') ||
+                                  filenameLower.endsWith('.xml') ||
+                                  filenameLower.endsWith('.yaml') ||
+                                  filenameLower.endsWith('.yml') ||
+                                  filenameLower.endsWith('.md') ||
+                                  filenameLower.endsWith('.txt') ||
+                                  filenameLower.endsWith('.py') ||
+                                  filenameLower.endsWith('.java') ||
+                                  filenameLower.endsWith('.dart') ||
+                                  filenameLower.endsWith('.cpp') ||
+                                  filenameLower.endsWith('.c') ||
+                                  filenameLower.endsWith('.cs') ||
+                                  filenameLower.endsWith('.php') ||
+                                  filenameLower.endsWith('.rb') ||
+                                  filenameLower.endsWith('.swift') ||
+                                  filenameLower.endsWith('.go') ||
+                                  filenameLower.endsWith('.rs') ||
+                                  filenameLower.endsWith('.sql');
+      
+      if (hasProperExtension) {
         return filename;
       }
 
-      // Generate filename based on detected type
-      return '$detectedType File';
+      // Generate filename based on detected type with proper extension
+      String properFilename;
+      switch (detectedType.toLowerCase()) {
+        case 'html':
+          properFilename = 'document.html';
+          break;
+        case 'css':
+          properFilename = 'styles.css';
+          break;
+        case 'javascript':
+          properFilename = 'script.js';
+          break;
+        case 'typescript':
+          properFilename = 'script.ts';
+          break;
+        case 'json':
+          properFilename = 'data.json';
+          break;
+        case 'xml':
+          properFilename = 'data.xml';
+          break;
+        case 'yaml':
+        case 'yml':
+          properFilename = 'config.yaml';
+          break;
+        case 'markdown':
+        case 'md':
+          properFilename = 'document.md';
+          break;
+        case 'python':
+          properFilename = 'script.py';
+          break;
+        case 'java':
+          properFilename = 'Main.java';
+          break;
+        case 'dart':
+          properFilename = 'main.dart';
+          break;
+        case 'c':
+        case 'cpp':
+        case 'c++':
+          properFilename = 'program.cpp';
+          break;
+        case 'csharp':
+        case 'cs':
+          properFilename = 'Program.cs';
+          break;
+        case 'php':
+          properFilename = 'index.php';
+          break;
+        case 'ruby':
+          properFilename = 'script.rb';
+          break;
+        case 'swift':
+          properFilename = 'main.swift';
+          break;
+        case 'go':
+          properFilename = 'main.go';
+          break;
+        case 'rust':
+          properFilename = 'main.rs';
+          break;
+        case 'sql':
+          properFilename = 'query.sql';
+          break;
+        case 'plaintext':
+        case 'txt':
+        case 'text':
+          properFilename = 'document.txt';
+          break;
+        default:
+          properFilename = 'document.$detectedType';
+          break;
+      }
+      return properFilename;
     } catch (e) {
       // Fallback to simple detection if robust detection fails
       return _fallbackContentDetection(filename, content);
@@ -614,9 +809,55 @@ class HtmlService with ChangeNotifier {
     await clearFile();
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
-    _selectedContentType = null; // Always reset to Automatic when loading new file
+    
+    // Automatically detect content type for syntax highlighting
+    // This ensures HTML content gets proper syntax highlighting even when loaded from URLs
+    try {
+      final detectedType = await fileTypeDetector.detectFileType(
+        filename: file.name,
+        content: file.content,
+      );
+      
+      // Map detected type to appropriate content type for syntax highlighting
+      // This handles cases where file extension might not match actual content type
+      _selectedContentType = _mapDetectedTypeToContentType(detectedType);
+    } catch (e) {
+      // If detection fails, fall back to automatic (null)
+      _selectedContentType = null;
+    }
+    
     notifyListeners();
     await scrollToZero();
+  }
+  
+  /// Map detected file type to appropriate content type for syntax highlighting
+  String _mapDetectedTypeToContentType(String detectedType) {
+    // Map detected types to content types that work with re_highlight
+    const typeMapping = {
+      'HTML': 'html',
+      'CSS': 'css',
+      'JavaScript': 'javascript',
+      'TypeScript': 'typescript',
+      'JSON': 'json',
+      'XML': 'xml',
+      'YAML': 'yaml',
+      'Markdown': 'markdown',
+      'Python': 'python',
+      'Java': 'java',
+      'Dart': 'dart',
+      'C++': 'cpp',
+      'C': 'c',
+      'C#': 'csharp',
+      'PHP': 'php',
+      'Ruby': 'ruby',
+      'Swift': 'swift',
+      'Go': 'go',
+      'Rust': 'rust',
+      'SQL': 'sql',
+      'Text': 'plaintext',
+    };
+    
+    return typeMapping[detectedType] ?? 'plaintext';
   }
 
   Future<void> scrollToZero() async {
