@@ -27,7 +27,8 @@ import 'package:view_source_vibe/services/file_type_detector.dart';
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
   HtmlFile? _originalFile; // Store original file for "Automatic" option
-  String? _selectedContentType; // Track the selected content type for syntax highlighting
+  String?
+      _selectedContentType; // Track the selected content type for syntax highlighting
   ScrollController? _verticalScrollController;
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
@@ -129,60 +130,69 @@ class HtmlService with ChangeNotifier {
     // Check if base filename already has a proper file extension
     // If it does, we still need to verify it matches the content type
     final baseFilenameLower = baseFilename.toLowerCase();
-    
+
     // First, detect the content type
     final lowerContent = content.toLowerCase();
     String detectedExtension = '';
-    
+
     // HTML detection - be specific to avoid false positives with XML/RSS
     // Only detect as HTML if we have clear HTML indicators and no XML indicators
     bool hasHtmlIndicators = lowerContent.contains('<html') ||
-                           lowerContent.contains('<!doctype') ||
-                           lowerContent.contains('<head') ||
-                           lowerContent.contains('<body') ||
-                           lowerContent.contains('<div') ||
-                           lowerContent.contains('<span') ||
-                           lowerContent.contains('<style') ||
-                           lowerContent.contains('<script') ||
-                           lowerContent.contains('<meta') ||
-                           lowerContent.contains('<link') ||
-                           lowerContent.contains('<title') ||
-                           lowerContent.contains('<p') ||
-                           lowerContent.contains('<h') ||
-                           lowerContent.contains('<a ') ||
-                           lowerContent.contains('<img') ||
-                           lowerContent.contains('<table') ||
-                           lowerContent.contains('<ul') ||
-                           lowerContent.contains('<li');
+        lowerContent.contains('<!doctype') ||
+        lowerContent.contains('<head') ||
+        lowerContent.contains('<body') ||
+        lowerContent.contains('<div') ||
+        lowerContent.contains('<span') ||
+        lowerContent.contains('<style') ||
+        lowerContent.contains('<script') ||
+        lowerContent.contains('<meta') ||
+        lowerContent.contains('<link') ||
+        lowerContent.contains('<title') ||
+        lowerContent.contains('<p') ||
+        lowerContent.contains('<h') ||
+        lowerContent.contains('<a ') ||
+        lowerContent.contains('<img') ||
+        lowerContent.contains('<table') ||
+        lowerContent.contains('<ul') ||
+        lowerContent.contains('<li');
     bool hasXmlIndicators = lowerContent.contains('<rss ') ||
-                          lowerContent.contains('<feed ') ||
-                          lowerContent.contains('<?xml') ||
-                          lowerContent.contains('xmlns=');
-    
+        lowerContent.contains('<feed ') ||
+        lowerContent.contains('<?xml') ||
+        lowerContent.contains('xmlns=');
+
     bool isHtml = hasHtmlIndicators && !hasXmlIndicators;
-    
+
     // CSS detection - only if not HTML
     // Be careful not to detect CSS embedded in HTML (like in <style> tags)
-    bool isCss = !isHtml && (lowerContent.contains('body {') || lowerContent.contains('@media'));
-    
+    bool isCss = !isHtml &&
+        (lowerContent.contains('body {') || lowerContent.contains('@media'));
+
     // JavaScript detection - only if not HTML or CSS
     // Be very careful to avoid false positives in HTML files with script tags
-    bool isJavaScript = !isHtml && !isCss && (
-        (lowerContent.contains('function ') && lowerContent.contains('{') && lowerContent.contains('}')) ||
-        (lowerContent.contains('const ') && lowerContent.contains('=') && lowerContent.contains(';') && 
-         !lowerContent.contains('<script') && !lowerContent.contains('</script>')) ||
-        (lowerContent.contains('let ') && lowerContent.contains('=') && lowerContent.contains(';') &&
-         !lowerContent.contains('<script') && !lowerContent.contains('</script>'))
-    );
-    
+    bool isJavaScript = !isHtml &&
+        !isCss &&
+        ((lowerContent.contains('function ') &&
+                lowerContent.contains('{') &&
+                lowerContent.contains('}')) ||
+            (lowerContent.contains('const ') &&
+                lowerContent.contains('=') &&
+                lowerContent.contains(';') &&
+                !lowerContent.contains('<script') &&
+                !lowerContent.contains('</script>')) ||
+            (lowerContent.contains('let ') &&
+                lowerContent.contains('=') &&
+                lowerContent.contains(';') &&
+                !lowerContent.contains('<script') &&
+                !lowerContent.contains('</script>')));
+
     // XML detection - check for RSS/Atom feeds and general XML
     bool isXml = lowerContent.contains('<rss ') ||
-                lowerContent.contains('<feed ') ||
-                lowerContent.contains('<?xml') ||
-                lowerContent.contains('xmlns=') ||
-                lowerContent.contains('<channel ') ||
-                lowerContent.contains('<item ');
-    
+        lowerContent.contains('<feed ') ||
+        lowerContent.contains('<?xml') ||
+        lowerContent.contains('xmlns=') ||
+        lowerContent.contains('<channel ') ||
+        lowerContent.contains('<item ');
+
     // Determine the correct extension based on content
     // Prioritize XML detection over other types to fix RSS feed issue
     if (isXml) {
@@ -194,7 +204,7 @@ class HtmlService with ChangeNotifier {
     } else if (isJavaScript) {
       detectedExtension = '.js';
     }
-    
+
     // If the filename already has an extension that matches the content type, use it
     if (detectedExtension.isNotEmpty) {
       if (baseFilenameLower.endsWith(detectedExtension)) {
@@ -203,34 +213,34 @@ class HtmlService with ChangeNotifier {
         // Extension doesn't match content type, replace it
         // Remove any existing extension first
         final baseWithoutExt = baseFilename.split('.').first;
-        return '$baseWithoutExt$detectedExtension';
+        return '$baseWithoutExt';
       }
     }
-    
+
     // If no specific content type detected, check if filename has a proper extension
     final hasProperExtension = baseFilenameLower.endsWith('.html') ||
-                                baseFilenameLower.endsWith('.htm') ||
-                                baseFilenameLower.endsWith('.css') ||
-                                baseFilenameLower.endsWith('.js') ||
-                                baseFilenameLower.endsWith('.json') ||
-                                baseFilenameLower.endsWith('.xml') ||
-                                baseFilenameLower.endsWith('.yaml') ||
-                                baseFilenameLower.endsWith('.yml') ||
-                                baseFilenameLower.endsWith('.md') ||
-                                baseFilenameLower.endsWith('.txt') ||
-                                baseFilenameLower.endsWith('.py') ||
-                                baseFilenameLower.endsWith('.java') ||
-                                baseFilenameLower.endsWith('.dart') ||
-                                baseFilenameLower.endsWith('.cpp') ||
-                                baseFilenameLower.endsWith('.c') ||
-                                baseFilenameLower.endsWith('.cs') ||
-                                baseFilenameLower.endsWith('.php') ||
-                                baseFilenameLower.endsWith('.rb') ||
-                                baseFilenameLower.endsWith('.swift') ||
-                                baseFilenameLower.endsWith('.go') ||
-                                baseFilenameLower.endsWith('.rs') ||
-                                baseFilenameLower.endsWith('.sql');
-    
+        baseFilenameLower.endsWith('.htm') ||
+        baseFilenameLower.endsWith('.css') ||
+        baseFilenameLower.endsWith('.js') ||
+        baseFilenameLower.endsWith('.json') ||
+        baseFilenameLower.endsWith('.xml') ||
+        baseFilenameLower.endsWith('.yaml') ||
+        baseFilenameLower.endsWith('.yml') ||
+        baseFilenameLower.endsWith('.md') ||
+        baseFilenameLower.endsWith('.txt') ||
+        baseFilenameLower.endsWith('.py') ||
+        baseFilenameLower.endsWith('.java') ||
+        baseFilenameLower.endsWith('.dart') ||
+        baseFilenameLower.endsWith('.cpp') ||
+        baseFilenameLower.endsWith('.c') ||
+        baseFilenameLower.endsWith('.cs') ||
+        baseFilenameLower.endsWith('.php') ||
+        baseFilenameLower.endsWith('.rb') ||
+        baseFilenameLower.endsWith('.swift') ||
+        baseFilenameLower.endsWith('.go') ||
+        baseFilenameLower.endsWith('.rs') ||
+        baseFilenameLower.endsWith('.sql');
+
     if (hasProperExtension) {
       return baseFilename;
     }
@@ -245,34 +255,33 @@ class HtmlService with ChangeNotifier {
       Uri uri, http.Client client, Map<String, String> headers) async {
     try {
       // Create a request that doesn't automatically follow redirects
-      final request = http.Request('GET', uri)
-        ..followRedirects = false;
-      
+      final request = http.Request('GET', uri)..followRedirects = false;
+
       // Add headers to the request
       headers.forEach((key, value) {
         request.headers[key] = value;
       });
-      
+
       // Send the request
-      final response = await client.send(request).timeout(const Duration(seconds: 30));
-      
+      final response =
+          await client.send(request).timeout(const Duration(seconds: 30));
+
       // Check if this is a redirect response
       if (response.isRedirect) {
         // Get the redirect location from headers
         final locationHeader = response.headers['location'];
-        
+
         if (locationHeader != null && locationHeader.isNotEmpty) {
           // Handle relative redirects by resolving against the original URI
           final redirectUri = uri.resolve(locationHeader);
-          
+
           // Recursively follow the redirect to get the final URL
           return await _getFinalUrlAfterRedirects(redirectUri, client, headers);
         }
       }
-      
+
       // If not a redirect, return the original URL
       return uri.toString();
-      
     } catch (e) {
       // If redirect handling fails, fall back to the original URL
       debugPrint('Error handling redirects: $e');
@@ -301,67 +310,99 @@ class HtmlService with ChangeNotifier {
     // HTML detection - prioritize and make extremely robust using scoring system
     // Check for HTML-specific patterns first, before other languages
     int htmlScore = 0;
-    
+
     // Strong HTML indicators (high score)
-    if (lowerContent.contains('<html') || lowerContent.contains('<!doctype html')) htmlScore += 10;
+    if (lowerContent.contains('<html') ||
+        lowerContent.contains('<!doctype html')) htmlScore += 10;
     if (lowerContent.contains('<!doctype')) htmlScore += 8;
-    if (lowerContent.contains('<head') || lowerContent.contains('<body')) htmlScore += 8;
-    if (lowerContent.contains('</html>') || lowerContent.contains('</head>') || lowerContent.contains('</body>')) htmlScore += 8;
-    
+    if (lowerContent.contains('<head') || lowerContent.contains('<body'))
+      htmlScore += 8;
+    if (lowerContent.contains('</html>') ||
+        lowerContent.contains('</head>') ||
+        lowerContent.contains('</body>')) htmlScore += 8;
+
     // Medium HTML indicators
-    if (lowerContent.contains('<div') || lowerContent.contains('<span')) htmlScore += 5;
-    if (lowerContent.contains('<script') || lowerContent.contains('<style')) htmlScore += 5;
-    if (lowerContent.contains('<meta') || lowerContent.contains('<link')) htmlScore += 5;
-    if (lowerContent.contains('<title') || lowerContent.contains('<noscript')) htmlScore += 5;
-    
+    if (lowerContent.contains('<div') || lowerContent.contains('<span'))
+      htmlScore += 5;
+    if (lowerContent.contains('<script') || lowerContent.contains('<style'))
+      htmlScore += 5;
+    if (lowerContent.contains('<meta') || lowerContent.contains('<link'))
+      htmlScore += 5;
+    if (lowerContent.contains('<title') || lowerContent.contains('<noscript'))
+      htmlScore += 5;
+
     // Weak HTML indicators
     if (lowerContent.contains('<!')) htmlScore += 3;
     if (lowerContent.contains('</')) htmlScore += 3;
-    if (lowerContent.contains('<img') || lowerContent.contains('<a ')) htmlScore += 3;
-    if (lowerContent.contains('<p') || lowerContent.contains('<h') || lowerContent.contains('<section')) htmlScore += 3;
-    
+    if (lowerContent.contains('<img') || lowerContent.contains('<a '))
+      htmlScore += 3;
+    if (lowerContent.contains('<p') ||
+        lowerContent.contains('<h') ||
+        lowerContent.contains('<section')) htmlScore += 3;
+
     // Consider it HTML if we have strong evidence
     bool isHtml = htmlScore >= 5;
-    
+
     // CSS detection - only if not HTML
-    bool isCss = !isHtml && (lowerContent.contains('body {') ||
-                            lowerContent.contains('@media') ||
-                            lowerContent.contains('/* css') ||
-                            lowerContent.contains('@import') ||
-                            lowerContent.contains('@font-face') ||
-                            lowerContent.contains('@keyframes') ||
-                            (lowerContent.contains('{') && 
-                             lowerContent.contains('}') &&
-                             lowerContent.contains(':') &&
-                             lowerContent.contains(';') &&
-                             !lowerContent.contains('<') &&
-                             !lowerContent.contains('>') &&
-                             !lowerContent.contains('function') &&
-                             !lowerContent.contains('const ') &&
-                             !lowerContent.contains('let ')));
-    
+    bool isCss = !isHtml &&
+        (lowerContent.contains('body {') ||
+            lowerContent.contains('@media') ||
+            lowerContent.contains('/* css') ||
+            lowerContent.contains('@import') ||
+            lowerContent.contains('@font-face') ||
+            lowerContent.contains('@keyframes') ||
+            (lowerContent.contains('{') &&
+                lowerContent.contains('}') &&
+                lowerContent.contains(':') &&
+                lowerContent.contains(';') &&
+                !lowerContent.contains('<') &&
+                !lowerContent.contains('>') &&
+                !lowerContent.contains('function') &&
+                !lowerContent.contains('const ') &&
+                !lowerContent.contains('let ')));
+
     // JavaScript detection - only if not HTML, and much more specific patterns
     // Avoid false positives from JavaScript in HTML attributes
-    bool isJavaScript = !isHtml && !isCss && (
-        (lowerContent.contains('function ') && lowerContent.contains('{') && lowerContent.contains('}')) ||
-        (lowerContent.contains('const ') && lowerContent.contains('=') && lowerContent.contains(';') && !lowerContent.contains('onclick=') && !lowerContent.contains('onload=') && !lowerContent.contains('onclick =')) ||
-        (lowerContent.contains('let ') && lowerContent.contains('=') && lowerContent.contains(';') && !lowerContent.contains('onclick=') && !lowerContent.contains('onload=') && !lowerContent.contains('onclick =')) ||
-        (lowerContent.contains('=>') && lowerContent.contains('{') && lowerContent.contains('}')) ||
-        (lowerContent.contains('class ') && lowerContent.contains('extends') && lowerContent.contains('{')) ||
-        (lowerContent.contains('import ') && lowerContent.contains('from') && lowerContent.contains(';')) ||
-        (lowerContent.contains('export ') && lowerContent.contains('{') && lowerContent.contains('}'))
-    );
-    
+    bool isJavaScript = !isHtml &&
+        !isCss &&
+        ((lowerContent.contains('function ') &&
+                lowerContent.contains('{') &&
+                lowerContent.contains('}')) ||
+            (lowerContent.contains('const ') &&
+                lowerContent.contains('=') &&
+                lowerContent.contains(';') &&
+                !lowerContent.contains('onclick=') &&
+                !lowerContent.contains('onload=') &&
+                !lowerContent.contains('onclick =')) ||
+            (lowerContent.contains('let ') &&
+                lowerContent.contains('=') &&
+                lowerContent.contains(';') &&
+                !lowerContent.contains('onclick=') &&
+                !lowerContent.contains('onload=') &&
+                !lowerContent.contains('onclick =')) ||
+            (lowerContent.contains('=>') &&
+                lowerContent.contains('{') &&
+                lowerContent.contains('}')) ||
+            (lowerContent.contains('class ') &&
+                lowerContent.contains('extends') &&
+                lowerContent.contains('{')) ||
+            (lowerContent.contains('import ') &&
+                lowerContent.contains('from') &&
+                lowerContent.contains(';')) ||
+            (lowerContent.contains('export ') &&
+                lowerContent.contains('{') &&
+                lowerContent.contains('}')));
+
     // XML detection - check for RSS/Atom feeds and general XML
     // This should happen before HTML detection to avoid false positives
     bool isXml = lowerContent.contains('<rss ') ||
-                lowerContent.contains('<feed ') ||
-                lowerContent.contains('<?xml') ||
-                lowerContent.contains('xmlns=') ||
-                lowerContent.contains('<channel ') ||
-                lowerContent.contains('<item ') ||
-                (!isHtml && tryParseAsXml(content));
-    
+        lowerContent.contains('<feed ') ||
+        lowerContent.contains('<?xml') ||
+        lowerContent.contains('xmlns=') ||
+        lowerContent.contains('<channel ') ||
+        lowerContent.contains('<item ') ||
+        (!isHtml && tryParseAsXml(content));
+
     // Assign file type based on detection (priority: XML > HTML > CSS > JS > other languages)
     // XML detection comes first to fix RSS feed issue
     if (isXml) {
@@ -375,7 +416,7 @@ class HtmlService with ChangeNotifier {
     } else if (isXml) {
       return 'XML File';
     }
-    
+
     // Other language detections (only if not HTML/CSS/JS)
     if (!isHtml && !isCss && !isJavaScript) {
       // Check for Java content
@@ -481,6 +522,9 @@ class HtmlService with ChangeNotifier {
           filename == 'index' ||
           !filename.contains('.') && !filename.contains('/')) {
         // Use simple descriptive names without extensions
+        if (filename.contains('rss') || filename.contains('feed')) {
+          return 'RSS Page';
+        } // Simple fallback for generated filen}
         return 'Web Page'; // Simple fallback for generated filenames
       }
 
@@ -488,28 +532,28 @@ class HtmlService with ChangeNotifier {
       // Check for common file extensions to avoid false positives
       final filenameLower = filename.toLowerCase();
       final hasProperExtension = filenameLower.endsWith('.html') ||
-                                  filenameLower.endsWith('.htm') ||
-                                  filenameLower.endsWith('.css') ||
-                                  filenameLower.endsWith('.js') ||
-                                  filenameLower.endsWith('.json') ||
-                                  filenameLower.endsWith('.xml') ||
-                                  filenameLower.endsWith('.yaml') ||
-                                  filenameLower.endsWith('.yml') ||
-                                  filenameLower.endsWith('.md') ||
-                                  filenameLower.endsWith('.txt') ||
-                                  filenameLower.endsWith('.py') ||
-                                  filenameLower.endsWith('.java') ||
-                                  filenameLower.endsWith('.dart') ||
-                                  filenameLower.endsWith('.cpp') ||
-                                  filenameLower.endsWith('.c') ||
-                                  filenameLower.endsWith('.cs') ||
-                                  filenameLower.endsWith('.php') ||
-                                  filenameLower.endsWith('.rb') ||
-                                  filenameLower.endsWith('.swift') ||
-                                  filenameLower.endsWith('.go') ||
-                                  filenameLower.endsWith('.rs') ||
-                                  filenameLower.endsWith('.sql');
-      
+          filenameLower.endsWith('.htm') ||
+          filenameLower.endsWith('.css') ||
+          filenameLower.endsWith('.js') ||
+          filenameLower.endsWith('.json') ||
+          filenameLower.endsWith('.xml') ||
+          filenameLower.endsWith('.yaml') ||
+          filenameLower.endsWith('.yml') ||
+          filenameLower.endsWith('.md') ||
+          filenameLower.endsWith('.txt') ||
+          filenameLower.endsWith('.py') ||
+          filenameLower.endsWith('.java') ||
+          filenameLower.endsWith('.dart') ||
+          filenameLower.endsWith('.cpp') ||
+          filenameLower.endsWith('.c') ||
+          filenameLower.endsWith('.cs') ||
+          filenameLower.endsWith('.php') ||
+          filenameLower.endsWith('.rb') ||
+          filenameLower.endsWith('.swift') ||
+          filenameLower.endsWith('.go') ||
+          filenameLower.endsWith('.rs') ||
+          filenameLower.endsWith('.sql');
+
       if (hasProperExtension) {
         return filename;
       }
@@ -747,7 +791,7 @@ class HtmlService with ChangeNotifier {
     await clearFile();
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
-    
+
     // Automatically detect content type for syntax highlighting
     // This ensures HTML content gets proper syntax highlighting even when loaded from URLs
     try {
@@ -755,7 +799,7 @@ class HtmlService with ChangeNotifier {
         filename: file.name,
         content: file.content,
       );
-      
+
       // Map detected type to appropriate content type for syntax highlighting
       // This handles cases where file extension might not match actual content type
       _selectedContentType = _mapDetectedTypeToContentType(detectedType);
@@ -763,11 +807,11 @@ class HtmlService with ChangeNotifier {
       // If detection fails, fall back to automatic (null)
       _selectedContentType = null;
     }
-    
+
     notifyListeners();
     await scrollToZero();
   }
-  
+
   /// Map detected file type to appropriate content type for syntax highlighting
   String _mapDetectedTypeToContentType(String detectedType) {
     // Map detected types to content types that work with re_highlight
@@ -794,7 +838,7 @@ class HtmlService with ChangeNotifier {
       'SQL': 'sql',
       'Text': 'plaintext',
     };
-    
+
     return typeMapping[detectedType] ?? 'plaintext';
   }
 
@@ -820,50 +864,70 @@ class HtmlService with ChangeNotifier {
   List<String> getAvailableContentTypes() {
     // Get all available language keys from re_highlight
     final availableLanguages = builtinAllLanguages.keys.toList();
-    
+
     // Filter and sort the list to show most common types first
     // HTML/XML moved to top after Automatic for better UX
     final commonTypes = [
-      'html', 'xml', 'css', 'javascript', 'typescript', 'json',
-      'yaml', 'markdown', 'python', 'java', 'dart', 'c',
-      'cpp', 'csharp', 'php', 'ruby', 'swift', 'go', 'rust', 'sql',
+      'html',
+      'xml',
+      'css',
+      'javascript',
+      'typescript',
+      'json',
+      'yaml',
+      'markdown',
+      'python',
+      'java',
+      'dart',
+      'c',
+      'cpp',
+      'csharp',
+      'php',
+      'ruby',
+      'swift',
+      'go',
+      'rust',
+      'sql',
       'plaintext'
     ];
-    
+
     // Add common types first, then add remaining types
     final result = <String>[];
-    
+
     // Add "Automatic" as the first option
     result.add('automatic');
-    
+
     // Add HTML/XML first (right after Automatic) if they exist
     for (final type in ['html', 'xml']) {
       if (availableLanguages.contains(type) && !result.contains(type)) {
         result.add(type);
       }
     }
-    
+
     // Add other common types that exist in re_highlight
     for (final type in commonTypes) {
-      if (type != 'html' && type != 'xml' && availableLanguages.contains(type) && !result.contains(type)) {
+      if (type != 'html' &&
+          type != 'xml' &&
+          availableLanguages.contains(type) &&
+          !result.contains(type)) {
         result.add(type);
       }
     }
-    
+
     // Add remaining types (excluding duplicates)
     for (final type in availableLanguages) {
       if (!result.contains(type)) {
         result.add(type);
       }
     }
-    
+
     return result;
   }
 
   /// Update the current file's content type for syntax highlighting without changing filename
   void updateFileContentType(String newContentType) {
     if (_currentFile == null) return;
-    
+
     // Handle "Automatic" option - revert to original file and clear selected content type
     if (newContentType == 'automatic') {
       if (_originalFile != null) {
@@ -873,13 +937,13 @@ class HtmlService with ChangeNotifier {
       }
       return;
     }
-    
+
     // Update the selected content type for syntax highlighting
     _selectedContentType = newContentType;
-    
+
     // Create a new file with the same name but trigger UI update
     final currentFile = _currentFile!;
-    
+
     // Create updated file with same name (filename doesn't change)
     final updatedFile = HtmlFile(
       name: currentFile.name, // Keep original filename
@@ -889,7 +953,7 @@ class HtmlService with ChangeNotifier {
       size: currentFile.size,
       isUrl: currentFile.isUrl,
     );
-    
+
     // Update current file
     _currentFile = updatedFile;
     notifyListeners();
@@ -969,7 +1033,7 @@ class HtmlService with ChangeNotifier {
 
       // Manual redirect handling to get the actual redirected URL
       final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers);
-      
+
       // Make the request to the final URL with timeout
       final response = await client
           .get(
@@ -989,7 +1053,7 @@ class HtmlService with ChangeNotifier {
 
         // Parse the final URL to extract filename and other information
         final finalUri = Uri.parse(finalUrl);
-        
+
         // Extract filename from final URL path segments
         final pathFilename =
             finalUri.pathSegments.isNotEmpty ? finalUri.pathSegments.last : '';
