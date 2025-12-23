@@ -235,8 +235,13 @@ class FileTypeDetector {
     final lowerContent = content.toLowerCase();
     final scores = <String, int>{};
 
-    // HTML detection
-    if (lowerContent.contains('<html') || lowerContent.contains('<!doctype')) {
+    // HTML detection - be specific to avoid false positives with XML/RSS
+    // Only detect as HTML if we have clear HTML indicators and no XML indicators
+    bool hasHtmlIndicators = lowerContent.contains('<html') || lowerContent.contains('<!doctype');
+    bool hasXmlIndicators = lowerContent.contains('<rss ') || lowerContent.contains('<feed ') ||
+                           lowerContent.contains('<?xml') || lowerContent.contains('xmlns=');
+    
+    if (hasHtmlIndicators && !hasXmlIndicators) {
       scores['HTML'] = 20;
     }
 
@@ -300,11 +305,27 @@ class FileTypeDetector {
       scores['Markdown'] = 12;
     }
 
-    // XML detection
-    if (lowerContent.startsWith('<?xml') || lowerContent.contains('<xml ') ||
-        (lowerContent.contains('<') && lowerContent.contains('>') &&
-         lowerContent.contains('/>'))) {
-      scores['XML'] = 15;
+    // XML detection - prioritize XML detection and make it more comprehensive
+    // Check for XML declarations, self-closing tags, and specific XML formats like RSS/Atom
+    bool isXml = lowerContent.startsWith('<?xml') ||
+                 lowerContent.contains('<xml ') ||
+                 lowerContent.contains('<rss ') ||
+                 lowerContent.contains('<feed ') ||  // Atom feeds
+                 lowerContent.contains('<channel ') ||
+                 lowerContent.contains('<item ') ||
+                 lowerContent.contains('xmlns=') ||
+                 (lowerContent.contains('<') && lowerContent.contains('>') &&
+                  lowerContent.contains('/>'));
+    
+    // Give higher score to XML if we find strong XML indicators
+    if (isXml) {
+      // Even higher score for clear XML formats
+      if (lowerContent.contains('<rss ') || lowerContent.contains('<feed ') ||
+          lowerContent.contains('<?xml') || lowerContent.contains('xmlns=')) {
+        scores['XML'] = 25; // High confidence for clear XML
+      } else {
+        scores['XML'] = 20; // Still high confidence for general XML
+      }
     }
 
     // Python detection
@@ -413,7 +434,9 @@ class FileTypeDetector {
     if (lowerContent.startsWith('# ') || lowerContent.contains('## ')) {
       return 'Markdown';
     }
-    if (lowerContent.contains('<?xml') || lowerContent.contains('<xml ')) {
+    if (lowerContent.contains('<?xml') || lowerContent.contains('<xml ') ||
+        lowerContent.contains('<rss ') || lowerContent.contains('<feed ') ||
+        lowerContent.contains('<channel ') || lowerContent.contains('xmlns=')) {
       return 'XML';
     }
     if (lowerContent.contains('public class ') || lowerContent.contains('system.out.println')) {

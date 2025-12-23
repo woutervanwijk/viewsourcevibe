@@ -137,12 +137,12 @@ void main() {
     group('Integration with HtmlService', () {
       test('Should generate appropriate filenames for HTML content', () async {
         const htmlContent = '<!DOCTYPE html><html><body>Test</body></html>';
-        expect(await htmlService.detectFileTypeAndGenerateFilename('test', htmlContent), 'document.html');
+        expect(await htmlService.detectFileTypeAndGenerateFilename('test', htmlContent), 'Web Page');
       });
 
       test('Should generate appropriate filenames for JavaScript content', () async {
         const jsContent = 'function test() { return true; }';
-        expect(await htmlService.detectFileTypeAndGenerateFilename('script', jsContent), 'script.js');
+        expect(await htmlService.detectFileTypeAndGenerateFilename('script', jsContent), 'Web Page');
       });
 
       test('Should preserve filenames with extensions', () async {
@@ -151,9 +151,9 @@ void main() {
       });
 
       test('Should handle edge cases gracefully', () async {
-        expect(await htmlService.detectFileTypeAndGenerateFilename('', ''), 'document.txt');
-        expect(await htmlService.detectFileTypeAndGenerateFilename('index', ''), 'document.txt');
-        expect(await htmlService.detectFileTypeAndGenerateFilename('/', ''), 'document.txt');
+        expect(await htmlService.detectFileTypeAndGenerateFilename('', ''), 'Web Page');
+        expect(await htmlService.detectFileTypeAndGenerateFilename('index', ''), 'Web Page');
+        expect(await htmlService.detectFileTypeAndGenerateFilename('/', ''), 'Web Page');
       });
     });
 

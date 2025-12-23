@@ -76,13 +76,13 @@ class _UrlInputState extends State<UrlInput> {
                           htmlService.currentFile!.isUrl
                       ? 'Current URL'
                       : htmlService.currentFile != null
-                          ? 'Local File Loaded'
+                          ? 'File: ${htmlService.currentFile!.name}'
                           : 'Enter URL',
                   hintText: htmlService.currentFile != null &&
                           htmlService.currentFile!.isUrl
                       ? ''
                       : htmlService.currentFile != null
-                          ? ''
+                          ? 'Local file loaded: ${htmlService.currentFile!.name}'
                           : 'https://example.com',
                   prefixIcon: const Icon(Icons.link, size: 20),
                   border: OutlineInputBorder(

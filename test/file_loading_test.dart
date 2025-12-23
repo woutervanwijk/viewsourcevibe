@@ -43,7 +43,7 @@ void main() {
       expect(htmlService.currentFile, isNotNull);
 
       // Clear the file
-      htmlService.clearFile();
+      await htmlService.clearFile();
       expect(htmlService.currentFile, null);
     });
 

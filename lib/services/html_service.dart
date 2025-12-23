@@ -134,39 +134,35 @@ class HtmlService with ChangeNotifier {
     final lowerContent = content.toLowerCase();
     String detectedExtension = '';
     
-    // HTML detection - prioritize HTML detection strongly
-    // Check for any HTML tags, not just specific ones
-    bool isHtml = lowerContent.contains('<html') ||
-                  lowerContent.contains('<!doctype') ||
-                  lowerContent.contains('<head') ||
-                  lowerContent.contains('<body') ||
-                  lowerContent.contains('<div') ||
-                  lowerContent.contains('<span') ||
-                  lowerContent.contains('<script') ||
-                  lowerContent.contains('<style') ||
-                  lowerContent.contains('<meta') ||
-                  lowerContent.contains('<link') ||
-                  lowerContent.contains('<title') ||
-                  lowerContent.contains('<p') ||
-                  lowerContent.contains('<h') ||
-                  lowerContent.contains('<a ') ||
-                  lowerContent.contains('<img') ||
-                  lowerContent.contains('<table') ||
-                  lowerContent.contains('<ul') ||
-                  lowerContent.contains('<li') ||
-                  lowerContent.contains('<nav') ||
-                  lowerContent.contains('<footer') ||
-                  lowerContent.contains('<header') ||
-                  lowerContent.contains('<main') ||
-                  lowerContent.contains('<article') ||
-                  lowerContent.contains('<section') ||
-                  lowerContent.contains('<button') ||
-                  lowerContent.contains('<input') ||
-                  lowerContent.contains('<form') ||
-                  lowerContent.contains('<br') ||
-                  lowerContent.contains('<hr');
+    // HTML detection - be specific to avoid false positives with XML/RSS
+    // Only detect as HTML if we have clear HTML indicators and no XML indicators
+    bool hasHtmlIndicators = lowerContent.contains('<html') ||
+                           lowerContent.contains('<!doctype') ||
+                           lowerContent.contains('<head') ||
+                           lowerContent.contains('<body') ||
+                           lowerContent.contains('<div') ||
+                           lowerContent.contains('<span') ||
+                           lowerContent.contains('<style') ||
+                           lowerContent.contains('<script') ||
+                           lowerContent.contains('<meta') ||
+                           lowerContent.contains('<link') ||
+                           lowerContent.contains('<title') ||
+                           lowerContent.contains('<p') ||
+                           lowerContent.contains('<h') ||
+                           lowerContent.contains('<a ') ||
+                           lowerContent.contains('<img') ||
+                           lowerContent.contains('<table') ||
+                           lowerContent.contains('<ul') ||
+                           lowerContent.contains('<li');
+    bool hasXmlIndicators = lowerContent.contains('<rss ') ||
+                          lowerContent.contains('<feed ') ||
+                          lowerContent.contains('<?xml') ||
+                          lowerContent.contains('xmlns=');
+    
+    bool isHtml = hasHtmlIndicators && !hasXmlIndicators;
     
     // CSS detection - only if not HTML
+    // Be careful not to detect CSS embedded in HTML (like in <style> tags)
     bool isCss = !isHtml && (lowerContent.contains('body {') || lowerContent.contains('@media'));
     
     // JavaScript detection - only if not HTML or CSS
@@ -179,8 +175,19 @@ class HtmlService with ChangeNotifier {
          !lowerContent.contains('<script') && !lowerContent.contains('</script>'))
     );
     
+    // XML detection - check for RSS/Atom feeds and general XML
+    bool isXml = lowerContent.contains('<rss ') ||
+                lowerContent.contains('<feed ') ||
+                lowerContent.contains('<?xml') ||
+                lowerContent.contains('xmlns=') ||
+                lowerContent.contains('<channel ') ||
+                lowerContent.contains('<item ');
+    
     // Determine the correct extension based on content
-    if (isHtml) {
+    // Prioritize XML detection over other types to fix RSS feed issue
+    if (isXml) {
+      detectedExtension = '.xml';
+    } else if (isHtml) {
       detectedExtension = '.html';
     } else if (isCss) {
       detectedExtension = '.css';
@@ -228,14 +235,8 @@ class HtmlService with ChangeNotifier {
       return baseFilename;
     }
 
-    // If we get here, the filename doesn't have a proper extension or the extension doesn't match content
-    // Use the detected extension from earlier, or fall back to .txt
-    if (detectedExtension.isNotEmpty) {
-      return '$baseFilename$detectedExtension';
-    } else {
-      // Fallback to .txt if no specific content type detected
-      return '$baseFilename.txt';
-    }
+    // Don't add extensions for generated filenames
+    return baseFilename;
   }
 
   /// Get the final URL after following all redirects manually
@@ -351,11 +352,21 @@ class HtmlService with ChangeNotifier {
         (lowerContent.contains('export ') && lowerContent.contains('{') && lowerContent.contains('}'))
     );
     
-    // XML detection - only if not HTML
-    bool isXml = !isHtml && tryParseAsXml(content);
+    // XML detection - check for RSS/Atom feeds and general XML
+    // This should happen before HTML detection to avoid false positives
+    bool isXml = lowerContent.contains('<rss ') ||
+                lowerContent.contains('<feed ') ||
+                lowerContent.contains('<?xml') ||
+                lowerContent.contains('xmlns=') ||
+                lowerContent.contains('<channel ') ||
+                lowerContent.contains('<item ') ||
+                (!isHtml && tryParseAsXml(content));
     
-    // Assign file type based on detection (priority: HTML > CSS > JS > other languages)
-    if (isHtml) {
+    // Assign file type based on detection (priority: XML > HTML > CSS > JS > other languages)
+    // XML detection comes first to fix RSS feed issue
+    if (isXml) {
+      return 'XML File';
+    } else if (isHtml) {
       return 'HTML File';
     } else if (isCss) {
       return 'CSS File';
@@ -464,86 +475,13 @@ class HtmlService with ChangeNotifier {
         content: content,
       );
 
-      // Handle empty or unclear filenames
+      // Don't add extensions for generated filenames - preserve original or use simple names
       if (filename.isEmpty ||
           filename == '/' ||
           filename == 'index' ||
           !filename.contains('.') && !filename.contains('/')) {
-        // Map detected types to proper file extensions
-        String properFilename;
-        switch (detectedType.toLowerCase()) {
-          case 'html':
-            properFilename = 'document.html';
-            break;
-          case 'css':
-            properFilename = 'styles.css';
-            break;
-          case 'javascript':
-            properFilename = 'script.js';
-            break;
-          case 'typescript':
-            properFilename = 'script.ts';
-            break;
-          case 'json':
-            properFilename = 'data.json';
-            break;
-          case 'xml':
-            properFilename = 'data.xml';
-            break;
-          case 'yaml':
-          case 'yml':
-            properFilename = 'config.yaml';
-            break;
-          case 'markdown':
-          case 'md':
-            properFilename = 'document.md';
-            break;
-          case 'python':
-            properFilename = 'script.py';
-            break;
-          case 'java':
-            properFilename = 'Main.java';
-            break;
-          case 'dart':
-            properFilename = 'main.dart';
-            break;
-          case 'c':
-          case 'cpp':
-          case 'c++':
-            properFilename = 'program.cpp';
-            break;
-          case 'csharp':
-          case 'cs':
-            properFilename = 'Program.cs';
-            break;
-          case 'php':
-            properFilename = 'index.php';
-            break;
-          case 'ruby':
-            properFilename = 'script.rb';
-            break;
-          case 'swift':
-            properFilename = 'main.swift';
-            break;
-          case 'go':
-            properFilename = 'main.go';
-            break;
-          case 'rust':
-            properFilename = 'main.rs';
-            break;
-          case 'sql':
-            properFilename = 'query.sql';
-            break;
-          case 'plaintext':
-          case 'txt':
-          case 'text':
-            properFilename = 'document.txt';
-            break;
-          default:
-            properFilename = 'document.$detectedType';
-            break;
-        }
-        return properFilename;
+        // Use simple descriptive names without extensions
+        return 'Web Page'; // Simple fallback for generated filenames
       }
 
       // If filename already has a proper file extension, use it
