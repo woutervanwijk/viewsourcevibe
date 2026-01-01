@@ -792,6 +792,19 @@ class HtmlService with ChangeNotifier {
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
 
+    // Performance warning for large files
+    final fileSizeMB = file.size / (1024 * 1024);
+    if (file.size > 1 * 1024 * 1024) {
+      // 1MB warning threshold
+      debugPrint(
+          '📄 Loading large file: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB severe warning
+        debugPrint(
+            '⚠️  Very large file loading: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
+      }
+    }
+
     // Automatically detect content type for syntax highlighting
     // This ensures HTML content gets proper syntax highlighting even when loaded from URLs
     try {
@@ -1607,6 +1620,42 @@ class HtmlService with ChangeNotifier {
       String themeName = 'github',
       bool wrapText = false,
       bool showLineNumbers = true}) {
+    // Performance monitoring and warnings for large files
+    final contentSize = content.length;
+    final contentSizeMB = contentSize / (1024 * 1024);
+
+    // Warn about potential performance issues with large files
+    if (contentSize > 1 * 1024 * 1024) {
+      // 1MB warning threshold
+      debugPrint(
+          '🚨 Large file detected: ${contentSizeMB.toStringAsFixed(2)} MB');
+      debugPrint('   Syntax highlighting may impact performance');
+      debugPrint('   File extension: $extension');
+
+      if (contentSize > 5 * 1024 * 1024) {
+        // 5MB severe warning
+        debugPrint(
+            '⚠️  Very large file: ${contentSizeMB.toStringAsFixed(2)} MB');
+        debugPrint('   Significant performance impact expected');
+
+        // Show warning to user if context is available and mounted
+        try {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'Large file (${contentSizeMB.toStringAsFixed(1)} MB). Syntax highlighting may be slow.'),
+                duration: const Duration(seconds: 4),
+                // backgroundColor: Colors.orange,
+              ),
+            );
+          });
+        } catch (e) {
+          debugPrint('Could not show large file warning: $e');
+        }
+      }
+    }
+
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
 
