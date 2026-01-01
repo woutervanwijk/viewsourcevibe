@@ -285,14 +285,38 @@ class SharingService {
           
           // Try to extract the filename and treat the path as content
           final fileName = normalizedFilePath.split('/').last;
-          final fakeContent = 'File content could not be loaded. The file was located at: $filePath';
+          final helpfulContent = '''📱 iOS File Sharing Issue
+
+This file could not be loaded because it's in a sandboxed iOS location that the main app cannot access.
+
+File path: $filePath
+
+💡 How to share this file properly:
+
+1. **Save to Files First**
+   - Open the file in the original app
+   - Tap "Share" → "Save to Files"
+   - Choose "On My iPhone" location
+   - Then share from the Files app
+
+2. **Share as Text**
+   - Open the file in the original app
+   - Use "Share as Text" or "Copy" option
+   - Paste the content into this app
+
+3. **Use "Open With"**
+   - Long-press the file
+   - Choose "Open With" → "ViewSourceVibe"
+
+🔧 Technical Note:
+The iOS Share Extension needs to read file content and pass it as bytes, not just the file path.''';
           
           final htmlFile = HtmlFile(
             name: fileName,
             path: 'shared://unavailable',
-            content: fakeContent,
+            content: helpfulContent,
             lastModified: DateTime.now(),
-            size: fakeContent.length,
+            size: helpfulContent.length,
             isUrl: false,
           );
           

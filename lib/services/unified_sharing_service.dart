@@ -564,22 +564,41 @@ Try these solutions:
 
           // Try to extract the filename and show a helpful message
           final fileName = extractFileNameFromPath(filePath);
-          final errorContent = '''File could not be loaded
+          final errorContent = '''📱 iOS File Sharing Issue
 
 This file is located in iOS sandboxed storage:
 $filePath
 
-The file could not be read directly by the app due to iOS security restrictions.
+🔒 Why this happened:
+The iOS Share Extension provided a file path that the main app cannot access directly due to iOS security restrictions.
 
-The Share Extension tried to process this file but may have failed if:
-1. The file format is not supported
-2. The file is too large to pass through the sharing mechanism
-3. The file is protected by additional security policies
+💡 How to fix this:
 
-Try these solutions:
-- Use "Save to Files" to save the file to your device first, then share it from the Files app
-- Open the file in the original app and use "Share as text" or "Copy" instead
-- Use "Open with" and choose this app to open directly''';
+1. **Best Solution - Save to Files First**
+   - Open the file in the original app
+   - Tap "Share" → "Save to Files"
+   - Choose a location like "On My iPhone"
+   - Then share from the Files app
+
+2. **Alternative - Share as Text**
+   - Open the file in the original app
+   - Tap "Share" → "Copy" or "Share as Text"
+   - Paste into this app manually
+
+3. **Advanced - Use "Open With"**
+   - Long-press the file in the original app
+   - Choose "Open With" → "ViewSourceVibe"
+
+📝 Technical Details:
+The Share Extension should read the file content and pass it as bytes, not just the file path. This is an iOS Share Extension configuration issue.
+
+🔧 For Developers:
+The iOS Share Extension needs to be updated to:
+- Read file content from sandboxed locations
+- Pass content as fileBytes parameter
+- Include proper filename and MIME type
+
+If you're the app developer, please update the native iOS Share Extension code.''';
 
           final htmlFile = HtmlFile(
             name: fileName,
