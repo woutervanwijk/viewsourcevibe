@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: EdgeInsets.all(8),
                       child: Center(
                         child: Text(
-                          'No file loaded. Enter an url, share a file, or tap the folder icon to open a file',
+                          'No file loaded. Enter an url, share a file, or tap the folder icon to view it',
                           style: TextStyle(
                             fontSize: 16,
                             color: Theme.of(context)
