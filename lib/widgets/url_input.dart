@@ -75,7 +75,8 @@ class _UrlInputState extends State<UrlInput> {
                   labelText: htmlService.currentFile != null &&
                           htmlService.currentFile!.isUrl
                       ? 'Current URL'
-                      : htmlService.currentFile != null
+                      : htmlService.currentFile != null &&
+                              htmlService.currentFile!.name != ''
                           ? 'File: ${htmlService.currentFile!.name}'
                           : 'Enter URL',
                   hintText: htmlService.currentFile != null &&
@@ -93,12 +94,13 @@ class _UrlInputState extends State<UrlInput> {
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 20),
                           onPressed: () {
-                    _urlController.clear();
-                    // If there's a URL file loaded, clear it from the service too
-                    if (htmlService.currentFile != null && htmlService.currentFile!.isUrl) {
-                      htmlService.clearFile();
-                    }
-                  },
+                            _urlController.clear();
+                            // If there's a URL file loaded, clear it from the service too
+                            if (htmlService.currentFile != null &&
+                                htmlService.currentFile!.isUrl) {
+                              htmlService.clearFile();
+                            }
+                          },
                         )
                       : null,
                   contentPadding:

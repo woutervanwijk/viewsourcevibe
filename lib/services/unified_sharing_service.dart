@@ -245,7 +245,7 @@ class UnifiedSharingService {
       }
 
       final htmlFile = HtmlFile(
-        name: fileName ?? '',
+        name: fileName ?? 'Shared text',
         path: path ?? 'shared://text',
         content: text,
         lastModified: DateTime.now(),
@@ -324,7 +324,7 @@ class UnifiedSharingService {
       }
 
       final content = String.fromCharCodes(bytes);
-      final name = fileName ?? '';
+      final name = fileName ?? 'Shared file';
 
       final htmlFile = HtmlFile(
         name: name,

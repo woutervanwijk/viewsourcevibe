@@ -160,7 +160,7 @@ class SharingService {
           'SharingService: Handling shared text (${text.length} characters)');
 
       final htmlFile = HtmlFile(
-        name: '', // Empty name for unknown filenames
+        name: 'Shared text', // Default name for shared text
         path: 'shared://text',
         content: text,
         lastModified: DateTime.now(),
@@ -205,7 +205,7 @@ class SharingService {
       }
 
       final content = String.fromCharCodes(bytes);
-      final name = fileName ?? ''; // Empty name for unknown filenames
+      final name = fileName ?? 'Shared file'; // Default name for shared files
 
       final htmlFile = HtmlFile(
         name: name,
