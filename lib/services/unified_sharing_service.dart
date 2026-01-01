@@ -155,6 +155,7 @@ class UnifiedSharingService {
             content,
             fileName: fileName,
             path: filePath ?? 'shared://${type ?? "content"}',
+            type: type, // Pass the type to determine appropriate default filename
           );
         }
       } else if (fileBytes != null && fileBytes.isNotEmpty) {
@@ -218,6 +219,7 @@ class UnifiedSharingService {
     String text, {
     String? fileName,
     String? path,
+    String? type, // Add type parameter to distinguish between text and file content
   }) async {
     try {
       debugPrint(
@@ -244,8 +246,11 @@ class UnifiedSharingService {
         return;
       }
 
+      // Determine the appropriate default filename based on content type
+      final defaultFileName = type == 'text' ? 'Shared text' : 'Shared file';
+
       final htmlFile = HtmlFile(
-        name: fileName ?? 'Shared text',
+        name: fileName ?? defaultFileName,
         path: path ?? 'shared://text',
         content: text,
         lastModified: DateTime.now(),
