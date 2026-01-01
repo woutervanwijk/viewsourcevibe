@@ -10,7 +10,8 @@ class FileViewer extends StatelessWidget {
 
   const FileViewer({super.key, required this.file, this.scrollController});
 
-  void _showContentTypeMenu(BuildContext context, HtmlService htmlService) {
+  void _showContentTypeMenu(BuildContext context) {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
     final availableContentTypes = htmlService.getAvailableContentTypes();
     final selectedContentType = htmlService.selectedContentType;
     final fileExtension =
@@ -184,7 +185,6 @@ class FileViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final htmlService = Provider.of<HtmlService>(context);
     final settings = Provider.of<AppSettings>(context);
 
     // Add null safety checks
@@ -200,7 +200,7 @@ class FileViewer extends StatelessWidget {
       children: [
         // File info header - more compact and clickable
         GestureDetector(
-          onTap: () => _showContentTypeMenu(context, htmlService),
+          onTap: () => _showContentTypeMenu(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(
@@ -238,14 +238,18 @@ class FileViewer extends StatelessWidget {
 
         // File content with built-in syntax highlighting and line numbers
         Expanded(
-          child: htmlService.buildHighlightedText(
-            file.content,
-            htmlService.selectedContentType ?? file.extension,
-            context,
-            fontSize: settings.fontSize,
-            themeName: settings.themeName,
-            wrapText: settings.wrapText,
-            showLineNumbers: settings.showLineNumbers,
+          child: Consumer<HtmlService>(
+            builder: (context, htmlService, child) {
+              return htmlService.buildHighlightedText(
+                file.content,
+                htmlService.selectedContentType ?? file.extension,
+                context,
+                fontSize: settings.fontSize,
+                themeName: settings.themeName,
+                wrapText: settings.wrapText,
+                showLineNumbers: settings.showLineNumbers,
+              );
+            },
           ),
         ),
       ],
