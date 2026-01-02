@@ -5,8 +5,6 @@ import 'package:view_source_vibe/models/html_file.dart';
 void main() {
   group('Automatic detection UI tests', () {
     test('File extension should be correct for URL-loaded files', () async {
-      final htmlService = HtmlService();
-
       print('🔍 Testing file extensions for URL-loaded files:');
 
       // Test case 1: File with proper HTML extension
@@ -53,8 +51,6 @@ void main() {
     });
 
     test('Content type fallback should handle missing extensions', () async {
-      final htmlService = HtmlService();
-
       print('🔍 Testing content type fallback logic:');
 
       // Simulate the logic from file_viewer.dart

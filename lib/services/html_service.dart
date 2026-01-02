@@ -213,7 +213,7 @@ class HtmlService with ChangeNotifier {
         // Extension doesn't match content type, replace it
         // Remove any existing extension first
         final baseWithoutExt = baseFilename.split('.').first;
-        return '$baseWithoutExt';
+        return baseWithoutExt;
       }
     }
 
@@ -313,32 +313,50 @@ class HtmlService with ChangeNotifier {
 
     // Strong HTML indicators (high score)
     if (lowerContent.contains('<html') ||
-        lowerContent.contains('<!doctype html')) htmlScore += 10;
-    if (lowerContent.contains('<!doctype')) htmlScore += 8;
-    if (lowerContent.contains('<head') || lowerContent.contains('<body'))
+        lowerContent.contains('<!doctype html')) {
+      htmlScore += 10;
+    }
+    if (lowerContent.contains('<!doctype')) {
       htmlScore += 8;
+    }
+    if (lowerContent.contains('<head') || lowerContent.contains('<body')) {
+      htmlScore += 8;
+    }
     if (lowerContent.contains('</html>') ||
         lowerContent.contains('</head>') ||
-        lowerContent.contains('</body>')) htmlScore += 8;
+        lowerContent.contains('</body>')) {
+      htmlScore += 8;
+    }
 
     // Medium HTML indicators
-    if (lowerContent.contains('<div') || lowerContent.contains('<span'))
+    if (lowerContent.contains('<div') || lowerContent.contains('<span')) {
       htmlScore += 5;
-    if (lowerContent.contains('<script') || lowerContent.contains('<style'))
+    }
+    if (lowerContent.contains('<script') || lowerContent.contains('<style')) {
       htmlScore += 5;
-    if (lowerContent.contains('<meta') || lowerContent.contains('<link'))
+    }
+    if (lowerContent.contains('<meta') || lowerContent.contains('<link')) {
       htmlScore += 5;
-    if (lowerContent.contains('<title') || lowerContent.contains('<noscript'))
+    }
+    if (lowerContent.contains('<title') || lowerContent.contains('<noscript')) {
       htmlScore += 5;
+    }
 
     // Weak HTML indicators
-    if (lowerContent.contains('<!')) htmlScore += 3;
-    if (lowerContent.contains('</')) htmlScore += 3;
-    if (lowerContent.contains('<img') || lowerContent.contains('<a '))
+    if (lowerContent.contains('<!')) {
       htmlScore += 3;
+    }
+    if (lowerContent.contains('</')) {
+      htmlScore += 3;
+    }
+    if (lowerContent.contains('<img') || lowerContent.contains('<a ')) {
+      htmlScore += 3;
+    }
     if (lowerContent.contains('<p') ||
         lowerContent.contains('<h') ||
-        lowerContent.contains('<section')) htmlScore += 3;
+        lowerContent.contains('<section')) {
+      htmlScore += 3;
+    }
 
     // Consider it HTML if we have strong evidence
     bool isHtml = htmlScore >= 5;

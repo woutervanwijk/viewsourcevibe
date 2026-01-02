@@ -6,6 +6,7 @@ import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
+import 'package:view_source_vibe/services/file_system_service.dart';
 import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
 import 'package:app_links/app_links.dart';
 import 'package:universal_io/io.dart';
@@ -229,9 +230,18 @@ void main() async {
 
   final htmlService = HtmlService();
   final appSettings = AppSettings();
+  final fileSystemService = FileSystemService();
 
   // Initialize settings persistence
   await appSettings.initialize();
+
+  // Initialize file system service
+  try {
+    await fileSystemService.initialize();
+  } catch (e) {
+    debugPrint('❌ Error initializing FileSystemService: $e');
+    // Continue even if file system initialization fails
+  }
 
   // Setup system dark mode listener
   final platformDispatcher = WidgetsBinding.instance.platformDispatcher;
@@ -281,6 +291,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => htmlService),
         ChangeNotifierProvider(create: (_) => appSettings),
+        Provider<FileSystemService>(create: (_) => fileSystemService),
       ],
       child: const MyApp(),
     ),

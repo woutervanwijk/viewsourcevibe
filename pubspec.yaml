@@ -42,6 +42,9 @@ dependencies:
 
   # File type detection
   mime_type: ^1.0.0
+
+  # Path manipulation
+  path: ^1.8.0
   
 dev_dependencies:
   flutter_test:
