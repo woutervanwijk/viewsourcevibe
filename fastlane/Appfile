@@ -1,0 +1,35 @@
+# Appfile for ViewSourceVibe
+# This file contains configuration that is global to all lanes
+
+# ============================================
+# iOS Configuration
+# ============================================
+
+# Your Apple ID (optional, can be set in environment variables)
+# apple_id("your@apple.com")
+
+# App Identifier (Bundle ID)
+app_identifier("com.yourcompany.viewsourcevibe")
+
+# Team ID (optional)
+# team_id("YOUR_TEAM_ID")
+
+# ============================================
+# Android Configuration
+# ============================================
+
+# Package name
+package_name("com.yourcompany.viewsourcevibe")
+
+# Google Play JSON key file (path to your service account JSON key)
+# json_key_file("fastlane/google-play-key.json")
+
+# ============================================
+# Common Configuration
+# ============================================
+
+# You can set environment variables here
+# env("FLUTTER_ROOT", "/path/to/flutter")
+
+# Set the default platform
+default_platform(:ios)

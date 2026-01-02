@@ -1,0 +1,101 @@
+name: Android CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'android/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/android-ci-cd.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'android/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/android-ci-cd.yml'
+
+env:
+  FLUTTER_VERSION: "3.19.0"
+  JAVA_VERSION: "17"
+
+jobs:
+  build-and-test:
+    name: Build and Test Android
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+      
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Install dependencies
+        run: flutter pub get
+      
+      - name: Run Flutter analyze
+        run: flutter analyze
+      
+      - name: Run Flutter tests
+        run: flutter test
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+      
+      - name: Install Fastlane
+        run: gem install fastlane -NV
+      
+      - name: Build Android app bundle
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: fastlane android build_android
+      
+      - name: Upload Android artifact
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-app
+          path: android/app/build/outputs/bundle/release/app-release.aab
+      
+      - name: Deploy to Google Play Beta
+        if: github.ref == 'refs/heads/develop'
+        run: fastlane android beta
+        env:
+          GOOGLE_PLAY_JSON_KEY_PATH: ${{ secrets.GOOGLE_PLAY_JSON_KEY_PATH }}
+      
+      - name: Deploy to Google Play Production
+        if: github.ref == 'refs/heads/main'
+        run: fastlane android playstore
+        env:
+          GOOGLE_PLAY_JSON_KEY_PATH: ${{ secrets.GOOGLE_PLAY_JSON_KEY_PATH }}
+
+  notify:
+    name: Slack Notification
+    needs: build-and-test
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Send Slack notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_TITLE: "Android Build Status"
+          SLACK_MESSAGE: "${{ github.repository }} - ${{ github.ref }} - ${{ job.status }}"
+          SLACK_FOOTER: "GitHub Actions"

@@ -1,0 +1,115 @@
+name: iOS CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'ios/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/ios-ci-cd.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'ios/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/ios-ci-cd.yml'
+
+env:
+  FLUTTER_VERSION: "3.19.0"
+  XCODE_VERSION: "14.3"
+
+jobs:
+  build-and-test:
+    name: Build and Test iOS
+    runs-on: macos-13
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Install dependencies
+        run: flutter pub get
+      
+      - name: Run Flutter analyze
+        run: flutter analyze
+      
+      - name: Run Flutter tests
+        run: flutter test
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+      
+      - name: Install Fastlane
+        run: gem install fastlane -NV
+      
+      - name: Install CocoaPods
+        run: sudo gem install cocoapods
+      
+      - name: Install Apple certificates
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: apple-actions/import-codesign-certs@v2
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      
+      - name: Install provisioning profiles
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: apple-actions/install-provisioning-profile@v1
+        with:
+          profile-file-base64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+      
+      - name: Build iOS app
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: fastlane ios build_ios
+      
+      - name: Upload iOS artifact
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@v3
+        with:
+          name: ios-app
+          path: build/ios/ViewSourceVibe.ipa
+      
+      - name: Deploy to TestFlight
+        if: github.ref == 'refs/heads/develop'
+        run: fastlane ios testflight
+        env:
+          APP_STORE_CONNECT_API_KEY_PATH: ${{ secrets.APP_STORE_CONNECT_API_KEY_PATH }}
+          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}
+      
+      - name: Deploy to App Store
+        if: github.ref == 'refs/heads/main'
+        run: fastlane ios appstore
+        env:
+          APP_STORE_CONNECT_API_KEY_PATH: ${{ secrets.APP_STORE_CONNECT_API_KEY_PATH }}
+          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}
+
+  notify:
+    name: Slack Notification
+    needs: build-and-test
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Send Slack notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_TITLE: "iOS Build Status"
+          SLACK_MESSAGE: "${{ github.repository }} - ${{ github.ref }} - ${{ job.status }}"
+          SLACK_FOOTER: "GitHub Actions"

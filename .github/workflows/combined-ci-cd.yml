@@ -1,0 +1,130 @@
+name: Combined CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'README.md'
+  pull_request:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'README.md'
+
+env:
+  FLUTTER_VERSION: "3.19.0"
+
+jobs:
+  ios-build:
+    name: iOS Build
+    runs-on: macos-13
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Install dependencies
+        run: flutter pub get
+      
+      - name: Run Flutter analyze
+        run: flutter analyze
+      
+      - name: Run Flutter tests
+        run: flutter test
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+      
+      - name: Install Fastlane
+        run: gem install fastlane -NV
+      
+      - name: Install CocoaPods
+        run: sudo gem install cocoapods
+      
+      - name: Build iOS app
+        run: fastlane ios build_ios
+      
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ios-app
+          path: build/ios/ViewSourceVibe.ipa
+
+  android-build:
+    name: Android Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+      
+      - name: Install dependencies
+        run: flutter pub get
+      
+      - name: Run Flutter analyze
+        run: flutter analyze
+      
+      - name: Run Flutter tests
+        run: flutter test
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+      
+      - name: Install Fastlane
+        run: gem install fastlane -NV
+      
+      - name: Build Android app bundle
+        run: fastlane android build_android
+      
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-app
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+  notify:
+    name: Combined Notification
+    needs: [ios-build, android-build]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Send Slack notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ needs.ios-build.result == 'success' && needs.android-build.result == 'success' ? 'good' : 'danger' }}
+          SLACK_TITLE: "Combined Build Status"
+          SLACK_MESSAGE: "iOS: ${{ needs.ios-build.result }}, Android: ${{ needs.android-build.result }}"
+          SLACK_FOOTER: "GitHub Actions"

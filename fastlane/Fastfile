@@ -1,0 +1,302 @@
+# This is the main Fastfile that contains all the lanes for both iOS and Android
+
+# Set default platform to iOS
+default_platform(:ios)
+
+# Import common functions
+import_from_git(url: 'https://github.com/fastlane/fastlane')
+
+# ============================================
+# iOS Configuration
+# ============================================
+platform :ios do
+  
+  # Get the current version from pubspec.yaml
+  def get_version_number
+    require 'yaml'
+    pubspec = YAML.load_file('pubspec.yaml')
+    pubspec['version']
+  end
+  
+  # Get the current build number (increment for each build)
+  def get_build_number
+    # You can implement your own build number logic here
+    # For example, get from a file or use timestamp
+    (Time.now.to_i / 10).to_i # Simple timestamp-based build number
+  end
+  
+  # ============================================
+  # iOS Build Lane
+  # ============================================
+  desc "Build iOS app for App Store distribution"
+  lane :build_ios do
+    # Get version info
+    version = get_version_number
+    build_number = get_build_number
+    
+    # Update Info.plist with version info
+    update_info_plist(
+      plist_path: "ios/Runner/Info.plist",
+      version_number: version,
+      build_number: build_number
+    )
+    
+    # Build the app
+    build_app(
+      workspace: "ios/Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "app-store",
+      output_directory: "build/ios",
+      output_name: "ViewSourceVibe.ipa"
+    )
+    
+    # Log build info
+    UI.success("✅ iOS build completed successfully!")
+    UI.message("Version: #{version} (#{build_number})")
+    UI.message("IPA location: build/ios/ViewSourceVibe.ipa")
+  end
+  
+  # ============================================
+  # iOS App Store Submission Lane
+  # ============================================
+  desc "Build and upload to App Store Connect"
+  lane :appstore do
+    build_ios
+    
+    # Upload to App Store Connect
+    upload_to_app_store(
+      ipa: "build/ios/ViewSourceVibe.ipa",
+      skip_metadata: true,
+      skip_screenshots: true
+    )
+    
+    UI.success("✅ App uploaded to App Store Connect!")
+  end
+  
+  # ============================================
+  # iOS TestFlight Submission Lane
+  # ============================================
+  desc "Build and upload to TestFlight"
+  lane :testflight do
+    build_ios
+    
+    # Upload to TestFlight
+    upload_to_testflight(
+      ipa: "build/ios/ViewSourceVibe.ipa",
+      skip_metadata: true,
+      skip_screenshots: true
+    )
+    
+    UI.success("✅ App uploaded to TestFlight!")
+  end
+  
+  # ============================================
+  # iOS Beta Lane (Ad-Hoc Distribution)
+  # ============================================
+  desc "Build for ad-hoc/enterprise distribution"
+  lane :beta do
+    # Get version info
+    version = get_version_number
+    build_number = get_build_number
+    
+    # Update Info.plist
+    update_info_plist(
+      plist_path: "ios/Runner/Info.plist",
+      version_number: version,
+      build_number: build_number
+    )
+    
+    # Build for ad-hoc distribution
+    build_app(
+      workspace: "ios/Runner.xcworkspace",
+      scheme: "Runner",
+      export_method: "ad-hoc",
+      output_directory: "build/ios",
+      output_name: "ViewSourceVibe_Beta.ipa"
+    )
+    
+    UI.success("✅ Beta build completed successfully!")
+    UI.message("IPA location: build/ios/ViewSourceVibe_Beta.ipa")
+  end
+end
+
+# ============================================
+# Android Configuration
+# ============================================
+platform :android do
+  
+  # Get the current version from pubspec.yaml
+  def get_version_number
+    require 'yaml'
+    pubspec = YAML.load_file('pubspec.yaml')
+    pubspec['version']
+  end
+  
+  # Get the current version code (increment for each build)
+  def get_version_code
+    # You can implement your own version code logic here
+    # For example, get from a file or use timestamp
+    (Time.now.to_i / 100).to_i # Simple timestamp-based version code
+  end
+  
+  # ============================================
+  # Android Build Lane
+  # ============================================
+  desc "Build Android app bundle"
+  lane :build_android do
+    # Get version info
+    version = get_version_number
+    version_code = get_version_code
+    
+    # Update version in build.gradle
+    update_android_version_code(
+      gradle_file_path: "android/app/build.gradle",
+      version_code: version_code
+    )
+    
+    update_android_version_name(
+      gradle_file_path: "android/app/build.gradle",
+      version_name: version
+    )
+    
+    # Build the app bundle
+    gradle(
+      task: "bundle",
+      build_type: "Release",
+      project_dir: "android/"
+    )
+    
+    # Log build info
+    UI.success("✅ Android build completed successfully!")
+    UI.message("Version: #{version} (#{version_code})")
+    UI.message("AAB location: android/app/build/outputs/bundle/release/app-release.aab")
+  end
+  
+  # ============================================
+  # Android Play Store Submission Lane
+  # ============================================
+  desc "Build and upload to Google Play Store"
+  lane :playstore do
+    build_android
+    
+    # Upload to Google Play
+    upload_to_play_store(
+      track: "production",
+      aab: "android/app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,
+      skip_upload_screenshots: true,
+      skip_upload_images: true
+    )
+    
+    UI.success("✅ App uploaded to Google Play Store!")
+  end
+  
+  # ============================================
+  # Android Beta Lane
+  # ============================================
+  desc "Build and upload to beta track"
+  lane :beta do
+    build_android
+    
+    # Upload to beta track
+    upload_to_play_store(
+      track: "beta",
+      aab: "android/app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,
+      skip_upload_screenshots: true,
+      skip_upload_images: true
+    )
+    
+    UI.success("✅ App uploaded to Google Play Beta track!")
+  end
+  
+  # ============================================
+  # Android APK Lane (for direct distribution)
+  # ============================================
+  desc "Build APK for direct distribution"
+  lane :apk do
+    # Get version info
+    version = get_version_number
+    version_code = get_version_code
+    
+    # Update version in build.gradle
+    update_android_version_code(
+      gradle_file_path: "android/app/build.gradle",
+      version_code: version_code
+    )
+    
+    update_android_version_name(
+      gradle_file_path: "android/app/build.gradle",
+      version_name: version
+    )
+    
+    # Build APK
+    gradle(
+      task: "assembleRelease",
+      build_type: "Release",
+      project_dir: "android/"
+    )
+    
+    UI.success("✅ APK build completed successfully!")
+    UI.message("Version: #{version} (#{version_code})")
+    UI.message("APK location: android/app/build/outputs/apk/release/app-release.apk")
+  end
+end
+
+# ============================================
+# Common Lanes (Both Platforms)
+# ============================================
+
+# Run tests
+desc "Run all tests"
+lane :test do
+  sh "flutter test"
+end
+
+# Build both platforms
+desc "Build both iOS and Android"
+lane :build_all do
+  UI.message("📱 Building iOS...")
+  build_ios
+  
+  UI.message("🤖 Building Android...")
+  build_android
+  
+  UI.success("✅ Both platforms built successfully!")
+end
+
+# Increment version
+desc "Increment version number"
+lane :increment_version do
+  require 'yaml'
+  
+  # Read current version
+  pubspec = YAML.load_file('pubspec.yaml')
+  current_version = pubspec['version']
+  
+  # Parse version components
+  parts = current_version.split('.')
+  major = parts[0].to_i
+  minor = parts[1].to_i
+  patch = parts[2].to_i
+  
+  # Increment patch version
+  new_version = "#{major}.#{minor}.#{patch + 1}"
+  
+  # Update pubspec.yaml
+  pubspec['version'] = new_version
+  File.write('pubspec.yaml', pubspec.to_yaml)
+  
+  UI.success("✅ Version incremented to #{new_version}")
+end
+
+# Clean build artifacts
+desc "Clean build artifacts"
+lane :clean do
+  sh "rm -rf build/"
+  sh "rm -rf ios/build/"
+  sh "rm -rf android/build/"
+  sh "flutter clean"
+  
+  UI.success("✅ Build artifacts cleaned!")
+end
