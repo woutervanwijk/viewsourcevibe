@@ -45,6 +45,20 @@ class MainActivity : FlutterActivity() {
             println("MainActivity: onNewIntent - URL detected: ${intent.data}")
         }
         
+        // Ensure the activity is brought to front and properly reset
+        // This helps when launched from sharing menu
+        if (!isTaskRoot) {
+            println("MainActivity: Not task root, finishing and restarting")
+            val newIntent = Intent(this, javaClass)
+            newIntent.action = intent.action
+            newIntent.data = intent.data
+            newIntent.type = intent.type
+            newIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(newIntent)
+            finish()
+            return
+        }
+        
         // Handle content:// URIs immediately in onNewIntent
         if (intent.action == Intent.ACTION_VIEW && intent.data != null) {
             val dataString = intent.data.toString()
