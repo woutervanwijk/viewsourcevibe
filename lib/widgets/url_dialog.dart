@@ -53,7 +53,7 @@ class _UrlDialogState extends State<UrlDialog> {
               controller: _urlController,
               decoration: InputDecoration(
                 labelText: 'URL',
-                hintText: 'https://example.com',
+                hintText: 'https://github.com/woutervanwijk/viewsourcevibe',
                 prefixIcon: const Icon(Icons.link),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),

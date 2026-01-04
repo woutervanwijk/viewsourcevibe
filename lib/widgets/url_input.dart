@@ -84,22 +84,18 @@ class _UrlInputState extends State<UrlInput> {
                       ? ''
                       : htmlService.currentFile != null
                           ? 'Local file loaded: ${htmlService.currentFile!.name}'
-                          : 'https://example.com',
+                          : '',
                   prefixIcon: const Icon(Icons.link, size: 20),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6)),
                   suffixIcon: (_urlController.text.isNotEmpty ||
-                          (htmlService.currentFile != null &&
-                              (htmlService.currentFile!.isUrl ||
-                               htmlService.currentFile!.name == 'Web URL Error')))
+                          htmlService.currentFile != null)
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 20),
                           onPressed: () {
                             _urlController.clear();
-                            // If there's a URL file loaded or an error displayed, clear it from the service
-                            if (htmlService.currentFile != null &&
-                                (htmlService.currentFile!.isUrl ||
-                                 htmlService.currentFile!.name == 'Web URL Error')) {
+                            // If there's any file loaded, clear it from the service
+                            if (htmlService.currentFile != null) {
                               htmlService.clearFile();
                             }
                           },
