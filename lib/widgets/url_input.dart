@@ -90,14 +90,16 @@ class _UrlInputState extends State<UrlInput> {
                       borderRadius: BorderRadius.circular(6)),
                   suffixIcon: (_urlController.text.isNotEmpty ||
                           (htmlService.currentFile != null &&
-                              htmlService.currentFile!.isUrl))
+                              (htmlService.currentFile!.isUrl ||
+                               htmlService.currentFile!.name == 'Web URL Error')))
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 20),
                           onPressed: () {
                             _urlController.clear();
-                            // If there's a URL file loaded, clear it from the service too
+                            // If there's a URL file loaded or an error displayed, clear it from the service
                             if (htmlService.currentFile != null &&
-                                htmlService.currentFile!.isUrl) {
+                                (htmlService.currentFile!.isUrl ||
+                                 htmlService.currentFile!.name == 'Web URL Error')) {
                               htmlService.clearFile();
                             }
                           },

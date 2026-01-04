@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_editor/re_editor.dart';
-import 'dart:async';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/styles/vs.dart';
@@ -21,6 +20,7 @@ import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import 'dart:async' show TimeoutException;
 import 'dart:io' show SocketException;
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
@@ -910,6 +910,8 @@ class HtmlService with ChangeNotifier {
   Future<void> clearFile() async {
     await scrollToZero();
     _currentFile = null;
+    _originalFile = null; // Also clear the original file
+    _selectedContentType = null; // Reset content type selection
     notifyListeners();
   }
 
@@ -1139,14 +1141,64 @@ class HtmlService with ChangeNotifier {
             'Failed to load URL: ${response.statusCode} ${response.reasonPhrase}');
       }
     } catch (e) {
-      // Provide more specific error messages
+      // Display error in the editor instead of throwing exception
+      String errorMessage;
+      
       if (e is TimeoutException) {
-        throw Exception('Request timed out');
+        errorMessage = 'Request timed out';
       } else if (e is FormatException) {
-        throw Exception('Invalid URL format');
+        errorMessage = 'Invalid URL format';
+      } else if (e is SocketException) {
+        errorMessage = 'Network error: ${e.message}';
       } else {
-        throw Exception('Error loading URL: $e');
+        errorMessage = e.toString();
       }
+
+      // Create error content similar to how file loading errors are handled
+      final errorContent = '''Web URL Could Not Be Loaded
+
+Error: $errorMessage
+
+URL: $url
+
+This web URL could not be loaded. Possible reasons:
+
+🌐 Network Issues
+- Check your internet connection
+- Try again later if the website is temporarily unavailable
+
+🔒 Website Restrictions
+- Some websites block automated requests
+- Try opening the URL in your browser first
+
+📱 URL Format Problems
+- Make sure the URL is complete and valid
+- Include "https://" at the beginning
+
+🔄 Redirect Issues
+- The URL might redirect to an unavailable location
+- Try the original URL directly
+
+If this problem persists, you can:
+1. Open the URL in your browser
+2. View the page source there
+3. Copy and paste the HTML content here manually
+
+Technical details: ${e.runtimeType}''';
+
+      final htmlFile = HtmlFile(
+        name: 'Web URL Error',
+        path: url,
+        content: errorContent,
+        lastModified: DateTime.now(),
+        size: errorContent.length,
+        isUrl: false,
+      );
+
+      await loadFile(htmlFile);
+      
+      // Also log to console for debugging
+      debugPrint('Error loading web URL: $e');
     }
   }
 
