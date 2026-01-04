@@ -1,5 +1,27 @@
 # View Source Vibe
 
+View Source for iOS and Android. I wanted to create an app like this for some time, since most View Source apps on mobile were annoying or old. It had to be: 
+- free (open source)
+- open files and urls
+- options to share to and from the app
+- easy to use
+- syntax highlighting
+- wordwrap
+- line numbers
+- theme support
+- well tested on usability
+
+So I took the chance to experiment with Vibe coding (literally with Mistral Vibe). Vibe coding really suits me, because I am most satisfied with results, not the coding itself. I used Flutter because I know it already (we coded the Fiper.net app in it)
+
+- Coded myself the minumum possible
+- Kept the prompts broad, by purpose. To see how good it is. (It's good! in a lot of ways)
+- Logs/prompts in the repo
+- Tested a lot to make sure it really works well
+
+===
+
+This is what Vibe wrote itself: 
+
 ![View Source Vibe Logo](assets/icon.png)
 
 **Cross-Platform Source Code Viewer**
@@ -191,7 +213,6 @@ Contributions are welcome! Please read our [contributing guidelines](CONTRIBUTIN
 ## 📧 Contact
 
 For questions or support, please contact:
-- Email: support@viewsourcevibe.com
 - GitHub Issues: https://github.com/woutervanwijk/viewsourcevibe/issues
 
 ---
