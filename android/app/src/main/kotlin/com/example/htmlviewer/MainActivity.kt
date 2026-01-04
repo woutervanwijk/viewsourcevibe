@@ -47,7 +47,8 @@ class MainActivity : FlutterActivity() {
         
         // Ensure the activity is brought to front and properly reset
         // This helps when launched from sharing menu
-        if (!isTaskRoot) {
+        // Only do this for non-sharing intents to avoid interrupting sharing flow
+        if (!isTaskRoot && intent.action != Intent.ACTION_SEND && intent.action != Intent.ACTION_VIEW) {
             println("MainActivity: Not task root, finishing and restarting")
             val newIntent = Intent(this, javaClass)
             newIntent.action = intent.action
