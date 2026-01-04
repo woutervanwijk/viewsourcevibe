@@ -73,7 +73,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'The app is designed to work seamlessly on both iOS and Android devices, offering a modern Material Design interface with comprehensive code viewing capabilities. Mistral Vibe AI played a crucial role in optimizing the development process, ensuring code quality, and implementing advanced features.',
+                        'The app is designed to work seamlessly on all mobile devices, offering a modern Material Design interface with comprehensive code viewing capabilities. Mistral Vibe AI played a crucial role in optimizing the development process, ensuring code quality, and implementing advanced features.',
                         style: TextStyle(fontSize: 16),
                       ),
                     ],
@@ -95,8 +95,7 @@ class AboutScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildFeatureItem(
-                          '📱 Cross-platform support for iOS and Android'),
+                      _buildFeatureItem('📱 Cross-platform support'),
                       _buildFeatureItem(
                           '🎨 Beautiful syntax highlighting with multiple themes'),
                       _buildFeatureItem(
