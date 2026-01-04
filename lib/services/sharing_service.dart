@@ -5,6 +5,7 @@ import 'package:universal_io/io.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 class SharingService {
   static const MethodChannel _channel =
@@ -86,6 +87,22 @@ class SharingService {
           // ignore: use_build_context_synchronously
           await _processSharedUrl(context, htmlService, sharedText);
         } else {
+          // Not a valid URL, but check if it's a potential URL that should be opened
+          if (UnifiedSharingService.isPotentialUrl(sharedText)) {
+            // Try to open as URL first
+            try {
+              final uri = Uri.tryParse(sharedText.trim());
+              if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+                debugPrint('SharingService: Detected potential URL in shared text, opening: $sharedText');
+                // ignore: use_build_context_synchronously
+                await _processSharedUrl(context, htmlService, sharedText);
+                return; // URL handled, no need for text processing
+              }
+            } catch (e) {
+              debugPrint('SharingService: URL detection failed for potential URL: $e');
+            }
+          }
+          
           // Not a valid URL, treat as text content
           debugPrint(
               'SharingService: Shared text is not a URL, treating as text: $sharedText');

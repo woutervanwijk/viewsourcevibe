@@ -147,6 +147,34 @@ class UnifiedSharingService {
         // If it's a URL in text form, handle it as a URL
         if (type == 'text' && isUrl(content)) {
           await _processSharedUrl(context, htmlService, content);
+        } else if (type == 'text') {
+          // Enhanced URL detection for shared text content
+          // Check if the text content is actually a URL that should be opened
+          final trimmedContent = content.trim();
+          
+          // Try to detect URLs more aggressively
+          if (isPotentialUrl(trimmedContent)) {
+            // Try to open as URL first
+            try {
+              final uri = Uri.tryParse(trimmedContent);
+              if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+                await _processSharedUrl(context, htmlService, trimmedContent);
+                return; // URL handled, no need for text processing
+              }
+            } catch (e) {
+              debugPrint('UnifiedSharingService: URL detection failed, treating as text: $e');
+            }
+          }
+          
+          // Otherwise handle it as text content (could be a file read by native side)
+          await _processSharedText(
+            context,
+            htmlService,
+            content,
+            fileName: fileName,
+            path: filePath ?? 'shared://${type ?? "content"}',
+            type: type, // Pass the type to determine appropriate default filename
+          );
         } else {
           // Otherwise handle it as text content (could be a file read by native side)
           await _processSharedText(
@@ -831,5 +859,74 @@ If you're the app developer, please update the native iOS Share Extension code.'
     }
 
     return lastComponent;
+  }
+
+  /// Enhanced URL detection for shared text content
+  /// This method detects potential URLs even if they're shared as plain text
+  static bool isPotentialUrl(String text) {
+    if (text.isEmpty) return false;
+    
+    final trimmed = text.trim();
+    
+    // Remove common URL wrappers
+    final cleanText = trimmed
+        .replaceAll('<', '')
+        .replaceAll('>', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '');
+    
+    // Check for common URL patterns
+    try {
+      final uri = Uri.tryParse(cleanText);
+      if (uri != null) {
+        // Valid URL with http/https scheme
+        if (uri.scheme == 'http' || uri.scheme == 'https') {
+          return true;
+        }
+        // Valid URL that might be missing scheme (www.example.com)
+        if (uri.host.isNotEmpty && !uri.host.contains(' ')) {
+          return true;
+        }
+      }
+    } catch (e) {
+      // Parsing failed, try simpler patterns
+    }
+    
+    // Check for common URL patterns without scheme
+    final urlPatterns = [
+      r'www\.',
+      r'http://',
+      r'https://',
+      r'\.com',
+      r'\.org',
+      r'\.net',
+      r'\.io',
+      r'\.co',
+      r'\.app',
+      r'\.dev',
+    ];
+    
+    for (final pattern in urlPatterns) {
+      if (cleanText.contains(RegExp(pattern, caseSensitive: false))) {
+        // Additional checks to avoid false positives
+        if (cleanText.contains(' ') && !cleanText.startsWith('http')) {
+          // Contains spaces but doesn't start with http - might not be a URL
+          continue;
+        }
+        return true;
+      }
+    }
+    
+    // Check for common URL structures
+    if ((cleanText.contains('.') && cleanText.contains('/')) ||
+        (cleanText.contains('.') && cleanText.length > 10)) {
+      // Might be a URL, but do additional checks
+      final hasInvalidChars = RegExp(r'[\s\n\r\t]').hasMatch(cleanText);
+      if (!hasInvalidChars) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 }

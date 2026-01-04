@@ -21,6 +21,7 @@ import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import 'dart:io' show SocketException;
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 
@@ -252,8 +253,15 @@ class HtmlService with ChangeNotifier {
   /// Get the final URL after following all redirects manually
   /// This ensures we get the actual redirected URL, not the original
   Future<String> _getFinalUrlAfterRedirects(
-      Uri uri, http.Client client, Map<String, String> headers) async {
+      Uri uri, http.Client client, Map<String, String> headers, 
+      {Uri? originalUri, int redirectDepth = 0}) async {
     try {
+      // Prevent infinite redirect loops
+      if (redirectDepth > 5) {
+        debugPrint('Too many redirects (>5), falling back to original URL');
+        return originalUri?.toString() ?? uri.toString();
+      }
+
       // Create a request that doesn't automatically follow redirects
       final request = http.Request('GET', uri)..followRedirects = false;
 
@@ -276,16 +284,30 @@ class HtmlService with ChangeNotifier {
           final redirectUri = uri.resolve(locationHeader);
 
           // Recursively follow the redirect to get the final URL
-          return await _getFinalUrlAfterRedirects(redirectUri, client, headers);
+          return await _getFinalUrlAfterRedirects(
+            redirectUri, 
+            client, 
+            headers,
+            originalUri: originalUri ?? uri, // Preserve the original URI
+            redirectDepth: redirectDepth + 1
+          );
         }
       }
 
-      // If not a redirect, return the original URL
+      // If not a redirect, return the current URL
       return uri.toString();
     } catch (e) {
-      // If redirect handling fails, fall back to the original URL
+      // If redirect handling fails, fall back to the original URL if available
       debugPrint('Error handling redirects: $e');
-      return uri.toString();
+      
+      // If this is a DNS lookup failure or connection error, fall back to original URL
+      if (e is SocketException || e.toString().contains('Failed host lookup')) {
+        debugPrint('DNS/Connection error detected, falling back to original URL');
+        return originalUri?.toString() ?? uri.toString();
+      }
+      
+      // For other errors, return the original URL if available, otherwise current URI
+      return originalUri?.toString() ?? uri.toString();
     }
   }
 
@@ -1063,7 +1085,7 @@ class HtmlService with ChangeNotifier {
       };
 
       // Manual redirect handling to get the actual redirected URL
-      final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers);
+      final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers, originalUri: uri);
 
       // Make the request to the final URL with timeout
       final response = await client
