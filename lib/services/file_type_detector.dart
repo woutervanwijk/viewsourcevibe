@@ -48,11 +48,38 @@ class FileTypeDetector {
     }
 
     // Strategy 2: Extension-based detection (fastest)
+    // For URLs, we need to be more careful about extension detection
+    bool isUrl = _isUrlFilename(filename);
     if (filename != null && filename.contains('.')) {
-      detectedType = _detectByExtension(filename);
-      if (detectedType != 'Text') {
-        _detectionCache[cacheKey] = detectedType;
-        return detectedType;
+      // For URLs, only do extension detection if it looks like a real file extension
+      // (not just a domain name)
+      if (isUrl) {
+        // Extract the last part after the last dot
+        final lastDotIndex = filename.lastIndexOf('.');
+        final lastPart = filename.substring(lastDotIndex + 1);
+        
+        // Check if this looks like a real file extension (not a domain TLD)
+        // Real file extensions are typically 2-4 characters and are known extensions
+        final knownExtensions = ['html', 'htm', 'css', 'js', 'json', 'xml', 'yaml', 'yml', 
+                                'md', 'txt', 'py', 'java', 'dart', 'cpp', 'c', 'cs', 'php', 
+                                'rb', 'swift', 'go', 'rs', 'kt', 'hs', 'lua', 'pl', 'r', 'sh'];
+        
+        if (knownExtensions.contains(lastPart.toLowerCase())) {
+          detectedType = _detectByExtension(filename);
+          if (detectedType != 'Text') {
+            _detectionCache[cacheKey] = detectedType;
+            return detectedType;
+          }
+        }
+        // If not a known extension, skip extension detection for URLs
+        // and let content-based detection handle it
+      } else {
+        // For non-URLs, use normal extension detection
+        detectedType = _detectByExtension(filename);
+        if (detectedType != 'Text') {
+          _detectionCache[cacheKey] = detectedType;
+          return detectedType;
+        }
       }
     }
 
@@ -75,6 +102,21 @@ class FileTypeDetector {
     // Strategy 4: Content-based detection with scoring
     if (content != null && content.isNotEmpty) {
       detectedType = _detectByContent(content);
+      
+      // Special handling for URLs: if content detection returns 'Text' for a URL,
+      // it means the content is unclear, so default to HTML
+      if (detectedType == 'Text' && _isUrlFilename(filename)) {
+        detectedType = 'HTML';
+      }
+      
+      _detectionCache[cacheKey] = detectedType;
+      return detectedType;
+    }
+
+    // Strategy 4.5: Final URL fallback - if we get here with a URL and no clear detection, default to HTML
+    // Only apply this if we have a URL but no content to analyze
+    if (_isUrlFilename(filename) && detectedType == 'Text' && (content == null || content.isEmpty)) {
+      detectedType = 'HTML';
       _detectionCache[cacheKey] = detectedType;
       return detectedType;
     }
@@ -158,6 +200,28 @@ class FileTypeDetector {
       'editorconfig': 'INI',
       'txt': 'Text', 'text': 'Text',
     };
+
+    // For URL loading, if there's no clear file extension, default to HTML
+    // This handles cases where URLs don't have clear file extensions
+    // Only apply this logic for actual URLs, not local filenames
+    bool isUrl = filename.contains('http://') || filename.contains('https://') ||
+                filename.contains('www.') || 
+                (filename.contains('.com') && filename.contains('/')) ||
+                (filename.contains('.org') && filename.contains('/')) ||
+                (filename.contains('.net') && filename.contains('/')) ||
+                (filename.contains('.io') && filename.contains('/')) ||
+                (filename.contains('.co') && filename.contains('/'));
+                
+    if (isUrl) {
+      // Check if the extension is clearly not HTML (CSS, JS, etc.)
+      final nonHtmlExtensions = ['css', 'js', 'json', 'xml', 'yaml', 'yml', 'md', 'txt', 
+                                 'py', 'java', 'dart', 'cpp', 'c', 'cs', 'php', 'rb', 'swift', 
+                                 'go', 'rs', 'kt', 'hs', 'lua', 'pl', 'r', 'sh', 'ps1'];
+      
+      if (!nonHtmlExtensions.contains(ext)) {
+        return 'HTML'; // Default to HTML for URLs without clear non-HTML extensions
+      }
+    }
 
     return extensionMap[ext] ?? 'Text';
   }
@@ -523,6 +587,19 @@ class FileTypeDetector {
     }
 
     return false;
+  }
+
+  /// Check if a filename appears to be a URL
+  bool _isUrlFilename(String? filename) {
+    if (filename == null) return false;
+    
+    return filename.contains('http://') || filename.contains('https://') ||
+           filename.contains('www.') || 
+           (filename.contains('.com') && filename.contains('/')) ||
+           (filename.contains('.org') && filename.contains('/')) ||
+           (filename.contains('.net') && filename.contains('/')) ||
+           (filename.contains('.io') && filename.contains('/')) ||
+           (filename.contains('.co') && filename.contains('/'));
   }
 
   /// Generate cache key for detection results
