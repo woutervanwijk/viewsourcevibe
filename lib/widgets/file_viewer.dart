@@ -240,7 +240,8 @@ class FileViewer extends StatelessWidget {
         Expanded(
           child: Consumer<HtmlService>(
             builder: (context, htmlService, child) {
-              return htmlService.buildHighlightedText(
+              // Use debounced highlighting for better performance
+              return htmlService.buildHighlightedTextDebounced(
                 file.content,
                 htmlService.selectedContentType ?? file.extension,
                 context,

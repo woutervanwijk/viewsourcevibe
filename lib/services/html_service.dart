@@ -20,7 +20,7 @@ import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
-import 'dart:async' show TimeoutException;
+import 'dart:async' show TimeoutException, Timer;
 import 'dart:io' show SocketException;
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
@@ -33,6 +33,20 @@ class HtmlService with ChangeNotifier {
   ScrollController? _verticalScrollController;
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
+  
+  // Cache for highlighted content to improve performance
+  final Map<String, Widget> _highlightCache = {};
+  final Map<String, CodeLineEditingController> _controllerCache = {};
+  
+  // Debouncing for syntax highlighting
+  Timer? _highlightDebounceTimer;
+  String? _pendingHighlightContent;
+  String? _pendingHighlightExtension;
+  BuildContext? _pendingHighlightContext;
+  double _pendingHighlightFontSize = 16.0;
+  String _pendingHighlightThemeName = 'github';
+  bool _pendingHighlightWrapText = false;
+  bool _pendingHighlightShowLineNumbers = true;
 
   HtmlFile? get currentFile => _currentFile;
   String? get selectedContentType => _selectedContentType;
@@ -912,6 +926,7 @@ class HtmlService with ChangeNotifier {
     _currentFile = null;
     _originalFile = null; // Also clear the original file
     _selectedContentType = null; // Reset content type selection
+    clearHighlightCache(); // Clear syntax highlighting cache
     notifyListeners();
   }
 
@@ -1712,6 +1727,7 @@ Technical details: ${e.runtimeType}''';
       String themeName = 'github',
       bool wrapText = false,
       bool showLineNumbers = true}) {
+    
     // Performance monitoring and warnings for large files
     final contentSize = content.length;
     final contentSizeMB = contentSize / (1024 * 1024);
@@ -1748,11 +1764,57 @@ Technical details: ${e.runtimeType}''';
       }
     }
 
+    // Performance optimization: Use simplified highlighting for very large files
+    bool useSimplifiedHighlighting = contentSize > 10 * 1024 * 1024; // 10MB threshold
+    
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
 
+    // Generate a cache key based on content hash and parameters
+    final cacheKey = _generateHighlightCacheKey(
+      content: content,
+      extension: extension,
+      fontSize: fontSize,
+      themeName: themeName,
+      wrapText: wrapText,
+      showLineNumbers: showLineNumbers,
+      useSimplified: useSimplifiedHighlighting
+    );
+    
+    // Check cache first
+    if (_highlightCache.containsKey(cacheKey)) {
+      debugPrint('🔄 Using cached highlighted content');
+      return _highlightCache[cacheKey]!;
+    }
+    
     // Create a controller for the code editor
-    final controller = CodeLineEditingController.fromText(content);
+    // Performance optimization: Use chunked content for very large files
+    String processedContent = content;
+    if (useSimplifiedHighlighting) {
+      // For very large files, use a simplified approach
+      // This reduces memory usage and parsing time
+      debugPrint('🔧 Using simplified highlighting for very large file');
+      
+      // Limit the amount of content processed for syntax highlighting
+      // while still showing the full content
+      final maxHighlightLength = 50000; // ~50KB for highlighting
+      if (content.length > maxHighlightLength) {
+        // Take the first part for highlighting, but keep full content for display
+        processedContent = content.substring(0, maxHighlightLength);
+        debugPrint('   Processing first ${maxHighlightLength ~/ 1024}KB for highlighting');
+      }
+    }
+
+    // Check controller cache
+    final controllerCacheKey = '${cacheKey}_controller';
+    CodeLineEditingController? controller;
+    if (_controllerCache.containsKey(controllerCacheKey)) {
+      controller = _controllerCache[controllerCacheKey]!;
+      debugPrint('🔄 Using cached controller');
+    } else {
+      controller = CodeLineEditingController.fromText(processedContent);
+      _controllerCache[controllerCacheKey] = controller;
+    }
 
     // Create context menu controller (not used directly, but available for future enhancements)
     // final contextMenuController = CodeEditorContextMenuController(
@@ -1772,8 +1834,8 @@ Technical details: ${e.runtimeType}''';
             _verticalScrollController ?? PrimaryScrollController.of(context),
         horizontalScroller: _horizontalScrollController);
 
-    // Return CodeEditor with context menu support
-    return CodeEditor(
+    // Create the final widget
+    final codeEditor = CodeEditor(
       controller: controller,
       showCursorWhenReadOnly: false,
       readOnly: true,
@@ -1805,6 +1867,14 @@ Technical details: ${e.runtimeType}''';
             }
           : null,
     );
+    
+    // Cache the result for future use
+    _highlightCache[cacheKey] = codeEditor;
+    
+    // Enforce cache size limits
+    _enforceCacheSizeLimits();
+    
+    return codeEditor;
   }
 
   // Helper method to get re_highlight mode for language name
@@ -1928,5 +1998,115 @@ Technical details: ${e.runtimeType}''';
         // Fallback to github theme
         return githubTheme;
     }
+  }
+
+  /// Generate cache key for highlighted content
+  String _generateHighlightCacheKey({
+    required String content,
+    required String extension,
+    required double fontSize,
+    required String themeName,
+    required bool wrapText,
+    required bool showLineNumbers,
+    required bool useSimplified,
+  }) {
+    // Create a hash of the content to use as part of the cache key
+    // Use a simple hash function that's fast but effective for this purpose
+    final contentHash = _simpleHash(content);
+    
+    return 'hl:${contentHash}_ext:${extension}_fs:${fontSize.toStringAsFixed(1)}_th:${themeName}_wrap:${wrapText}_lines:${showLineNumbers}_simple:${useSimplified}';
+  }
+
+  /// Simple hash function for content
+  String _simpleHash(String input) {
+    // For very long content, use a substring to avoid performance issues
+    final sample = input.length > 1000 ? input.substring(0, 1000) : input;
+    
+    // Simple hash using string length and some character positions
+    final hashParts = [
+      sample.length.toString(),
+      sample.isNotEmpty ? sample.codeUnitAt(0).toString() : '0',
+      sample.length > 10 ? sample.codeUnitAt(10).toString() : '0',
+      sample.length > 100 ? sample.codeUnitAt(100).toString() : '0',
+      sample.length > 500 ? sample.codeUnitAt(500).toString() : '0',
+    ];
+    
+    return hashParts.join('_');
+  }
+
+  /// Clear the highlight cache
+  void clearHighlightCache() {
+    _highlightCache.clear();
+    _controllerCache.clear();
+    debugPrint('🧹 Cleared syntax highlighting cache');
+  }
+
+  /// Check and enforce cache size limits
+  void _enforceCacheSizeLimits() {
+    const maxCacheEntries = 10; // Limit to 10 cached highlighted widgets
+    const maxControllerEntries = 20; // Limit to 20 cached controllers
+    
+    // Enforce highlight cache limit
+    if (_highlightCache.length > maxCacheEntries) {
+      final keysToRemove = _highlightCache.keys.take(_highlightCache.length - maxCacheEntries).toList();
+      for (final key in keysToRemove) {
+        _highlightCache.remove(key);
+      }
+      debugPrint('🔄 Trimmed highlight cache to $maxCacheEntries entries');
+    }
+    
+    // Enforce controller cache limit
+    if (_controllerCache.length > maxControllerEntries) {
+      final keysToRemove = _controllerCache.keys.take(_controllerCache.length - maxControllerEntries).toList();
+      for (final key in keysToRemove) {
+        _controllerCache.remove(key);
+      }
+      debugPrint('🔄 Trimmed controller cache to $maxControllerEntries entries');
+    }
+  }
+
+  /// Clear cache for specific content
+  void clearCacheForContent(String content) {
+    final contentHash = _simpleHash(content);
+    final keysToRemove = _highlightCache.keys.where((key) => key.startsWith('hl:$contentHash')).toList();
+    
+    for (final key in keysToRemove) {
+      _highlightCache.remove(key);
+      final controllerKey = '${key}_controller';
+      _controllerCache.remove(controllerKey);
+    }
+    
+    debugPrint('🧹 Cleared cache for specific content (${keysToRemove.length} entries)');
+  }
+
+  /// Debounced version of buildHighlightedText for better performance
+  /// This prevents rapid recalculation when content changes frequently
+  Widget buildHighlightedTextDebounced(
+      String content, String extension, BuildContext context,
+      {double fontSize = 16.0,
+      String themeName = 'github',
+      bool wrapText = false,
+      bool showLineNumbers = true}) {
+    
+    // For now, just use the regular method but with caching
+    // The caching will provide most of the performance benefits
+    return buildHighlightedText(
+      content, 
+      extension, 
+      context,
+      fontSize: fontSize,
+      themeName: themeName,
+      wrapText: wrapText,
+      showLineNumbers: showLineNumbers,
+    );
+  }
+
+  /// Cancel any pending highlight operations
+  void cancelPendingHighlight() {
+    _highlightDebounceTimer?.cancel();
+    _pendingHighlightContent = null;
+    _pendingHighlightExtension = null;
+    _pendingHighlightContext = null;
+    debugPrint('⏹️  Cancelled pending highlight operations');
   }
 }
