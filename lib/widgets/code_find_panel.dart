@@ -1,428 +1,265 @@
 import 'package:flutter/material.dart';
+import 'package:re_editor/re_editor.dart';
+import 'dart:math';
 
-class CodeFindPanelView extends StatefulWidget implements PreferredSizeWidget {
-  final dynamic controller;
+const EdgeInsetsGeometry _kDefaultFindMargin = EdgeInsets.only(right: 10);
+
+const double _kDefaultFindPanelHeight = 36;
+const double _kDefaultReplacePanelHeight = _kDefaultFindPanelHeight * 2;
+const double _kDefaultFindIconSize = 16;
+const double _kDefaultFindIconWidth = 30;
+const double _kDefaultFindIconHeight = 30;
+const double _kDefaultFindInputFontSize = 13;
+const double _kDefaultFindResultFontSize = 12;
+const EdgeInsetsGeometry _kDefaultFindPadding =
+    EdgeInsets.only(left: 5, right: 5, top: 2.5, bottom: 2.5);
+const EdgeInsetsGeometry _kDefaultFindInputContentPadding = EdgeInsets.only(
+  left: 5,
+  right: 5,
+);
+
+class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
+  final CodeFindController controller;
+  final EdgeInsetsGeometry margin;
   final bool readOnly;
+  final Color? iconColor;
+  final Color? iconSelectedColor;
+  final double iconSize;
+  final double inputFontSize;
+  final double resultFontSize;
+  final Color? inputTextColor;
+  final Color? resultFontColor;
+  final EdgeInsetsGeometry padding;
+  final InputDecoration decoration;
 
-  const CodeFindPanelView({
-    super.key,
-    required this.controller,
-    required this.readOnly,
-  });
+  const CodeFindPanelView(
+      {super.key,
+      required this.controller,
+      this.margin = _kDefaultFindMargin,
+      required this.readOnly,
+      this.iconSelectedColor,
+      this.iconColor,
+      this.iconSize = _kDefaultFindIconSize,
+      this.inputFontSize = _kDefaultFindInputFontSize,
+      this.resultFontSize = _kDefaultFindResultFontSize,
+      this.inputTextColor,
+      this.resultFontColor,
+      this.padding = _kDefaultFindPadding,
+      this.decoration = const InputDecoration(
+        filled: true,
+        contentPadding: _kDefaultFindInputContentPadding,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(0)), gapPadding: 0),
+      )});
 
   @override
-  State<CodeFindPanelView> createState() => _CodeFindPanelViewState();
-
-  @override
-  Size get preferredSize => const Size.fromHeight(200); // Adjust height as needed
-}
-
-class _CodeFindPanelViewState extends State<CodeFindPanelView> {
-  final TextEditingController _findController = TextEditingController();
-  final TextEditingController _replaceController = TextEditingController();
-  final FocusNode _findFocusNode = FocusNode();
-  final FocusNode _replaceFocusNode = FocusNode();
-
-  bool _caseSensitive = false;
-  bool _wholeWord = false;
-  bool _regex = false;
-  bool _showReplace = false;
-
-  int _currentMatchIndex = 0;
-  List<Map<String, int>> _findResults = []; // List of {start, end} maps
-
-  @override
-  void dispose() {
-    _findController.dispose();
-    _replaceController.dispose();
-    _findFocusNode.dispose();
-    _replaceFocusNode.dispose();
-    super.dispose();
-  }
+  Size get preferredSize => Size(
+      double.infinity,
+      controller.value == null
+          ? 0
+          : ((controller.value!.replaceMode
+                  ? _kDefaultReplacePanelHeight
+                  : _kDefaultFindPanelHeight) +
+              margin.vertical));
 
   @override
   Widget build(BuildContext context) {
+    if (controller.value == null) {
+      return const SizedBox(width: 0, height: 0);
+    }
     return Container(
-      padding: const EdgeInsets.all(8.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(8.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 4.0,
-            spreadRadius: 1.0,
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildFindField(),
-          if (_showReplace) ...[
-            const SizedBox(height: 8),
-            _buildReplaceField(),
+        margin: margin,
+        alignment: Alignment.topRight,
+        // height: preferredSize.height, // Allow dynamic height
+        child: Column(
+          children: [
+            _buildFindInputView(context),
+            if (controller.value!.replaceMode) _buildReplaceInputView(context),
           ],
-          const SizedBox(height: 8),
-          _buildOptionsRow(),
-          const SizedBox(height: 8),
-          _buildActionButtons(),
-          if (_findResults.isNotEmpty)
-            _buildMatchInfo(),
-        ],
-      ),
-    );
+        ));
   }
 
-  Widget _buildFindField() {
-    return TextField(
-      controller: _findController,
-      focusNode: _findFocusNode,
-      decoration: InputDecoration(
-        labelText: 'Find',
-        border: const OutlineInputBorder(),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () {
-            _findController.clear();
-            _clearFindResults();
-          },
-        ),
-      ),
-      onChanged: (text) {
-        if (text.isEmpty) {
-          _clearFindResults();
-        } else {
-          _performFind(text);
-        }
-      },
-      onSubmitted: (text) {
-        if (text.isNotEmpty) {
-          _findNext();
-        }
-      },
-    );
-  }
-
-  Widget _buildReplaceField() {
-    return TextField(
-      controller: _replaceController,
-      focusNode: _replaceFocusNode,
-      decoration: InputDecoration(
-        labelText: 'Replace with',
-        border: const OutlineInputBorder(),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () {
-            _replaceController.clear();
-          },
-        ),
-      ),
-      onSubmitted: (text) {
-        _replaceCurrent();
-      },
-    );
-  }
-
-  Widget _buildOptionsRow() {
+  Widget _buildFindInputView(BuildContext context) {
+    final CodeFindValue value = controller.value!;
+    final String result;
+    if (value.result == null) {
+      result = 'none';
+    } else {
+      result = '${value.result!.index + 1}/${value.result!.matches.length}';
+    }
     return Row(
       children: [
-        FilterChip(
-          label: const Text('Case sensitive'),
-          selected: _caseSensitive,
-          onSelected: (selected) {
-            setState(() {
-              _caseSensitive = selected;
-            });
-            _performFind(_findController.text);
-          },
+        Expanded(
+          flex: 2,
+          child: SizedBox(
+              // height: _kDefaultFindPanelHeight, // Remove fixed height
+              child: Stack(
+            alignment: Alignment.center,
+            children: [
+              _buildTextField(
+                  context: context,
+                  controller: controller.findInputController,
+                  focusNode: controller.findInputFocusNode,
+                  iconsWidth: _kDefaultFindIconWidth * 1.5,
+                  onSubmitted: (_) {
+                    controller.nextMatch();
+                    controller.findInputFocusNode.requestFocus();
+                  }),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _buildCheckText(
+                      context: context,
+                      text: 'Aa',
+                      checked: value.option.caseSensitive,
+                      onPressed: () {
+                        controller.toggleCaseSensitive();
+                      }),
+                  _buildCheckText(
+                      context: context,
+                      text: '.*',
+                      checked: value.option.regex,
+                      onPressed: () {
+                        controller.toggleRegex();
+                      })
+                ],
+              )
+            ],
+          )),
         ),
-        const SizedBox(width: 8),
-        FilterChip(
-          label: const Text('Whole word'),
-          selected: _wholeWord,
-          onSelected: (selected) {
-            setState(() {
-              _wholeWord = selected;
-            });
-            _performFind(_findController.text);
-          },
-        ),
-        const SizedBox(width: 8),
-        FilterChip(
-          label: const Text('Regex'),
-          selected: _regex,
-          onSelected: (selected) {
-            setState(() {
-              _regex = selected;
-            });
-            _performFind(_findController.text);
-          },
-        ),
-        const Spacer(),
-        if (!_showReplace)
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _showReplace = true;
-              });
-            },
-            child: const Text('Replace'),
+        Text(result,
+            style: TextStyle(color: resultFontColor, fontSize: resultFontSize)),
+        Expanded(
+          flex: 0,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildIconButton(
+                  onPressed: value.result == null
+                      ? null
+                      : () {
+                          controller.previousMatch();
+                        },
+                  icon: Icons.arrow_upward,
+                  tooltip: 'Previous'),
+              _buildIconButton(
+                  onPressed: value.result == null
+                      ? null
+                      : () {
+                          controller.nextMatch();
+                        },
+                  icon: Icons.arrow_downward,
+                  tooltip: 'Next'),
+              _buildIconButton(
+                  onPressed: () {
+                    controller.close();
+                  },
+                  icon: Icons.close,
+                  tooltip: 'Close')
+            ],
           ),
+        )
       ],
     );
   }
 
-  Widget _buildActionButtons() {
+  Widget _buildReplaceInputView(BuildContext context) {
+    final CodeFindValue value = controller.value!;
     return Row(
       children: [
-        ElevatedButton(
-          onPressed: _findResults.isEmpty ? null : _findPrevious,
-          child: const Text('Previous'),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: _findResults.isEmpty ? null : _findNext,
-          child: const Text('Next'),
-        ),
-        if (_showReplace) ...[
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _findResults.isEmpty || _replaceController.text.isEmpty
-                ? null
-                : _replaceCurrent,
-            child: const Text('Replace'),
+        Expanded(
+          child: SizedBox(
+            // height: _kDefaultFindPanelHeight, // Remove fixed height
+            child: _buildTextField(
+              context: context,
+              controller: controller.replaceInputController,
+              focusNode: controller.replaceInputFocusNode,
+              onSubmitted: (_) {
+                controller.replaceMatch();
+                controller.replaceInputFocusNode.requestFocus();
+              },
+            ),
           ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _findResults.isEmpty || _replaceController.text.isEmpty
+        ),
+        _buildIconButton(
+            onPressed: value.result == null
                 ? null
-                : _replaceAll,
-            child: const Text('Replace All'),
-          ),
-        ],
+                : () {
+                    controller.replaceMatch();
+                  },
+            icon: Icons.done,
+            tooltip: 'Replace'),
+        _buildIconButton(
+            onPressed: value.result == null
+                ? null
+                : () {
+                    controller.replaceAllMatches();
+                  },
+            icon: Icons.done_all,
+            tooltip: 'Replace All')
       ],
     );
   }
 
-  Widget _buildMatchInfo() {
+  Widget _buildTextField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    double iconsWidth = 0,
+    ValueChanged<String>? onSubmitted,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(top: 8.0),
-      child: Text(
-        '${_currentMatchIndex + 1} of ${_findResults.length} matches',
-        style: TextStyle(
-          color: Theme.of(context).textTheme.bodySmall?.color,
-          fontSize: 12,
-        ),
+      padding: padding,
+      child: TextField(
+        maxLines: 1,
+        focusNode: focusNode,
+        // textInputAction: TextInputAction.next, // Removed to prevent focus jumping
+        style: TextStyle(color: inputTextColor, fontSize: inputFontSize),
+        decoration: decoration.copyWith(
+            isDense: true,
+            contentPadding: (decoration.contentPadding ?? EdgeInsets.zero)
+                .add(EdgeInsets.only(right: iconsWidth))),
+        controller: controller,
+        onSubmitted: onSubmitted,
       ),
     );
   }
 
-  void _performFind(String text) {
-    if (text.isEmpty) {
-      _clearFindResults();
-      return;
-    }
-
-    // Implement actual search functionality
-    try {
-      final controller = widget.controller;
-      if (controller == null) {
-        debugPrint('❌ Find controller is null');
-        return;
-      }
-
-      // Get the text content from the controller
-      final content = controller.text ?? '';
-      if (content.isEmpty) {
-        _clearFindResults();
-        return;
-      }
-
-      // Perform case-sensitive search if enabled
-      final searchText = _caseSensitive ? text : text.toLowerCase();
-      final contentToSearch = _caseSensitive ? content : content.toLowerCase();
-
-      // Find all matches
-      final matches = <Map<String, int>>[];
-      int startIndex = 0;
-      
-      while (startIndex < contentToSearch.length) {
-        final matchIndex = contentToSearch.indexOf(searchText, startIndex);
-        if (matchIndex == -1) break;
-
-        // Check for whole word match if enabled
-        if (_wholeWord) {
-          final isWholeWord = _isWholeWordMatch(contentToSearch, matchIndex, searchText.length);
-          if (!isWholeWord) {
-            startIndex = matchIndex + 1;
-            continue;
-          }
-        }
-
-        matches.add({
-          'start': matchIndex,
-          'end': matchIndex + searchText.length,
-        });
-        startIndex = matchIndex + 1;
-      }
-
-      setState(() {
-        _findResults = matches;
-        _currentMatchIndex = 0;
-      });
-
-      // Highlight the first match
-      _highlightCurrentMatch();
-    } catch (e) {
-      debugPrint('❌ Error performing find: $e');
-      _clearFindResults();
-    }
-  }
-
-  bool _isWholeWordMatch(String content, int startIndex, int length) {
-    // Check if the match is a whole word
-    final endIndex = startIndex + length;
-    
-    // Check character before the match
-    if (startIndex > 0) {
-      final charBefore = content[startIndex - 1];
-      if (charBefore != ' ' && charBefore != '\n' && charBefore != '\t' && charBefore != '\r') {
-        return false;
-      }
-    }
-
-    // Check character after the match
-    if (endIndex < content.length) {
-      final charAfter = content[endIndex];
-      if (charAfter != ' ' && charAfter != '\n' && charAfter != '\t' && charAfter != '\r') {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  void _highlightCurrentMatch() {
-    if (_findResults.isEmpty) return;
-
-    try {
-      final controller = widget.controller;
-      if (controller == null) return;
-
-      // For now, just ensure the controller is updated
-      // The actual highlighting will be handled by the editor's built-in selection
-      if (controller.notifyListeners != null) {
-        controller.notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('❌ Error highlighting match: $e');
-    }
-  }
-
-  void _findNext() {
-    if (_findResults.isEmpty) return;
-
-    setState(() {
-      _currentMatchIndex = (_currentMatchIndex + 1) % _findResults.length;
-    });
-
-    _highlightCurrentMatch();
-  }
-
-  void _findPrevious() {
-    if (_findResults.isEmpty) return;
-
-    setState(() {
-      _currentMatchIndex = (_currentMatchIndex - 1 + _findResults.length) % _findResults.length;
-    });
-
-    _highlightCurrentMatch();
-  }
-
-  void _replaceCurrent() {
-    if (_findResults.isEmpty || _replaceController.text.isEmpty) return;
-
-    try {
-      final controller = widget.controller;
-      if (controller == null) return;
-
-      final currentMatch = _findResults[_currentMatchIndex];
-      final start = currentMatch['start'] ?? 0;
-      final end = currentMatch['end'] ?? 0;
-
-      // Replace the current match
-      final currentText = controller.text ?? '';
-      final newText = currentText.replaceRange(
-        start,
-        end,
-        _replaceController.text,
-      );
-
-      // Update the controller text
-      controller.text = newText;
-
-      // Re-perform the search to update matches after replacement
-      _performFind(_findController.text);
-    } catch (e) {
-      debugPrint('❌ Error replacing current: $e');
-    }
-  }
-
-  void _replaceAll() {
-    if (_findResults.isEmpty || _replaceController.text.isEmpty) return;
-
-    try {
-      final controller = widget.controller;
-      if (controller == null) return;
-
-      final replaceText = _replaceController.text;
-      
-      // Replace all occurrences
-      String newText = controller.text ?? '';
-      int replaceCount = 0;
-
-      // We need to process replacements from the end to avoid index shifting
-      final matches = List<Map<String, int>>.from(_findResults);
-      
-      for (int i = matches.length - 1; i >= 0; i--) {
-        final match = matches[i];
-        final start = match['start'] ?? 0;
-        final end = match['end'] ?? 0;
-
-        newText = newText.replaceRange(
-          start,
-          end,
-          replaceText,
-        );
-        replaceCount++;
-      }
-
-      // Update the controller text
-      controller.text = newText;
-
-      // Show a snackbar with the replacement count
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Replaced $replaceCount occurrences'),
-            duration: const Duration(seconds: 2),
+  Widget _buildCheckText({
+    required BuildContext context,
+    required String text,
+    required bool checked,
+    required VoidCallback onPressed,
+  }) {
+    final Color selectedColor =
+        iconSelectedColor ?? Theme.of(context).primaryColor;
+    return GestureDetector(
+        onTap: onPressed,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: SizedBox(
+            width: _kDefaultFindIconWidth * 0.75,
+            child: Text(text,
+                style: TextStyle(
+                  color: checked ? selectedColor : iconColor,
+                  fontSize: inputFontSize,
+                )),
           ),
-        );
-      });
-
-      // Clear the find results and search field
-      _findController.clear();
-      _clearFindResults();
-    } catch (e) {
-      debugPrint('❌ Error replacing all: $e');
-    }
+        ));
   }
 
-  void _clearFindResults() {
-    setState(() {
-      _findResults = [];
-      _currentMatchIndex = 0;
-    });
+  Widget _buildIconButton(
+      {required IconData icon, VoidCallback? onPressed, String? tooltip}) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(
+        icon,
+        size: iconSize,
+      ),
+      constraints: const BoxConstraints(
+          maxWidth: _kDefaultFindIconWidth, maxHeight: _kDefaultFindIconHeight),
+      tooltip: tooltip,
+      splashRadius: max(_kDefaultFindIconWidth, _kDefaultFindIconHeight) / 2,
+    );
   }
 }

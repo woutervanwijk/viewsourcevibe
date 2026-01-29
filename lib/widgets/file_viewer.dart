@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
+import 'package:view_source_vibe/widgets/code_find_panel.dart';
 
 class FileViewer extends StatelessWidget {
   final HtmlFile file;
@@ -198,41 +199,65 @@ class FileViewer extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // File info header - more compact and clickable
-        GestureDetector(
-          onTap: () => _showContentTypeMenu(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(
-              children: [
-                Icon(
-                  isHtmlFile ? Icons.html : Icons.text_snippet,
-                  size: 14,
+        // File info header or Search Panel
+        Consumer<HtmlService>(
+          builder: (context, htmlService, child) {
+            if (htmlService.isSearchActive &&
+                htmlService.activeFindController != null) {
+              return Container(
+                color: Theme.of(context).cardColor,
+                child: CodeFindPanelView(
+                  controller: htmlService.activeFindController!,
+                  readOnly: false,
+                  margin: EdgeInsets.zero,
+                  decoration: const InputDecoration(
+                    filled: true,
+                    contentPadding: EdgeInsets.only(left: 5, right: 5),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(0)),
+                        gapPadding: 0),
+                  ),
                 ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    fileName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14,
+              );
+            }
+
+            return GestureDetector(
+              onTap: () => _showContentTypeMenu(context),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      isHtmlFile ? Icons.html : Icons.text_snippet,
+                      size: 14,
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        fileName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '${lines.length} lines • ${file.fileSize}',
+                      style: TextStyle(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withAlpha(153), // 60% opacity
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '${lines.length} lines • ${file.fileSize}',
-                  style: TextStyle(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withAlpha(153), // 60% opacity
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
         const Divider(height: 1),
 

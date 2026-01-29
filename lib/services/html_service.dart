@@ -23,7 +23,6 @@ import 'package:flutter/services.dart';
 import 'dart:async' show TimeoutException, Timer;
 import 'dart:io' show SocketException;
 import 'package:view_source_vibe/widgets/contextmenu.dart';
-import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 
@@ -40,6 +39,9 @@ class HtmlService with ChangeNotifier {
   final Map<String, Widget> _highlightCache = {};
   final Map<String, CodeLineEditingController> _controllerCache = {};
 
+  // Track the currently active find controller
+  CodeFindController? _activeFindController;
+
   // Debouncing for syntax highlighting
   Timer? _highlightDebounceTimer;
 
@@ -48,6 +50,10 @@ class HtmlService with ChangeNotifier {
   ScrollController? get horizontalScrollController =>
       _horizontalScrollController;
   GlobalKey? get codeEditorKey => _codeEditorKey;
+
+  // Expose search state
+  CodeFindController? get activeFindController => _activeFindController;
+  bool get isSearchActive => _activeFindController?.value != null;
 
   HtmlService() {
     _horizontalScrollController = ScrollController();
@@ -1968,10 +1974,20 @@ Technical details: ${e.runtimeType}''';
               );
             }
           : null,
-      findBuilder: (context, editingController, readOnly) {
-        return CodeFindPanelView(
-          controller: editingController,
-          readOnly: readOnly,
+      findBuilder: (context, controller, readOnly) {
+        // Update the active find controller when the builder is called
+        // This ensures we always have the correct controller for the current editor
+        if (_activeFindController != controller) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _updateActiveFindController(controller);
+          });
+        }
+
+        // Return empty container to disable in-editor panel
+        // The panel will be rendered in the AppBar instead
+        return const PreferredSize(
+          preferredSize: Size.zero,
+          child: SizedBox.shrink(),
         );
       },
     );
@@ -2176,6 +2192,9 @@ Technical details: ${e.runtimeType}''';
       debugPrint(
           '🔄 Trimmed controller cache to $maxControllerEntries entries');
     }
+
+    // Enforce find controller cache limit (same as controller cache)
+    // CodeFindController is managed by CodeEditor, so we don't need to cache it manually
   }
 
   /// Clear cache for specific content
@@ -2220,5 +2239,41 @@ Technical details: ${e.runtimeType}''';
   void cancelPendingHighlight() {
     _highlightDebounceTimer?.cancel();
     debugPrint('⏹️  Cancelled pending highlight operations');
+  }
+
+  /// Toggle the search panel for the current editor
+  void toggleSearch() {
+    if (_activeFindController != null) {
+      if (_activeFindController!.value == null) {
+        _activeFindController!.findMode();
+      } else {
+        _activeFindController!.close();
+      }
+    }
+  }
+
+  /// Update the active find controller and manage listeners
+  void _updateActiveFindController(CodeFindController? newController) {
+    if (_activeFindController == newController) return;
+
+    // Remove listener from old controller
+    if (_activeFindController != null) {
+      _activeFindController!.removeListener(_onSearchStateChanged);
+    }
+
+    _activeFindController = newController;
+
+    // Add listener to new controller
+    if (_activeFindController != null) {
+      _activeFindController!.addListener(_onSearchStateChanged);
+    }
+
+    // Notify listeners of the change
+    notifyListeners();
+  }
+
+  /// Callback when the search state changes
+  void _onSearchStateChanged() {
+    notifyListeners();
   }
 }

@@ -1,15 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:re_editor/re_editor.dart';
 import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:flutter/material.dart';
 
 void main() {
-  testWidgets('CodeFindPanelView should render correctly', (WidgetTester tester) async {
+  testWidgets('CodeFindPanelView should render correctly',
+      (WidgetTester tester) async {
     // Build our widget and trigger a frame.
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: CodeFindPanelView(
-            controller: null, // We'll use a mock controller in a real test
+            controller: CodeFindController(CodeLineEditingController()),
             readOnly: false,
           ),
         ),
@@ -31,12 +33,14 @@ void main() {
     expect(find.text('Replace'), findsOneWidget);
   });
 
-  testWidgets('CodeFindPanelView should show replace field when Replace button is pressed', (WidgetTester tester) async {
+  testWidgets(
+      'CodeFindPanelView should show replace field when Replace button is pressed',
+      (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: CodeFindPanelView(
-            controller: null,
+            controller: CodeFindController(CodeLineEditingController()),
             readOnly: false,
           ),
         ),

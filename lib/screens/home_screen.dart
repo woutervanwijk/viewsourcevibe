@@ -26,24 +26,28 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           },
-          child: Row(
-            children: [
-              // App icon to the left of the title
-              Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: Image.asset(
-                  'assets/icon.webp',
-                  width: 28,
-                  height: 28,
-                  fit: BoxFit.contain,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                // App icon to the left of the title
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Image.asset(
+                    'assets/icon.webp',
+                    width: 28,
+                    height: 28,
+                    fit: BoxFit.contain,
+                  ),
                 ),
-              ),
-              const Text(
-                'View\nSource\nVibe',
-                style: TextStyle(fontSize: 10, height: 1),
-                // textAlign: TextAlign.center,
-              ),
-            ],
+                const Text(
+                  'View\nSource\nVibe',
+                  style: TextStyle(fontSize: 10, height: 1),
+                  // textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
         actions: const [
@@ -53,13 +57,17 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          const UrlInput(),
+          Consumer<HtmlService>(
+            builder: (context, htmlService, child) {
+              return const UrlInput();
+            },
+          ),
           Expanded(
             child: Consumer<HtmlService>(
               builder: (context, htmlService, child) {
                 if (htmlService.currentFile == null) {
                   return Padding(
-                      padding: EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
                       child: Center(
                         child: Text(
                           'No file loaded\n\nEnter an url to view the source\nOr share a file or url to this app\nOr tap the folder icon to open a local file',
