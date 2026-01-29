@@ -54,6 +54,11 @@ class MetadataDialog extends StatelessWidget {
                 children: [
                   _buildHeaderSection(context, metadata),
                   const SizedBox(height: 24),
+                  if (metadata['detectedTech']?.isNotEmpty == true) ...[
+                    _buildSectionTitle(context, 'Technology Stack'),
+                    _buildTechSection(context, metadata['detectedTech']),
+                    const SizedBox(height: 24),
+                  ],
                   if (metadata['openGraph']?.isNotEmpty == true) ...[
                     _buildSectionTitle(context, 'OpenGraph Tags'),
                     _buildMapSection(context, metadata['openGraph']),
@@ -153,6 +158,31 @@ class MetadataDialog extends StatelessWidget {
           'Description': description,
         }),
       ],
+    );
+  }
+
+  Widget _buildTechSection(BuildContext context, Map<String, dynamic> tech) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: tech.entries.map((e) {
+        return Chip(
+          avatar: Icon(Icons.code,
+              size: 16, color: Theme.of(context).colorScheme.primary),
+          label: Text('${e.key}: ${e.value}'),
+          backgroundColor: Theme.of(context)
+              .colorScheme
+              .primaryContainer
+              .withValues(alpha: 0.3),
+          side: BorderSide.none,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          labelStyle: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onPrimaryContainer,
+          ),
+        );
+      }).toList(),
     );
   }
 

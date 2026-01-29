@@ -2436,6 +2436,7 @@ Technical details: $e''';
       'jsLinks': <String>[],
       'otherMeta': <String, String>{},
       'icons': <String, String>{},
+      'detectedTech': <String, String>{},
     };
 
     // Extract Title
@@ -2512,8 +2513,75 @@ Technical details: $e''';
         metadata['icons']['icon'] ??
         metadata['icons']['shortcut icon'];
 
+    // Detect CMS and Frameworks
+    _detectTechnologies(html, metadata);
+
     _pageMetadata = metadata;
     notifyListeners();
+  }
+
+  /// Guess CMS and Frameworks based on patterns in the HTML
+  void _detectTechnologies(String html, Map<String, dynamic> metadata) {
+    final Map<String, String> tech = {};
+
+    // 1. Check Meta Generator
+    final generator = metadata['otherMeta']['generator']?.toLowerCase() ?? '';
+    if (generator.contains('wordpress'))
+      tech['CMS'] = 'WordPress';
+    else if (generator.contains('joomla'))
+      tech['CMS'] = 'Joomla';
+    else if (generator.contains('drupal'))
+      tech['CMS'] = 'Drupal';
+    else if (generator.contains('ghost'))
+      tech['CMS'] = 'Ghost';
+    else if (generator.contains('hugo'))
+      tech['Static Site'] = 'Hugo';
+    else if (generator.contains('webflow'))
+      tech['CMS'] = 'Webflow';
+    else if (generator.contains('wix')) tech['CMS'] = 'Wix';
+
+    // 2. Check File Paths and Specific Tags
+    if (tech['CMS'] == null) {
+      if (html.contains('wp-content') || html.contains('wp-includes'))
+        tech['CMS'] = 'WordPress';
+      else if (html.contains('cdn.shopify.com') ||
+          html.contains('shopify-payment-button'))
+        tech['CMS'] = 'Shopify';
+      else if (html.contains('static1.squarespace.com'))
+        tech['CMS'] = 'Squarespace';
+      else if (html.contains('data-wf-page')) tech['CMS'] = 'Webflow';
+    }
+
+    // 3. Detect Frontend Frameworks
+    if (_hasPattern(html, r'''_next/static|__NEXT_DATA__'''))
+      tech['Framework'] = 'Next.js';
+    else if (_hasPattern(html, r'''__NUXT__'''))
+      tech['Framework'] = 'Nuxt.js';
+    else if (_hasPattern(html, r'''data-reactroot'''))
+      tech['Library'] = 'React';
+    else if (_hasPattern(html, r'''data-v-|v-if=|v-for='''))
+      tech['Library'] = 'Vue.js';
+    else if (_hasPattern(html, r'''ng-version|ng-app'''))
+      tech['Framework'] = 'Angular';
+
+    // 4. Detect CSS Frameworks
+    if (_hasPattern(html,
+        r'''bootstrap(?:\.min)?\.css|class=["'][^"']*?\b(?:col-|btn-|navbar-)''')) {
+      tech['CSS Framework'] = 'Bootstrap';
+    }
+    if (_hasPattern(html,
+        r'''tailwind(?:\.min)?\.css|class=["'][^"']*?\b(?:text-|bg-|p-|m-|flex-|grid-)''')) {
+      // More specific tailwind check to avoid false positives with generic utilities
+      if (_hasPattern(html, r'''\b(?:sm:|md:|lg:|xl:|2xl:)[a-z]''')) {
+        tech['CSS Framework'] = 'Tailwind CSS';
+      }
+    }
+
+    metadata['detectedTech'] = tech;
+  }
+
+  bool _hasPattern(String text, String pattern) {
+    return RegExp(pattern, caseSensitive: false).hasMatch(text);
   }
 
   Map<String, String> _parseAttributes(String attrStr) {
