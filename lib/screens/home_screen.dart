@@ -15,6 +15,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -95,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           currentFile != null
                               ? FileViewer(
                                   file: currentFile,
+                                  scrollController: _scrollController,
                                 )
                               : const Center(
                                   child: Text('File data is not available'),

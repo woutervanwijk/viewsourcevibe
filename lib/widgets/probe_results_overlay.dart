@@ -35,9 +35,9 @@ class ProbeResultsOverlay extends StatelessWidget {
           margin: const EdgeInsets.all(16),
           constraints: const BoxConstraints(maxWidth: 600),
           decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.red.withOpacity(0.3)),
+            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
           ),
           child: SelectableText(
             'Error: ${htmlService.probeError}',
@@ -50,9 +50,11 @@ class ProbeResultsOverlay extends StatelessWidget {
     final result = htmlService.probeResult;
     if (result != null) {
       return ListView(
+        primary:
+            false, // Prevent conflict with editor's primary scroll controller
         padding: const EdgeInsets.all(16),
         children: [
-          _buildStatusCard(context, result),
+          _buildStatusCard(context, htmlService, result),
           const SizedBox(height: 16),
           _buildHeadersList(context, result),
         ],
@@ -62,7 +64,8 @@ class ProbeResultsOverlay extends StatelessWidget {
     return const Center(child: Text('Enter a URL and press Enter to probe.'));
   }
 
-  Widget _buildStatusCard(BuildContext context, Map<String, dynamic> result) {
+  Widget _buildStatusCard(BuildContext context, HtmlService htmlService,
+      Map<String, dynamic> result) {
     final status = result['statusCode'];
     final reason = result['reasonPhrase'];
     final isRedirect = result['isRedirect'] == true;
@@ -76,7 +79,7 @@ class ProbeResultsOverlay extends StatelessWidget {
       color: Theme.of(context)
           .colorScheme
           .surfaceContainerHighest
-          .withOpacity(0.3),
+          .withValues(alpha: 0.3),
       shape: RoundedRectangleBorder(
         side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
@@ -92,7 +95,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: statusColor),
                   ),
@@ -110,7 +113,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.blue),
                     ),
@@ -126,10 +129,64 @@ class ProbeResultsOverlay extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _buildDetailRow('Final URL', result['finalUrl']),
-            if (result['contentLength'] != null)
+            if (result['headers']?['server'] != null)
+              _buildDetailRow('Server', result['headers']['server']),
+            if (result['headers']?['content-type'] != null)
               _buildDetailRow(
-                  'Content Length', '${result['contentLength']} bytes'),
+                  'Content-Type', result['headers']['content-type']),
+            const SizedBox(height: 8),
+            _buildDetailRow('Final URL', result['finalUrl']),
+            if (isRedirect && result['redirectLocation'] != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(
+                      width: 100,
+                      child: Text(
+                        'Redirect to:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          // Load the redirect URL
+                          final redirectUrl = result['redirectLocation'];
+                          Provider.of<HtmlService>(context, listen: false)
+                              .loadFromUrl(redirectUrl);
+                          Provider.of<HtmlService>(context, listen: false)
+                              .probeUrl(redirectUrl)
+                              .ignore();
+                        },
+                        child: Text(
+                          result['redirectLocation'],
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (result['contentLength'] != null ||
+                (htmlService.currentFile?.content.isNotEmpty ?? false))
+              _buildDetailRow(
+                'Content Length',
+                () {
+                  final probeLength = result['contentLength'] ?? 0;
+                  final fileLength =
+                      htmlService.currentFile?.content.length ?? 0;
+                  if ((probeLength == 0 || probeLength == null) &&
+                      fileLength > 0) {
+                    return '$probeLength ($fileLength bytes loaded)';
+                  }
+                  return '$probeLength bytes';
+                }(),
+              ),
           ],
         ),
       ),

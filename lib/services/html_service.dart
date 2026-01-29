@@ -1329,14 +1329,54 @@ Technical details: ${e.runtimeType}''';
       final response = await http.Response.fromStream(streamedResponse);
       client.close();
 
+      int? contentLength = response.contentLength;
+
+      debugPrint('Probe Headers: ${response.headers}');
+      debugPrint('Initial ContentLength: $contentLength');
+
+      // Check Content-Length header fallback
+      if ((contentLength == null || contentLength == 0) &&
+          response.headers.containsKey('content-length')) {
+        contentLength = int.tryParse(response.headers['content-length']!);
+        debugPrint('Parsed ContentLength from header: $contentLength');
+      }
+
+      // Check Content-Range header (for 206 Partial Content)
+      // Format: bytes 0-0/12345
+      if (response.headers.containsKey('content-range')) {
+        final contentRange = response.headers['content-range']!;
+        debugPrint('Parsing Content-Range: $contentRange');
+        // Extract the total size (after the slash)
+        final parts = contentRange.split('/');
+        if (parts.length == 2 && parts[1] != '*') {
+          final totalSize = int.tryParse(parts[1]);
+          if (totalSize != null) {
+            contentLength = totalSize;
+            debugPrint(
+                'Parsed Total Length from Content-Range: $contentLength');
+          }
+        }
+      }
+
       final result = {
         'statusCode': response.statusCode,
         'reasonPhrase': response.reasonPhrase,
         'headers': response.headers,
         'isRedirect': response.isRedirect,
-        'contentLength': response.contentLength,
+        'contentLength': contentLength,
         'finalUrl': url, // Since we didn't follow redirects automatically
       };
+
+      // Extract redirect location if present
+      if (response.isRedirect) {
+        final location = response.headers['location'];
+        if (location != null && location.isNotEmpty) {
+          // Resolve relative URLs
+          final uri = Uri.parse(url);
+          final redirectUri = uri.resolve(location);
+          result['redirectLocation'] = redirectUri.toString();
+        }
+      }
 
       _probeResult = result;
       _isProbing = false;
@@ -1927,10 +1967,14 @@ Technical details: ${e.runtimeType}''';
         showLineNumbers: showLineNumbers,
         useSimplified: useSimplifiedHighlighting);
 
-    // Check cache first
-    if (_highlightCache.containsKey(cacheKey)) {
-      debugPrint('🔄 Using cached highlighted content');
-      return _highlightCache[cacheKey]!;
+    // Add scroll controller identity to cache key to avoid issues if it changes
+    final String fullCacheKey =
+        '${cacheKey}_scroll:${customScrollController?.hashCode ?? 'none'}';
+
+    // check widget cache
+    if (_highlightCache.containsKey(fullCacheKey)) {
+      debugPrint('🔄 Using cached highlighted widget');
+      return _highlightCache[fullCacheKey]!;
     }
 
     // Create a controller for the code editor
@@ -1963,12 +2007,6 @@ Technical details: ${e.runtimeType}''';
       _controllerCache[controllerCacheKey] = controller;
     }
 
-    // Create context menu controller (not used directly, but available for future enhancements)
-    // final contextMenuController = CodeEditorContextMenuController(
-    //   context: context,
-    //   editingController: controller,
-    // );
-
     if (customScrollController == null) {
       _verticalScrollController ??= PrimaryScrollController.of(context);
     }
@@ -1979,6 +2017,7 @@ Technical details: ${e.runtimeType}''';
     final codeTheme = CodeHighlightTheme(
         languages: {languageName: CodeHighlightThemeMode(mode: mode)},
         theme: _getThemeByName(themeName));
+
     // Create the scroll controller for CodeEditor
     final codeScrollController = CodeScrollController(
         verticalScroller: customScrollController ??
@@ -2036,11 +2075,10 @@ Technical details: ${e.runtimeType}''';
       },
     );
 
-    // Cache the result for future use
-    _highlightCache[cacheKey] = codeEditor;
-
     // Enforce cache size limits
     _enforceCacheSizeLimits();
+
+    _highlightCache[fullCacheKey] = codeEditor;
 
     return codeEditor;
   }

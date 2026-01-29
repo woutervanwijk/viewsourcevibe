@@ -274,14 +274,22 @@ class Toolbar extends StatelessWidget {
           onPressed: () => _shareCurrentFile(context),
         ),
         Consumer<HtmlService>(builder: (context, htmlService, child) {
-          return IconButton(
-            icon: Icon(htmlService.isProbeOverlayVisible
-                ? Icons.featured_play_list_outlined
-                : Icons.travel_explore),
-            tooltip: htmlService.isProbeOverlayVisible
-                ? 'Show Editor'
-                : 'Probe / Show Results',
-            onPressed: () => htmlService.toggleProbeOverlay(),
+          return Container(
+            decoration: BoxDecoration(
+              color: htmlService.isProbeOverlayVisible
+                  ? Theme.of(context).highlightColor
+                  : Colors.transparent,
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: Icon(htmlService.isProbeOverlayVisible
+                  ? Icons.featured_play_list_outlined
+                  : Icons.travel_explore),
+              tooltip: htmlService.isProbeOverlayVisible
+                  ? 'Show Editor'
+                  : 'Probe / Show Results',
+              onPressed: () => htmlService.toggleProbeOverlay(),
+            ),
           );
         }),
         Consumer<HtmlService>(
