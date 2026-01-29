@@ -85,35 +85,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 // Show a subtle indicator if this is the sample file
                 final currentFile = htmlService.currentFile;
-                final isSampleFile = currentFile != null &&
-                    (currentFile.path.contains('sample.html') ||
-                        currentFile.path.contains('assets') ||
-                        currentFile.path.contains('fallback'));
 
                 return Column(
                   children: [
-                    if (isSampleFile)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 4, horizontal: 8),
-                        color: const Color.fromRGBO(
-                            21, 101, 192, 0.1), // Blue with 10% opacity
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.info_outline,
-                                size: 16, color: Colors.blue),
-                            SizedBox(width: 4),
-                            Text(
-                              'Sample file loaded (Debug Mode)',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blue,
-                                  fontStyle: FontStyle.italic),
-                            ),
-                          ],
-                        ),
-                      ),
                     Expanded(
                       child: currentFile != null
                           ? FileViewer(

@@ -4,19 +4,20 @@ import 'dart:math';
 
 const EdgeInsetsGeometry _kDefaultFindMargin = EdgeInsets.only(right: 10);
 
-const double _kDefaultFindPanelHeight = 36;
+const double _kDefaultFindPanelHeight = 54;
 const double _kDefaultReplacePanelHeight = _kDefaultFindPanelHeight * 2;
 const double _kDefaultFindIconSize = 16;
 const double _kDefaultFindIconWidth = 30;
 const double _kDefaultFindIconHeight = 30;
 const double _kDefaultFindInputFontSize = 13;
 const double _kDefaultFindResultFontSize = 12;
-const EdgeInsetsGeometry _kDefaultFindPadding =
-    EdgeInsets.only(left: 5, right: 5, top: 2.5, bottom: 2.5);
-const EdgeInsetsGeometry _kDefaultFindInputContentPadding = EdgeInsets.only(
-  left: 5,
-  right: 5,
-);
+const EdgeInsetsGeometry _kDefaultFindPadding = EdgeInsets.only(
+    left: 8, right: 8, top: 4, bottom: 4); // Match UrlInput padding
+const EdgeInsetsGeometry _kDefaultFindInputContentPadding =
+    EdgeInsets.symmetric(
+  vertical: 10,
+  horizontal: 12,
+); // Match UrlInput content padding
 
 class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
   final CodeFindController controller;
@@ -49,7 +50,8 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
         filled: true,
         contentPadding: _kDefaultFindInputContentPadding,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(0)), gapPadding: 0),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            gapPadding: 0), // Radius 6
       )});
 
   @override

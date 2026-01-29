@@ -286,11 +286,15 @@ class Toolbar extends StatelessWidget {
           tooltip: 'Probe URL',
           onPressed: () => _showProbeUrlDialog(context),
         ),
-        IconButton(
-          icon: const Icon(Icons.search),
-          tooltip: 'Find',
-          onPressed: () =>
-              Provider.of<HtmlService>(context, listen: false).toggleSearch(),
+        Consumer<HtmlService>(
+          builder: (context, htmlService, child) {
+            final bool hasFile = htmlService.currentFile != null;
+            return IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'Find',
+              onPressed: hasFile ? () => htmlService.toggleSearch() : null,
+            );
+          },
         ),
         IconButton(
           icon: const Icon(Icons.settings),
