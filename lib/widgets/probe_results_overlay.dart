@@ -270,7 +270,9 @@ class ProbeResultsOverlay extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 Container(
                   padding:
@@ -288,8 +290,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (isRedirect) ...[
-                  const SizedBox(width: 8),
+                if (isRedirect)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -306,7 +307,6 @@ class ProbeResultsOverlay extends StatelessWidget {
                       ),
                     ),
                   ),
-                ],
               ],
             ),
             const SizedBox(height: 12),

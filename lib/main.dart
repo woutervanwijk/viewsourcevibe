@@ -219,6 +219,8 @@ Try these solutions:
   else if (uri.scheme == 'http' || uri.scheme == 'https') {
     debugPrint('Opening web URL: ${uri.toString()}');
     try {
+      // Trigger probe in parallel
+      htmlService.probeUrl(uri.toString()).ignore();
       await htmlService.loadFromUrl(uri.toString());
     } catch (e) {
       debugPrint('Error loading web URL: $e');

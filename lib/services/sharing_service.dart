@@ -25,12 +25,11 @@ class SharingService {
   static Future<void> shareHtml(String html, {String? filename}) async {
     try {
       // Handle empty or null filenames by providing a sensible default
-      final effectiveFilename = filename?.isNotEmpty == true 
-          ? filename! 
-          : 'shared_content.html';
-      
-      await _channel.invokeMethod('shareHtml',
-          {'html': html, 'filename': effectiveFilename});
+      final effectiveFilename =
+          filename?.isNotEmpty == true ? filename! : 'shared_content.html';
+
+      await _channel.invokeMethod(
+          'shareHtml', {'html': html, 'filename': effectiveFilename});
     } on PlatformException catch (e) {
       debugPrint("Failed to share HTML: '${e.message}'.");
       throw Exception("Sharing failed: ${e.message}");
@@ -82,8 +81,7 @@ class SharingService {
         // Use the fixed isUrl method for consistent URL detection
         if (isUrl(sharedText)) {
           // This is a valid HTTP/HTTPS URL, treat it as a URL
-          debugPrint(
-              'SharingService: Shared text is a valid URL: $sharedText');
+          debugPrint('SharingService: Shared text is a valid URL: $sharedText');
           // ignore: use_build_context_synchronously
           await _processSharedUrl(context, htmlService, sharedText);
         } else {
@@ -92,17 +90,20 @@ class SharingService {
             // Try to open as URL first
             try {
               final uri = Uri.tryParse(sharedText.trim());
-              if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-                debugPrint('SharingService: Detected potential URL in shared text, opening: $sharedText');
+              if (uri != null &&
+                  (uri.scheme == 'http' || uri.scheme == 'https')) {
+                debugPrint(
+                    'SharingService: Detected potential URL in shared text, opening: $sharedText');
                 // ignore: use_build_context_synchronously
                 await _processSharedUrl(context, htmlService, sharedText);
                 return; // URL handled, no need for text processing
               }
             } catch (e) {
-              debugPrint('SharingService: URL detection failed for potential URL: $e');
+              debugPrint(
+                  'SharingService: URL detection failed for potential URL: $e');
             }
           }
-          
+
           // Not a valid URL, treat as text content
           debugPrint(
               'SharingService: Shared text is not a URL, treating as text: $sharedText');
@@ -152,6 +153,8 @@ class SharingService {
     String url,
   ) async {
     try {
+      // Trigger probe in parallel
+      htmlService.probeUrl(url).ignore();
       // Load the URL using the existing HTML service
       await htmlService.loadFromUrl(url);
 
@@ -253,8 +256,11 @@ class SharingService {
       debugPrint('SharingService: Handling file path: $filePath');
 
       // Security: Validate file path to prevent directory traversal attacks
-      if (filePath.contains('..') || filePath.contains('\\') || filePath.contains(r'\0')) {
-        debugPrint('SharingService: Invalid file path detected (potential directory traversal)');
+      if (filePath.contains('..') ||
+          filePath.contains('\\') ||
+          filePath.contains(r'\0')) {
+        debugPrint(
+            'SharingService: Invalid file path detected (potential directory traversal)');
         throw Exception('Invalid file path');
       }
 
@@ -292,14 +298,15 @@ class SharingService {
 
       if (!await file.exists()) {
         debugPrint('SharingService: File does not exist at: ${file.path}');
-        
+
         // If file doesn't exist, check if this might be a file path that should have been
         // handled as text content (common issue with iOS share extension)
-        if (filePath.contains('File Provider Storage') || 
-            filePath.contains('%20') || 
+        if (filePath.contains('File Provider Storage') ||
+            filePath.contains('%20') ||
             filePath.contains('Library/Developer/CoreSimulator')) {
-          debugPrint('SharingService: This looks like a sandboxed file path that should have been handled as text content');
-          
+          debugPrint(
+              'SharingService: This looks like a sandboxed file path that should have been handled as text content');
+
           // Try to extract the filename and treat the path as content
           final fileName = normalizedFilePath.split('/').last;
           final helpfulContent = '''📱 iOS File Sharing Issue
@@ -327,7 +334,7 @@ File path: $filePath
 
 🔧 Technical Note:
 The iOS Share Extension needs to read file content and pass it as bytes, not just the file path.''';
-          
+
           final htmlFile = HtmlFile(
             name: fileName,
             path: 'shared://unavailable',
@@ -336,11 +343,11 @@ The iOS Share Extension needs to read file content and pass it as bytes, not jus
             size: helpfulContent.length,
             isUrl: false,
           );
-          
+
           await htmlService.loadFile(htmlFile);
           return;
         }
-        
+
         throw Exception('File does not exist: $normalizedFilePath');
       }
 
@@ -414,7 +421,8 @@ The iOS Share Extension needs to read file content and pass it as bytes, not jus
 
     // Check if this is likely a file path (starts with /) - do this early to avoid false positives
     if (cleanText.startsWith('/')) {
-      debugPrint('SharingService: Detected absolute file path, not URL: $cleanText');
+      debugPrint(
+          'SharingService: Detected absolute file path, not URL: $cleanText');
       return false; // This is an absolute file path, not a URL
     }
 
@@ -439,7 +447,8 @@ The iOS Share Extension needs to read file content and pass it as bytes, not jus
         cleanText.contains('Library/') ||
         cleanText.contains('Containers/') ||
         cleanText.contains('Applications/')) {
-      debugPrint('SharingService: Detected file path pattern, not URL: $cleanText');
+      debugPrint(
+          'SharingService: Detected file path pattern, not URL: $cleanText');
       return false; // This contains file path patterns, not a URL
     }
 

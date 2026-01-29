@@ -6,6 +6,7 @@ import 'package:view_source_vibe/widgets/file_viewer.dart';
 import 'package:view_source_vibe/widgets/toolbar.dart';
 import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/widgets/probe_results_overlay.dart';
+import 'package:view_source_vibe/widgets/metadata_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final htmlService = Provider.of<HtmlService>(context);
     return Scaffold(
       appBar: AppBar(
         title: GestureDetector(
@@ -120,6 +122,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      floatingActionButton: htmlService.pageMetadata != null
+          ? FloatingActionButton.small(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => const MetadataDialog(),
+                );
+              },
+              tooltip: 'Page Metadata',
+              child: const Icon(Icons.info_outline, size: 20),
+            )
+          : null,
     );
   }
 }

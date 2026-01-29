@@ -1,0 +1,269 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+
+class MetadataDialog extends StatelessWidget {
+  const MetadataDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final htmlService = Provider.of<HtmlService>(context);
+    final metadata = htmlService.pageMetadata;
+
+    if (metadata == null) {
+      return const AlertDialog(
+        title: Text('No Metadata'),
+        content: Text('No metadata could be extracted from this file.'),
+      );
+    }
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.8,
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Page Metadata',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                children: [
+                  _buildHeaderSection(context, metadata),
+                  const SizedBox(height: 24),
+                  if (metadata['openGraph']?.isNotEmpty == true) ...[
+                    _buildSectionTitle(context, 'OpenGraph Tags'),
+                    _buildMapSection(context, metadata['openGraph']),
+                    const SizedBox(height: 24),
+                  ],
+                  if (metadata['twitter']?.isNotEmpty == true) ...[
+                    _buildSectionTitle(context, 'Twitter Card Info'),
+                    _buildMapSection(context, metadata['twitter']),
+                    const SizedBox(height: 24),
+                  ],
+                  _buildSectionTitle(context, 'Linked Resources'),
+                  _buildLinkSection(context, 'Stylesheets (CSS)',
+                      metadata['cssLinks'], Icons.css),
+                  _buildLinkSection(context, 'Scripts (JS)',
+                      metadata['jsLinks'], Icons.javascript),
+                  _buildLinkSection(context, 'RSS/Atom Feeds',
+                      metadata['rssLinks'], Icons.rss_feed),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle(context, 'Other Meta Tags'),
+                  _buildMapSection(context, metadata['otherMeta']),
+                  const SizedBox(height: 80), // Space for bottom detection note
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection(
+      BuildContext context, Map<String, dynamic> metadata) {
+    final title = metadata['title'] ?? 'No Title';
+    final description = metadata['description'] ?? 'No description available.';
+    final image = metadata['image'];
+    final favicon = metadata['favicon'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (favicon != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  favicon,
+                  width: 48,
+                  height: 48,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.public, size: 48, color: Colors.grey),
+                ),
+              ),
+              const SizedBox(width: 16),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SelectableText(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (image != null) ...[
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              image,
+              width: double.infinity,
+              height: 200,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => const SizedBox(),
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
+        _buildSectionTitle(context, 'Basic Information'),
+        _buildMapSection(context, {
+          'Title': title,
+          if (favicon != null) 'Icon URL': favicon,
+          'Description': description,
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+      ),
+    );
+  }
+
+  Widget _buildMapSection(BuildContext context, Map<String, dynamic> data) {
+    if (data.isEmpty) {
+      return const Text('None detected.',
+          style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey));
+    }
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: data.entries.map((e) {
+          final isLast = data.entries.last.key == e.key;
+          return Column(
+            children: [
+              ListTile(
+                title: Text(
+                  e.key,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'monospace'),
+                ),
+                subtitle: SelectableText(
+                  e.value.toString(),
+                  style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                ),
+                dense: true,
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: e.value.toString()));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied to clipboard')),
+                  );
+                },
+              ),
+              if (!isLast) const Divider(height: 1),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildLinkSection(
+      BuildContext context, String title, List<dynamic> links, IconData icon) {
+    if (links.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: Colors.grey[600]),
+              const SizedBox(width: 8),
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700])),
+            ],
+          ),
+        ),
+        ...links.map((url) => Card(
+              elevation: 0,
+              margin: const EdgeInsets.only(bottom: 4),
+              color: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ListTile(
+                title: Text(
+                  url.toString(),
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+                dense: true,
+                onTap: () {
+                  final htmlService =
+                      Provider.of<HtmlService>(context, listen: false);
+                  htmlService.loadFromUrl(url.toString());
+                  Navigator.pop(context);
+                },
+              ),
+            )),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+}

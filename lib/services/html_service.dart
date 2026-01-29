@@ -42,6 +42,10 @@ class HtmlService with ChangeNotifier {
   bool _isProbing = false;
   String? _probeError;
 
+  // Metadata state
+  Map<String, dynamic>? _pageMetadata;
+  Map<String, dynamic>? get pageMetadata => _pageMetadata;
+
   // Cache for highlighted content to improve performance
   final Map<String, Widget> _highlightCache = {};
   final Map<String, CodeLineEditingController> _controllerCache = {};
@@ -977,6 +981,19 @@ class HtmlService with ChangeNotifier {
 
     notifyListeners();
     await scrollToZero();
+
+    // Extract metadata if it's HTML or XML
+    if (_currentFile != null &&
+        (selectedContentType == 'html' ||
+            selectedContentType == 'xml' ||
+            _currentFile!.name.endsWith('.html') ||
+            _currentFile!.name.endsWith('.xml') ||
+            _currentFile!.name.endsWith('.xhtml'))) {
+      _extractMetadata();
+    } else {
+      _pageMetadata = null;
+      notifyListeners();
+    }
 
     // Note: State saving is handled by the AppLifecycleObserver
     // We don't save state here to avoid excessive writes during normal usage
@@ -2403,5 +2420,122 @@ Technical details: $e''';
   /// Callback when the search state changes
   void _onSearchStateChanged() {
     notifyListeners();
+  }
+
+  /// Extract metadata from the current file content
+  void _extractMetadata() {
+    if (_currentFile == null) return;
+    final html = _currentFile!.content;
+    final baseUrl = _currentFile!.isUrl ? _currentFile!.path : '';
+
+    final Map<String, dynamic> metadata = {
+      'openGraph': <String, String>{},
+      'twitter': <String, String>{},
+      'rssLinks': <String>[],
+      'cssLinks': <String>[],
+      'jsLinks': <String>[],
+      'otherMeta': <String, String>{},
+      'icons': <String, String>{},
+    };
+
+    // Extract Title
+    final titleMatch =
+        RegExp(r'<title[^>]*>(.*?)</title>', dotAll: true, caseSensitive: false)
+            .firstMatch(html);
+    if (titleMatch != null) metadata['title'] = titleMatch.group(1)?.trim();
+
+    // Extract Meta Tags
+    final metaTags =
+        RegExp(r'<meta\s+([^>]*?)>', caseSensitive: false).allMatches(html);
+    for (final match in metaTags) {
+      final attrStr = match.group(1) ?? '';
+      final attrs = _parseAttributes(attrStr);
+
+      final name =
+          attrs['name']?.toLowerCase() ?? attrs['property']?.toLowerCase();
+      final content = attrs['content'];
+
+      if (name != null && content != null) {
+        if (name.startsWith('og:')) {
+          metadata['openGraph'][name] = content;
+        } else if (name.startsWith('twitter:')) {
+          metadata['twitter'][name] = content;
+        } else if (name == 'description') {
+          metadata['description'] = content;
+        } else {
+          metadata['otherMeta'][name] = content;
+        }
+      }
+    }
+
+    // Extract Link Tags (CSS, RSS, Favicon)
+    final linkTags =
+        RegExp(r'<link\s+([^>]*?)>', caseSensitive: false).allMatches(html);
+    for (final match in linkTags) {
+      final attrStr = match.group(1) ?? '';
+      final attrs = _parseAttributes(attrStr);
+
+      final rel = attrs['rel']?.toLowerCase();
+      final href = attrs['href'];
+      final type = attrs['type']?.toLowerCase();
+
+      if (href != null) {
+        final absoluteHref = _resolveUrl(href, baseUrl);
+        if (rel == 'stylesheet' || type == 'text/css') {
+          metadata['cssLinks'].add(absoluteHref);
+        } else if (rel == 'alternate' &&
+            (type?.contains('rss') == true || type?.contains('atom') == true)) {
+          metadata['rssLinks'].add(absoluteHref);
+        } else if (rel != null && rel.contains('icon')) {
+          metadata['icons'][rel] = absoluteHref;
+        }
+      }
+    }
+
+    // Extract Script Tags
+    final scriptTags =
+        RegExp(r'''<script\s+[^>]*src=["'](.*?)["']''', caseSensitive: false)
+            .allMatches(html);
+    for (final match in scriptTags) {
+      final attrStr = match.group(1) ?? '';
+      final attrs = _parseAttributes(attrStr);
+      final src = attrs['src'];
+      if (src != null) {
+        metadata['jsLinks'].add(_resolveUrl(src, baseUrl));
+      }
+    }
+
+    // Refine Image/Favicon from OG/Meta
+    metadata['image'] = metadata['openGraph']['og:image'] ??
+        metadata['twitter']['twitter:image'];
+    metadata['favicon'] = metadata['icons']['apple-touch-icon'] ??
+        metadata['icons']['icon'] ??
+        metadata['icons']['shortcut icon'];
+
+    _pageMetadata = metadata;
+    notifyListeners();
+  }
+
+  Map<String, String> _parseAttributes(String attrStr) {
+    final Map<String, String> attrs = {};
+    // Regex to match attributes like name="value" or property="value" or rel='value'
+    final regExp = RegExp(r'''([a-zA-Z0-9:-]+)\s*=\s*["'](.*?)["']''',
+        caseSensitive: false);
+    for (final match in regExp.allMatches(attrStr)) {
+      attrs[match.group(1)!] = match.group(2)!;
+    }
+    return attrs;
+  }
+
+  String _resolveUrl(String url, String baseUrl) {
+    if (url.isEmpty) return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (baseUrl.isEmpty) return url;
+    try {
+      final base = Uri.parse(baseUrl);
+      return base.resolve(url).toString();
+    } catch (e) {
+      return url;
+    }
   }
 }
