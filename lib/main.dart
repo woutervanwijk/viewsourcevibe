@@ -9,6 +9,7 @@ import 'package:view_source_vibe/services/file_system_service.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
 import 'package:app_links/app_links.dart';
+import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:universal_io/io.dart';
 
 /// Sets up URL scheme handling for deep linking
@@ -236,14 +237,16 @@ void main() async {
   final appSettings = AppSettings();
   final fileSystemService = FileSystemService();
   final appStateService = await AppStateService.create();
+  final urlHistoryService = await UrlHistoryService.create();
 
   // Add app lifecycle observer to save state when app goes to background
   final appLifecycleObserver =
       AppLifecycleObserver(htmlService, appStateService);
   WidgetsBinding.instance.addObserver(appLifecycleObserver);
 
-  // Link services for auto-save
+  // Link services for auto-save and history
   htmlService.setAppStateService(appStateService);
+  htmlService.setUrlHistoryService(urlHistoryService);
 
   // Initialize settings persistence
   await appSettings.initialize();
@@ -394,6 +397,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => htmlService),
         ChangeNotifierProvider(create: (_) => appSettings),
         ChangeNotifierProvider(create: (_) => appStateService),
+        ChangeNotifierProvider(create: (_) => urlHistoryService),
         Provider<FileSystemService>(create: (_) => fileSystemService),
       ],
       child: const MyApp(),

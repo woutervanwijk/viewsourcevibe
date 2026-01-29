@@ -25,6 +25,7 @@ import 'dart:convert';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
+import 'package:view_source_vibe/services/url_history_service.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -35,6 +36,7 @@ class HtmlService with ChangeNotifier {
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
   AppStateService? _appStateService;
+  UrlHistoryService? _urlHistoryService;
 
   // Probe state
   Map<String, dynamic>? _probeResult;
@@ -116,6 +118,10 @@ class HtmlService with ChangeNotifier {
 
   void setAppStateService(AppStateService service) {
     _appStateService = service;
+  }
+
+  void setUrlHistoryService(UrlHistoryService service) {
+    _urlHistoryService = service;
   }
 
   /// Auto-save the current state if a service is available
@@ -945,6 +951,11 @@ class HtmlService with ChangeNotifier {
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
 
+    // Record in history if it has a path/URL
+    if (file.path.isNotEmpty) {
+      _urlHistoryService?.addUrl(file.path);
+    }
+
     // Switch back to editor if this is a local file
     if (!file.isUrl) {
       _isProbeOverlayVisible = false;
@@ -1162,6 +1173,9 @@ class HtmlService with ChangeNotifier {
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://$url';
       }
+
+      // Record in history
+      _urlHistoryService?.addUrl(url);
 
       // Parse and validate the URL
       final uri = Uri.tryParse(url);
