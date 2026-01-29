@@ -212,7 +212,6 @@ class FileViewer extends StatelessWidget {
                 child: CodeFindPanelView(
                   controller: htmlService.activeFindController!,
                   readOnly: false,
-                  margin: EdgeInsets.zero,
                   margin: const EdgeInsets.symmetric(
                       horizontal: 8.0, vertical: 6.0), // Match UrlInput margin
                 ),
@@ -298,6 +297,7 @@ class FileViewer extends StatelessWidget {
                 themeName: settings.themeName,
                 wrapText: settings.wrapText,
                 showLineNumbers: settings.showLineNumbers,
+                customScrollController: scrollController,
               );
             },
           ),

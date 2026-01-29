@@ -5,6 +5,7 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/widgets/file_viewer.dart';
 import 'package:view_source_vibe/widgets/toolbar.dart';
 import 'package:view_source_vibe/widgets/url_input.dart';
+import 'package:view_source_vibe/widgets/probe_results_overlay.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -89,13 +90,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 return Column(
                   children: [
                     Expanded(
-                      child: currentFile != null
-                          ? FileViewer(
-                              file: currentFile,
-                            )
-                          : const Center(
-                              child: Text('File data is not available'),
-                            ),
+                      child: Stack(
+                        children: [
+                          currentFile != null
+                              ? FileViewer(
+                                  file: currentFile,
+                                )
+                              : const Center(
+                                  child: Text('File data is not available'),
+                                ),
+                          // Overlay Probe Results if active
+                          const ProbeResultsOverlay(),
+                        ],
+                      ),
                     ),
                   ],
                 );

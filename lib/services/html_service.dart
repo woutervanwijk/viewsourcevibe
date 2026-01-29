@@ -35,6 +35,12 @@ class HtmlService with ChangeNotifier {
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
 
+  // Probe state
+  Map<String, dynamic>? _probeResult;
+  bool _isProbeOverlayVisible = false;
+  bool _isProbing = false;
+  String? _probeError;
+
   // Cache for highlighted content to improve performance
   final Map<String, Widget> _highlightCache = {};
   final Map<String, CodeLineEditingController> _controllerCache = {};
@@ -50,6 +56,12 @@ class HtmlService with ChangeNotifier {
   ScrollController? get horizontalScrollController =>
       _horizontalScrollController;
   GlobalKey? get codeEditorKey => _codeEditorKey;
+
+  // Expose probe state
+  Map<String, dynamic>? get probeResult => _probeResult;
+  bool get isProbeOverlayVisible => _isProbeOverlayVisible;
+  bool get isProbing => _isProbing;
+  String? get probeError => _probeError;
 
   // Expose search state
   CodeFindController? get activeFindController => _activeFindController;
@@ -1273,6 +1285,10 @@ Technical details: ${e.runtimeType}''';
 
   /// Probe a URL to get status code and headers without downloading the full content
   Future<Map<String, dynamic>> probeUrl(String url) async {
+    _isProbing = true;
+    _probeError = null;
+    notifyListeners();
+
     try {
       // Validate and sanitize URL
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -1313,7 +1329,7 @@ Technical details: ${e.runtimeType}''';
       final response = await http.Response.fromStream(streamedResponse);
       client.close();
 
-      return {
+      final result = {
         'statusCode': response.statusCode,
         'reasonPhrase': response.reasonPhrase,
         'headers': response.headers,
@@ -1321,9 +1337,31 @@ Technical details: ${e.runtimeType}''';
         'contentLength': response.contentLength,
         'finalUrl': url, // Since we didn't follow redirects automatically
       };
+
+      _probeResult = result;
+      _isProbing = false;
+      notifyListeners();
+
+      return result;
     } catch (e) {
       debugPrint('Error probing URL: $e');
+      _probeError = e.toString();
+      _isProbing = false;
+      notifyListeners();
       rethrow;
+    }
+  }
+
+  void toggleProbeOverlay() {
+    _isProbeOverlayVisible = !_isProbeOverlayVisible;
+    notifyListeners();
+
+    if (_isProbeOverlayVisible && _currentFile != null && _currentFile!.isUrl) {
+      // Optional: Auto-probe current URL if we open overlay and have no result or mismatch?
+      // For now, adhere to "Only an enter will probe" for new URLs, but if we toggle ON
+      // for an existing URL, we might want to ensure we have data.
+      // But the requirements say "Only an enter will probe for a new url".
+      // So we just toggle. If the user wants to probe the current URL they can press enter in the URL bar.
     }
   }
 
@@ -1834,7 +1872,8 @@ Technical details: ${e.runtimeType}''';
       {double fontSize = 16.0,
       String themeName = 'github',
       bool wrapText = false,
-      bool showLineNumbers = true}) {
+      bool showLineNumbers = true,
+      ScrollController? customScrollController}) {
     // Performance monitoring and warnings for large files
     final contentSize = content.length;
     final contentSizeMB = contentSize / (1024 * 1024);
@@ -1929,7 +1968,11 @@ Technical details: ${e.runtimeType}''';
     //   context: context,
     //   editingController: controller,
     // );
-    _verticalScrollController ??= PrimaryScrollController.of(context);
+
+    if (customScrollController == null) {
+      _verticalScrollController ??= PrimaryScrollController.of(context);
+    }
+
     // Create a code theme using the selected theme
     final mode =
         _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
@@ -1938,8 +1981,9 @@ Technical details: ${e.runtimeType}''';
         theme: _getThemeByName(themeName));
     // Create the scroll controller for CodeEditor
     final codeScrollController = CodeScrollController(
-        verticalScroller:
-            _verticalScrollController ?? PrimaryScrollController.of(context),
+        verticalScroller: customScrollController ??
+            _verticalScrollController ??
+            PrimaryScrollController.of(context),
         horizontalScroller: _horizontalScrollController);
 
     // Create the final widget
@@ -2221,7 +2265,8 @@ Technical details: ${e.runtimeType}''';
       {double fontSize = 16.0,
       String themeName = 'github',
       bool wrapText = false,
-      bool showLineNumbers = true}) {
+      bool showLineNumbers = true,
+      ScrollController? customScrollController}) {
     // For now, just use the regular method but with caching
     // The caching will provide most of the performance benefits
     return buildHighlightedText(
@@ -2232,6 +2277,7 @@ Technical details: ${e.runtimeType}''';
       themeName: themeName,
       wrapText: wrapText,
       showLineNumbers: showLineNumbers,
+      customScrollController: customScrollController,
     );
   }
 

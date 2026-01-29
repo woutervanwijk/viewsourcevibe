@@ -30,6 +30,12 @@ class _UrlInputState extends State<UrlInput> {
 
     try {
       await Provider.of<HtmlService>(context, listen: false).loadFromUrl(url);
+
+      // Also probe the URL if we are loading a new one
+      // This satisfies "Only an enter will probe for a new url"
+      // We do this in parallel or after load? Use the same URL.
+      Provider.of<HtmlService>(context, listen: false).probeUrl(url).ignore();
+
       // Clear the input after successful load
       // _urlController.clear();
     } catch (e) {
