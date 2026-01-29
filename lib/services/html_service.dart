@@ -2540,43 +2540,48 @@ Technical details: $e''';
 
     // 1. Check Meta Generator
     final generator = metadata['otherMeta']['generator']?.toLowerCase() ?? '';
-    if (generator.contains('wordpress'))
+    if (generator.contains('wordpress')) {
       tech['CMS'] = 'WordPress';
-    else if (generator.contains('joomla'))
+    } else if (generator.contains('joomla')) {
       tech['CMS'] = 'Joomla';
-    else if (generator.contains('drupal'))
+    } else if (generator.contains('drupal')) {
       tech['CMS'] = 'Drupal';
-    else if (generator.contains('ghost'))
+    } else if (generator.contains('ghost')) {
       tech['CMS'] = 'Ghost';
-    else if (generator.contains('hugo'))
+    } else if (generator.contains('hugo')) {
       tech['Static Site'] = 'Hugo';
-    else if (generator.contains('webflow'))
+    } else if (generator.contains('webflow')) {
       tech['CMS'] = 'Webflow';
-    else if (generator.contains('wix')) tech['CMS'] = 'Wix';
+    } else if (generator.contains('wix')) {
+      tech['CMS'] = 'Wix';
+    }
 
     // 2. Check File Paths and Specific Tags
     if (tech['CMS'] == null) {
-      if (html.contains('wp-content') || html.contains('wp-includes'))
+      if (html.contains('wp-content') || html.contains('wp-includes')) {
         tech['CMS'] = 'WordPress';
-      else if (html.contains('cdn.shopify.com') ||
-          html.contains('shopify-payment-button'))
+      } else if (html.contains('cdn.shopify.com') ||
+          html.contains('shopify-payment-button')) {
         tech['CMS'] = 'Shopify';
-      else if (html.contains('static1.squarespace.com'))
+      } else if (html.contains('static1.squarespace.com')) {
         tech['CMS'] = 'Squarespace';
-      else if (html.contains('data-wf-page')) tech['CMS'] = 'Webflow';
+      } else if (html.contains('data-wf-page')) {
+        tech['CMS'] = 'Webflow';
+      }
     }
 
     // 3. Detect Frontend Frameworks
-    if (_hasPattern(html, r'''_next/static|__NEXT_DATA__'''))
+    if (_hasPattern(html, r'''_next/static|__NEXT_DATA__''')) {
       tech['Framework'] = 'Next.js';
-    else if (_hasPattern(html, r'''__NUXT__'''))
+    } else if (_hasPattern(html, r'''__NUXT__''')) {
       tech['Framework'] = 'Nuxt.js';
-    else if (_hasPattern(html, r'''data-reactroot'''))
+    } else if (_hasPattern(html, r'''data-reactroot''')) {
       tech['Library'] = 'React';
-    else if (_hasPattern(html, r'''data-v-|v-if=|v-for='''))
+    } else if (_hasPattern(html, r'''data-v-|v-if=|v-for=''')) {
       tech['Library'] = 'Vue.js';
-    else if (_hasPattern(html, r'''ng-version|ng-app'''))
+    } else if (_hasPattern(html, r'''ng-version|ng-app''')) {
       tech['Framework'] = 'Angular';
+    }
 
     // 4. Detect CSS Frameworks
     if (_hasPattern(html,
