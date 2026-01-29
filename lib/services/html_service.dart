@@ -1268,15 +1268,15 @@ If this problem persists, you can:
 2. View the page source there
 3. Copy and paste the HTML content here manually
 
-Technical details: ${e.runtimeType}''';
+Technical details: $e''';
 
       final htmlFile = HtmlFile(
-        name: 'Web URL Error',
+        name: url,
         path: url,
         content: errorContent,
         lastModified: DateTime.now(),
         size: errorContent.length,
-        isUrl: false,
+        isUrl: true,
       );
 
       await loadFile(htmlFile, clearProbe: false);
