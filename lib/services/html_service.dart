@@ -21,7 +21,7 @@ import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'dart:async' show TimeoutException, Timer;
-import 'dart:io' show SocketException;
+import 'dart:io' show SocketException, InternetAddress;
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
@@ -1297,6 +1297,19 @@ Technical details: ${e.runtimeType}''';
 
       final uri = Uri.parse(url);
       final client = http.Client();
+      final stopwatch = Stopwatch()..start();
+      String? ipAddress;
+
+      // Resolve IP
+      try {
+        final addresses = await InternetAddress.lookup(uri.host)
+            .timeout(const Duration(seconds: 2));
+        if (addresses.isNotEmpty) {
+          ipAddress = addresses.first.address;
+        }
+      } catch (e) {
+        debugPrint('DNS Lookup failed: $e');
+      }
 
       // Headers to mimic a browser/curl
       final headers = {
@@ -1327,6 +1340,7 @@ Technical details: ${e.runtimeType}''';
       }
 
       final response = await http.Response.fromStream(streamedResponse);
+      stopwatch.stop();
       client.close();
 
       int? contentLength = response.contentLength;
@@ -1358,13 +1372,33 @@ Technical details: ${e.runtimeType}''';
         }
       }
 
+      // Security Headers Check
+      final securityHeaders = {
+        'Strict-Transport-Security':
+            response.headers['strict-transport-security'],
+        'Content-Security-Policy': response.headers['content-security-policy'],
+        'X-Frame-Options': response.headers['x-frame-options'],
+        'X-Content-Type-Options': response.headers['x-content-type-options'],
+        'Referrer-Policy': response.headers['referrer-policy'],
+        'Permissions-Policy': response.headers['permissions-policy'],
+      };
+
+      // Cookies
+      final setCookie = response.headers['set-cookie'];
+      final List<String> cookies =
+          setCookie != null ? setCookie.split(RegExp(r',(?=[^;]+?=)')) : [];
+
       final result = {
         'statusCode': response.statusCode,
         'reasonPhrase': response.reasonPhrase,
         'headers': response.headers,
         'isRedirect': response.isRedirect,
         'contentLength': contentLength,
-        'finalUrl': url, // Since we didn't follow redirects automatically
+        'finalUrl': url,
+        'responseTime': stopwatch.elapsedMilliseconds,
+        'ipAddress': ipAddress,
+        'security': securityHeaders,
+        'cookies': cookies,
       };
 
       // Extract redirect location if present

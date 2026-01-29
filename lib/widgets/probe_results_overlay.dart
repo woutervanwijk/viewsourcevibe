@@ -35,9 +35,9 @@ class ProbeResultsOverlay extends StatelessWidget {
           margin: const EdgeInsets.all(16),
           constraints: const BoxConstraints(maxWidth: 600),
           decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.1),
+            color: Colors.red.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+            border: Border.all(color: Colors.red.withOpacity(0.3)),
           ),
           child: SelectableText(
             'Error: ${htmlService.probeError}',
@@ -49,19 +49,199 @@ class ProbeResultsOverlay extends StatelessWidget {
 
     final result = htmlService.probeResult;
     if (result != null) {
-      return ListView(
-        primary:
-            false, // Prevent conflict with editor's primary scroll controller
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildStatusCard(context, htmlService, result),
-          const SizedBox(height: 16),
-          _buildHeadersList(context, result),
-        ],
+      return DefaultTabController(
+        length: 4,
+        child: Column(
+          children: [
+            TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelColor: Theme.of(context).colorScheme.primary,
+              unselectedLabelColor:
+                  Theme.of(context).colorScheme.onSurfaceVariant,
+              indicatorColor: Theme.of(context).colorScheme.primary,
+              tabs: const [
+                Tab(text: 'General', icon: Icon(Icons.info_outline, size: 20)),
+                Tab(text: 'Headers', icon: Icon(Icons.list_alt, size: 20)),
+                Tab(text: 'Security', icon: Icon(Icons.security, size: 20)),
+                Tab(
+                    text: 'Cookies',
+                    icon: Icon(Icons.cookie_outlined, size: 20)),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildGeneralTab(context, htmlService, result),
+                  _buildHeadersTab(context, result),
+                  _buildSecurityTab(context, result),
+                  _buildCookiesTab(context, result),
+                ],
+              ),
+            ),
+          ],
+        ),
       );
     }
 
     return const Center(child: Text('Enter a URL and press Enter to probe.'));
+  }
+
+  Widget _buildGeneralTab(BuildContext context, HtmlService htmlService,
+      Map<String, dynamic> result) {
+    return ListView(
+      primary: false,
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildStatusCard(context, htmlService, result),
+        const SizedBox(height: 16),
+        _buildNetworkInfoCard(context, result),
+      ],
+    );
+  }
+
+  Widget _buildNetworkInfoCard(
+      BuildContext context, Map<String, dynamic> result) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Network & Performance',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            if (result['ipAddress'] != null)
+              _buildDetailRow('Server IP', result['ipAddress']),
+            if (result['responseTime'] != null)
+              _buildDetailRow('Response Time', '${result['responseTime']} ms'),
+            if (result['headers']?['server'] != null)
+              _buildDetailRow('Server Software', result['headers']['server']),
+            if (result['headers']?['via'] != null)
+              _buildDetailRow('Proxy/Via', result['headers']['via']),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeadersTab(BuildContext context, Map<String, dynamic> result) {
+    return _buildHeadersList(context, result);
+  }
+
+  Widget _buildSecurityTab(BuildContext context, Map<String, dynamic> result) {
+    final security = result['security'] as Map<String, String?>? ?? {};
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          'Security Header Audit',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
+        ...security.entries.map((e) {
+          final isPresent = e.value != null;
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                color: isPresent
+                    ? Colors.green.withOpacity(0.3)
+                    : Colors.orange.withOpacity(0.3),
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ListTile(
+              leading: Icon(
+                isPresent
+                    ? Icons.check_circle_outline
+                    : Icons.warning_amber_rounded,
+                color: isPresent ? Colors.green : Colors.orange,
+              ),
+              title: Text(e.key,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                isPresent ? e.value! : 'Missing Header',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  color: isPresent ? null : Colors.orange[700],
+                ),
+              ),
+              dense: true,
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildCookiesTab(BuildContext context, Map<String, dynamic> result) {
+    final List<String> cookies = result['cookies'] as List<String>? ?? [];
+
+    if (cookies.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cookie_outlined, size: 48, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('No cookies set by this server.'),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: cookies.length,
+      itemBuilder: (context, index) {
+        final cookie = cookies[index];
+        final parts = cookie.split(';');
+        final nameValue = parts[0];
+        final attributes = parts.length > 1 ? parts.sublist(1).join(';') : '';
+
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(
+            side:
+                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            title: Text(nameValue,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle:
+                Text(attributes.trim(), style: const TextStyle(fontSize: 12)),
+            trailing: IconButton(
+              icon: const Icon(Icons.copy, size: 18),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: cookie));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Cookie copied'),
+                      duration: Duration(milliseconds: 500)),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildStatusCard(BuildContext context, HtmlService htmlService,
@@ -79,7 +259,7 @@ class ProbeResultsOverlay extends StatelessWidget {
       color: Theme.of(context)
           .colorScheme
           .surfaceContainerHighest
-          .withValues(alpha: 0.3),
+          .withOpacity(0.3),
       shape: RoundedRectangleBorder(
         side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
@@ -95,7 +275,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
+                    color: statusColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: statusColor),
                   ),
@@ -113,7 +293,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
+                      color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.blue),
                     ),
@@ -129,12 +309,9 @@ class ProbeResultsOverlay extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            if (result['headers']?['server'] != null)
-              _buildDetailRow('Server', result['headers']['server']),
             if (result['headers']?['content-type'] != null)
               _buildDetailRow(
                   'Content-Type', result['headers']['content-type']),
-            const SizedBox(height: 8),
             _buildDetailRow('Final URL', result['finalUrl']),
             if (isRedirect && result['redirectLocation'] != null)
               Padding(
@@ -180,8 +357,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                   final probeLength = result['contentLength'] ?? 0;
                   final fileLength =
                       htmlService.currentFile?.content.length ?? 0;
-                  if ((probeLength == 0 || probeLength == null) &&
-                      fileLength > 0) {
+                  if ((probeLength == 0) && fileLength > 0) {
                     return '$probeLength ($fileLength bytes loaded)';
                   }
                   return '$probeLength bytes';
@@ -215,52 +391,63 @@ class ProbeResultsOverlay extends StatelessWidget {
   }
 
   Widget _buildHeadersList(BuildContext context, Map<String, dynamic> result) {
-    final headers = result['headers'] as Map<String, String>;
+    var headers = result['headers'] as Map<String, String>;
+    // Sort headers alphabetically
+    final sortedKeys = headers.keys.toList()..sort();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Response Headers',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            side:
-                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-            borderRadius: BorderRadius.circular(12),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'All Response Headers',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-          child: Column(
-            children: headers.entries.map((e) {
-              return ListTile(
-                title: Text(
-                  e.key,
-                  style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  e.value,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                ),
-                dense: true,
-                onTap: () {
-                  Clipboard.setData(
-                      ClipboardData(text: '${e.key}: ${e.value}'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Header copied to clipboard'),
-                        duration: Duration(milliseconds: 500)),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListView.separated(
+                itemCount: sortedKeys.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final key = sortedKeys[index];
+                  final value = headers[key]!;
+                  return ListTile(
+                    title: Text(
+                      key,
+                      style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      value,
+                      style: const TextStyle(
+                          fontFamily: 'monospace', fontSize: 13),
+                    ),
+                    dense: true,
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: '$key: $value'));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Header copied to clipboard'),
+                            duration: Duration(milliseconds: 500)),
+                      );
+                    },
                   );
                 },
-              );
-            }).toList(),
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
