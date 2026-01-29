@@ -6,11 +6,14 @@ class AppStateService with ChangeNotifier {
   static const String _lastFileKey = 'last_file';
   static const String _lastUrlKey = 'last_url';
   static const String _lastScrollPositionKey = 'last_scroll_position';
-  static const String _lastHorizontalScrollPositionKey = 'last_horizontal_scroll_position';
+  static const String _lastHorizontalScrollPositionKey =
+      'last_horizontal_scroll_position';
   static const String _lastContentTypeKey = 'last_content_type';
   static const String _lastFileNameKey = 'last_file_name';
   static const String _lastFilePathKey = 'last_file_path';
   static const String _lastFileIsUrlKey = 'last_file_is_url';
+  static const String _isProbeVisibleKey = 'is_probe_visible';
+  static const String _probeResultKey = 'probe_result';
 
   final SharedPreferences _prefs;
 
@@ -27,6 +30,8 @@ class AppStateService with ChangeNotifier {
     double? scrollPosition,
     double? horizontalScrollPosition,
     String? contentType,
+    bool? isProbeVisible,
+    String? probeResultJson,
   }) async {
     try {
       if (currentFile != null) {
@@ -34,7 +39,7 @@ class AppStateService with ChangeNotifier {
         await _prefs.setString(_lastFileNameKey, currentFile.name);
         await _prefs.setString(_lastFilePathKey, currentFile.path);
         await _prefs.setBool(_lastFileIsUrlKey, currentFile.isUrl);
-        
+
         if (currentFile.isUrl) {
           await _prefs.setString(_lastUrlKey, currentFile.path);
         } else {
@@ -49,11 +54,20 @@ class AppStateService with ChangeNotifier {
       }
 
       if (horizontalScrollPosition != null) {
-        await _prefs.setDouble(_lastHorizontalScrollPositionKey, horizontalScrollPosition);
+        await _prefs.setDouble(
+            _lastHorizontalScrollPositionKey, horizontalScrollPosition);
       }
 
       if (contentType != null) {
         await _prefs.setString(_lastContentTypeKey, contentType);
+      }
+
+      if (isProbeVisible != null) {
+        await _prefs.setBool(_isProbeVisibleKey, isProbeVisible);
+      }
+
+      if (probeResultJson != null) {
+        await _prefs.setString(_probeResultKey, probeResultJson);
       }
 
       debugPrint('✅ App state saved successfully');
@@ -66,10 +80,11 @@ class AppStateService with ChangeNotifier {
   /// Load saved app state
   AppState? loadAppState() {
     try {
-      // Check if we have any saved state
-      if (!_prefs.containsKey(_lastFileKey) && 
+      // Check if we have any saved state - check several possible primary keys
+      if (!_prefs.containsKey(_lastFilePathKey) &&
+          !_prefs.containsKey(_lastFileKey) &&
           !_prefs.containsKey(_lastUrlKey) &&
-          !_prefs.containsKey(_lastFilePathKey)) {
+          !_prefs.containsKey(_isProbeVisibleKey)) {
         debugPrint('📂 No saved app state found');
         return null;
       }
@@ -89,12 +104,22 @@ class AppStateService with ChangeNotifier {
       }
 
       if (_prefs.containsKey(_lastHorizontalScrollPositionKey)) {
-        state.horizontalScrollPosition = _prefs.getDouble(_lastHorizontalScrollPositionKey);
+        state.horizontalScrollPosition =
+            _prefs.getDouble(_lastHorizontalScrollPositionKey);
       }
 
       // Load content type
       if (_prefs.containsKey(_lastContentTypeKey)) {
         state.contentType = _prefs.getString(_lastContentTypeKey);
+      }
+
+      // Load probe state
+      if (_prefs.containsKey(_isProbeVisibleKey)) {
+        state.isProbeVisible = _prefs.getBool(_isProbeVisibleKey);
+      }
+
+      if (_prefs.containsKey(_probeResultKey)) {
+        state.probeResultJson = _prefs.getString(_probeResultKey);
       }
 
       debugPrint('📂 App state loaded successfully: ${state.toString()}');
@@ -116,6 +141,8 @@ class AppStateService with ChangeNotifier {
       await _prefs.remove(_lastFileNameKey);
       await _prefs.remove(_lastFilePathKey);
       await _prefs.remove(_lastFileIsUrlKey);
+      await _prefs.remove(_isProbeVisibleKey);
+      await _prefs.remove(_probeResultKey);
 
       debugPrint('🧹 App state cleared successfully');
     } catch (e) {
@@ -132,9 +159,11 @@ class AppState {
   double? scrollPosition;
   double? horizontalScrollPosition;
   String? contentType;
+  bool? isProbeVisible;
+  String? probeResultJson;
 
   @override
   String toString() {
-    return 'AppState(filePath: $filePath, fileName: $fileName, isUrl: $isUrl, scrollPosition: $scrollPosition, horizontalScrollPosition: $horizontalScrollPosition, contentType: $contentType)';
+    return 'AppState(filePath: $filePath, fileName: $fileName, isUrl: $isUrl, scrollPosition: $scrollPosition, horizontalScrollPosition: $horizontalScrollPosition, contentType: $contentType, isProbeVisible: $isProbeVisible)';
   }
 }

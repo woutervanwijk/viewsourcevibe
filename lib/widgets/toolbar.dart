@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -7,7 +6,6 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:view_source_vibe/models/html_file.dart';
-import 'package:view_source_vibe/utils/file_utils.dart';
 import 'package:view_source_vibe/screens/settings_screen.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -109,22 +107,6 @@ class Toolbar extends StatelessWidget {
     }
   }
 
-  Future<void> _loadSampleFile(BuildContext context, String filename) async {
-    try {
-      final htmlFile = await FileUtils.loadSampleFile(filename);
-      if (context.mounted) {
-        await Provider.of<HtmlService>(context, listen: false)
-            .loadFile(htmlFile);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading sample file: $e')),
-        );
-      }
-    }
-  }
-
   void _showSettingsScreen(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -177,57 +159,6 @@ class Toolbar extends StatelessWidget {
     }
   }
 
-  void _showSampleFilesMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.html, color: Colors.blue),
-            title: const Text('Sample HTML'),
-            onTap: () {
-              Navigator.pop(context);
-              _loadSampleFile(context, 'sample.html');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.css, color: Colors.purple),
-            title: const Text('Sample CSS'),
-            onTap: () {
-              Navigator.pop(context);
-              _loadSampleFile(context, 'sample.css');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.code, color: Colors.green),
-            title: const Text('Sample Dart'),
-            onTap: () {
-              Navigator.pop(context);
-              _loadSampleFile(context, 'sample.dart');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.data_object, color: Colors.amber),
-            title: const Text('Sample YAML'),
-            onTap: () {
-              Navigator.pop(context);
-              _loadSampleFile(context, 'sample.yaml');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.code, color: Colors.blue),
-            title: const Text('Sample Python'),
-            onTap: () {
-              Navigator.pop(context);
-              _loadSampleFile(context, 'sample.py');
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -237,12 +168,6 @@ class Toolbar extends StatelessWidget {
           tooltip: 'Open File',
           onPressed: () => _pickFile(context),
         ),
-        if (kDebugMode)
-          IconButton(
-            icon: const Icon(Icons.code),
-            tooltip: 'Sample Files',
-            onPressed: () => _showSampleFilesMenu(context),
-          ),
         Consumer<AppSettings>(
           builder: (context, settings, child) {
             return Container(
@@ -282,9 +207,7 @@ class Toolbar extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              icon: Icon(htmlService.isProbeOverlayVisible
-                  ? Icons.featured_play_list_outlined
-                  : Icons.travel_explore),
+              icon: const Icon(Icons.travel_explore),
               tooltip: htmlService.isProbeOverlayVisible
                   ? 'Show Editor'
                   : 'Probe / Show Results',

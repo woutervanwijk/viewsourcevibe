@@ -35,9 +35,9 @@ class ProbeResultsOverlay extends StatelessWidget {
           margin: const EdgeInsets.all(16),
           constraints: const BoxConstraints(maxWidth: 600),
           decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.red.withOpacity(0.3)),
+            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
           ),
           child: SelectableText(
             'Error: ${htmlService.probeError}',
@@ -140,7 +140,7 @@ class ProbeResultsOverlay extends StatelessWidget {
   }
 
   Widget _buildSecurityTab(BuildContext context, Map<String, dynamic> result) {
-    final security = result['security'] as Map<String, String?>? ?? {};
+    final Map<String, dynamic> security = result['security'] ?? {};
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -158,8 +158,8 @@ class ProbeResultsOverlay extends StatelessWidget {
             shape: RoundedRectangleBorder(
               side: BorderSide(
                 color: isPresent
-                    ? Colors.green.withOpacity(0.3)
-                    : Colors.orange.withOpacity(0.3),
+                    ? Colors.green.withValues(alpha: 0.3)
+                    : Colors.orange.withValues(alpha: 0.3),
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -190,7 +190,8 @@ class ProbeResultsOverlay extends StatelessWidget {
   }
 
   Widget _buildCookiesTab(BuildContext context, Map<String, dynamic> result) {
-    final List<String> cookies = result['cookies'] as List<String>? ?? [];
+    final List<String> cookies =
+        (result['cookies'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
     if (cookies.isEmpty) {
       return const Center(
@@ -259,7 +260,7 @@ class ProbeResultsOverlay extends StatelessWidget {
       color: Theme.of(context)
           .colorScheme
           .surfaceContainerHighest
-          .withOpacity(0.3),
+          .withValues(alpha: 0.3),
       shape: RoundedRectangleBorder(
         side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
@@ -275,7 +276,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: statusColor),
                   ),
@@ -293,7 +294,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.blue),
                     ),
@@ -320,7 +321,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(
-                      width: 100,
+                      width: 128,
                       child: Text(
                         'Redirect to:',
                         style: TextStyle(fontWeight: FontWeight.bold),
@@ -357,7 +358,7 @@ class ProbeResultsOverlay extends StatelessWidget {
                   final probeLength = result['contentLength'] ?? 0;
                   final fileLength =
                       htmlService.currentFile?.content.length ?? 0;
-                  if ((probeLength == 0) && fileLength > 0) {
+                  if (fileLength > 0) {
                     return '$probeLength ($fileLength bytes loaded)';
                   }
                   return '$probeLength bytes';
@@ -376,7 +377,7 @@ class ProbeResultsOverlay extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 128,
             child: Text(
               '$label:',
               style: const TextStyle(fontWeight: FontWeight.bold),
@@ -391,7 +392,7 @@ class ProbeResultsOverlay extends StatelessWidget {
   }
 
   Widget _buildHeadersList(BuildContext context, Map<String, dynamic> result) {
-    var headers = result['headers'] as Map<String, String>;
+    final Map<String, dynamic> headers = result['headers'] ?? {};
     // Sort headers alphabetically
     final sortedKeys = headers.keys.toList()..sort();
 

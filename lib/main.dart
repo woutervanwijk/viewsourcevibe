@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/html_file.dart';
@@ -38,8 +37,6 @@ Future<void> setupUrlHandling(HtmlService htmlService) async {
     debugPrint('Error setting up URL handling: $e');
   }
 }
-
-
 
 /// Handles deep links from URL schemes
 Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
@@ -125,12 +122,14 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
       // The Android code should have already processed this and provided file content
       // If we get here, it means the Android code didn't handle it properly
       debugPrint('Content URI not handled by Android: ${uri.toString()}');
-      
+
       // Fallback: try to load it as a file if possible
       // This is a last resort and may not work for all content URIs
-      final errorContent = uri.toString().contains('com.google.android.apps.docs')
-        ? (uri.toString().contains('storage') || uri.toString().contains('enc%3Dencoded')
-            ? '''Google Drive File Could Not Be Loaded
+      final errorContent =
+          uri.toString().contains('com.google.android.apps.docs')
+              ? (uri.toString().contains('storage') ||
+                      uri.toString().contains('enc%3Dencoded')
+                  ? '''Google Drive File Could Not Be Loaded
 
 This file was shared from Google Drive using a content URI:
 
@@ -162,7 +161,7 @@ If you're sharing from Google Drive:
 4. Then share the downloaded file
 
 If you continue to have issues, try using a different file manager app to share the file.'''
-            : '''Google Docs File Could Not Be Loaded
+                  : '''Google Docs File Could Not Be Loaded
 
 This file was shared from Google Docs using an encrypted content URI:
 
@@ -184,7 +183,7 @@ Alternative methods:
 - Use "Print" and save as PDF, then share the PDF
 
 💡 Tip: Google Docs files shared directly may not be accessible due to Google's security policies. Always save a copy first!''')
-        : '''Content File Could Not Be Loaded
+              : '''Content File Could Not Be Loaded
 
 This file was shared from an Android app using a content URI:
 
@@ -202,7 +201,7 @@ Try these solutions:
 - Save the file to your device storage first, then share it
 - Use a different app to share the file
 - Contact the app developer for support''';
-      
+
       final htmlFile = HtmlFile(
         name: 'Content File Error',
         path: uri.toString(),
@@ -237,8 +236,12 @@ void main() async {
   final appStateService = await AppStateService.create();
 
   // Add app lifecycle observer to save state when app goes to background
-  final appLifecycleObserver = AppLifecycleObserver(htmlService, appStateService);
+  final appLifecycleObserver =
+      AppLifecycleObserver(htmlService, appStateService);
   WidgetsBinding.instance.addObserver(appLifecycleObserver);
+
+  // Link services for auto-save
+  htmlService.setAppStateService(appStateService);
 
   // Initialize settings persistence
   await appSettings.initialize();
@@ -280,49 +283,52 @@ void main() async {
   // Setup unified sharing service (will be initialized in MyApp)
   // UnifiedSharingService.initialize(context);
 
-  // Setup URL scheme handling for deep linking
-  setupUrlHandling(htmlService);
-
-  // Load saved app state if available (only if not in debug mode or if no deep link was handled)
-  bool shouldRestoreState = true;
-  
-  // Check if we're in debug mode - if so, load sample file instead of restoring state
-  if (kDebugMode) {
-    // We're in debug mode
-    try {
-      await htmlService.loadSampleFile();
-      shouldRestoreState = false; // Don't restore state if we loaded a sample file
-    } catch (e) {
-      debugPrint('Failed to load sample file: $e');
-      // Continue anyway - app will work without sample file
+  // Determine if we should restore state or handle a deep link
+  // Deep link should always take precedence over session restoration
+  Uri? initialUri;
+  try {
+    final appLinks = AppLinks();
+    initialUri =
+        await appLinks.getInitialAppLink().timeout(const Duration(seconds: 2));
+    if (initialUri != null) {
+      debugPrint('🚀 App started with deep link: $initialUri');
     }
+  } catch (e) {
+    debugPrint('⚠️ Error checking initial app link: $e');
   }
 
-  // Restore app state if we should and if there's saved state
-  if (shouldRestoreState) {
+  // Restore session if no deep link
+  if (initialUri != null) {
+    await _handleDeepLink(initialUri, htmlService);
+    // After deep link, also setup the stream for future links
+    setupUrlHandling(htmlService);
+  } else {
+    // No deep link, restore previous session
     try {
       final savedState = appStateService.loadAppState();
       if (savedState != null) {
         debugPrint('🔄 Restoring app state from previous session');
-        
+
         // Restore the file/URL if available
         if (savedState.filePath != null && savedState.filePath!.isNotEmpty) {
           if (savedState.isUrl == true) {
             // It's a URL
             try {
+              debugPrint('🌐 Restoring URL: ${savedState.filePath}');
               await htmlService.loadFromUrl(savedState.filePath!);
-              debugPrint('🌐 Restored URL: ${savedState.filePath}');
             } catch (e) {
               debugPrint('❌ Failed to restore URL: $e');
             }
           } else {
-            // It's a local file - we need to reload it from the filesystem
+            // It's a local file
             try {
               final file = File(savedState.filePath!);
               if (await file.exists()) {
+                debugPrint('📁 Restoring file: ${savedState.filePath}');
                 final content = await file.readAsString();
                 final htmlFile = HtmlFile(
-                  name: savedState.fileName ?? savedState.filePath!.split('/').last,
+                  name: savedState.fileName ??
+                      savedState.filePath!.split('/').last,
                   path: savedState.filePath!,
                   content: content,
                   lastModified: await file.lastModified(),
@@ -330,35 +336,54 @@ void main() async {
                   isUrl: false,
                 );
                 await htmlService.loadFile(htmlFile);
-                debugPrint('📁 Restored file: ${savedState.filePath}');
               } else {
-                debugPrint('❌ File no longer exists: ${savedState.filePath}');
+                debugPrint(
+                    '❌ Restored file no longer exists: ${savedState.filePath}');
               }
             } catch (e) {
               debugPrint('❌ Failed to restore file: $e');
             }
           }
         }
-        
-        // Restore scroll positions after the file is loaded
-        if (savedState.scrollPosition != null || savedState.horizontalScrollPosition != null) {
-          // We'll restore scroll positions after the UI is built
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            htmlService.restoreScrollPosition(savedState.scrollPosition);
-            htmlService.restoreHorizontalScrollPosition(savedState.horizontalScrollPosition);
-            debugPrint('📜 Restored scroll positions');
-          });
-        }
-        
-        // Restore content type if available
-        if (savedState.contentType != null && savedState.contentType!.isNotEmpty) {
+
+        // Restore content type if available (must be done after loadFile/loadFromUrl)
+        if (savedState.contentType != null &&
+            savedState.contentType!.isNotEmpty) {
           htmlService.selectedContentType = savedState.contentType;
           debugPrint('🎨 Restored content type: ${savedState.contentType}');
         }
+
+        // Restore probe state
+        if (savedState.isProbeVisible != null ||
+            savedState.probeResultJson != null) {
+          htmlService.restoreProbeState(
+              savedState.isProbeVisible, savedState.probeResultJson);
+          debugPrint('🔍 Restored probe state');
+        }
+
+        // Restore scroll positions (must be done after UI is built as it needs clients)
+        if (savedState.scrollPosition != null ||
+            savedState.horizontalScrollPosition != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (savedState.scrollPosition != null) {
+              htmlService.restoreScrollPosition(savedState.scrollPosition);
+            }
+            if (savedState.horizontalScrollPosition != null) {
+              htmlService.restoreHorizontalScrollPosition(
+                  savedState.horizontalScrollPosition);
+            }
+            debugPrint('📜 Restored scroll positions');
+          });
+        }
+      } else {
+        debugPrint('ℹ️ No saved state found to restore');
       }
     } catch (e) {
-      debugPrint('❌ Error restoring app state: $e');
+      debugPrint('❌ Error during session restoration: $e');
     }
+
+    // Still setup URL handling for future links even if no initial link was found
+    setupUrlHandling(htmlService);
   }
 
   runApp(
@@ -450,8 +475,9 @@ class AppLifecycleObserver with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
       // App is going to background or being closed - save state
       debugPrint('📱 App going to background, saving state...');
       htmlService.saveCurrentState(appStateService);

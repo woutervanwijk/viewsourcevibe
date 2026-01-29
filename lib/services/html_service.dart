@@ -19,9 +19,9 @@ import 'package:re_highlight/styles/tokyo-night-light.dart';
 import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter/services.dart';
 import 'dart:async' show TimeoutException, Timer;
 import 'dart:io' show SocketException, InternetAddress;
+import 'dart:convert';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
@@ -34,6 +34,7 @@ class HtmlService with ChangeNotifier {
   ScrollController? _verticalScrollController;
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
+  AppStateService? _appStateService;
 
   // Probe state
   Map<String, dynamic>? _probeResult;
@@ -81,12 +82,20 @@ class HtmlService with ChangeNotifier {
 
   /// Save current scroll position
   double? getCurrentScrollPosition() {
-    return _verticalScrollController?.position.pixels;
+    if (_verticalScrollController != null &&
+        _verticalScrollController!.hasClients) {
+      return _verticalScrollController!.position.pixels;
+    }
+    return null;
   }
 
   /// Save current horizontal scroll position
   double? getCurrentHorizontalScrollPosition() {
-    return _horizontalScrollController?.position.pixels;
+    if (_horizontalScrollController != null &&
+        _horizontalScrollController!.hasClients) {
+      return _horizontalScrollController!.position.pixels;
+    }
+    return null;
   }
 
   /// Restore scroll position
@@ -98,6 +107,17 @@ class HtmlService with ChangeNotifier {
           controller.jumpTo(position);
         });
       }
+    }
+  }
+
+  void setAppStateService(AppStateService service) {
+    _appStateService = service;
+  }
+
+  /// Auto-save the current state if a service is available
+  void _autoSave() {
+    if (_appStateService != null) {
+      saveCurrentState(_appStateService!);
     }
   }
 
@@ -113,18 +133,33 @@ class HtmlService with ChangeNotifier {
     }
   }
 
+  /// Restore probe state
+  void restoreProbeState(bool? isVisible, String? resultJson) {
+    if (isVisible != null) {
+      _isProbeOverlayVisible = isVisible;
+    }
+    if (resultJson != null && resultJson.isNotEmpty) {
+      try {
+        _probeResult = jsonDecode(resultJson);
+      } catch (e) {
+        debugPrint('❌ Error restoring probe result: $e');
+      }
+    }
+    notifyListeners();
+  }
+
   /// Save current app state using the provided AppStateService
   Future<void> saveCurrentState(AppStateService appStateService) async {
     try {
-      if (_currentFile != null) {
-        await appStateService.saveAppState(
-          currentFile: _currentFile,
-          scrollPosition: getCurrentScrollPosition(),
-          horizontalScrollPosition: getCurrentHorizontalScrollPosition(),
-          contentType: selectedContentType,
-        );
-        debugPrint('💾 Saved current app state');
-      }
+      await appStateService.saveAppState(
+        currentFile: _currentFile,
+        scrollPosition: getCurrentScrollPosition(),
+        horizontalScrollPosition: getCurrentHorizontalScrollPosition(),
+        contentType: selectedContentType,
+        isProbeVisible: _isProbeOverlayVisible,
+        probeResultJson: _probeResult != null ? jsonEncode(_probeResult) : null,
+      );
+      debugPrint('💾 Saved current app state');
     } catch (e) {
       debugPrint('❌ Error saving app state: $e');
     }
@@ -901,10 +936,15 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  Future<void> loadFile(HtmlFile file) async {
-    await clearFile();
+  Future<void> loadFile(HtmlFile file, {bool clearProbe = true}) async {
+    await clearFile(clearProbe: clearProbe);
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
+
+    // Switch back to editor if this is a local file
+    if (!file.isUrl) {
+      _isProbeOverlayVisible = false;
+    }
 
     // Performance warning for large files
     final fileSizeMB = file.size / (1024 * 1024);
@@ -984,13 +1024,18 @@ class HtmlService with ChangeNotifier {
     await Future.delayed(const Duration(milliseconds: 10));
   }
 
-  Future<void> clearFile() async {
+  Future<void> clearFile({bool clearProbe = true}) async {
     await scrollToZero();
     _currentFile = null;
     _originalFile = null; // Also clear the original file
     selectedContentType = null; // Reset content type selection
+    if (clearProbe) {
+      _probeResult = null; // Clear probe results
+      _probeError = null; // Clear probe errors
+    }
     clearHighlightCache(); // Clear syntax highlighting cache
     notifyListeners();
+    _autoSave();
   }
 
   /// Get a list of available content types for syntax highlighting
@@ -1067,6 +1112,7 @@ class HtmlService with ChangeNotifier {
         _currentFile = _originalFile!;
         selectedContentType = null; // Clear selected content type
         notifyListeners();
+        _autoSave();
       }
       return;
     }
@@ -1090,48 +1136,7 @@ class HtmlService with ChangeNotifier {
     // Update current file
     _currentFile = updatedFile;
     notifyListeners();
-  }
-
-  Future<void> loadSampleFile() async {
-    try {
-      // Load sample HTML file from assets
-      final content = await rootBundle.loadString('assets/sample.html');
-
-      final htmlFile = HtmlFile(
-        name: 'sample.html',
-        path: 'assets/sample.html',
-        content: content,
-        lastModified: DateTime.now(),
-        size: content.length,
-        isUrl: false,
-      );
-
-      await loadFile(htmlFile);
-    } catch (e) {
-      debugPrint('Error loading sample file: $e');
-      // Fallback to a simple HTML sample if asset loading fails
-      const fallbackContent = '''<!DOCTYPE html>
-<html>
-<head>
-    <title>Sample HTML</title>
-</head>
-<body>
-    <h1>Welcome to View Source Vibe</h1>
-    <p>This is a sample HTML file for testing.</p>
-</body>
-</html>''';
-
-      final htmlFile = HtmlFile(
-        name: 'sample.html',
-        path: 'fallback',
-        content: fallbackContent,
-        lastModified: DateTime.now(),
-        size: fallbackContent.length,
-        isUrl: false,
-      );
-
-      await loadFile(htmlFile);
-    }
+    _autoSave();
   }
 
   Future<void> loadFromUrl(String url) async {
@@ -1214,7 +1219,7 @@ class HtmlService with ChangeNotifier {
           isUrl: true,
         );
 
-        await loadFile(htmlFile);
+        await loadFile(htmlFile, clearProbe: false);
       } else {
         throw Exception(
             'Failed to load URL: ${response.statusCode} ${response.reasonPhrase}');
@@ -1274,7 +1279,7 @@ Technical details: ${e.runtimeType}''';
         isUrl: false,
       );
 
-      await loadFile(htmlFile);
+      await loadFile(htmlFile, clearProbe: false);
 
       // Also log to console for debugging
       debugPrint('Error loading web URL: $e');
@@ -1286,9 +1291,10 @@ Technical details: ${e.runtimeType}''';
   /// Probe a URL to get status code and headers without downloading the full content
   Future<Map<String, dynamic>> probeUrl(String url) async {
     _isProbing = true;
+    _probeResult = null; // Reset previous results immediately
     _probeError = null;
     notifyListeners();
-
+    _autoSave();
     try {
       // Validate and sanitize URL
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -1415,6 +1421,7 @@ Technical details: ${e.runtimeType}''';
       _probeResult = result;
       _isProbing = false;
       notifyListeners();
+      _autoSave();
 
       return result;
     } catch (e) {
@@ -1429,6 +1436,7 @@ Technical details: ${e.runtimeType}''';
   void toggleProbeOverlay() {
     _isProbeOverlayVisible = !_isProbeOverlayVisible;
     notifyListeners();
+    _autoSave();
 
     if (_isProbeOverlayVisible && _currentFile != null && _currentFile!.isUrl) {
       // Optional: Auto-probe current URL if we open overlay and have no result or mismatch?
@@ -2041,7 +2049,9 @@ Technical details: ${e.runtimeType}''';
       _controllerCache[controllerCacheKey] = controller;
     }
 
-    if (customScrollController == null) {
+    if (customScrollController != null) {
+      _verticalScrollController = customScrollController;
+    } else {
       _verticalScrollController ??= PrimaryScrollController.of(context);
     }
 
