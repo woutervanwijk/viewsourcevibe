@@ -11,6 +11,7 @@ import 'package:view_source_vibe/utils/file_utils.dart';
 import 'package:view_source_vibe/screens/settings_screen.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:view_source_vibe/ui/dialogs/probe_dialog.dart';
 
 class Toolbar extends StatelessWidget {
   const Toolbar({super.key});
@@ -177,6 +178,13 @@ class Toolbar extends StatelessWidget {
     }
   }
 
+  void _showProbeUrlDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const ProbeDialog(),
+    );
+  }
+
   void _showSampleFilesMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -272,6 +280,11 @@ class Toolbar extends StatelessWidget {
           ),
           tooltip: 'Share',
           onPressed: () => _shareCurrentFile(context),
+        ),
+        IconButton(
+          icon: const Icon(Icons.travel_explore),
+          tooltip: 'Probe URL',
+          onPressed: () => _showProbeUrlDialog(context),
         ),
         IconButton(
           icon: const Icon(Icons.settings),

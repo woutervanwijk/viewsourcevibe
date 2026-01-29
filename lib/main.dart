@@ -7,6 +7,7 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:view_source_vibe/services/file_system_service.dart';
+import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
 import 'package:app_links/app_links.dart';
 import 'package:universal_io/io.dart';
@@ -37,6 +38,8 @@ Future<void> setupUrlHandling(HtmlService htmlService) async {
     debugPrint('Error setting up URL handling: $e');
   }
 }
+
+
 
 /// Handles deep links from URL schemes
 Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
@@ -231,6 +234,11 @@ void main() async {
   final htmlService = HtmlService();
   final appSettings = AppSettings();
   final fileSystemService = FileSystemService();
+  final appStateService = await AppStateService.create();
+
+  // Add app lifecycle observer to save state when app goes to background
+  final appLifecycleObserver = AppLifecycleObserver(htmlService, appStateService);
+  WidgetsBinding.instance.addObserver(appLifecycleObserver);
 
   // Initialize settings persistence
   await appSettings.initialize();
@@ -275,14 +283,81 @@ void main() async {
   // Setup URL scheme handling for deep linking
   setupUrlHandling(htmlService);
 
-  // Load sample file in debug mode for easier testing
+  // Load saved app state if available (only if not in debug mode or if no deep link was handled)
+  bool shouldRestoreState = true;
+  
+  // Check if we're in debug mode - if so, load sample file instead of restoring state
   if (kDebugMode) {
     // We're in debug mode
     try {
       await htmlService.loadSampleFile();
+      shouldRestoreState = false; // Don't restore state if we loaded a sample file
     } catch (e) {
       debugPrint('Failed to load sample file: $e');
       // Continue anyway - app will work without sample file
+    }
+  }
+
+  // Restore app state if we should and if there's saved state
+  if (shouldRestoreState) {
+    try {
+      final savedState = appStateService.loadAppState();
+      if (savedState != null) {
+        debugPrint('🔄 Restoring app state from previous session');
+        
+        // Restore the file/URL if available
+        if (savedState.filePath != null && savedState.filePath!.isNotEmpty) {
+          if (savedState.isUrl == true) {
+            // It's a URL
+            try {
+              await htmlService.loadFromUrl(savedState.filePath!);
+              debugPrint('🌐 Restored URL: ${savedState.filePath}');
+            } catch (e) {
+              debugPrint('❌ Failed to restore URL: $e');
+            }
+          } else {
+            // It's a local file - we need to reload it from the filesystem
+            try {
+              final file = File(savedState.filePath!);
+              if (await file.exists()) {
+                final content = await file.readAsString();
+                final htmlFile = HtmlFile(
+                  name: savedState.fileName ?? savedState.filePath!.split('/').last,
+                  path: savedState.filePath!,
+                  content: content,
+                  lastModified: await file.lastModified(),
+                  size: await file.length(),
+                  isUrl: false,
+                );
+                await htmlService.loadFile(htmlFile);
+                debugPrint('📁 Restored file: ${savedState.filePath}');
+              } else {
+                debugPrint('❌ File no longer exists: ${savedState.filePath}');
+              }
+            } catch (e) {
+              debugPrint('❌ Failed to restore file: $e');
+            }
+          }
+        }
+        
+        // Restore scroll positions after the file is loaded
+        if (savedState.scrollPosition != null || savedState.horizontalScrollPosition != null) {
+          // We'll restore scroll positions after the UI is built
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            htmlService.restoreScrollPosition(savedState.scrollPosition);
+            htmlService.restoreHorizontalScrollPosition(savedState.horizontalScrollPosition);
+            debugPrint('📜 Restored scroll positions');
+          });
+        }
+        
+        // Restore content type if available
+        if (savedState.contentType != null && savedState.contentType!.isNotEmpty) {
+          htmlService.selectedContentType = savedState.contentType;
+          debugPrint('🎨 Restored content type: ${savedState.contentType}');
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error restoring app state: $e');
     }
   }
 
@@ -291,6 +366,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => htmlService),
         ChangeNotifierProvider(create: (_) => appSettings),
+        ChangeNotifierProvider(create: (_) => appStateService),
         Provider<FileSystemService>(create: (_) => fileSystemService),
       ],
       child: const MyApp(),
@@ -362,5 +438,23 @@ class MyApp extends StatelessWidget {
       home: SharedContentWrapper(child: const HomeScreen()),
       debugShowCheckedModeBanner: false,
     );
+  }
+}
+
+class AppLifecycleObserver with WidgetsBindingObserver {
+  final HtmlService htmlService;
+  final AppStateService appStateService;
+
+  AppLifecycleObserver(this.htmlService, this.appStateService);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      // App is going to background or being closed - save state
+      debugPrint('📱 App going to background, saving state...');
+      htmlService.saveCurrentState(appStateService);
+    }
   }
 }

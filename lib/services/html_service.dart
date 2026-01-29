@@ -23,33 +23,27 @@ import 'package:flutter/services.dart';
 import 'dart:async' show TimeoutException, Timer;
 import 'dart:io' show SocketException;
 import 'package:view_source_vibe/widgets/contextmenu.dart';
+import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
+import 'package:view_source_vibe/services/app_state_service.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
   HtmlFile? _originalFile; // Store original file for "Automatic" option
   String?
-      _selectedContentType; // Track the selected content type for syntax highlighting
+      selectedContentType; // Track the selected content type for syntax highlighting
   ScrollController? _verticalScrollController;
   ScrollController? _horizontalScrollController;
   GlobalKey? _codeEditorKey;
-  
+
   // Cache for highlighted content to improve performance
   final Map<String, Widget> _highlightCache = {};
   final Map<String, CodeLineEditingController> _controllerCache = {};
-  
+
   // Debouncing for syntax highlighting
   Timer? _highlightDebounceTimer;
-  String? _pendingHighlightContent;
-  String? _pendingHighlightExtension;
-  BuildContext? _pendingHighlightContext;
-  double _pendingHighlightFontSize = 16.0;
-  String _pendingHighlightThemeName = 'github';
-  bool _pendingHighlightWrapText = false;
-  bool _pendingHighlightShowLineNumbers = true;
 
   HtmlFile? get currentFile => _currentFile;
-  String? get selectedContentType => _selectedContentType;
   ScrollController? get scrollController => _verticalScrollController;
   ScrollController? get horizontalScrollController =>
       _horizontalScrollController;
@@ -65,6 +59,57 @@ class HtmlService with ChangeNotifier {
     _verticalScrollController?.dispose();
     _horizontalScrollController?.dispose();
     super.dispose();
+  }
+
+  /// Save current scroll position
+  double? getCurrentScrollPosition() {
+    return _verticalScrollController?.position.pixels;
+  }
+
+  /// Save current horizontal scroll position
+  double? getCurrentHorizontalScrollPosition() {
+    return _horizontalScrollController?.position.pixels;
+  }
+
+  /// Restore scroll position
+  void restoreScrollPosition(double? position) {
+    if (position != null) {
+      final controller = _verticalScrollController;
+      if (controller != null && controller.hasClients) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          controller.jumpTo(position);
+        });
+      }
+    }
+  }
+
+  /// Restore horizontal scroll position
+  void restoreHorizontalScrollPosition(double? position) {
+    if (position != null) {
+      final controller = _horizontalScrollController;
+      if (controller != null && controller.hasClients) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          controller.jumpTo(position);
+        });
+      }
+    }
+  }
+
+  /// Save current app state using the provided AppStateService
+  Future<void> saveCurrentState(AppStateService appStateService) async {
+    try {
+      if (_currentFile != null) {
+        await appStateService.saveAppState(
+          currentFile: _currentFile,
+          scrollPosition: getCurrentScrollPosition(),
+          horizontalScrollPosition: getCurrentHorizontalScrollPosition(),
+          contentType: selectedContentType,
+        );
+        debugPrint('💾 Saved current app state');
+      }
+    } catch (e) {
+      debugPrint('❌ Error saving app state: $e');
+    }
   }
 
   /// Generate a descriptive filename for URLs without clear filenames
@@ -267,7 +312,7 @@ class HtmlService with ChangeNotifier {
   /// Get the final URL after following all redirects manually
   /// This ensures we get the actual redirected URL, not the original
   Future<String> _getFinalUrlAfterRedirects(
-      Uri uri, http.Client client, Map<String, String> headers, 
+      Uri uri, http.Client client, Map<String, String> headers,
       {Uri? originalUri, int redirectDepth = 0}) async {
     try {
       // Prevent infinite redirect loops
@@ -298,13 +343,9 @@ class HtmlService with ChangeNotifier {
           final redirectUri = uri.resolve(locationHeader);
 
           // Recursively follow the redirect to get the final URL
-          return await _getFinalUrlAfterRedirects(
-            redirectUri, 
-            client, 
-            headers,
-            originalUri: originalUri ?? uri, // Preserve the original URI
-            redirectDepth: redirectDepth + 1
-          );
+          return await _getFinalUrlAfterRedirects(redirectUri, client, headers,
+              originalUri: originalUri ?? uri, // Preserve the original URI
+              redirectDepth: redirectDepth + 1);
         }
       }
 
@@ -313,13 +354,14 @@ class HtmlService with ChangeNotifier {
     } catch (e) {
       // If redirect handling fails, fall back to the original URL if available
       debugPrint('Error handling redirects: $e');
-      
+
       // If this is a DNS lookup failure or connection error, fall back to original URL
       if (e is SocketException || e.toString().contains('Failed host lookup')) {
-        debugPrint('DNS/Connection error detected, falling back to original URL');
+        debugPrint(
+            'DNS/Connection error detected, falling back to original URL');
         return originalUri?.toString() ?? uri.toString();
       }
-      
+
       // For other errors, return the original URL if available, otherwise current URI
       return originalUri?.toString() ?? uri.toString();
     }
@@ -869,14 +911,17 @@ class HtmlService with ChangeNotifier {
 
       // Map detected type to appropriate content type for syntax highlighting
       // This handles cases where file extension might not match actual content type
-      _selectedContentType = _mapDetectedTypeToContentType(detectedType);
+      selectedContentType = _mapDetectedTypeToContentType(detectedType);
     } catch (e) {
       // If detection fails, fall back to automatic (null)
-      _selectedContentType = null;
+      selectedContentType = null;
     }
 
     notifyListeners();
     await scrollToZero();
+
+    // Note: State saving is handled by the AppLifecycleObserver
+    // We don't save state here to avoid excessive writes during normal usage
   }
 
   /// Map detected file type to appropriate content type for syntax highlighting
@@ -925,7 +970,7 @@ class HtmlService with ChangeNotifier {
     await scrollToZero();
     _currentFile = null;
     _originalFile = null; // Also clear the original file
-    _selectedContentType = null; // Reset content type selection
+    selectedContentType = null; // Reset content type selection
     clearHighlightCache(); // Clear syntax highlighting cache
     notifyListeners();
   }
@@ -1002,14 +1047,14 @@ class HtmlService with ChangeNotifier {
     if (newContentType == 'automatic') {
       if (_originalFile != null) {
         _currentFile = _originalFile!;
-        _selectedContentType = null; // Clear selected content type
+        selectedContentType = null; // Clear selected content type
         notifyListeners();
       }
       return;
     }
 
     // Update the selected content type for syntax highlighting
-    _selectedContentType = newContentType;
+    selectedContentType = newContentType;
 
     // Create a new file with the same name but trigger UI update
     final currentFile = _currentFile!;
@@ -1102,7 +1147,8 @@ class HtmlService with ChangeNotifier {
       };
 
       // Manual redirect handling to get the actual redirected URL
-      final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers, originalUri: uri);
+      final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers,
+          originalUri: uri);
 
       // Make the request to the final URL with timeout
       final response = await client
@@ -1158,7 +1204,7 @@ class HtmlService with ChangeNotifier {
     } catch (e) {
       // Display error in the editor instead of throwing exception
       String errorMessage;
-      
+
       if (e is TimeoutException) {
         errorMessage = 'Request timed out';
       } else if (e is FormatException) {
@@ -1211,13 +1257,69 @@ Technical details: ${e.runtimeType}''';
       );
 
       await loadFile(htmlFile);
-      
+
       // Also log to console for debugging
       debugPrint('Error loading web URL: $e');
     }
   }
 
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
+
+  /// Probe a URL to get status code and headers without downloading the full content
+  Future<Map<String, dynamic>> probeUrl(String url) async {
+    try {
+      // Validate and sanitize URL
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://$url';
+      }
+
+      final uri = Uri.parse(url);
+      final client = http.Client();
+
+      // Headers to mimic a browser/curl
+      final headers = {
+        'User-Agent':
+            'Mozilla/5.0 (compatible; ViewSourceVibe/1.0; +https://github.com/wouterviewsource/viewsourcevibe)',
+        'Accept': '*/*',
+      };
+
+      // Try HEAD request first (most efficient)
+      final request = http.Request('HEAD', uri)..followRedirects = false;
+      headers.forEach((key, value) => request.headers[key] = value);
+
+      http.StreamedResponse streamedResponse;
+      try {
+        streamedResponse =
+            await client.send(request).timeout(const Duration(seconds: 10));
+      } catch (e) {
+        // If HEAD fails (some servers block it), try GET with range header
+        // or just close stream immediately
+        debugPrint('HEAD request failed, trying GET: $e');
+        final getRequest = http.Request('GET', uri)..followRedirects = false;
+        headers.forEach((key, value) => getRequest.headers[key] = value);
+        // Try to get just the first byte
+        getRequest.headers['Range'] = 'bytes=0-0';
+
+        streamedResponse =
+            await client.send(getRequest).timeout(const Duration(seconds: 10));
+      }
+
+      final response = await http.Response.fromStream(streamedResponse);
+      client.close();
+
+      return {
+        'statusCode': response.statusCode,
+        'reasonPhrase': response.reasonPhrase,
+        'headers': response.headers,
+        'isRedirect': response.isRedirect,
+        'contentLength': response.contentLength,
+        'finalUrl': url, // Since we didn't follow redirects automatically
+      };
+    } catch (e) {
+      debugPrint('Error probing URL: $e');
+      rethrow;
+    }
+  }
 
   String getLanguageForExtension(String extension) {
     final ext = extension.toLowerCase();
@@ -1727,7 +1829,6 @@ Technical details: ${e.runtimeType}''';
       String themeName = 'github',
       bool wrapText = false,
       bool showLineNumbers = true}) {
-    
     // Performance monitoring and warnings for large files
     final contentSize = content.length;
     final contentSizeMB = contentSize / (1024 * 1024);
@@ -1765,28 +1866,28 @@ Technical details: ${e.runtimeType}''';
     }
 
     // Performance optimization: Use simplified highlighting for very large files
-    bool useSimplifiedHighlighting = contentSize > 10 * 1024 * 1024; // 10MB threshold
-    
+    bool useSimplifiedHighlighting =
+        contentSize > 10 * 1024 * 1024; // 10MB threshold
+
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
 
     // Generate a cache key based on content hash and parameters
     final cacheKey = _generateHighlightCacheKey(
-      content: content,
-      extension: extension,
-      fontSize: fontSize,
-      themeName: themeName,
-      wrapText: wrapText,
-      showLineNumbers: showLineNumbers,
-      useSimplified: useSimplifiedHighlighting
-    );
-    
+        content: content,
+        extension: extension,
+        fontSize: fontSize,
+        themeName: themeName,
+        wrapText: wrapText,
+        showLineNumbers: showLineNumbers,
+        useSimplified: useSimplifiedHighlighting);
+
     // Check cache first
     if (_highlightCache.containsKey(cacheKey)) {
       debugPrint('🔄 Using cached highlighted content');
       return _highlightCache[cacheKey]!;
     }
-    
+
     // Create a controller for the code editor
     // Performance optimization: Use chunked content for very large files
     String processedContent = content;
@@ -1794,14 +1895,15 @@ Technical details: ${e.runtimeType}''';
       // For very large files, use a simplified approach
       // This reduces memory usage and parsing time
       debugPrint('🔧 Using simplified highlighting for very large file');
-      
+
       // Limit the amount of content processed for syntax highlighting
       // while still showing the full content
       final maxHighlightLength = 50000; // ~50KB for highlighting
       if (content.length > maxHighlightLength) {
         // Take the first part for highlighting, but keep full content for display
         processedContent = content.substring(0, maxHighlightLength);
-        debugPrint('   Processing first ${maxHighlightLength ~/ 1024}KB for highlighting');
+        debugPrint(
+            '   Processing first ${maxHighlightLength ~/ 1024}KB for highlighting');
       }
     }
 
@@ -1866,14 +1968,20 @@ Technical details: ${e.runtimeType}''';
               );
             }
           : null,
+      findBuilder: (context, editingController, readOnly) {
+        return CodeFindPanelView(
+          controller: editingController,
+          readOnly: readOnly,
+        );
+      },
     );
-    
+
     // Cache the result for future use
     _highlightCache[cacheKey] = codeEditor;
-    
+
     // Enforce cache size limits
     _enforceCacheSizeLimits();
-    
+
     return codeEditor;
   }
 
@@ -2013,15 +2121,15 @@ Technical details: ${e.runtimeType}''';
     // Create a hash of the content to use as part of the cache key
     // Use a simple hash function that's fast but effective for this purpose
     final contentHash = _simpleHash(content);
-    
-    return 'hl:${contentHash}_ext:${extension}_fs:${fontSize.toStringAsFixed(1)}_th:${themeName}_wrap:${wrapText}_lines:${showLineNumbers}_simple:${useSimplified}';
+
+    return 'hl:${contentHash}_ext:${extension}_fs:${fontSize.toStringAsFixed(1)}_th:${themeName}_wrap:${wrapText}_lines:${showLineNumbers}_simple:$useSimplified';
   }
 
   /// Simple hash function for content
   String _simpleHash(String input) {
     // For very long content, use a substring to avoid performance issues
     final sample = input.length > 1000 ? input.substring(0, 1000) : input;
-    
+
     // Simple hash using string length and some character positions
     final hashParts = [
       sample.length.toString(),
@@ -2030,7 +2138,7 @@ Technical details: ${e.runtimeType}''';
       sample.length > 100 ? sample.codeUnitAt(100).toString() : '0',
       sample.length > 500 ? sample.codeUnitAt(500).toString() : '0',
     ];
-    
+
     return hashParts.join('_');
   }
 
@@ -2045,38 +2153,46 @@ Technical details: ${e.runtimeType}''';
   void _enforceCacheSizeLimits() {
     const maxCacheEntries = 10; // Limit to 10 cached highlighted widgets
     const maxControllerEntries = 20; // Limit to 20 cached controllers
-    
+
     // Enforce highlight cache limit
     if (_highlightCache.length > maxCacheEntries) {
-      final keysToRemove = _highlightCache.keys.take(_highlightCache.length - maxCacheEntries).toList();
+      final keysToRemove = _highlightCache.keys
+          .take(_highlightCache.length - maxCacheEntries)
+          .toList();
       for (final key in keysToRemove) {
         _highlightCache.remove(key);
       }
       debugPrint('🔄 Trimmed highlight cache to $maxCacheEntries entries');
     }
-    
+
     // Enforce controller cache limit
     if (_controllerCache.length > maxControllerEntries) {
-      final keysToRemove = _controllerCache.keys.take(_controllerCache.length - maxControllerEntries).toList();
+      final keysToRemove = _controllerCache.keys
+          .take(_controllerCache.length - maxControllerEntries)
+          .toList();
       for (final key in keysToRemove) {
         _controllerCache.remove(key);
       }
-      debugPrint('🔄 Trimmed controller cache to $maxControllerEntries entries');
+      debugPrint(
+          '🔄 Trimmed controller cache to $maxControllerEntries entries');
     }
   }
 
   /// Clear cache for specific content
   void clearCacheForContent(String content) {
     final contentHash = _simpleHash(content);
-    final keysToRemove = _highlightCache.keys.where((key) => key.startsWith('hl:$contentHash')).toList();
-    
+    final keysToRemove = _highlightCache.keys
+        .where((key) => key.startsWith('hl:$contentHash'))
+        .toList();
+
     for (final key in keysToRemove) {
       _highlightCache.remove(key);
       final controllerKey = '${key}_controller';
       _controllerCache.remove(controllerKey);
     }
-    
-    debugPrint('🧹 Cleared cache for specific content (${keysToRemove.length} entries)');
+
+    debugPrint(
+        '🧹 Cleared cache for specific content (${keysToRemove.length} entries)');
   }
 
   /// Debounced version of buildHighlightedText for better performance
@@ -2087,12 +2203,11 @@ Technical details: ${e.runtimeType}''';
       String themeName = 'github',
       bool wrapText = false,
       bool showLineNumbers = true}) {
-    
     // For now, just use the regular method but with caching
     // The caching will provide most of the performance benefits
     return buildHighlightedText(
-      content, 
-      extension, 
+      content,
+      extension,
       context,
       fontSize: fontSize,
       themeName: themeName,
@@ -2104,9 +2219,6 @@ Technical details: ${e.runtimeType}''';
   /// Cancel any pending highlight operations
   void cancelPendingHighlight() {
     _highlightDebounceTimer?.cancel();
-    _pendingHighlightContent = null;
-    _pendingHighlightExtension = null;
-    _pendingHighlightContext = null;
     debugPrint('⏹️  Cancelled pending highlight operations');
   }
 }
