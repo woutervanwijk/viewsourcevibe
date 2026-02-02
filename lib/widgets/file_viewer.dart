@@ -195,10 +195,6 @@ class FileViewer extends StatelessWidget {
     final fileExtension =
         fileName.isNotEmpty ? file.name.split('.').last.toLowerCase() : '';
     final isHtmlFile = fileExtension == 'html' || fileExtension == 'htm';
-    final isSampleFile = file.path.contains('sample.html') ||
-        file.path.contains('assets') ||
-        file.path.contains('fallback');
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -221,27 +217,6 @@ class FileViewer extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (isSampleFile)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                    color: const Color.fromRGBO(
-                        21, 101, 192, 0.1), // Blue with 10% opacity
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.blue),
-                        SizedBox(width: 4),
-                        Text(
-                          'Sample file loaded (Debug Mode)',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.blue,
-                              fontStyle: FontStyle.italic),
-                        ),
-                      ],
-                    ),
-                  ),
                 GestureDetector(
                   onTap: () => _showContentTypeMenu(context),
                   child: Padding(
