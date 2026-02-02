@@ -270,7 +270,7 @@ class FileViewer extends StatelessWidget {
                               onPressed: () => htmlService.toggleSearch(),
                               tooltip: 'Find',
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 2),
                             // Font Size picker
                             PopupMenuButton<double>(
                               icon: const Icon(Icons.format_size, size: 20),
@@ -302,63 +302,100 @@ class FileViewer extends StatelessWidget {
                                 }).toList();
                               },
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 2),
                             // Word Wrap button
-                            IconButton(
-                              icon: Icon(
-                                settings.wrapText
-                                    ? Icons.wrap_text
-                                    : Icons.wrap_text_outlined,
-                                size: 20,
+                            Container(
+                              decoration: BoxDecoration(
+                                color: settings.wrapText
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withAlpha(40)
+                                    : null,
+                                borderRadius: BorderRadius.circular(4),
                               ),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () {
-                                settings.wrapText = !settings.wrapText;
-                              },
-                              tooltip: 'Word Wrap',
+                              child: IconButton(
+                                icon: Icon(
+                                  settings.wrapText
+                                      ? Icons.wrap_text
+                                      : Icons.wrap_text_outlined,
+                                  size: 20,
+                                  color: settings.wrapText
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                                padding: const EdgeInsets.all(4),
+                                constraints: const BoxConstraints(),
+                                onPressed: () {
+                                  settings.wrapText = !settings.wrapText;
+                                },
+                                tooltip: 'Word Wrap',
+                              ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 2),
+                            // Beautify Toggle button
+                            Container(
+                              decoration: BoxDecoration(
+                                color: htmlService.isBeautifyEnabled
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withAlpha(40)
+                                    : null,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  htmlService.isBeautifyEnabled
+                                      ? Icons.format_indent_increase
+                                      : Icons.format_indent_increase_outlined,
+                                  size: 20,
+                                  color: htmlService.isBeautifyEnabled
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                                padding: const EdgeInsets.all(4),
+                                constraints: const BoxConstraints(),
+                                onPressed: () =>
+                                    htmlService.toggleIsBeautifyEnabled(),
+                                tooltip: htmlService.isBeautifyEnabled
+                                    ? 'Show Raw'
+                                    : 'Beautify Code',
+                              ),
+                            ),
+                            const SizedBox(width: 2),
                           ],
                           // WebView Toggle button - Always show for text files
-                          IconButton(
-                            icon: Icon(
-                              htmlService.isWebViewMode
-                                  ? Icons.code
-                                  : Icons.language,
-                              size: 20,
+                          Container(
+                            decoration: BoxDecoration(
                               color: htmlService.isWebViewMode
-                                  ? Theme.of(context).colorScheme.primary
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withAlpha(40)
                                   : null,
+                              borderRadius: BorderRadius.circular(4),
                             ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () => htmlService.toggleIsWebViewMode(),
-                            tooltip: htmlService.isWebViewMode
-                                ? 'Show Editor'
-                                : 'Show Browser Preview',
-                          ),
-                          const SizedBox(width: 8),
-                          // Beautify Toggle button
-                          IconButton(
-                            icon: Icon(
-                              htmlService.isBeautifyEnabled
-                                  ? Icons.format_indent_increase
-                                  : Icons.format_indent_increase_outlined,
-                              size: 20,
-                              color: htmlService.isBeautifyEnabled
-                                  ? Theme.of(context).colorScheme.primary
-                                  : null,
+                            child: IconButton(
+                              icon: Icon(
+                                htmlService.isWebViewMode
+                                    ? Icons.code
+                                    : Icons.language,
+                                size: 20,
+                                color: htmlService.isWebViewMode
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                              ),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: () =>
+                                  htmlService.toggleIsWebViewMode(),
+                              tooltip: htmlService.isWebViewMode
+                                  ? 'Show Editor'
+                                  : 'Show Browser Preview',
                             ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () =>
-                                htmlService.toggleIsBeautifyEnabled(),
-                            tooltip: htmlService.isBeautifyEnabled
-                                ? 'Show Raw'
-                                : 'Beautify Code',
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 2),
                         ],
                       ],
                     ),

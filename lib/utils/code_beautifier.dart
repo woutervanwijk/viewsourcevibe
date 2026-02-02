@@ -27,7 +27,7 @@ class CodeBeautifier {
       final value = token.group(0)!;
       if (value.startsWith('</')) {
         indent--;
-        result += '\n' + '  ' * indent + value;
+        result += '\n${'  ' * indent}$value';
       } else if (value.startsWith('<') &&
           !value.endsWith('/>') &&
           !value.startsWith('<!') &&
@@ -38,14 +38,14 @@ class CodeBeautifier {
         final selfClosing =
             {'br', 'hr', 'img', 'input', 'link', 'meta'}.contains(tagName);
 
-        result += '\n' + '  ' * indent + value;
+        result += '\n${'  ' * indent}$value';
         if (!selfClosing) indent++;
       } else if (value.startsWith('<')) {
-        result += '\n' + '  ' * indent + value;
+        result += '\n${'  ' * indent}$value';
       } else {
         final text = value.trim();
         if (text.isNotEmpty) {
-          result += '\n' + '  ' * indent + text;
+          result += '\n${'  ' * indent}$text';
         }
       }
     }
@@ -61,14 +61,13 @@ class CodeBeautifier {
     for (var i = 0; i < normalized.length; i++) {
       final char = normalized[i];
       if (char == '{') {
-        result += ' {\n' + '  ' * (indent + 1);
+        result += ' {\n${'  ' * (indent + 1)}';
         indent++;
       } else if (char == '}') {
         indent--;
-        result =
-            result.trimRight() + '\n' + '  ' * indent + '}\n' + '  ' * indent;
+        result = '${result.trimRight()}\n${'  ' * indent}}\n${'  ' * indent}';
       } else if (char == ';') {
-        result += ';\n' + '  ' * indent;
+        result += ';\n${'  ' * indent}';
       } else {
         result += char;
       }
@@ -103,20 +102,20 @@ class CodeBeautifier {
       }
 
       if (char == '{') {
-        result += ' {\n' + '  ' * (indent + 1);
+        result += ' {\n${'  ' * (indent + 1)}';
         indent++;
       } else if (char == '}') {
         indent--;
-        result = result.trimRight() + '\n' + '  ' * indent + '}';
+        result = '${result.trimRight()}\n${'  ' * indent}}';
         // Add newline if next char isn't a semicolon or something similar
         if (i + 1 < js.length &&
             js[i + 1] != ';' &&
             js[i + 1] != ',' &&
             js[i + 1] != ')') {
-          result += '\n' + '  ' * indent;
+          result += '\n${'  ' * indent}';
         }
       } else if (char == ';') {
-        result += ';\n' + '  ' * indent;
+        result += ';\n${'  ' * indent}';
       } else {
         result += char;
       }

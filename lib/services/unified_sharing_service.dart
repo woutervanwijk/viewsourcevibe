@@ -179,8 +179,13 @@ class UnifiedSharingService {
 
               final choice =
                   await _showShareChoiceDialog(dialogContext, urlToLoad);
+
               if (choice == 'url') {
-                await _processSharedUrl(dialogContext, htmlService, urlToLoad);
+                // Re-check context after async gap
+                final safeContext = (context.mounted)
+                    ? context
+                    : (MyApp.navigatorKey.currentContext ?? context);
+                await _processSharedUrl(safeContext, htmlService, urlToLoad);
                 return;
               }
               // If they chose 'text' or cancelled, fall through to text processing
@@ -192,8 +197,12 @@ class UnifiedSharingService {
           }
 
           // Handle it as text content
+          final finalSafeContext = (context.mounted)
+              ? context
+              : (MyApp.navigatorKey.currentContext ?? context);
+
           await _processSharedText(
-            context,
+            finalSafeContext,
             htmlService,
             content,
             fileName: fileName,
