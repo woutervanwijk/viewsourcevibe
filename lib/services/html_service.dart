@@ -648,76 +648,85 @@ class HtmlService with ChangeNotifier {
 
       // Generate filename based on detected type with proper extension
       String properFilename;
+      final baseName = filename.isEmpty ? 'document' : filename;
+
       switch (detectedType.toLowerCase()) {
         case 'html':
-          properFilename = 'document.html';
+          properFilename = '$baseName.html';
           break;
         case 'css':
-          properFilename = 'styles.css';
+          properFilename = '$baseName.css';
           break;
         case 'javascript':
-          properFilename = 'script.js';
+          properFilename = '$baseName.js';
           break;
         case 'typescript':
-          properFilename = 'script.ts';
+          properFilename = '$baseName.ts';
           break;
         case 'json':
-          properFilename = 'data.json';
+          properFilename = '$baseName.json';
           break;
         case 'xml':
-          properFilename = 'data.xml';
+          // Keep atom/rss if they were in the original filename
+          if (filenameLower.endsWith('.atom')) {
+            properFilename = filename;
+          } else if (filenameLower.endsWith('.rss')) {
+            properFilename = filename;
+          } else {
+            properFilename = '$baseName.xml';
+          }
           break;
         case 'yaml':
         case 'yml':
-          properFilename = 'config.yaml';
+          properFilename = '$baseName.yaml';
           break;
         case 'markdown':
         case 'md':
-          properFilename = 'document.md';
+          properFilename = '$baseName.md';
           break;
         case 'python':
-          properFilename = 'script.py';
+          properFilename = '$baseName.py';
           break;
         case 'java':
-          properFilename = 'Main.java';
+          properFilename = '$baseName.java';
           break;
         case 'dart':
-          properFilename = 'main.dart';
+          properFilename = '$baseName.dart';
           break;
         case 'c':
         case 'cpp':
         case 'c++':
-          properFilename = 'program.cpp';
+          properFilename = '$baseName.cpp';
           break;
         case 'csharp':
         case 'cs':
-          properFilename = 'Program.cs';
+          properFilename = '$baseName.cs';
           break;
         case 'php':
-          properFilename = 'index.php';
+          properFilename = '$baseName.php';
           break;
         case 'ruby':
-          properFilename = 'script.rb';
+          properFilename = '$baseName.rb';
           break;
         case 'swift':
-          properFilename = 'main.swift';
+          properFilename = '$baseName.swift';
           break;
         case 'go':
-          properFilename = 'main.go';
+          properFilename = '$baseName.go';
           break;
         case 'rust':
-          properFilename = 'main.rs';
+          properFilename = '$baseName.rs';
           break;
         case 'sql':
-          properFilename = 'query.sql';
+          properFilename = '$baseName.sql';
           break;
         case 'plaintext':
         case 'txt':
         case 'text':
-          properFilename = 'document.txt';
+          properFilename = '$baseName.txt';
           break;
         default:
-          properFilename = 'document.$detectedType';
+          properFilename = '$baseName.$detectedType';
           break;
       }
       return properFilename;
@@ -2302,8 +2311,15 @@ Technical details: $e''';
       'ts': 'typescript',
       'jsx': 'javascript',
       'tsx': 'javascript',
-      'yaml': 'yaml',
-      'yml': 'yaml',
+      'xml': 'XML',
+      'xsd': 'XML',
+      'xsl': 'XML',
+      'svg': 'XML',
+      'rss': 'XML',
+      'atom': 'XML',
+      'rdf': 'XML',
+      'yaml': 'YAML',
+      'yml': 'YAML',
       'markdown': 'markdown',
       'md': 'markdown',
       'asciidoc': 'asciidoc',
