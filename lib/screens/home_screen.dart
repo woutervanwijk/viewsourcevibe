@@ -6,6 +6,7 @@ import 'package:view_source_vibe/widgets/file_viewer.dart';
 import 'package:view_source_vibe/widgets/toolbar.dart';
 import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/widgets/metadata_view.dart';
+import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -25,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
     _tabController.addListener(_handleTabSelection);
   }
 
@@ -103,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen>
                 tabs: [
                   _buildTab(Icons.code, 'Editor'),
                   _buildTab(Icons.info_outline, 'Metadata'),
+                  _buildTab(Icons.layers_outlined, 'Services'),
                   _buildTab(Icons.network_check, 'Probe'),
                   _buildTab(Icons.list_alt, 'Headers'),
                   _buildTab(Icons.security, 'Security'),
@@ -150,16 +152,19 @@ class _HomeScreenState extends State<HomeScreen>
                       // 2. Metadata
                       const MetadataView(),
 
-                      // 3. Probe: General
+                      // 3. Services
+                      const ServicesView(),
+
+                      // 4. Probe: General
                       const ProbeGeneralView(),
 
-                      // 4. Probe: Headers
+                      // 5. Probe: Headers
                       const ProbeHeadersView(),
 
-                      // 5. Probe: Security
+                      // 6. Probe: Security
                       const ProbeSecurityView(),
 
-                      // 6. Probe: Cookies
+                      // 7. Probe: Cookies
                       const ProbeCookiesView(),
                     ],
                   );

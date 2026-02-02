@@ -20,6 +20,8 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     'otherMeta': <String, String>{},
     'icons': <String, String>{},
     'detectedTech': <String, String>{},
+    'detectedServices': <String, List<String>>{},
+    'iframeLinks': <String>[],
   };
 
   // Extract Title
@@ -81,11 +83,21 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
       RegExp(r'''<script\s+[^>]*src=["'](.*?)["']''', caseSensitive: false)
           .allMatches(html);
   for (final match in scriptTags) {
+    final src = match.group(1);
+    if (src != null && src.isNotEmpty) {
+      metadata['jsLinks'].add(_resolveUrl(src, baseUrl));
+    }
+  }
+
+  // Extract Iframe Tags
+  final iframeTags =
+      RegExp(r'<iframe\s+([^>]*?)>', caseSensitive: false).allMatches(html);
+  for (final match in iframeTags) {
     final attrStr = match.group(1) ?? '';
     final attrs = _parseAttributes(attrStr);
     final src = attrs['src'];
     if (src != null) {
-      metadata['jsLinks'].add(_resolveUrl(src, baseUrl));
+      metadata['iframeLinks'].add(_resolveUrl(src, baseUrl));
     }
   }
 
@@ -98,6 +110,9 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
 
   // Detect CMS and Frameworks
   _detectTechnologies(html, metadata);
+
+  // Detect Services (Trackers, Fonts, etc.)
+  _detectServices(html, metadata);
 
   return metadata;
 }
@@ -165,6 +180,70 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
   }
 
   metadata['detectedTech'] = tech;
+}
+
+/// Detect commonly used services (Trackers, Fonts, Ads, Cloud)
+void _detectServices(String html, Map<String, dynamic> metadata) {
+  final Map<String, List<String>> services = {
+    'Analytics & Trackers': [],
+    'Fonts & Icons': [],
+    'Advertising': [],
+    'Cloud & Infrastructure': [],
+    'Social & Widgets': [],
+  };
+
+  final patterns = {
+    'Analytics & Trackers': {
+      'Google Analytics':
+          r'google-analytics\.com|googletagmanager\.com/gtag/js|_ga|_gid',
+      'Facebook Pixel': r'fbevents\.js|connect\.facebook\.net|fbq\(',
+      'Hotjar': r'static\.hotjar\.com|hj\(',
+      'Mixpanel': r'cdn\.mxpnl\.com|mixpanel\.init',
+      'Segment': r'cdn\.segment\.com|analytics\.js',
+      'Crazy Egg': r'script\.crazyegg\.com',
+    },
+    'Fonts & Icons': {
+      'Google Fonts': r'fonts\.googleapis\.com|fonts\.gstatic\.com',
+      'Adobe Fonts (Typekit)': r'use\.typekit\.net',
+      'Font Awesome': r'font-awesome|fontawesome',
+      'Typeform': r'embed\.typeform\.com',
+    },
+    'Advertising': {
+      'Taboola': r'taboola\.com',
+      'Google AdSense/DoubleClick':
+          r'googlesyndication\.com|adsbygoogle|doubleclick\.net',
+      'Outbrain': r'outbrain\.com',
+      'Criteo': r'criteo\.com',
+    },
+    'Cloud & Infrastructure': {
+      'Amazon Web Services (AWS)': r'amazonaws\.com|aws\.amazon\.com',
+      'Firebase': r'firebasejs|firebase\.google\.com',
+      'Microsoft Azure': r'azure\.com|windows\.net',
+      'Cloudflare': r'cloudflare\.com|/cdn-cgi/|cloudflare-static',
+      'Vercel': r'vercel\.app|vercel\.com',
+      'Netlify': r'netlify\.app|netlify\.com',
+    },
+    'Social & Widgets': {
+      'Twitter/X': r'platform\.twitter\.com',
+      'LinkedIn': r'platform\.linkedin\.com',
+      'Instagram': r'instagram\.com/embed',
+      'YouTube': r'youtube\.com/embed|ytimg\.com',
+      'Disqus': r'disqus\.com',
+    }
+  };
+
+  patterns.forEach((category, items) {
+    items.forEach((name, pattern) {
+      if (_hasPattern(html, pattern)) {
+        services[category]!.add(name);
+      }
+    });
+  });
+
+  // Remove empty categories
+  services.removeWhere((key, value) => value.isEmpty);
+
+  metadata['detectedServices'] = services;
 }
 
 bool _hasPattern(String text, String pattern) {
