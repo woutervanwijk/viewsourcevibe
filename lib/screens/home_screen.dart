@@ -8,6 +8,7 @@ import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/widgets/metadata_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
+import 'package:view_source_vibe/models/settings.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -135,8 +136,6 @@ class _HomeScreenState extends State<HomeScreen>
 
                   return TabBarView(
                     controller: _tabController,
-                    physics:
-                        const NeverScrollableScrollPhysics(), // Disable swipe to prevent conflict with editor
                     children: [
                       // 1. Editor
                       KeepAliveWrapper(
