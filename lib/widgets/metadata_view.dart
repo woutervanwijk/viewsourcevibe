@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 
-class MetadataDialog extends StatelessWidget {
-  const MetadataDialog({super.key});
+class MetadataView extends StatelessWidget {
+  const MetadataView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -12,80 +12,54 @@ class MetadataDialog extends StatelessWidget {
     final metadata = htmlService.pageMetadata;
 
     if (metadata == null) {
-      return const AlertDialog(
-        title: Text('No Metadata'),
-        content: Text('No metadata could be extracted from this file.'),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.info_outline,
+                size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+            const SizedBox(height: 16),
+            const Text('No Metadata'),
+            const SizedBox(height: 8),
+            const Text('Load a URL to view page metadata.',
+                style: TextStyle(color: Colors.grey)),
+          ],
+        ),
       );
     }
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.8,
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline,
-                      color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Page Metadata',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                children: [
-                  _buildHeaderSection(context, metadata),
-                  const SizedBox(height: 24),
-                  if (metadata['detectedTech']?.isNotEmpty == true) ...[
-                    _buildSectionTitle(context, 'Technology Stack'),
-                    _buildTechSection(context, metadata['detectedTech']),
-                    const SizedBox(height: 24),
-                  ],
-                  if (metadata['openGraph']?.isNotEmpty == true) ...[
-                    _buildSectionTitle(context, 'OpenGraph Tags'),
-                    _buildMapSection(context, metadata['openGraph']),
-                    const SizedBox(height: 24),
-                  ],
-                  if (metadata['twitter']?.isNotEmpty == true) ...[
-                    _buildSectionTitle(context, 'Twitter Card Info'),
-                    _buildMapSection(context, metadata['twitter']),
-                    const SizedBox(height: 24),
-                  ],
-                  _buildSectionTitle(context, 'Linked Resources'),
-                  _buildLinkSection(context, 'Stylesheets (CSS)',
-                      metadata['cssLinks'], Icons.css),
-                  _buildLinkSection(context, 'Scripts (JS)',
-                      metadata['jsLinks'], Icons.javascript),
-                  _buildLinkSection(context, 'RSS/Atom Feeds',
-                      metadata['rssLinks'], Icons.rss_feed),
-                  const SizedBox(height: 24),
-                  _buildSectionTitle(context, 'Other Meta Tags'),
-                  _buildMapSection(context, metadata['otherMeta']),
-                  const SizedBox(height: 80), // Space for bottom detection note
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      children: [
+        _buildHeaderSection(context, metadata),
+        const SizedBox(height: 24),
+        if (metadata['detectedTech']?.isNotEmpty == true) ...[
+          _buildSectionTitle(context, 'Technology Stack'),
+          _buildTechSection(context, metadata['detectedTech']),
+          const SizedBox(height: 24),
+        ],
+        if (metadata['openGraph']?.isNotEmpty == true) ...[
+          _buildSectionTitle(context, 'OpenGraph Tags'),
+          _buildMapSection(context, metadata['openGraph']),
+          const SizedBox(height: 24),
+        ],
+        if (metadata['twitter']?.isNotEmpty == true) ...[
+          _buildSectionTitle(context, 'Twitter Card Info'),
+          _buildMapSection(context, metadata['twitter']),
+          const SizedBox(height: 24),
+        ],
+        _buildSectionTitle(context, 'Linked Resources'),
+        _buildLinkSection(
+            context, 'Stylesheets (CSS)', metadata['cssLinks'], Icons.css),
+        _buildLinkSection(
+            context, 'Scripts (JS)', metadata['jsLinks'], Icons.javascript),
+        _buildLinkSection(
+            context, 'RSS/Atom Feeds', metadata['rssLinks'], Icons.rss_feed),
+        const SizedBox(height: 24),
+        _buildSectionTitle(context, 'Other Meta Tags'),
+        _buildMapSection(context, metadata['otherMeta']),
+        const SizedBox(height: 80),
+      ],
     );
   }
 
@@ -288,7 +262,6 @@ class MetadataDialog extends StatelessWidget {
                   final htmlService =
                       Provider.of<HtmlService>(context, listen: false);
                   htmlService.loadFromUrl(url.toString());
-                  Navigator.pop(context);
                 },
               ),
             )),

@@ -198,23 +198,6 @@ class Toolbar extends StatelessWidget {
           tooltip: 'Share',
           onPressed: () => _shareCurrentFile(context),
         ),
-        Consumer<HtmlService>(builder: (context, htmlService, child) {
-          return Container(
-            decoration: BoxDecoration(
-              color: htmlService.isProbeOverlayVisible
-                  ? Theme.of(context).highlightColor
-                  : Colors.transparent,
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.travel_explore),
-              tooltip: htmlService.isProbeOverlayVisible
-                  ? 'Show Editor'
-                  : 'Probe / Show Results',
-              onPressed: () => htmlService.toggleProbeOverlay(),
-            ),
-          );
-        }),
         Consumer<HtmlService>(
           builder: (context, htmlService, child) {
             final bool hasFile = htmlService.currentFile != null;

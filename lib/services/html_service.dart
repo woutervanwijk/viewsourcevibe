@@ -44,7 +44,6 @@ class HtmlService with ChangeNotifier {
 
   // Probe state
   Map<String, dynamic>? _probeResult;
-  bool _isProbeOverlayVisible = false;
   bool _isProbing = false;
   String? _probeError;
 
@@ -70,7 +69,6 @@ class HtmlService with ChangeNotifier {
 
   // Expose probe state
   Map<String, dynamic>? get probeResult => _probeResult;
-  bool get isProbeOverlayVisible => _isProbeOverlayVisible;
   bool get isProbing => _isProbing;
   bool get canGoBack => _navigationStack.isNotEmpty;
   String? get probeError => _probeError;
@@ -150,9 +148,7 @@ class HtmlService with ChangeNotifier {
 
   /// Restore probe state
   void restoreProbeState(bool? isVisible, String? resultJson) {
-    if (isVisible != null) {
-      _isProbeOverlayVisible = isVisible;
-    }
+    if (isVisible != null) {}
     if (resultJson != null && resultJson.isNotEmpty) {
       try {
         _probeResult = jsonDecode(resultJson);
@@ -171,7 +167,6 @@ class HtmlService with ChangeNotifier {
         scrollPosition: getCurrentScrollPosition(),
         horizontalScrollPosition: getCurrentHorizontalScrollPosition(),
         contentType: selectedContentType,
-        isProbeVisible: _isProbeOverlayVisible,
         probeResultJson: _probeResult != null ? jsonEncode(_probeResult) : null,
       );
       debugPrint('💾 Saved current app state');
@@ -987,9 +982,7 @@ class HtmlService with ChangeNotifier {
     }
 
     // Switch back to editor if this is a local file
-    if (!file.isUrl) {
-      _isProbeOverlayVisible = false;
-    }
+    if (!file.isUrl) {}
 
     // Performance warning for large files
     final fileSizeMB = file.size / (1024 * 1024);
@@ -1508,20 +1501,6 @@ Technical details: $e''';
       _isProbing = false;
       notifyListeners();
       rethrow;
-    }
-  }
-
-  void toggleProbeOverlay() {
-    _isProbeOverlayVisible = !_isProbeOverlayVisible;
-    notifyListeners();
-    _autoSave();
-
-    if (_isProbeOverlayVisible && _currentFile != null && _currentFile!.isUrl) {
-      // Optional: Auto-probe current URL if we open overlay and have no result or mismatch?
-      // For now, adhere to "Only an enter will probe" for new URLs, but if we toggle ON
-      // for an existing URL, we might want to ensure we have data.
-      // But the requirements say "Only an enter will probe for a new url".
-      // So we just toggle. If the user wants to probe the current URL they can press enter in the URL bar.
     }
   }
 
