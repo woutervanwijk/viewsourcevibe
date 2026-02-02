@@ -27,6 +27,10 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     'detectedServices': <String, List<String>>{},
     'resourceHints': <String, List<String>>{},
     'pageConfig': <String, String>{},
+    'media': {
+      'images': <Map<String, String>>[],
+      'videos': <Map<String, String>>[],
+    },
   };
 
   // Extract Language from <html> tag
@@ -159,7 +163,73 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
         metadata['iframeLinks'].add(absoluteSrc);
       } else {
         metadata['externalIframeLinks'].add(absoluteSrc);
+        // Check for video services
+        final lowerSrc = absoluteSrc.toLowerCase();
+        if (lowerSrc.contains('youtube.com/embed') ||
+            lowerSrc.contains('player.vimeo.com/video')) {
+          metadata['media']['videos'].add({
+            'src': absoluteSrc,
+            'type': 'iframe',
+            'provider': lowerSrc.contains('youtube') ? 'YouTube' : 'Vimeo',
+          });
+        }
       }
+    }
+  }
+
+  // Extract Images
+  final imgTags =
+      RegExp(r'<img\s+([^>]*?)>', caseSensitive: false).allMatches(html);
+  for (final match in imgTags) {
+    final attrStr = match.group(1) ?? '';
+    final attrs = _parseAttributes(attrStr);
+    final src = attrs['src'];
+    if (src != null && src.isNotEmpty) {
+      final absoluteSrc = _resolveUrl(src, baseUrl);
+      metadata['media']['images'].add({
+        'src': absoluteSrc,
+        'alt': attrs['alt'] ?? '',
+        'title': attrs['title'] ?? '',
+      });
+    }
+  }
+
+  // Extract Videos
+  final videoTags =
+      RegExp(r'<video\s+([^>]*?)>', caseSensitive: false).allMatches(html);
+  for (final match in videoTags) {
+    final attrStr = match.group(1) ?? '';
+    final attrs = _parseAttributes(attrStr);
+    final src = attrs['src'];
+
+    if (src != null && src.isNotEmpty) {
+      final absoluteSrc = _resolveUrl(src, baseUrl);
+      metadata['media']['videos'].add({
+        'src': absoluteSrc,
+        'type': 'video-tag',
+      });
+    }
+
+    // Check for <source> inside <video> (simplified check)
+    // We search for matches within the range of this video tag's likely inner content
+    // But since we are using regex on the whole HTML, we'll just look for all <source> tags
+    // and try to correlate them or just list them all.
+    // For simplicity, we'll do a separate pass for all <source> tags.
+  }
+
+  final sourceTags =
+      RegExp(r'<source\s+([^>]*?)>', caseSensitive: false).allMatches(html);
+  for (final match in sourceTags) {
+    final attrStr = match.group(1) ?? '';
+    final attrs = _parseAttributes(attrStr);
+    final src = attrs['src'];
+    if (src != null && src.isNotEmpty) {
+      final absoluteSrc = _resolveUrl(src, baseUrl);
+      metadata['media']['videos'].add({
+        'src': absoluteSrc,
+        'type': 'source-tag',
+        'mimeType': attrs['type'] ?? '',
+      });
     }
   }
 

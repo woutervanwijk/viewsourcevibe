@@ -90,6 +90,20 @@ class HtmlService with ChangeNotifier {
   CodeFindController? get activeFindController => _activeFindController;
   bool get isSearchActive => _activeFindController?.value != null;
 
+  bool get isHtml =>
+      selectedContentType == 'html' ||
+      (_currentFile?.name.toLowerCase().endsWith('.html') ?? false) ||
+      (_currentFile?.name.toLowerCase().endsWith('.htm') ?? false) ||
+      (_currentFile?.name.toLowerCase().endsWith('.xhtml') ?? false);
+
+  bool get isXml =>
+      selectedContentType == 'xml' ||
+      (_currentFile?.name.toLowerCase().endsWith('.xml') ?? false) ||
+      (_currentFile?.name.toLowerCase().endsWith('.rss') ?? false) ||
+      (_currentFile?.name.toLowerCase().endsWith('.atom') ?? false);
+
+  bool get isHtmlOrXml => isHtml || isXml;
+
   HtmlService() {
     _horizontalScrollController = ScrollController();
     _codeEditorKey = GlobalKey();
