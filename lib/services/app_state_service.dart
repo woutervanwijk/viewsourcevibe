@@ -14,6 +14,8 @@ class AppStateService with ChangeNotifier {
   static const String _lastFileIsUrlKey = 'last_file_is_url';
   static const String _isProbeVisibleKey = 'is_probe_visible';
   static const String _probeResultKey = 'probe_result';
+  static const String _pendingUrlKey = 'pending_url';
+  static const String _inputTextKey = 'input_text';
 
   final SharedPreferences _prefs;
 
@@ -32,6 +34,8 @@ class AppStateService with ChangeNotifier {
     String? contentType,
     bool? isProbeVisible,
     String? probeResultJson,
+    String? pendingUrl,
+    String? inputText,
   }) async {
     try {
       if (currentFile != null) {
@@ -68,6 +72,18 @@ class AppStateService with ChangeNotifier {
 
       if (probeResultJson != null) {
         await _prefs.setString(_probeResultKey, probeResultJson);
+      }
+
+      if (pendingUrl != null) {
+        await _prefs.setString(_pendingUrlKey, pendingUrl);
+      } else {
+        await _prefs.remove(_pendingUrlKey);
+      }
+
+      if (inputText != null) {
+        await _prefs.setString(_inputTextKey, inputText);
+      } else {
+        await _prefs.remove(_inputTextKey);
       }
 
       debugPrint('✅ App state saved successfully');
@@ -122,6 +138,14 @@ class AppStateService with ChangeNotifier {
         state.probeResultJson = _prefs.getString(_probeResultKey);
       }
 
+      if (_prefs.containsKey(_pendingUrlKey)) {
+        state.pendingUrl = _prefs.getString(_pendingUrlKey);
+      }
+
+      if (_prefs.containsKey(_inputTextKey)) {
+        state.inputText = _prefs.getString(_inputTextKey);
+      }
+
       debugPrint('📂 App state loaded successfully: ${state.toString()}');
       return state;
     } catch (e) {
@@ -143,6 +167,8 @@ class AppStateService with ChangeNotifier {
       await _prefs.remove(_lastFileIsUrlKey);
       await _prefs.remove(_isProbeVisibleKey);
       await _prefs.remove(_probeResultKey);
+      await _prefs.remove(_pendingUrlKey);
+      await _prefs.remove(_inputTextKey);
 
       debugPrint('🧹 App state cleared successfully');
     } catch (e) {
@@ -161,9 +187,11 @@ class AppState {
   String? contentType;
   bool? isProbeVisible;
   String? probeResultJson;
+  String? pendingUrl;
+  String? inputText;
 
   @override
   String toString() {
-    return 'AppState(filePath: $filePath, fileName: $fileName, isUrl: $isUrl, scrollPosition: $scrollPosition, horizontalScrollPosition: $horizontalScrollPosition, contentType: $contentType, isProbeVisible: $isProbeVisible)';
+    return 'AppState(filePath: $filePath, fileName: $fileName, isUrl: $isUrl, scrollPosition: $scrollPosition, horizontalScrollPosition: $horizontalScrollPosition, contentType: $contentType, isProbeVisible: $isProbeVisible, pendingUrl: $pendingUrl, inputText: $inputText)';
   }
 }

@@ -41,7 +41,7 @@ class ServicesView extends StatelessWidget {
         const SizedBox(height: 24),
         ...services.entries.map((entry) {
           return _buildServiceCategory(context, entry.key, entry.value);
-        }).toList(),
+        }),
         const Divider(height: 48),
         _buildSectionTitle(context, 'External Resources'),
         const Text(
@@ -84,7 +84,7 @@ class ServicesView extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.1),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -193,7 +193,7 @@ class ServicesView extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -214,8 +214,8 @@ class ServicesView extends StatelessWidget {
             children: items.map((item) {
               return Chip(
                 label: Text(item),
-                backgroundColor: color.withOpacity(0.05),
-                side: BorderSide(color: color.withOpacity(0.2)),
+                backgroundColor: color.withValues(alpha: 0.05),
+                side: BorderSide(color: color.withValues(alpha: 0.2)),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
                 labelStyle: const TextStyle(fontSize: 13),

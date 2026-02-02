@@ -14,7 +14,6 @@ class _UrlInputState extends State<UrlInput> {
   final _urlController = TextEditingController();
   final _focusNode = FocusNode();
   String _errorMessage = '';
-  String? _lastKnownPath; // Track the last path we synchronized from the model
 
   @override
   void initState() {
@@ -24,6 +23,8 @@ class _UrlInputState extends State<UrlInput> {
   }
 
   void _onUrlChanged() {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    htmlService.currentInputText = _urlController.text;
     setState(() {});
   }
 
@@ -79,32 +80,15 @@ class _UrlInputState extends State<UrlInput> {
         // Update URL display when file changes
         debugPrint(
             'url ${htmlService.currentFile?.path} ${htmlService.currentFile?.extension}');
-        if (htmlService.currentFile != null) {
-          final currentPath = htmlService.currentFile!.path;
+        if (htmlService.currentInputText != null) {
+          final currentText = htmlService.currentInputText!;
 
-          // Only update the controller if the model has changed to a NEW path
-          // that we haven't seen before.
-          if (_lastKnownPath != currentPath) {
-            _lastKnownPath = currentPath;
-
-            if (htmlService.currentFile!.isUrl) {
-              // Show URL for web content
-              if (_urlController.text != currentPath) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  // Check again to be safe
-                  if (mounted && _urlController.text != currentPath) {
-                    _urlController.text = currentPath;
-                  }
-                });
+          if (_urlController.text != currentText) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _urlController.text != currentText) {
+                _urlController.text = currentText;
               }
-            } else {
-              // Clear URL bar for local files
-              if (_urlController.text.isNotEmpty) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _urlController.clear();
-                });
-              }
-            }
+            });
           }
         }
 

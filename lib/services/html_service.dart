@@ -31,6 +31,9 @@ import 'package:view_source_vibe/services/metadata_parser.dart';
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
   HtmlFile? _originalFile; // Store original file for "Automatic" option
+  String? _pendingUrl;
+  String? _currentInputText;
+  bool _isLoading = false;
   String?
       selectedContentType; // Track the selected content type for syntax highlighting
   ScrollController? _verticalScrollController;
@@ -72,6 +75,16 @@ class HtmlService with ChangeNotifier {
   bool get isProbing => _isProbing;
   bool get canGoBack => _navigationStack.isNotEmpty;
   String? get probeError => _probeError;
+  bool get isLoading => _isLoading;
+  String? get pendingUrl => _pendingUrl;
+  String? get currentInputText => _currentInputText;
+
+  set currentInputText(String? value) {
+    if (_currentInputText != value) {
+      _currentInputText = value;
+      notifyListeners();
+    }
+  }
 
   // Expose search state
   CodeFindController? get activeFindController => _activeFindController;
@@ -80,6 +93,7 @@ class HtmlService with ChangeNotifier {
   HtmlService() {
     _horizontalScrollController = ScrollController();
     _codeEditorKey = GlobalKey();
+    _currentInputText = '';
   }
 
   @override
@@ -159,7 +173,6 @@ class HtmlService with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Save current app state using the provided AppStateService
   Future<void> saveCurrentState(AppStateService appStateService) async {
     try {
       await appStateService.saveAppState(
@@ -167,7 +180,11 @@ class HtmlService with ChangeNotifier {
         scrollPosition: getCurrentScrollPosition(),
         horizontalScrollPosition: getCurrentHorizontalScrollPosition(),
         contentType: selectedContentType,
+        isProbeVisible:
+            _probeResult != null, // Assuming probe is visible if result exists
         probeResultJson: _probeResult != null ? jsonEncode(_probeResult) : null,
+        pendingUrl: _pendingUrl,
+        inputText: _currentInputText,
       );
       debugPrint('💾 Saved current app state');
     } catch (e) {
@@ -1045,7 +1062,9 @@ class HtmlService with ChangeNotifier {
       selectedContentType = null;
     }
 
+    _currentInputText = file.path;
     notifyListeners();
+    _autoSave();
     await scrollToZero();
 
     // Extract metadata if it's HTML or XML
@@ -1236,7 +1255,7 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  Future<void> loadFromUrl(String url) async {
+  Future<HtmlFile> _loadFromUrlInternal(String url) async {
     try {
       // Validate and sanitize URL
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -1283,6 +1302,12 @@ class HtmlService with ChangeNotifier {
       // Manual redirect handling to get the actual redirected URL
       final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers,
           originalUri: uri);
+
+      // Update the input text immediately so the UI reflects the redirect while loading body
+      if (finalUrl != url) {
+        _currentInputText = finalUrl;
+        notifyListeners();
+      }
 
       // Make the request to the final URL with timeout
       final response = await client
@@ -1370,8 +1395,7 @@ class HtmlService with ChangeNotifier {
 
         final htmlFile = HtmlFile(
           name: processedFilename,
-          path:
-              url, // Use the original requested URL to ensure history/back/restart works with the entry point (e.g. for shortlinks or signed URLs)
+          path: finalUrl, // Use the final URL after redirects for the file path
           content: content,
           lastModified: DateTime.now(),
           size: content.length,
@@ -1379,7 +1403,7 @@ class HtmlService with ChangeNotifier {
           probeResult: probeResult,
         );
 
-        await loadFile(htmlFile, clearProbe: false);
+        return htmlFile;
       } else {
         throw Exception(
             'Failed to load URL: ${response.statusCode} ${response.reasonPhrase}');
@@ -1439,10 +1463,29 @@ Technical details: $e''';
         isUrl: true,
       );
 
-      await loadFile(htmlFile, clearProbe: false);
+      return htmlFile;
+    }
+  }
 
-      // Also log to console for debugging
-      debugPrint('Error loading web URL: $e');
+  Future<void> loadFromUrl(String url) async {
+    try {
+      _pendingUrl = url;
+      _isLoading = true;
+      notifyListeners();
+
+      final file = await _loadFromUrlInternal(url);
+      _pendingUrl = null;
+      await loadFile(file);
+      // loadFile already calls _autoSave() but we can be explicit here too
+      _autoSave();
+    } catch (e) {
+      _pendingUrl = null;
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 

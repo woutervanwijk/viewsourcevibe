@@ -315,12 +315,21 @@ void main() async {
         debugPrint('🔄 Restoring app state from previous session');
 
         // Restore the file/URL if available
-        if (savedState.filePath != null && savedState.filePath!.isNotEmpty) {
+
+        // Priority 1: Restore pending URL if one was loading when app closed
+        if (savedState.pendingUrl != null &&
+            savedState.pendingUrl!.isNotEmpty) {
+          debugPrint('🌐 Restoring pending URL: ${savedState.pendingUrl}');
+          htmlService.loadFromUrl(savedState.pendingUrl!);
+        }
+        // Priority 2: Restore previous file/URL
+        else if (savedState.filePath != null &&
+            savedState.filePath!.isNotEmpty) {
           if (savedState.isUrl == true) {
             // It's a URL
             try {
               debugPrint('🌐 Restoring URL: ${savedState.filePath}');
-              await htmlService.loadFromUrl(savedState.filePath!);
+              htmlService.loadFromUrl(savedState.filePath!);
             } catch (e) {
               debugPrint('❌ Failed to restore URL: $e');
             }
@@ -349,6 +358,12 @@ void main() async {
               debugPrint('❌ Failed to restore file: $e');
             }
           }
+        }
+
+        // Restore input text if available (overrides URL bar but doesn't trigger load)
+        if (savedState.inputText != null) {
+          htmlService.currentInputText = savedState.inputText;
+          debugPrint('✏️ Restored input text: ${savedState.inputText}');
         }
 
         // Restore content type if available (must be done after loadFile/loadFromUrl)

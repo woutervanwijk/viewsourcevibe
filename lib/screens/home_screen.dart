@@ -9,7 +9,6 @@ import 'package:view_source_vibe/widgets/metadata_view.dart';
 import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
-import 'package:view_source_vibe/models/settings.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -104,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen>
                 tabs: [
                   _buildTab(Icons.code, 'Editor'),
                   _buildTab(Icons.info_outline, 'Metadata'),
-                  _buildTab(Icons.layers_outlined, 'Services'),
+                  _buildTab(Icons.layers_outlined, 'External Services'),
                   _buildTab(Icons.network_check, 'Probe'),
                   _buildTab(Icons.list_alt, 'Headers'),
                   _buildTab(Icons.security, 'Security'),
