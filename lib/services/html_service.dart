@@ -2437,10 +2437,19 @@ Technical details: $e''';
     required bool useSimplified,
   }) {
     // Create a hash of the content to use as part of the cache key
-    // Use a simple hash function that's fast but effective for this purpose
     final contentHash = _simpleHash(content);
 
     return 'hl:${contentHash}_ext:${extension}_fs:${fontSize.toStringAsFixed(1)}_th:${themeName}_wrap:${wrapText}_lines:${showLineNumbers}_simple:$useSimplified';
+  }
+
+  /// Generate a cache key for the CodeLineEditingController (content-dependent only)
+  String _generateControllerCacheKey({
+    required String content,
+    required String extension,
+    required bool useSimplified,
+  }) {
+    final contentHash = _simpleHash(content);
+    return 'hl:${contentHash}_ext:${extension}_simple:$useSimplified';
   }
 
   /// Simple hash function for content
@@ -2481,7 +2490,8 @@ Technical details: $e''';
           .toList();
       for (final key in keysToRemove) {
         _cachedControllers.remove(key);
-        _cachedGlobalKeys.remove(key);
+        // Also remove all associated global keys for this content
+        _cachedGlobalKeys.removeWhere((ekey, _) => ekey.startsWith(key));
       }
       debugPrint('🔄 Trimmed editor cache to $maxCacheEntries entries');
     }
@@ -2490,17 +2500,14 @@ Technical details: $e''';
   /// Clear cache for specific content
   void clearCacheForContent(String content) {
     final contentHash = _simpleHash(content);
-    final keysToRemove = _cachedControllers.keys
-        .where((key) => key.startsWith('hl:$contentHash'))
-        .toList();
+    final controllerKeyPrefix = 'hl:$contentHash';
 
-    for (final key in keysToRemove) {
-      _cachedControllers.remove(key);
-      _cachedGlobalKeys.remove(key);
-    }
+    _cachedControllers
+        .removeWhere((key, _) => key.startsWith(controllerKeyPrefix));
+    _cachedGlobalKeys
+        .removeWhere((key, _) => key.startsWith(controllerKeyPrefix));
 
-    debugPrint(
-        '🧹 Cleared cache for specific content (${keysToRemove.length} entries)');
+    debugPrint('🧹 Cleared cache for content hash $contentHash');
   }
 
   /// Build the editor widget, returning strictly synchronous Widget if cached,
@@ -2516,23 +2523,26 @@ Technical details: $e''';
     final contentSize = content.length;
     bool useSimplifiedHighlighting = contentSize > 10 * 1024 * 1024;
 
-    // Generate cache key (independent of ScrollController now!)
-    final cacheKey = _generateHighlightCacheKey(
+    // Generate keys
+    final controllerKey = _generateControllerCacheKey(
         content: content,
         extension: extension,
-        fontSize: fontSize,
-        themeName: themeName,
-        wrapText: wrapText,
-        showLineNumbers: showLineNumbers,
         useSimplified: useSimplifiedHighlighting);
 
-    // Synchronous Cache Hit check
-    if (_cachedControllers.containsKey(cacheKey) &&
-        _cachedGlobalKeys.containsKey(cacheKey)) {
+    final editorKey =
+        '${controllerKey}_scroll:${customScrollController?.hashCode ?? 'none'}';
+
+    // check if we have the controller cached
+    if (_cachedControllers.containsKey(controllerKey)) {
+      final controller = _cachedControllers[controllerKey]!;
+
+      // Get or create GlobalKey for this scroll context
+      final globalKey = _cachedGlobalKeys[editorKey] ??= GlobalKey();
+
       return _buildEditorWidget(
           context,
-          _cachedControllers[cacheKey]!,
-          _cachedGlobalKeys[cacheKey]!,
+          controller,
+          globalKey,
           extension,
           themeName,
           fontSize,
@@ -2541,7 +2551,7 @@ Technical details: $e''';
           customScrollController);
     }
 
-    // Cache Miss: Perform setup (async if needed)
+    // Cache Miss: Perform setup (async)
     return _buildNewEditor(
         content,
         extension,
@@ -2552,7 +2562,8 @@ Technical details: $e''';
         showLineNumbers,
         customScrollController,
         useSimplifiedHighlighting,
-        cacheKey);
+        controllerKey,
+        editorKey);
   }
 
   Future<Widget> _buildNewEditor(
@@ -2565,7 +2576,8 @@ Technical details: $e''';
     bool showLineNumbers,
     ScrollController? customScrollController,
     bool useSimplifiedHighlighting,
-    String cacheKey,
+    String controllerKey,
+    String editorKey,
   ) async {
     // Unblock UI for initial render
     await Future.delayed(Duration.zero);
@@ -2584,8 +2596,8 @@ Technical details: $e''';
     final globalKey = GlobalKey();
 
     // Cache them
-    _cachedControllers[cacheKey] = controller;
-    _cachedGlobalKeys[cacheKey] = globalKey;
+    _cachedControllers[controllerKey] = controller;
+    _cachedGlobalKeys[editorKey] = globalKey;
     _enforceCacheSizeLimits();
 
     if (!context.mounted) return const SizedBox.shrink();

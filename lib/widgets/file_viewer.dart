@@ -286,54 +286,79 @@ class FileViewer extends StatelessWidget {
 
         // File content with built-in syntax highlighting and line numbers
         Expanded(
-          child: Consumer<HtmlService>(
-            builder: (context, htmlService, child) {
-              // Build the editor, handling both cached (sync) and new (async) states
-              // explicitly to prevent flickering and crashes.
-              final result = htmlService.buildEditor(
-                file.content,
-                htmlService.selectedContentType ?? file.extension,
-                context,
-                fontSize: settings.fontSize,
-                themeName: settings.themeName,
-                wrapText: settings.wrapText,
-                showLineNumbers: settings.showLineNumbers,
-                customScrollController:
-                    scrollController ?? PrimaryScrollController.of(context),
-              );
-
-              // If cached, return immediately (no flicker)
-              if (result is Widget) {
-                return result;
-              }
-
-              // If async, show loading indicator
-              return FutureBuilder<Widget>(
-                // Use key to force rebuild when content changes
-                key: ValueKey(
-                    '${htmlService.currentFile?.path}_${htmlService.selectedContentType}'),
-                future: result,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.done &&
-                      snapshot.hasData) {
-                    return snapshot.data!;
-                  }
-
-                  // Show loading indicator
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Processing syntax highlighting...',
-                            style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              // On iOS, tapping the status bar triggers a scroll to top.
+              // We detect this by checking for a scroll to 0 that isn't a manual drag.
+              if (Theme.of(context).platform == TargetPlatform.iOS &&
+                  notification.metrics.axis == Axis.vertical &&
+                  notification.metrics.pixels <= 0 &&
+                  notification is ScrollUpdateNotification &&
+                  notification.dragDetails == null) {
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                final hController = htmlService.horizontalScrollController;
+                if (hController != null &&
+                    hController.hasClients &&
+                    hController.offset > 0) {
+                  hController.animateTo(
+                    0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
                   );
-                },
-              );
+                }
+              }
+              return false;
             },
+            child: Consumer<HtmlService>(
+              builder: (context, htmlService, child) {
+                // Build the editor, handling both cached (sync) and new (async) states
+                // explicitly to prevent flickering and crashes.
+                final result = htmlService.buildEditor(
+                  file.content,
+                  htmlService.selectedContentType ?? file.extension,
+                  context,
+                  fontSize: settings.fontSize,
+                  themeName: settings.themeName,
+                  wrapText: settings.wrapText,
+                  showLineNumbers: settings.showLineNumbers,
+                  customScrollController:
+                      scrollController ?? PrimaryScrollController.of(context),
+                );
+
+                // If cached, return immediately (no flicker)
+                if (result is Widget) {
+                  return result;
+                }
+
+                // If async, show loading indicator
+                return FutureBuilder<Widget>(
+                  // Use key to force rebuild when content changes
+                  key: ValueKey(
+                      '${htmlService.currentFile?.path}_${htmlService.selectedContentType}'),
+                  future: result,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.done &&
+                        snapshot.hasData) {
+                      return snapshot.data!;
+                    }
+
+                    // Show loading indicator
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Processing syntax highlighting...',
+                              style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
       ],
