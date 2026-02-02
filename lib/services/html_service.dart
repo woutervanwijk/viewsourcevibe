@@ -633,9 +633,9 @@ class HtmlService with ChangeNotifier {
           !filename.contains('.') && !filename.contains('/')) {
         // Use simple descriptive names without extensions
         if (filename.contains('rss') || filename.contains('feed')) {
-          return 'RSS Page';
+          return 'RSS Page.xml';
         } // Simple fallback for generated filen}
-        return 'Web Page'; // Simple fallback for generated filenames
+        return 'Web Page.html'; // Simple fallback for generated filenames
       }
 
       // If filename already has a proper file extension, use it

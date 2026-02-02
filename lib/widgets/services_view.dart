@@ -31,6 +31,7 @@ class ServicesView extends StatelessWidget {
     }
 
     return ListView(
+      primary: false,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       children: [
         _buildSectionTitle(context, 'Detected Services'),

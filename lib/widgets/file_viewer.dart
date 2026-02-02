@@ -337,8 +337,22 @@ class FileViewer extends StatelessWidget {
                   notification.metrics.pixels <= 0 &&
                   notification is ScrollUpdateNotification &&
                   notification.dragDetails == null) {
+                // Tapping status bar on iOS
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
+
+                // 1. Scroll vertical to top
+                final vController =
+                    scrollController ?? PrimaryScrollController.of(context);
+                if (vController.hasClients && vController.offset > 0) {
+                  vController.animateTo(
+                    0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+
+                // 2. Scroll horizontal to start
                 final hController = htmlService.horizontalScrollController;
                 if (hController != null &&
                     hController.hasClients &&

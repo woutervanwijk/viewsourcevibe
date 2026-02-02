@@ -122,47 +122,52 @@ class Toolbar extends StatelessWidget {
 
     bool shareUrl = false;
 
-    // If it's a URL, ask the user what they want to share
+    // If it's a URL, ask the user what they want to share (only for text files)
     if (currentFile.isUrl) {
-      final choice = await showModalBottomSheet<String>(
-        context: context,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (context) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Share Options',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+      if (!htmlService.isMedia) {
+        final choice = await showModalBottomSheet<String>(
+          context: context,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'Share Options',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.link),
-                title: const Text('Share URL'),
-                subtitle: Text(currentFile.path,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                onTap: () => Navigator.pop(context, 'url'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.description_outlined),
-                title: const Text('Share Source Text'),
-                onTap: () => Navigator.pop(context, 'text'),
-              ),
-              const SizedBox(height: 8),
-            ],
+                ListTile(
+                  leading: const Icon(Icons.link),
+                  title: const Text('Share URL'),
+                  subtitle: Text(currentFile.path,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  onTap: () => Navigator.pop(context, 'url'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Share Source Text'),
+                  onTap: () => Navigator.pop(context, 'text'),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
-        ),
-      );
+        );
 
-      if (choice == null) return; // User cancelled
-      shareUrl = choice == 'url';
+        if (choice == null) return; // User cancelled
+        shareUrl = choice == 'url';
+      } else {
+        // For media or other non-text files, just share the URL
+        shareUrl = true;
+      }
     }
 
     try {

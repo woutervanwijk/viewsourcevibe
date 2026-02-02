@@ -30,6 +30,7 @@ class MetadataView extends StatelessWidget {
     }
 
     return ListView(
+      primary: false,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       children: [
         _buildHeaderSection(context, metadata),

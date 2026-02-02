@@ -46,6 +46,7 @@ class MediaView extends StatelessWidget {
     }
 
     return ListView(
+      primary: false,
       padding: const EdgeInsets.all(16),
       children: [
         if (videos.isNotEmpty) ...[
