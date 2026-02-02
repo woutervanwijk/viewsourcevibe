@@ -1274,8 +1274,7 @@ class HtmlService with ChangeNotifier {
 
       // Set proper headers to avoid 403 errors from websites that block non-browser clients
       final headers = {
-        'User-Agent':
-            'Mozilla/5.0 (compatible; ViewSourceVibe/1.0; +https://github.com/wouterviewsource/viewsourcevibe)',
+        'User-Agent': 'curl/7.88.1',
         'Accept':
             'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
@@ -1480,8 +1479,7 @@ Technical details: $e''';
 
       // Headers to mimic a browser/curl
       final headers = {
-        'User-Agent':
-            'Mozilla/5.0 (compatible; ViewSourceVibe/1.0; +https://github.com/wouterviewsource/viewsourcevibe)',
+        'User-Agent': 'curl/7.88.1',
         'Accept': '*/*',
       };
 
