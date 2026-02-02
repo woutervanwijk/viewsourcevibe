@@ -57,6 +57,12 @@ class HtmlService with ChangeNotifier {
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
 
+  bool _isWebViewMode = false;
+  bool get isWebViewMode => _isWebViewMode;
+
+  bool _isBeautifyEnabled = false;
+  bool get isBeautifyEnabled => _isBeautifyEnabled;
+
   // Cache for highlighted content to improve performance
   final Map<String, Widget> _highlightCache = {};
 
@@ -947,6 +953,8 @@ class HtmlService with ChangeNotifier {
   }
 
   Future<void> loadFile(HtmlFile file, {bool clearProbe = true}) async {
+    _isWebViewMode = false; // Reset view mode on new file
+    _isBeautifyEnabled = false; // Reset beautify mode on new file
     // Save current file to navigation stack if we are not going back
     if (!_isNavigatingBack && _currentFile != null) {
       // Only push to stack if it's a valid history item
@@ -1089,6 +1097,16 @@ class HtmlService with ChangeNotifier {
     };
 
     return typeMapping[detectedType] ?? 'plaintext';
+  }
+
+  void toggleIsWebViewMode() {
+    _isWebViewMode = !_isWebViewMode;
+    notifyListeners();
+  }
+
+  void toggleIsBeautifyEnabled() {
+    _isBeautifyEnabled = !_isBeautifyEnabled;
+    notifyListeners();
   }
 
   Future<void> scrollToZero() async {
