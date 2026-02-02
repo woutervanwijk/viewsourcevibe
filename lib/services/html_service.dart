@@ -21,11 +21,13 @@ import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async' show TimeoutException, Timer;
 import 'dart:io' show SocketException, InternetAddress;
+import 'dart:async';
 import 'dart:convert';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
+import 'package:view_source_vibe/services/metadata_parser.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -53,7 +55,6 @@ class HtmlService with ChangeNotifier {
 
   // Cache for highlighted content to improve performance
   final Map<String, Widget> _highlightCache = {};
-  final Map<String, CodeLineEditingController> _controllerCache = {};
 
   // Track the currently active find controller
   CodeFindController? _activeFindController;
@@ -2169,22 +2170,19 @@ Technical details: $e''';
       }
     }
 
-    // Check controller cache
-    final controllerCacheKey = '${cacheKey}_controller';
-    CodeLineEditingController? controller;
-    if (_controllerCache.containsKey(controllerCacheKey)) {
-      controller = _controllerCache[controllerCacheKey]!;
-      debugPrint('🔄 Using cached controller');
-    } else {
-      controller = CodeLineEditingController.fromText(processedContent);
-      _controllerCache[controllerCacheKey] = controller;
-    }
+    // Always create a new controller to avoid issues with listeners from deactivated widgets
+    final controller = CodeLineEditingController.fromText(processedContent);
 
-    if (customScrollController != null) {
-      _verticalScrollController = customScrollController;
-    } else {
-      _verticalScrollController ??= PrimaryScrollController.of(context);
-    }
+    // Resolve the vertical scroll controller
+    // If customScrollController is provided, use it.
+    // Otherwise, try to find one in the context.
+    // If that fails, create a temporary one (though this should rarely happen in a valid app structure).
+    final effectiveVerticalController = customScrollController ??
+        PrimaryScrollController.of(context) ??
+        ScrollController();
+
+    // Update our reference for external access (e.g. scrollToZero)
+    _verticalScrollController = effectiveVerticalController;
 
     // Create a code theme using the selected theme
     final mode =
@@ -2195,9 +2193,7 @@ Technical details: $e''';
 
     // Create the scroll controller for CodeEditor
     final codeScrollController = CodeScrollController(
-        verticalScroller: customScrollController ??
-            _verticalScrollController ??
-            PrimaryScrollController.of(context),
+        verticalScroller: effectiveVerticalController,
         horizontalScroller: _horizontalScrollController);
 
     // Create the final widget
@@ -2415,82 +2411,218 @@ Technical details: $e''';
     return hashParts.join('_');
   }
 
-  /// Clear the highlight cache
+  // Cache for editor state to prevent crashes and flickering
+  final Map<String, CodeLineEditingController> _cachedControllers = {};
+  final Map<String, GlobalKey> _cachedGlobalKeys = {};
+
+  /// Clear the editor cache
   void clearHighlightCache() {
-    _highlightCache.clear();
-    _controllerCache.clear();
-    debugPrint('🧹 Cleared syntax highlighting cache');
+    _cachedControllers.clear();
+    _cachedGlobalKeys.clear();
+    debugPrint('🧹 Cleared editor cache');
   }
 
   /// Check and enforce cache size limits
   void _enforceCacheSizeLimits() {
-    const maxCacheEntries = 10; // Limit to 10 cached highlighted widgets
-    const maxControllerEntries = 20; // Limit to 20 cached controllers
+    const maxCacheEntries = 10;
 
-    // Enforce highlight cache limit
-    if (_highlightCache.length > maxCacheEntries) {
-      final keysToRemove = _highlightCache.keys
-          .take(_highlightCache.length - maxCacheEntries)
+    if (_cachedControllers.length > maxCacheEntries) {
+      final keysToRemove = _cachedControllers.keys
+          .take(_cachedControllers.length - maxCacheEntries)
           .toList();
       for (final key in keysToRemove) {
-        _highlightCache.remove(key);
+        _cachedControllers.remove(key);
+        _cachedGlobalKeys.remove(key);
       }
-      debugPrint('🔄 Trimmed highlight cache to $maxCacheEntries entries');
+      debugPrint('🔄 Trimmed editor cache to $maxCacheEntries entries');
     }
-
-    // Enforce controller cache limit
-    if (_controllerCache.length > maxControllerEntries) {
-      final keysToRemove = _controllerCache.keys
-          .take(_controllerCache.length - maxControllerEntries)
-          .toList();
-      for (final key in keysToRemove) {
-        _controllerCache.remove(key);
-      }
-      debugPrint(
-          '🔄 Trimmed controller cache to $maxControllerEntries entries');
-    }
-
-    // Enforce find controller cache limit (same as controller cache)
-    // CodeFindController is managed by CodeEditor, so we don't need to cache it manually
   }
 
   /// Clear cache for specific content
   void clearCacheForContent(String content) {
     final contentHash = _simpleHash(content);
-    final keysToRemove = _highlightCache.keys
+    final keysToRemove = _cachedControllers.keys
         .where((key) => key.startsWith('hl:$contentHash'))
         .toList();
 
     for (final key in keysToRemove) {
-      _highlightCache.remove(key);
-      final controllerKey = '${key}_controller';
-      _controllerCache.remove(controllerKey);
+      _cachedControllers.remove(key);
+      _cachedGlobalKeys.remove(key);
     }
 
     debugPrint(
         '🧹 Cleared cache for specific content (${keysToRemove.length} entries)');
   }
 
-  /// Debounced version of buildHighlightedText for better performance
-  /// This prevents rapid recalculation when content changes frequently
-  Widget buildHighlightedTextDebounced(
+  /// Build the editor widget, returning strictly synchronous Widget if cached,
+  /// or a Future<Widget> if processing is needed.
+  FutureOr<Widget> buildEditor(
       String content, String extension, BuildContext context,
       {double fontSize = 16.0,
       String themeName = 'github',
       bool wrapText = false,
       bool showLineNumbers = true,
       ScrollController? customScrollController}) {
-    // For now, just use the regular method but with caching
-    // The caching will provide most of the performance benefits
-    return buildHighlightedText(
-      content,
-      extension,
-      context,
-      fontSize: fontSize,
-      themeName: themeName,
-      wrapText: wrapText,
-      showLineNumbers: showLineNumbers,
-      customScrollController: customScrollController,
+    // Performance optimization: Use simplified highlighting for very large files
+    final contentSize = content.length;
+    bool useSimplifiedHighlighting = contentSize > 10 * 1024 * 1024;
+
+    // Generate cache key (independent of ScrollController now!)
+    final cacheKey = _generateHighlightCacheKey(
+        content: content,
+        extension: extension,
+        fontSize: fontSize,
+        themeName: themeName,
+        wrapText: wrapText,
+        showLineNumbers: showLineNumbers,
+        useSimplified: useSimplifiedHighlighting);
+
+    // Synchronous Cache Hit check
+    if (_cachedControllers.containsKey(cacheKey) &&
+        _cachedGlobalKeys.containsKey(cacheKey)) {
+      return _buildEditorWidget(
+          context,
+          _cachedControllers[cacheKey]!,
+          _cachedGlobalKeys[cacheKey]!,
+          extension,
+          themeName,
+          fontSize,
+          wrapText,
+          showLineNumbers,
+          customScrollController);
+    }
+
+    // Cache Miss: Perform setup (async if needed)
+    return _buildNewEditor(
+        content,
+        extension,
+        context,
+        fontSize,
+        themeName,
+        wrapText,
+        showLineNumbers,
+        customScrollController,
+        useSimplifiedHighlighting,
+        cacheKey);
+  }
+
+  Future<Widget> _buildNewEditor(
+    String content,
+    String extension,
+    BuildContext context,
+    double fontSize,
+    String themeName,
+    bool wrapText,
+    bool showLineNumbers,
+    ScrollController? customScrollController,
+    bool useSimplifiedHighlighting,
+    String cacheKey,
+  ) async {
+    // Unblock UI for initial render
+    await Future.delayed(Duration.zero);
+
+    // Process content (simulated async if heavy)
+    String processedContent = content;
+    if (useSimplifiedHighlighting) {
+      final maxHighlightLength = 50000;
+      if (content.length > maxHighlightLength) {
+        processedContent = content.substring(0, maxHighlightLength);
+      }
+    }
+
+    // Create Controller & GlobalKey
+    final controller = CodeLineEditingController.fromText(processedContent);
+    final globalKey = GlobalKey();
+
+    // Cache them
+    _cachedControllers[cacheKey] = controller;
+    _cachedGlobalKeys[cacheKey] = globalKey;
+    _enforceCacheSizeLimits();
+
+    if (!context.mounted) return const SizedBox.shrink();
+
+    return _buildEditorWidget(context, controller, globalKey, extension,
+        themeName, fontSize, wrapText, showLineNumbers, customScrollController);
+  }
+
+  Widget _buildEditorWidget(
+    BuildContext context,
+    CodeLineEditingController controller,
+    GlobalKey key,
+    String extension,
+    String themeName,
+    double fontSize,
+    bool wrapText,
+    bool showLineNumbers,
+    ScrollController? customScrollController,
+  ) {
+    // Determine language
+    String languageName =
+        getLanguageForExtension(extension); // Use existing helper method
+
+    // Resolve Scroll Controller
+    final effectiveVerticalController = customScrollController ??
+        PrimaryScrollController.of(context) ??
+        ScrollController();
+
+    _verticalScrollController = effectiveVerticalController;
+
+    // Create Theme
+    final mode =
+        _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
+    final codeTheme = CodeHighlightTheme(
+        languages: {languageName: CodeHighlightThemeMode(mode: mode)},
+        theme: _getThemeByName(themeName));
+
+    // Create CodeScrollController linked to CURRENT effective controller
+    final codeScrollController = CodeScrollController(
+        verticalScroller: effectiveVerticalController,
+        horizontalScroller: _horizontalScrollController);
+
+    // Return the Editor Widget, using the GlobalKey to preserve state
+    return CodeEditor(
+      key: key,
+      controller: controller,
+      showCursorWhenReadOnly: false,
+      readOnly: true,
+      toolbarController: const ContextMenuControllerImpl(),
+      wordWrap: wrapText,
+      padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
+      scrollController: codeScrollController,
+      style: CodeEditorStyle(
+        codeTheme: codeTheme,
+        fontSize: fontSize,
+        fontFamily: 'Courier',
+        fontFamilyFallback: const ['monospace', 'Courier New'],
+        fontHeight: 1.2,
+      ),
+      sperator: showLineNumbers ? SizedBox(width: fontSize / 2) : null,
+      indicatorBuilder: showLineNumbers
+          ? (context, editingController, chunkController, notifier) {
+              return DefaultCodeLineNumber(
+                controller: editingController,
+                notifier: notifier,
+                textStyle: TextStyle(
+                  fontSize: fontSize,
+                  fontFamily: 'Courier',
+                  height: 1.2,
+                  fontFamilyFallback: const ['monospace', 'Courier New'],
+                  color: Colors.grey[600],
+                ),
+              );
+            }
+          : null,
+      findBuilder: (context, controller, readOnly) {
+        if (_activeFindController != controller) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _updateActiveFindController(controller);
+          });
+        }
+        return const PreferredSize(
+          preferredSize: Size.zero,
+          child: SizedBox.shrink(),
+        );
+      },
     );
   }
 
@@ -2498,6 +2630,30 @@ Technical details: $e''';
   void cancelPendingHighlight() {
     _highlightDebounceTimer?.cancel();
     debugPrint('⏹️  Cancelled pending highlight operations');
+  }
+
+  /// Async version of buildHighlightedText to prevent UI blocking
+  Future<Widget> buildHighlightedTextAsync(
+      String content, String extension, BuildContext context,
+      {double fontSize = 16.0,
+      String themeName = 'github',
+      bool wrapText = false,
+      bool showLineNumbers = true,
+      ScrollController? customScrollController}) async {
+    // Small delay to allow initial UI render (spinner)
+    await Future.delayed(Duration.zero);
+
+    // Check if mounted before proceeding (though context usage is in buildHighlightedText which is sync)
+    if (!context.mounted) {
+      return const SizedBox.shrink();
+    }
+
+    return buildHighlightedText(content, extension, context,
+        fontSize: fontSize,
+        themeName: themeName,
+        wrapText: wrapText,
+        showLineNumbers: showLineNumbers,
+        customScrollController: customScrollController);
   }
 
   /// Toggle the search panel for the current editor
@@ -2537,192 +2693,18 @@ Technical details: $e''';
   }
 
   /// Extract metadata from the current file content
-  void _extractMetadata() {
+  Future<void> _extractMetadata() async {
     if (_currentFile == null) return;
     final html = _currentFile!.content;
     final baseUrl = _currentFile!.isUrl ? _currentFile!.path : '';
 
-    final Map<String, dynamic> metadata = {
-      'openGraph': <String, String>{},
-      'twitter': <String, String>{},
-      'rssLinks': <String>[],
-      'cssLinks': <String>[],
-      'jsLinks': <String>[],
-      'otherMeta': <String, String>{},
-      'icons': <String, String>{},
-      'detectedTech': <String, String>{},
-    };
-
-    // Extract Title
-    final titleMatch =
-        RegExp(r'<title[^>]*>(.*?)</title>', dotAll: true, caseSensitive: false)
-            .firstMatch(html);
-    if (titleMatch != null) metadata['title'] = titleMatch.group(1)?.trim();
-
-    // Extract Meta Tags
-    final metaTags =
-        RegExp(r'<meta\s+([^>]*?)>', caseSensitive: false).allMatches(html);
-    for (final match in metaTags) {
-      final attrStr = match.group(1) ?? '';
-      final attrs = _parseAttributes(attrStr);
-
-      final name =
-          attrs['name']?.toLowerCase() ?? attrs['property']?.toLowerCase();
-      final content = attrs['content'];
-
-      if (name != null && content != null) {
-        if (name.startsWith('og:')) {
-          metadata['openGraph'][name] = content;
-        } else if (name.startsWith('twitter:')) {
-          metadata['twitter'][name] = content;
-        } else if (name == 'description') {
-          metadata['description'] = content;
-        } else {
-          metadata['otherMeta'][name] = content;
-        }
-      }
-    }
-
-    // Extract Link Tags (CSS, RSS, Favicon)
-    final linkTags =
-        RegExp(r'<link\s+([^>]*?)>', caseSensitive: false).allMatches(html);
-    for (final match in linkTags) {
-      final attrStr = match.group(1) ?? '';
-      final attrs = _parseAttributes(attrStr);
-
-      final rel = attrs['rel']?.toLowerCase();
-      final href = attrs['href'];
-      final type = attrs['type']?.toLowerCase();
-
-      if (href != null) {
-        final absoluteHref = _resolveUrl(href, baseUrl);
-        if (rel == 'stylesheet' || type == 'text/css') {
-          metadata['cssLinks'].add(absoluteHref);
-        } else if (rel == 'alternate' &&
-            (type?.contains('rss') == true || type?.contains('atom') == true)) {
-          metadata['rssLinks'].add(absoluteHref);
-        } else if (rel != null && rel.contains('icon')) {
-          metadata['icons'][rel] = absoluteHref;
-        }
-      }
-    }
-
-    // Extract Script Tags
-    final scriptTags =
-        RegExp(r'''<script\s+[^>]*src=["'](.*?)["']''', caseSensitive: false)
-            .allMatches(html);
-    for (final match in scriptTags) {
-      final attrStr = match.group(1) ?? '';
-      final attrs = _parseAttributes(attrStr);
-      final src = attrs['src'];
-      if (src != null) {
-        metadata['jsLinks'].add(_resolveUrl(src, baseUrl));
-      }
-    }
-
-    // Refine Image/Favicon from OG/Meta
-    metadata['image'] = metadata['openGraph']['og:image'] ??
-        metadata['twitter']['twitter:image'];
-    metadata['favicon'] = metadata['icons']['apple-touch-icon'] ??
-        metadata['icons']['icon'] ??
-        metadata['icons']['shortcut icon'];
-
-    // Detect CMS and Frameworks
-    _detectTechnologies(html, metadata);
-
-    _pageMetadata = metadata;
-    notifyListeners();
-  }
-
-  /// Guess CMS and Frameworks based on patterns in the HTML
-  void _detectTechnologies(String html, Map<String, dynamic> metadata) {
-    final Map<String, String> tech = {};
-
-    // 1. Check Meta Generator
-    final generator = metadata['otherMeta']['generator']?.toLowerCase() ?? '';
-    if (generator.contains('wordpress')) {
-      tech['CMS'] = 'WordPress';
-    } else if (generator.contains('joomla')) {
-      tech['CMS'] = 'Joomla';
-    } else if (generator.contains('drupal')) {
-      tech['CMS'] = 'Drupal';
-    } else if (generator.contains('ghost')) {
-      tech['CMS'] = 'Ghost';
-    } else if (generator.contains('hugo')) {
-      tech['Static Site'] = 'Hugo';
-    } else if (generator.contains('webflow')) {
-      tech['CMS'] = 'Webflow';
-    } else if (generator.contains('wix')) {
-      tech['CMS'] = 'Wix';
-    }
-
-    // 2. Check File Paths and Specific Tags
-    if (tech['CMS'] == null) {
-      if (html.contains('wp-content') || html.contains('wp-includes')) {
-        tech['CMS'] = 'WordPress';
-      } else if (html.contains('cdn.shopify.com') ||
-          html.contains('shopify-payment-button')) {
-        tech['CMS'] = 'Shopify';
-      } else if (html.contains('static1.squarespace.com')) {
-        tech['CMS'] = 'Squarespace';
-      } else if (html.contains('data-wf-page')) {
-        tech['CMS'] = 'Webflow';
-      }
-    }
-
-    // 3. Detect Frontend Frameworks
-    if (_hasPattern(html, r'''_next/static|__NEXT_DATA__''')) {
-      tech['Framework'] = 'Next.js';
-    } else if (_hasPattern(html, r'''__NUXT__''')) {
-      tech['Framework'] = 'Nuxt.js';
-    } else if (_hasPattern(html, r'''data-reactroot''')) {
-      tech['Library'] = 'React';
-    } else if (_hasPattern(html, r'''data-v-|v-if=|v-for=''')) {
-      tech['Library'] = 'Vue.js';
-    } else if (_hasPattern(html, r'''ng-version|ng-app''')) {
-      tech['Framework'] = 'Angular';
-    }
-
-    // 4. Detect CSS Frameworks
-    if (_hasPattern(html,
-        r'''bootstrap(?:\.min)?\.css|class=["'][^"']*?\b(?:col-|btn-|navbar-)''')) {
-      tech['CSS Framework'] = 'Bootstrap';
-    }
-    if (_hasPattern(html,
-        r'''tailwind(?:\.min)?\.css|class=["'][^"']*?\b(?:text-|bg-|p-|m-|flex-|grid-)''')) {
-      // More specific tailwind check to avoid false positives with generic utilities
-      if (_hasPattern(html, r'''\b(?:sm:|md:|lg:|xl:|2xl:)[a-z]''')) {
-        tech['CSS Framework'] = 'Tailwind CSS';
-      }
-    }
-
-    metadata['detectedTech'] = tech;
-  }
-
-  bool _hasPattern(String text, String pattern) {
-    return RegExp(pattern, caseSensitive: false).hasMatch(text);
-  }
-
-  Map<String, String> _parseAttributes(String attrStr) {
-    final Map<String, String> attrs = {};
-    // Regex to match attributes like name="value" or property="value" or rel='value'
-    final regExp = RegExp(r'''([a-zA-Z0-9:-]+)\s*=\s*["'](.*?)["']''',
-        caseSensitive: false);
-    for (final match in regExp.allMatches(attrStr)) {
-      attrs[match.group(1)!] = match.group(2)!;
-    }
-    return attrs;
-  }
-
-  String _resolveUrl(String url, String baseUrl) {
-    if (url.isEmpty) return url;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    if (baseUrl.isEmpty) return url;
     try {
-      final base = Uri.parse(baseUrl);
-      return base.resolve(url).toString();
+      _pageMetadata = await extractMetadataInIsolate(html, baseUrl);
     } catch (e) {
-      return url;
+      debugPrint('Error extracting metadata in isolate: $e');
+      _pageMetadata = null;
     }
+
+    notifyListeners();
   }
 }

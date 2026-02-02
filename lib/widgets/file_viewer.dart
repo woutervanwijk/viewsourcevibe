@@ -288,8 +288,9 @@ class FileViewer extends StatelessWidget {
         Expanded(
           child: Consumer<HtmlService>(
             builder: (context, htmlService, child) {
-              // Use debounced highlighting for better performance
-              return htmlService.buildHighlightedTextDebounced(
+              // Build the editor, handling both cached (sync) and new (async) states
+              // explicitly to prevent flickering and crashes.
+              final result = htmlService.buildEditor(
                 file.content,
                 htmlService.selectedContentType ?? file.extension,
                 context,
@@ -297,7 +298,40 @@ class FileViewer extends StatelessWidget {
                 themeName: settings.themeName,
                 wrapText: settings.wrapText,
                 showLineNumbers: settings.showLineNumbers,
-                customScrollController: scrollController,
+                customScrollController:
+                    scrollController ?? PrimaryScrollController.of(context),
+              );
+
+              // If cached, return immediately (no flicker)
+              if (result is Widget) {
+                return result;
+              }
+
+              // If async, show loading indicator
+              return FutureBuilder<Widget>(
+                // Use key to force rebuild when content changes
+                key: ValueKey(
+                    '${htmlService.currentFile?.path}_${htmlService.selectedContentType}'),
+                future: result as Future<Widget>,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.done &&
+                      snapshot.hasData) {
+                    return snapshot.data!;
+                  }
+
+                  // Show loading indicator
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Processing syntax highlighting...',
+                            style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                },
               );
             },
           ),
