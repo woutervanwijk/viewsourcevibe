@@ -359,8 +359,111 @@ class ProbeSecurityView extends ProbeViewBase {
             ),
           );
         }),
+        const SizedBox(height: 24),
+        Text(
+          'SSL Certificate',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
+        _buildCertificateCard(context, result['certificate']),
       ],
     );
+  }
+
+  Widget _buildCertificateCard(
+      BuildContext context, Map<String, dynamic>? cert) {
+    if (cert == null) {
+      return Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Icon(Icons.no_encryption_gmailerrorred, color: Colors.orange),
+              SizedBox(width: 12),
+              Text('No certificate information available'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final String subject = cert['subject'] ?? 'Unknown';
+    final String issuer = cert['issuer'] ?? 'Unknown';
+    final String start = cert['startValidity'] ?? '';
+    final String end = cert['endValidity'] ?? '';
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCertDetail(context, 'Subject (Owner)', subject),
+            const Divider(height: 16),
+            _buildCertDetail(context, 'Issuer', issuer),
+            const Divider(height: 16),
+            _buildCertDetail(context, 'Valid From', _formatDate(start)),
+            const Divider(height: 16),
+            _buildCertDetail(context, 'Valid Until', _formatDate(end)),
+            if (cert['pem'] != null) ...[
+              const Divider(height: 16),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.copy, size: 16),
+                label: const Text('Copy PEM Certificate'),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: cert['pem']));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Certificate copied')),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCertDetail(BuildContext context, String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        SelectableText(
+          value,
+          style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(String isoString) {
+    try {
+      if (isoString.isEmpty) return 'Unknown';
+      final date = DateTime.parse(isoString);
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
+          '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return isoString;
+    }
   }
 }
 

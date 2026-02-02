@@ -19,7 +19,7 @@ import 'package:re_highlight/styles/tokyo-night-light.dart';
 import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io' show SocketException, InternetAddress;
+import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
@@ -401,32 +401,37 @@ class HtmlService with ChangeNotifier {
         return originalUri?.toString() ?? uri.toString();
       }
 
-      // Create a request that doesn't automatically follow redirects
-      final request = http.Request('GET', uri)..followRedirects = false;
+      // Use HttpClient to manually handle redirects and capture certificate
+      final hClient = HttpClient();
+      final hRequest = await hClient.openUrl('GET', uri);
+      hRequest.followRedirects = false;
 
       // Add headers to the request
       headers.forEach((key, value) {
-        request.headers[key] = value;
+        hRequest.headers.set(key, value);
       });
 
-      // Send the request
-      final response =
-          await client.send(request).timeout(const Duration(seconds: 30));
+      final hResponse =
+          await hRequest.close().timeout(const Duration(seconds: 30));
+
+      // Capture certificate info if available
+      if (hResponse.certificate != null) {
+        // We can use this to store the cert, but for now it's in probeResult
+      }
 
       // Check if this is a redirect response
-      if (response.isRedirect) {
-        // Get the redirect location from headers
-        final locationHeader = response.headers['location'];
+      if (hResponse.statusCode >= 300 &&
+          hResponse.statusCode < 400 &&
+          hResponse.headers.value('location') != null) {
+        final locationHeader = hResponse.headers.value('location')!;
+        // Handle relative redirects by resolving against the original URI
+        final redirectUri = uri.resolve(locationHeader);
 
-        if (locationHeader != null && locationHeader.isNotEmpty) {
-          // Handle relative redirects by resolving against the original URI
-          final redirectUri = uri.resolve(locationHeader);
-
-          // Recursively follow the redirect to get the final URL
-          return await _getFinalUrlAfterRedirects(redirectUri, client, headers,
-              originalUri: originalUri ?? uri, // Preserve the original URI
-              redirectDepth: redirectDepth + 1);
-        }
+        // Recursively follow the redirect to get the final URL
+        return await _getFinalUrlAfterRedirects(
+            redirectUri, http.Client(), headers,
+            originalUri: originalUri ?? uri, // Preserve the original URI
+            redirectDepth: redirectDepth + 1);
       }
 
       // If not a redirect, return the current URL
@@ -1299,7 +1304,7 @@ class HtmlService with ChangeNotifier {
         'Accept-Language': 'en-US,en;q=0.5',
       };
 
-      // Manual redirect handling to get the actual redirected URL
+      // Manual redirect handling to get the final URL and capture certificate
       final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers,
           originalUri: uri);
 
@@ -1309,49 +1314,67 @@ class HtmlService with ChangeNotifier {
         notifyListeners();
       }
 
-      // Make the request to the final URL with timeout
-      final response = await client
-          .get(
-            Uri.parse(finalUrl),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 30));
+      // Use HttpClient for the final request to ensure we have the certificate
+      final hClient = HttpClient();
+      final hRequest = await hClient.openUrl('GET', Uri.parse(finalUrl));
+
+      headers.forEach((key, value) {
+        hRequest.headers.set(key, value);
+      });
+
+      final hResponse =
+          await hRequest.close().timeout(const Duration(seconds: 30));
+
+      // Capture certificate info
+      Map<String, dynamic>? certInfo;
+      if (hResponse.certificate != null) {
+        certInfo = _extractCertificateInfo(hResponse.certificate!);
+      }
+
+      // Read body
+      final bytes = await hResponse.fold<List<int>>([], (p, e) => p..addAll(e));
+      final content = utf8.decode(bytes, allowMalformed: true);
 
       stopwatch.stop();
 
+      // Convert HttpClient headers to a Map<String, String> for compatibility
+      final respHeaders = <String, String>{};
+      hResponse.headers.forEach((name, values) {
+        respHeaders[name] = values.join(', ');
+      });
+
       // Construct Probe Result from the response
-      final setCookie = response.headers['set-cookie'];
+      final setCookie = respHeaders['set-cookie'];
       final List<String> cookies =
           setCookie != null ? setCookie.split(RegExp(r',(?=[^;]+?=)')) : [];
 
       final securityHeaders = {
-        'Strict-Transport-Security':
-            response.headers['strict-transport-security'],
-        'Content-Security-Policy': response.headers['content-security-policy'],
-        'X-Frame-Options': response.headers['x-frame-options'],
-        'X-Content-Type-Options': response.headers['x-content-type-options'],
-        'Referrer-Policy': response.headers['referrer-policy'],
-        'Permissions-Policy': response.headers['permissions-policy'],
+        'Strict-Transport-Security': respHeaders['strict-transport-security'],
+        'Content-Security-Policy': respHeaders['content-security-policy'],
+        'X-Frame-Options': respHeaders['x-frame-options'],
+        'X-Content-Type-Options': respHeaders['x-content-type-options'],
+        'Referrer-Policy': respHeaders['referrer-policy'],
+        'Permissions-Policy': respHeaders['permissions-policy'],
       };
 
-      int? contentLength = response.contentLength;
+      int? contentLength = hResponse.contentLength;
       // Check Content-Length header fallback
-      if ((contentLength == null || contentLength == 0) &&
-          response.headers.containsKey('content-length')) {
-        contentLength = int.tryParse(response.headers['content-length']!);
+      if (contentLength <= 0 && respHeaders.containsKey('content-length')) {
+        contentLength = int.tryParse(respHeaders['content-length']!);
       }
 
       final probeResult = {
-        'statusCode': response.statusCode,
-        'reasonPhrase': response.reasonPhrase,
-        'headers': response.headers,
-        'isRedirect': response.isRedirect || finalUrl != url,
+        'statusCode': hResponse.statusCode,
+        'reasonPhrase': hResponse.reasonPhrase,
+        'headers': respHeaders,
+        'isRedirect': finalUrl != url,
         'contentLength': contentLength,
         'finalUrl': finalUrl,
         'responseTime': stopwatch.elapsedMilliseconds,
         'ipAddress': ipAddress,
         'security': securityHeaders,
         'cookies': cookies,
+        'certificate': certInfo,
       };
 
       // Check for redirect location if it was a redirect (though we followed it, we might want to show original redirect info if possible, but manual redirect following makes this tricky. We can assume if finalUrl != url, a redirect happened)
@@ -1364,8 +1387,12 @@ class HtmlService with ChangeNotifier {
       _probeResult = probeResult;
       _isProbing = false;
 
-      if (response.statusCode == 200) {
-        final content = response.body;
+      if (hResponse.statusCode == 200) {
+        // Security: Limit maximum content size to prevent memory issues
+        if (content.length > 10 * 1024 * 1024) {
+          // 10MB limit
+          throw Exception('File size exceeds maximum limit (10MB)');
+        }
 
         // Security: Limit maximum content size to prevent memory issues
         if (content.length > 10 * 1024 * 1024) {
@@ -1406,7 +1433,7 @@ class HtmlService with ChangeNotifier {
         return htmlFile;
       } else {
         throw Exception(
-            'Failed to load URL: ${response.statusCode} ${response.reasonPhrase}');
+            'Failed to load URL: ${hResponse.statusCode} ${hResponse.reasonPhrase}');
       }
     } catch (e) {
       // Display error in the editor instead of throwing exception
@@ -2807,5 +2834,31 @@ Technical details: $e''';
     }
 
     notifyListeners();
+  }
+
+  Map<String, dynamic> _extractCertificateInfo(X509Certificate cert) {
+    try {
+      return {
+        'subject': cert.subject,
+        'issuer': cert.issuer,
+        'startValidity': cert.startValidity.toIso8601String(),
+        'endValidity': cert.endValidity.toIso8601String(),
+        'der': base64Encode(cert.der),
+        'pem': _convertToPem(cert.der),
+      };
+    } catch (e) {
+      debugPrint('Error extracting certificate info: $e');
+      return {'error': e.toString()};
+    }
+  }
+
+  String _convertToPem(List<int> der) {
+    final base64String = base64Encode(der);
+    final chunks = <String>[];
+    for (var i = 0; i < base64String.length; i += 64) {
+      final end = (i + 64 > base64String.length) ? base64String.length : i + 64;
+      chunks.add(base64String.substring(i, end));
+    }
+    return '-----BEGIN CERTIFICATE-----\n${chunks.join('\n')}\n-----END CERTIFICATE-----';
   }
 }
