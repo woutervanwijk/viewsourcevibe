@@ -144,36 +144,39 @@ class UnifiedSharingService {
         debugPrint(
             'UnifiedSharingService: Handling shared content (${content.length} characters)');
 
-        // If it's a URL in text form, handle it as a URL
-        if (type == 'text' && isUrl(content)) {
-          await _processSharedUrl(context, htmlService, content);
-        } else if (type == 'text') {
-          // Enhanced URL detection for shared text content
-          // Check if the text content is actually a URL that should be opened
+        if (type == 'text') {
           final trimmedContent = content.trim();
-          
-          // Try to detect URLs more aggressively
-          if (isPotentialUrl(trimmedContent)) {
-            // Try to open as URL first
-            try {
-              final uri = Uri.tryParse(trimmedContent);
-              if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-                await _processSharedUrl(context, htmlService, trimmedContent);
-                return; // URL handled, no need for text processing
-              }
-            } catch (e) {
-              debugPrint('UnifiedSharingService: URL detection failed, treating as text: $e');
+          String? urlToLoad;
+
+          // Detect if it's a URL
+          if (isUrl(trimmedContent)) {
+            urlToLoad = trimmedContent;
+          } else if (isPotentialUrl(trimmedContent)) {
+            final uri = Uri.tryParse(trimmedContent);
+            if (uri != null &&
+                (uri.scheme == 'http' || uri.scheme == 'https')) {
+              urlToLoad = trimmedContent;
             }
           }
-          
-          // Otherwise handle it as text content (could be a file read by native side)
+
+          // If a URL was detected, ask the user what to do
+          if (urlToLoad != null) {
+            final choice = await _showShareChoiceDialog(context, urlToLoad);
+            if (choice == 'url') {
+              await _processSharedUrl(context, htmlService, urlToLoad);
+              return;
+            }
+            // If they chose 'text' or cancelled, fall through to text processing
+          }
+
+          // Handle it as text content
           await _processSharedText(
             context,
             htmlService,
             content,
             fileName: fileName,
             path: filePath ?? 'shared://${type ?? "content"}',
-            type: type, // Pass the type to determine appropriate default filename
+            type: type,
           );
         } else {
           // Otherwise handle it as text content (could be a file read by native side)
@@ -183,7 +186,8 @@ class UnifiedSharingService {
             content,
             fileName: fileName,
             path: filePath ?? 'shared://${type ?? "content"}',
-            type: type, // Pass the type to determine appropriate default filename
+            type:
+                type, // Pass the type to determine appropriate default filename
           );
         }
       } else if (fileBytes != null && fileBytes.isNotEmpty) {
@@ -247,7 +251,8 @@ class UnifiedSharingService {
     String text, {
     String? fileName,
     String? path,
-    String? type, // Add type parameter to distinguish between text and file content
+    String?
+        type, // Add type parameter to distinguish between text and file content
   }) async {
     try {
       debugPrint(
@@ -672,6 +677,46 @@ If you're the app developer, please update the native iOS Share Extension code.'
     }
   }
 
+  /// Show share choice dialog for detected URLs
+  static Future<String?> _showShareChoiceDialog(
+      BuildContext context, String url) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Shared URL Detected',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.public),
+              title: const Text('Load URL Source'),
+              subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
+              onTap: () => Navigator.pop(context, 'url'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.description_outlined),
+              title: const Text('Display as Text'),
+              onTap: () => Navigator.pop(context, 'text'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Show snackbar message
   static void _showSnackBar(BuildContext context, String message) {
     try {
@@ -865,16 +910,16 @@ If you're the app developer, please update the native iOS Share Extension code.'
   /// This method detects potential URLs even if they're shared as plain text
   static bool isPotentialUrl(String text) {
     if (text.isEmpty) return false;
-    
+
     final trimmed = text.trim();
-    
+
     // Remove common URL wrappers
     final cleanText = trimmed
         .replaceAll('<', '')
         .replaceAll('>', '')
         .replaceAll('"', '')
         .replaceAll("'", '');
-    
+
     // Check for common URL patterns
     try {
       final uri = Uri.tryParse(cleanText);
@@ -891,7 +936,7 @@ If you're the app developer, please update the native iOS Share Extension code.'
     } catch (e) {
       // Parsing failed, try simpler patterns
     }
-    
+
     // Check for common URL patterns without scheme
     final urlPatterns = [
       r'www\.',
@@ -905,7 +950,7 @@ If you're the app developer, please update the native iOS Share Extension code.'
       r'\.app',
       r'\.dev',
     ];
-    
+
     for (final pattern in urlPatterns) {
       if (cleanText.contains(RegExp(pattern, caseSensitive: false))) {
         // Additional checks to avoid false positives
@@ -916,7 +961,7 @@ If you're the app developer, please update the native iOS Share Extension code.'
         return true;
       }
     }
-    
+
     // Check for common URL structures
     if ((cleanText.contains('.') && cleanText.contains('/')) ||
         (cleanText.contains('.') && cleanText.length > 10)) {
@@ -926,7 +971,7 @@ If you're the app developer, please update the native iOS Share Extension code.'
         return true;
       }
     }
-    
+
     return false;
   }
 }
