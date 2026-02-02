@@ -39,6 +39,16 @@ class MetadataView extends StatelessWidget {
           _buildTechSection(context, metadata['detectedTech']),
           const SizedBox(height: 24),
         ],
+        if (metadata['pageConfig']?.isNotEmpty == true) ...[
+          _buildSectionTitle(context, 'Page Configuration'),
+          _buildMapSection(context, metadata['pageConfig']),
+          const SizedBox(height: 24),
+        ],
+        if (metadata['resourceHints']?.isNotEmpty == true) ...[
+          _buildSectionTitle(context, 'Optimization (Resource Hints)'),
+          _buildHintSection(context, metadata['resourceHints']),
+          const SizedBox(height: 24),
+        ],
         if (metadata['openGraph']?.isNotEmpty == true) ...[
           _buildSectionTitle(context, 'OpenGraph Tags'),
           _buildMapSection(context, metadata['openGraph']),
@@ -133,10 +143,61 @@ class MetadataView extends StatelessWidget {
         _buildSectionTitle(context, 'Basic Information'),
         _buildMapSection(context, {
           'Title': title,
+          if (metadata['language'] != null) 'Language': metadata['language'],
+          if (metadata['charset'] != null) 'Charset': metadata['charset'],
           if (favicon != null) 'Icon URL': favicon,
           'Description': description,
         }),
       ],
+    );
+  }
+
+  Widget _buildHintSection(BuildContext context, Map<String, dynamic> hints) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: hints.entries.map((e) {
+          final isLast = hints.entries.last.key == e.key;
+          final List<dynamic> urls = e.value;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 16, top: 12, bottom: 4),
+                child: Text(
+                  e.key.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+              ...urls.map((url) => ListTile(
+                    title: Text(
+                      url.toString(),
+                      style: const TextStyle(
+                          fontSize: 12, fontFamily: 'monospace'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    dense: true,
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: url.toString()));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Copied to clipboard')),
+                      );
+                    },
+                  )),
+              if (!isLast) const Divider(height: 1),
+            ],
+          );
+        }).toList(),
+      ),
     );
   }
 

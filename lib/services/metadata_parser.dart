@@ -25,7 +25,32 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     'icons': <String, String>{},
     'detectedTech': <String, String>{},
     'detectedServices': <String, List<String>>{},
+    'resourceHints': <String, List<String>>{},
+    'pageConfig': <String, String>{},
   };
+
+  // Extract Language from <html> tag
+  final langMatch =
+      RegExp(r'''<html[^>]*\s+lang=["'](.*?)["']''', caseSensitive: false)
+          .firstMatch(html);
+  if (langMatch != null) metadata['language'] = langMatch.group(1);
+
+  // Extract Charset
+  final charsetMatch =
+      RegExp(r'''<meta[^>]*\s+charset=["'](.*?)["']''', caseSensitive: false)
+          .firstMatch(html);
+  if (charsetMatch != null) {
+    metadata['charset'] = charsetMatch.group(1);
+  } else {
+    // Fallback to http-equiv
+    final httpEquivMatch = RegExp(
+            r'''<meta[^>]*http-equiv=["']Content-Type["'][^>]*content=["'](.*?charset=(.*?))["']''',
+            caseSensitive: false)
+        .firstMatch(html);
+    if (httpEquivMatch != null) {
+      metadata['charset'] = httpEquivMatch.group(2);
+    }
+  }
 
   // Extract Title
   final titleMatch =
@@ -51,6 +76,10 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
         metadata['twitter'][name] = content;
       } else if (name == 'description') {
         metadata['description'] = content;
+      } else if (name == 'viewport' ||
+          name == 'theme-color' ||
+          name.startsWith('msapplication-')) {
+        metadata['pageConfig'][name] = content;
       } else {
         metadata['otherMeta'][name] = content;
       }
@@ -81,6 +110,15 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
         metadata['rssLinks'].add(absoluteHref);
       } else if (rel != null && rel.contains('icon')) {
         metadata['icons'][rel] = absoluteHref;
+      } else if (rel == 'canonical' || rel == 'manifest') {
+        metadata['pageConfig'][rel!] = absoluteHref;
+      } else if (rel == 'search' && type?.contains('opensearch') == true) {
+        metadata['pageConfig']['opensearch'] = absoluteHref;
+      } else if (rel == 'preload' ||
+          rel == 'prefetch' ||
+          rel == 'preconnect' ||
+          rel == 'dns-prefetch') {
+        metadata['resourceHints'].putIfAbsent(rel!, () => []).add(absoluteHref);
       }
     }
   }
@@ -213,17 +251,50 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
     'Analytics & Trackers': {
       'Google Analytics':
           r'google-analytics\.com|googletagmanager\.com/gtag/js|_ga|_gid',
+      'Google Tag Manager': r'googletagmanager\.com/gtm\.js',
+      'HubSpot Analytics': r'js\.hs-scripts\.com|js\.hs-analytics\.net',
       'Facebook Pixel': r'fbevents\.js|connect\.facebook\.net|fbq\(',
       'Hotjar': r'static\.hotjar\.com|hj\(',
       'Mixpanel': r'cdn\.mxpnl\.com|mixpanel\.init',
       'Segment': r'cdn\.segment\.com|analytics\.js',
       'Crazy Egg': r'script\.crazyegg\.com',
+      'Plausible': r'plausible\.io/js/script\.js',
+      'Fathom': r'cdn\.usefathom\.com',
+      'Mouseflow': r'cdn\.mouseflow\.com',
+      'FullStory': r'fullstory\.com/s/fs\.js',
+      'Amplitude': r'cdn\.amplitude\.com',
+      'Klaviyo': r'static\.klaviyo\.com',
+      'Microsoft Clarity': r'www\.clarity\.ms/tag/',
+      'Matomo': r'matomo\.js|piwik\.js',
+      'Yandex Metrica': r'mc\.yandex\.ru/metrika',
+    },
+    'Marketing & CRM': {
+      'Intercom': r'widget\.intercom\.io',
+      'Zendesk': r'static\.zdassets\.com',
+      'Drift': r'js\.driftt\.com',
+      'Mailchimp': r'chimpstatic\.com',
+      'Marketo': r'munchkin\.marketo\.net',
+      'Pardot': r'pi\.pardot\.com',
+      'Salesforce': r'force\.com',
+      'HubSpot CRM': r'js\.hs-scripts\.com',
+      'ActiveCampaign': r'trackcmp\.net',
     },
     'Fonts & Icons': {
       'Google Fonts': r'fonts\.googleapis\.com|fonts\.gstatic\.com',
       'Adobe Fonts (Typekit)': r'use\.typekit\.net',
       'Font Awesome': r'font-awesome|fontawesome',
       'Typeform': r'embed\.typeform\.com',
+      'Ionicons': r'ionicons\.com',
+      'Boxicons': r'boxicons\.com',
+    },
+    'E-commerce': {
+      'Shopify': r'cdn\.shopify\.com|shopify-payment-button',
+      'WooCommerce': r'woocommerce\.min\.js|wc-ajax',
+      'Magento': r'/mage/|mage-data-init',
+      'BigCommerce': r'bigcommerce\.com',
+      'BigCartel': r'bigcartel\.com',
+      'Stripe': r'js\.stripe\.com',
+      'PayPal': r'paypal\.com/sdk/js',
     },
     'Advertising': {
       'Taboola': r'taboola\.com',
@@ -231,14 +302,27 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
           r'googlesyndication\.com|adsbygoogle|doubleclick\.net',
       'Outbrain': r'outbrain\.com',
       'Criteo': r'criteo\.com',
+      'Pinterest Tag': r'assets\.pinterest\.com/js/pinit\.js|pintrk\(',
+      'TikTok Pixel': r'analytics\.tiktok\.com/i18n/pixel/sdk\.js',
+      'LinkedIn Insight':
+          r'snap\.licdn\.com/li\.lms-analytics/insight\.min\.js',
+      'Amazon Advertising': r'amazon-adsystem\.com',
+      'Snap Pixel': r'sc-static\.net/scevent\.min\.js',
+      'Reddit Pixel': r'redditstatic\.com/ads/pixel\.js',
     },
-    'Cloud & Infrastructure': {
-      'Amazon Web Services (AWS)': r'amazonaws\.com|aws\.amazon\.com',
+    'Cloud, CDN & Infrastructure': {
+      'Amazon Web Services (AWS)':
+          r'amazonaws\.com|aws\.amazon\.com|s3\.amazonaws\.com',
       'Firebase': r'firebasejs|firebase\.google\.com',
       'Microsoft Azure': r'azure\.com|windows\.net',
       'Cloudflare': r'cloudflare\.com|/cdn-cgi/|cloudflare-static',
       'Vercel': r'vercel\.app|vercel\.com',
       'Netlify': r'netlify\.app|netlify\.com',
+      'Fastly': r'fastly\.net',
+      'Akamai': r'akamai\.net',
+      'DigitalOcean': r'digitalocean\.com',
+      'Heroku': r'herokuapp\.com',
+      'BunnyCDN': r'bunnycdn\.com',
     },
     'Social & Widgets': {
       'Twitter/X': r'platform\.twitter\.com',
@@ -246,6 +330,11 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
       'Instagram': r'instagram\.com/embed',
       'YouTube': r'youtube\.com/embed|ytimg\.com',
       'Disqus': r'disqus\.com',
+      'WhatsApp': r'wa\.me',
+      'Telegram': r't\.me',
+      'Facebook Chat': r'connect\.facebook\.net/.*xfbml\.customerchat\.js',
+      'Spotify': r'open\.spotify\.com/embed',
+      'Apple Music': r'embed\.music\.apple\.com',
     }
   };
 

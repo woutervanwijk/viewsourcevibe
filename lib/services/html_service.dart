@@ -2840,7 +2840,9 @@ Technical details: $e''';
     try {
       return {
         'subject': cert.subject,
+        'subjectParsed': _parseX509String(cert.subject),
         'issuer': cert.issuer,
+        'issuerParsed': _parseX509String(cert.issuer),
         'startValidity': cert.startValidity.toIso8601String(),
         'endValidity': cert.endValidity.toIso8601String(),
         'der': base64Encode(cert.der),
@@ -2850,6 +2852,36 @@ Technical details: $e''';
       debugPrint('Error extracting certificate info: $e');
       return {'error': e.toString()};
     }
+  }
+
+  Map<String, String> _parseX509String(String x509) {
+    final Map<String, String> labels = {
+      'CN': 'Common Name',
+      'O': 'Organization',
+      'OU': 'Organizational Unit',
+      'C': 'Country',
+      'L': 'Locality',
+      'ST': 'State/Province',
+      'E': 'Email',
+      'SERIALNUMBER': 'Serial Number',
+    };
+
+    final Map<String, String> parsed = {};
+    // Typical format: /CN=name/O=org... or CN=name, O=org...
+    final parts = x509.split(RegExp(r'[/,]\s*'));
+    for (var part in parts) {
+      if (part.contains('=')) {
+        final kv = part.split('=');
+        if (kv.length >= 2) {
+          final key = kv[0].trim().toUpperCase();
+          final value = kv.sublist(1).join('=').trim();
+          if (key.isNotEmpty && value.isNotEmpty) {
+            parsed[labels[key] ?? key] = value;
+          }
+        }
+      }
+    }
+    return parsed;
   }
 
   String _convertToPem(List<int> der) {

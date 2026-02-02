@@ -392,8 +392,8 @@ class ProbeSecurityView extends ProbeViewBase {
       );
     }
 
-    final String subject = cert['subject'] ?? 'Unknown';
-    final String issuer = cert['issuer'] ?? 'Unknown';
+    final Map<String, dynamic>? subjectParsed = cert['subjectParsed'];
+    final Map<String, dynamic>? issuerParsed = cert['issuerParsed'];
     final String start = cert['startValidity'] ?? '';
     final String end = cert['endValidity'] ?? '';
 
@@ -408,29 +408,95 @@ class ProbeSecurityView extends ProbeViewBase {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildCertDetail(context, 'Subject (Owner)', subject),
-            const Divider(height: 16),
-            _buildCertDetail(context, 'Issuer', issuer),
-            const Divider(height: 16),
-            _buildCertDetail(context, 'Valid From', _formatDate(start)),
-            const Divider(height: 16),
-            _buildCertDetail(context, 'Valid Until', _formatDate(end)),
+            Text(
+              'Subject (Owner)',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildParsedInfo(context, subjectParsed, cert['subject']),
+            const Divider(height: 24),
+            Text(
+              'Issuer',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildParsedInfo(context, issuerParsed, cert['issuer']),
+            const Divider(height: 24),
+            Row(
+              children: [
+                Expanded(
+                    child: _buildCertDetail(
+                        context, 'Valid From', _formatDate(start))),
+                Expanded(
+                    child: _buildCertDetail(
+                        context, 'Valid Until', _formatDate(end))),
+              ],
+            ),
             if (cert['pem'] != null) ...[
-              const Divider(height: 16),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.copy, size: 16),
-                label: const Text('Copy PEM Certificate'),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: cert['pem']));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Certificate copied')),
-                  );
-                },
+              const Divider(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: const Text('Copy PEM Certificate'),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: cert['pem']));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Certificate copied')),
+                    );
+                  },
+                ),
               ),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildParsedInfo(
+      BuildContext context, Map<String, dynamic>? parsed, String? raw) {
+    if (parsed == null || parsed.isEmpty) {
+      return SelectableText(
+        raw ?? 'Unknown',
+        style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: parsed.entries.map((e) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 120,
+                child: Text(
+                  '${e.key}:',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+              Expanded(
+                child: SelectableText(
+                  e.value.toString(),
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
