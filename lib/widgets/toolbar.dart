@@ -198,16 +198,6 @@ class Toolbar extends StatelessWidget {
           tooltip: 'Share',
           onPressed: () => _shareCurrentFile(context),
         ),
-        Consumer<HtmlService>(
-          builder: (context, htmlService, child) {
-            final bool hasFile = htmlService.currentFile != null;
-            return IconButton(
-              icon: const Icon(Icons.search),
-              tooltip: 'Find',
-              onPressed: hasFile ? () => htmlService.toggleSearch() : null,
-            );
-          },
-        ),
         IconButton(
           icon: const Icon(Icons.settings),
           tooltip: 'Settings',
