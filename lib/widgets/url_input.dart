@@ -185,6 +185,9 @@ class _UrlInputState extends State<UrlInput> {
                             onFieldSubmitted();
                             _loadUrl();
                           },
+                          onTapOutside: (event) {
+                            FocusScope.of(context).unfocus();
+                          },
                           style: const TextStyle(fontSize: 14),
                         );
                       },

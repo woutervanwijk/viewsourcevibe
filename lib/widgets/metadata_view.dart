@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:html_unescape/html_unescape.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 
@@ -65,8 +66,10 @@ class MetadataView extends StatelessWidget {
 
   Widget _buildHeaderSection(
       BuildContext context, Map<String, dynamic> metadata) {
-    final title = metadata['title'] ?? 'No Title';
-    final description = metadata['description'] ?? 'No description available.';
+    final unescape = HtmlUnescape();
+    final title = unescape.convert(metadata['title'] ?? 'No Title');
+    final description = unescape
+        .convert(metadata['description'] ?? 'No description available.');
     final image = metadata['image'];
     final favicon = metadata['favicon'];
 
@@ -179,6 +182,8 @@ class MetadataView extends StatelessWidget {
           style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey));
     }
 
+    final unescape = HtmlUnescape();
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -188,6 +193,7 @@ class MetadataView extends StatelessWidget {
       child: Column(
         children: data.entries.map((e) {
           final isLast = data.entries.last.key == e.key;
+          final value = unescape.convert(e.value.toString());
           return Column(
             children: [
               ListTile(
@@ -199,12 +205,12 @@ class MetadataView extends StatelessWidget {
                       fontFamily: 'monospace'),
                 ),
                 subtitle: SelectableText(
-                  e.value.toString(),
+                  value,
                   style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
                 ),
                 dense: true,
                 onTap: () {
-                  Clipboard.setData(ClipboardData(text: e.value.toString()));
+                  Clipboard.setData(ClipboardData(text: value));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Copied to clipboard')),
                   );
