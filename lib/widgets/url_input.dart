@@ -213,15 +213,33 @@ class _UrlInputState extends State<UrlInput> {
                                 itemBuilder: (BuildContext context, int index) {
                                   final String option =
                                       options.elementAt(index);
+
+                                  String displayName = option;
+                                  final isUrl = option.startsWith('http://') ||
+                                      option.startsWith('https://');
+
+                                  if (!isUrl) {
+                                    // Assume it's a file path, extract filename
+                                    // Handle both forward and backward slashes
+                                    final parts =
+                                        option.split(RegExp(r'[/\\]'));
+                                    if (parts.isNotEmpty) {
+                                      displayName = 'File: ${parts.last}';
+                                    }
+                                  }
+
                                   return ListTile(
-                                    title: Text(option,
+                                    title: Text(displayName,
                                         style: const TextStyle(fontSize: 13),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis),
                                     onTap: () => onSelected(option),
                                     dense: true,
-                                    leading:
-                                        const Icon(Icons.history, size: 16),
+                                    leading: Icon(
+                                        isUrl
+                                            ? Icons.history
+                                            : Icons.insert_drive_file_outlined,
+                                        size: 16),
                                   );
                                 },
                               ),
