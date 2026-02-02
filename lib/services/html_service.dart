@@ -1471,6 +1471,7 @@ Technical details: $e''';
 
   Future<void> loadFromUrl(String url, {int? switchToTab}) async {
     try {
+      _currentInputText = url;
       _pendingUrl = url;
       _requestedTabIndex = switchToTab;
       _isLoading = true;

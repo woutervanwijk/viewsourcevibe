@@ -138,14 +138,25 @@ class _UrlInputState extends State<UrlInput> {
                             prefixIcon: const Icon(Icons.link, size: 20),
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(6)),
-                            suffixIcon: _urlController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear, size: 20),
-                                    onPressed: () {
-                                      _urlController.clear();
-                                    },
+                            suffixIcon: htmlService.isLoading
+                                ? const Padding(
+                                    padding: EdgeInsets.all(16.0),
+                                    child: SizedBox(
+                                      width: 8,
+                                      height: 8,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1,
+                                      ),
+                                    ),
                                   )
-                                : null,
+                                : (_urlController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear, size: 20),
+                                        onPressed: () {
+                                          _urlController.clear();
+                                        },
+                                      )
+                                    : null),
                             contentPadding: const EdgeInsets.symmetric(
                                 vertical: 10, horizontal: 12),
                             isDense: true,
