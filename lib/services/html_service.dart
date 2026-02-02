@@ -951,10 +951,30 @@ class HtmlService with ChangeNotifier {
     }
   }
 
+  /// internal helper to cleaner check if file is valid for history
+  bool _shouldAddToHistory(HtmlFile file) {
+    if (file.path.isEmpty) return false;
+    // Don't add shared text content to history
+    if (file.path.startsWith('shared://')) return false;
+    // Don't add content URIs (shared files) to history
+    if (file.path.startsWith('content://')) return false;
+    // Don't add error pages
+    if (file.name == 'Content File Error' || file.name == 'Error') return false;
+
+    return true;
+  }
+
   Future<void> loadFile(HtmlFile file, {bool clearProbe = true}) async {
     // Save current file to navigation stack if we are not going back
     if (!_isNavigatingBack && _currentFile != null) {
-      _navigationStack.add(_currentFile!);
+      // Only push to stack if it's a valid history item
+      if (_shouldAddToHistory(_currentFile!)) {
+        // Prevent duplicates in back stack (don't push if same as top)
+        if (_navigationStack.isEmpty ||
+            _navigationStack.last.path != _currentFile!.path) {
+          _navigationStack.add(_currentFile!);
+        }
+      }
     }
 
     await clearFile(clearProbe: clearProbe);
@@ -962,7 +982,7 @@ class HtmlService with ChangeNotifier {
     _originalFile = file; // Store original file for "Automatic" option
 
     // Record in history if it has a path/URL
-    if (file.path.isNotEmpty) {
+    if (_shouldAddToHistory(file)) {
       _urlHistoryService?.addUrl(file.path);
     }
 
@@ -1198,8 +1218,11 @@ class HtmlService with ChangeNotifier {
         url = 'https://$url';
       }
 
-      // Record in history
-      _urlHistoryService?.addUrl(url);
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://$url';
+      }
+
+      // Record in history is now handled in loadFile
 
       // Parse and validate the URL
       final uri = Uri.tryParse(url);
