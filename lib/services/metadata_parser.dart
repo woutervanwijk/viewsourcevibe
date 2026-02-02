@@ -30,17 +30,21 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
   };
 
   // Extract Language from <html> tag
-  final langMatch =
-      RegExp(r'''<html[^>]*\s+lang=["'](.*?)["']''', caseSensitive: false)
-          .firstMatch(html);
-  if (langMatch != null) metadata['language'] = langMatch.group(1);
+  final htmlTagMatch =
+      RegExp(r'<html([^>]*?)>', caseSensitive: false).firstMatch(html);
+  if (htmlTagMatch != null) {
+    final attrs = _parseAttributes(htmlTagMatch.group(1) ?? '');
+    metadata['language'] = attrs['lang'];
+  }
 
   // Extract Charset
-  final charsetMatch =
-      RegExp(r'''<meta[^>]*\s+charset=["'](.*?)["']''', caseSensitive: false)
-          .firstMatch(html);
+  final charsetMatch = RegExp(
+          r'''<meta[^>]*\s+charset=(?:"([^"]*)"|'([^']*)'|([^\s>]+))''',
+          caseSensitive: false)
+      .firstMatch(html);
   if (charsetMatch != null) {
-    metadata['charset'] = charsetMatch.group(1);
+    metadata['charset'] =
+        charsetMatch.group(1) ?? charsetMatch.group(2) ?? charsetMatch.group(3);
   } else {
     // Fallback to http-equiv
     final httpEquivMatch = RegExp(
@@ -65,8 +69,9 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     final attrStr = match.group(1) ?? '';
     final attrs = _parseAttributes(attrStr);
 
-    final name =
-        attrs['name']?.toLowerCase() ?? attrs['property']?.toLowerCase();
+    final name = attrs['name']?.toLowerCase() ??
+        attrs['property']?.toLowerCase() ??
+        attrs['itemprop']?.toLowerCase();
     final content = attrs['content'];
 
     if (name != null && content != null) {
@@ -118,7 +123,9 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
           rel == 'prefetch' ||
           rel == 'preconnect' ||
           rel == 'dns-prefetch') {
-        metadata['resourceHints'].putIfAbsent(rel!, () => []).add(absoluteHref);
+        metadata['resourceHints']
+            .putIfAbsent(rel!, () => <String>[])
+            .add(absoluteHref);
       }
     }
   }
@@ -240,11 +247,13 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
 /// Detect commonly used services (Trackers, Fonts, Ads, Cloud)
 void _detectServices(String html, Map<String, dynamic> metadata) {
   final Map<String, List<String>> services = {
-    'Analytics & Trackers': [],
-    'Fonts & Icons': [],
-    'Advertising': [],
-    'Cloud & Infrastructure': [],
-    'Social & Widgets': [],
+    'Analytics & Trackers': <String>[],
+    'Marketing & CRM': <String>[],
+    'Fonts & Icons': <String>[],
+    'E-commerce': <String>[],
+    'Advertising': <String>[],
+    'Cloud, CDN & Infrastructure': <String>[],
+    'Social & Widgets': <String>[],
   };
 
   final patterns = {
@@ -358,11 +367,17 @@ bool _hasPattern(String text, String pattern) {
 
 Map<String, String> _parseAttributes(String attrStr) {
   final Map<String, String> attrs = {};
-  // Regex to match attributes like name="value" or property="value" or rel='value'
-  final regExp =
-      RegExp(r'''([a-zA-Z0-9:-]+)\s*=\s*["'](.*?)["']''', caseSensitive: false);
+  // Regex to match attributes like name="value", property='value', or unquoted rel=stylesheet
+  final regExp = RegExp(
+      r'([a-zA-Z0-9:-]+)\s*=\s*(?:"([^"]*)"|' "'" r"([^']*)" r'|([^\s>]+))',
+      caseSensitive: false);
+
   for (final match in regExp.allMatches(attrStr)) {
-    attrs[match.group(1)!] = match.group(2)!;
+    final name = match.group(1)!;
+    final value = match.group(2) ?? match.group(3) ?? match.group(4);
+    if (value != null) {
+      attrs[name.toLowerCase()] = value;
+    }
   }
   return attrs;
 }

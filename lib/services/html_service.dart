@@ -201,11 +201,10 @@ class HtmlService with ChangeNotifier {
       domain = domain.substring(4);
     }
 
-    // Clean domain name (remove common TLDs and subdomains)
+    // Clean domain name for fallback use
+    String humanDomain = domain;
     final domainParts = domain.split('.');
     if (domainParts.length >= 2) {
-      // Keep main domain and first subdomain if it's meaningful
-      // Remove common TLDs like com, org, net, io, etc.
       final commonTlds = {
         'com',
         'org',
@@ -215,177 +214,79 @@ class HtmlService with ChangeNotifier {
         'dev',
         'app',
         'tech',
-        'info'
+        'info',
+        'me',
+        'tv'
       };
-      if (domainParts.length >= 3 &&
-          commonTlds.contains(domainParts[domainParts.length - 2])) {
-        // Pattern like example.co.uk or example.com.br
-        domain = domainParts.sublist(domainParts.length - 3).join('.');
+      if (!commonTlds.contains(domainParts[domainParts.length - 1])) {
+        humanDomain = domainParts.sublist(0, domainParts.length - 1).join(' ');
       } else {
-        domain = domainParts.sublist(domainParts.length - 2).join('.');
+        humanDomain = domainParts[domainParts.length - 2];
       }
     }
+    // Capitalize first letter
+    humanDomain = humanDomain.isNotEmpty
+        ? humanDomain[0].toUpperCase() + humanDomain.substring(1)
+        : 'Web Page';
 
-    // Extract meaningful path segments (avoid common path segments)
+    // Extract meaningful path segments
     final pathSegments = uri.pathSegments
         .where((segment) =>
             segment.isNotEmpty &&
             !segment.startsWith('_') &&
             segment != 'index' &&
-            segment != 'home' &&
-            segment != 'page' &&
-            segment != 'view')
+            segment != 'home')
         .toList();
 
-    // Generate base filename
     String baseFilename;
     if (pathSegments.isNotEmpty) {
-      // Use the last meaningful path segment
       baseFilename = pathSegments.last;
     } else {
-      // Use domain name as base
-      baseFilename = domain;
+      baseFilename = humanDomain;
     }
 
-    // Clean up the base filename
+    // Clean up characters but preserve dots for extensions
     baseFilename = baseFilename
-        .replaceAll(RegExp(r'[^a-zA-Z0-9\-_.]'),
-            '-') // Replace special chars with hyphens
-        .replaceAll(RegExp(r'-+'), '-') // Collapse multiple hyphens
-        .replaceAll(RegExp(r'^-|-$'), ''); // Remove leading/trailing hyphens
+        .replaceAll(RegExp(r'[^a-zA-Z0-9\-_.]'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
 
-    // Ensure reasonable length (max 40 characters for base, leaving room for content type suffix)
-    if (baseFilename.length > 40) {
-      baseFilename = baseFilename.substring(0, 40);
-    }
+    if (baseFilename.isEmpty) return humanDomain;
 
-    // If we end up with an empty filename, use a default
-    if (baseFilename.isEmpty) {
-      baseFilename = domain;
-      if (baseFilename.isEmpty) {
-        baseFilename = 'WebPage';
-      }
-    }
+    // Check for "proper" extensions we want to preserve
+    final baseLower = baseFilename.toLowerCase();
+    final knownExtensions = {
+      '.html',
+      '.htm',
+      '.xhtml',
+      '.css',
+      '.js',
+      '.json',
+      '.xml',
+      '.yaml',
+      '.yml',
+      '.md',
+      '.txt',
+      '.py',
+      '.java',
+      '.dart',
+      '.php',
+      '.rb',
+      '.swift',
+      '.go',
+      '.rs',
+      '.sql',
+      '.atom',
+      '.rss',
+      '.rdf'
+    };
 
-    // Check if base filename already has a proper file extension
-    // If it does, we still need to verify it matches the content type
-    final baseFilenameLower = baseFilename.toLowerCase();
-
-    // First, detect the content type
-    final lowerContent = content.toLowerCase();
-    String detectedExtension = '';
-
-    // HTML detection - be specific to avoid false positives with XML/RSS
-    // Only detect as HTML if we have clear HTML indicators and no XML indicators
-    bool hasHtmlIndicators = lowerContent.contains('<html') ||
-        lowerContent.contains('<!doctype') ||
-        lowerContent.contains('<head') ||
-        lowerContent.contains('<body') ||
-        lowerContent.contains('<div') ||
-        lowerContent.contains('<span') ||
-        lowerContent.contains('<style') ||
-        lowerContent.contains('<script') ||
-        lowerContent.contains('<meta') ||
-        lowerContent.contains('<link') ||
-        lowerContent.contains('<title') ||
-        lowerContent.contains('<p') ||
-        lowerContent.contains('<h') ||
-        lowerContent.contains('<a ') ||
-        lowerContent.contains('<img') ||
-        lowerContent.contains('<table') ||
-        lowerContent.contains('<ul') ||
-        lowerContent.contains('<li');
-    bool hasXmlIndicators = lowerContent.contains('<rss ') ||
-        lowerContent.contains('<feed ') ||
-        lowerContent.contains('<?xml') ||
-        lowerContent.contains('xmlns=');
-
-    bool isHtml = hasHtmlIndicators && !hasXmlIndicators;
-
-    // CSS detection - only if not HTML
-    // Be careful not to detect CSS embedded in HTML (like in <style> tags)
-    bool isCss = !isHtml &&
-        (lowerContent.contains('body {') || lowerContent.contains('@media'));
-
-    // JavaScript detection - only if not HTML or CSS
-    // Be very careful to avoid false positives in HTML files with script tags
-    bool isJavaScript = !isHtml &&
-        !isCss &&
-        ((lowerContent.contains('function ') &&
-                lowerContent.contains('{') &&
-                lowerContent.contains('}')) ||
-            (lowerContent.contains('const ') &&
-                lowerContent.contains('=') &&
-                lowerContent.contains(';') &&
-                !lowerContent.contains('<script') &&
-                !lowerContent.contains('</script>')) ||
-            (lowerContent.contains('let ') &&
-                lowerContent.contains('=') &&
-                lowerContent.contains(';') &&
-                !lowerContent.contains('<script') &&
-                !lowerContent.contains('</script>')));
-
-    // XML detection - check for RSS/Atom feeds and general XML
-    bool isXml = lowerContent.contains('<rss ') ||
-        lowerContent.contains('<feed ') ||
-        lowerContent.contains('<?xml') ||
-        lowerContent.contains('xmlns=') ||
-        lowerContent.contains('<channel ') ||
-        lowerContent.contains('<item ');
-
-    // Determine the correct extension based on content
-    // Prioritize XML detection over other types to fix RSS feed issue
-    if (isXml) {
-      detectedExtension = '.xml';
-    } else if (isHtml) {
-      detectedExtension = '.html';
-    } else if (isCss) {
-      detectedExtension = '.css';
-    } else if (isJavaScript) {
-      detectedExtension = '.js';
-    }
-
-    // If the filename already has an extension that matches the content type, use it
-    if (detectedExtension.isNotEmpty) {
-      if (baseFilenameLower.endsWith(detectedExtension)) {
-        return baseFilename; // Extension matches content type
-      } else {
-        // Extension doesn't match content type, replace it
-        // Remove any existing extension first
-        final baseWithoutExt = baseFilename.split('.').first;
-        return baseWithoutExt;
-      }
-    }
-
-    // If no specific content type detected, check if filename has a proper extension
-    final hasProperExtension = baseFilenameLower.endsWith('.html') ||
-        baseFilenameLower.endsWith('.htm') ||
-        baseFilenameLower.endsWith('.css') ||
-        baseFilenameLower.endsWith('.js') ||
-        baseFilenameLower.endsWith('.json') ||
-        baseFilenameLower.endsWith('.xml') ||
-        baseFilenameLower.endsWith('.yaml') ||
-        baseFilenameLower.endsWith('.yml') ||
-        baseFilenameLower.endsWith('.md') ||
-        baseFilenameLower.endsWith('.txt') ||
-        baseFilenameLower.endsWith('.py') ||
-        baseFilenameLower.endsWith('.java') ||
-        baseFilenameLower.endsWith('.dart') ||
-        baseFilenameLower.endsWith('.cpp') ||
-        baseFilenameLower.endsWith('.c') ||
-        baseFilenameLower.endsWith('.cs') ||
-        baseFilenameLower.endsWith('.php') ||
-        baseFilenameLower.endsWith('.rb') ||
-        baseFilenameLower.endsWith('.swift') ||
-        baseFilenameLower.endsWith('.go') ||
-        baseFilenameLower.endsWith('.rs') ||
-        baseFilenameLower.endsWith('.sql');
-
-    if (hasProperExtension) {
+    if (knownExtensions.any((ext) => baseLower.endsWith(ext))) {
       return baseFilename;
     }
 
-    // Don't add extensions for generated filenames
+    // If it's a domain-like name without extension, return it as is
+    // detectFileTypeAndGenerateFilename will handle adding extensions if needed
     return baseFilename;
   }
 
@@ -689,12 +590,14 @@ class HtmlService with ChangeNotifier {
 
   /// Detect file type and generate appropriate filename using robust detection
   Future<String> detectFileTypeAndGenerateFilename(
-      String filename, String content) async {
+      String filename, String content,
+      {String? contentType}) async {
     try {
       // Use the robust file type detector
       final detectedType = await fileTypeDetector.detectFileType(
         filename: filename,
         content: content,
+        contentType: contentType,
       );
 
       // Don't add extensions for generated filenames - preserve original or use simple names
@@ -714,6 +617,7 @@ class HtmlService with ChangeNotifier {
       final filenameLower = filename.toLowerCase();
       final hasProperExtension = filenameLower.endsWith('.html') ||
           filenameLower.endsWith('.htm') ||
+          filenameLower.endsWith('.xhtml') ||
           filenameLower.endsWith('.css') ||
           filenameLower.endsWith('.js') ||
           filenameLower.endsWith('.json') ||
@@ -733,7 +637,10 @@ class HtmlService with ChangeNotifier {
           filenameLower.endsWith('.swift') ||
           filenameLower.endsWith('.go') ||
           filenameLower.endsWith('.rs') ||
-          filenameLower.endsWith('.sql');
+          filenameLower.endsWith('.sql') ||
+          filenameLower.endsWith('.atom') ||
+          filenameLower.endsWith('.rss') ||
+          filenameLower.endsWith('.rdf');
 
       if (hasProperExtension) {
         return filename;
@@ -1054,9 +961,13 @@ class HtmlService with ChangeNotifier {
     // Automatically detect content type for syntax highlighting
     // This ensures HTML content gets proper syntax highlighting even when loaded from URLs
     try {
+      final headers = _probeResult?['headers'] as Map<String, String>?;
+      final contentType = headers?['content-type'];
+
       final detectedType = await fileTypeDetector.detectFileType(
         filename: file.name,
         content: file.content,
+        contentType: contentType,
       );
 
       // Map detected type to appropriate content type for syntax highlighting
@@ -1417,8 +1328,11 @@ class HtmlService with ChangeNotifier {
             : generateDescriptiveFilename(finalUri, content);
 
         // Use robust file type detection to generate appropriate filename
-        final processedFilename =
-            await detectFileTypeAndGenerateFilename(filename, content);
+        final headers = probeResult['headers'] as Map<String, String>?;
+        final contentType = headers?['content-type'];
+        final processedFilename = await detectFileTypeAndGenerateFilename(
+            filename, content,
+            contentType: contentType);
 
         final htmlFile = HtmlFile(
           name: processedFilename,
