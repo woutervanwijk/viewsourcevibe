@@ -173,21 +173,6 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
       ),
-      floatingActionButton: Consumer<HtmlService>(
-        builder: (context, htmlService, child) {
-          // Only show FAB if we are on the Editor tab (index 0) and have a file
-          if (_tabController.index == 0 && htmlService.currentFile != null) {
-            return FloatingActionButton(
-              onPressed: () {
-                htmlService.toggleSearch();
-              },
-              tooltip: 'Find',
-              child: const Icon(Icons.search),
-            );
-          }
-          return const SizedBox.shrink();
-        },
-      ),
     );
   }
 

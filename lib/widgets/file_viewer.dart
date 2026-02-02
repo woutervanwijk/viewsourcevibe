@@ -221,34 +221,97 @@ class FileViewer extends StatelessWidget {
                   onTap: () => _showContentTypeMenu(context),
                   child: Padding(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     child: Row(
                       children: [
                         Icon(
                           isHtmlFile ? Icons.html : Icons.text_snippet,
-                          size: 14,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            fileName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                fileName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '${lines.length} lines • ${file.fileSize}',
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withAlpha(153),
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          '${lines.length} lines • ${file.fileSize}',
-                          style: TextStyle(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withAlpha(153), // 60% opacity
-                            fontSize: 11,
-                          ),
+                        // Find button
+                        IconButton(
+                          icon: const Icon(Icons.search, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => htmlService.toggleSearch(),
+                          tooltip: 'Find',
                         ),
+                        const SizedBox(width: 8),
+                        // Font Size picker
+                        PopupMenuButton<double>(
+                          icon: const Icon(Icons.format_size, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: 'Font Size',
+                          onSelected: (double size) {
+                            settings.fontSize = size;
+                          },
+                          itemBuilder: (BuildContext context) {
+                            return AppSettings.availableFontSizes.map((size) {
+                              return PopupMenuItem<double>(
+                                value: size,
+                                child: Row(
+                                  children: [
+                                    Text('${size.toInt()} px'),
+                                    if (settings.fontSize == size) ...[
+                                      const Spacer(),
+                                      Icon(Icons.check,
+                                          size: 16,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            }).toList();
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        // Word Wrap button
+                        IconButton(
+                          icon: Icon(
+                            settings.wrapText
+                                ? Icons.wrap_text
+                                : Icons.wrap_text_outlined,
+                            size: 20,
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () {
+                            settings.wrapText = !settings.wrapText;
+                          },
+                          tooltip: 'Word Wrap',
+                        ),
+                        const SizedBox(width: 4),
                       ],
                     ),
                   ),

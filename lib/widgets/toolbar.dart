@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:view_source_vibe/models/settings.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
@@ -115,12 +114,6 @@ class Toolbar extends StatelessWidget {
     );
   }
 
-  void _toggleWordWrap(BuildContext context) {
-    final settings = Provider.of<AppSettings>(context, listen: false);
-    final newValue = !settings.wrapText;
-    settings.wrapText = newValue;
-  }
-
   Future<void> _shareCurrentFile(BuildContext context) async {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     final currentFile = htmlService.currentFile;
@@ -219,28 +212,6 @@ class Toolbar extends StatelessWidget {
           icon: const Icon(Icons.folder_open),
           tooltip: 'Open File',
           onPressed: () => _pickFile(context),
-        ),
-        Consumer<AppSettings>(
-          builder: (context, settings, child) {
-            return Container(
-              decoration: BoxDecoration(
-                color: settings.wrapText
-                    ? Theme.of(context).highlightColor
-                    : Colors.transparent,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: Icon(
-                  settings.wrapText
-                      ? Icons.wrap_text
-                      : Icons.wrap_text_outlined,
-                ),
-                tooltip:
-                    'Toggle Word Wrap (${settings.wrapText ? 'ON' : 'OFF'})',
-                onPressed: () => _toggleWordWrap(context),
-              ),
-            );
-          },
         ),
         IconButton(
           icon: Icon(
