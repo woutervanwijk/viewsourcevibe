@@ -4,7 +4,6 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
-import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:view_source_vibe/services/file_system_service.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
@@ -421,16 +420,14 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
-
-    // Initialize unified sharing service when the app starts
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      UnifiedSharingService.initialize(context);
-    });
 
     // Determine the effective theme mode based on user preference
     ThemeMode effectiveThemeMode;
@@ -451,6 +448,7 @@ class MyApp extends StatelessWidget {
     }
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'View Source Vibe',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

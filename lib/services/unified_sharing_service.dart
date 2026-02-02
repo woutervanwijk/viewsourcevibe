@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:universal_io/io.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/main.dart';
 
 /// Unified Sharing Service that consolidates all sharing functionality
 class UnifiedSharingService {
@@ -147,8 +148,7 @@ class UnifiedSharingService {
         if (type == 'text') {
           final trimmedContent = content.trim();
           String? urlToLoad;
-
-          // Detect if it's a URL
+          // Detect if it's a URL (either the whole string or containing one)
           if (isUrl(trimmedContent)) {
             urlToLoad = trimmedContent;
           } else if (isPotentialUrl(trimmedContent)) {
@@ -156,17 +156,39 @@ class UnifiedSharingService {
             if (uri != null &&
                 (uri.scheme == 'http' || uri.scheme == 'https')) {
               urlToLoad = trimmedContent;
+            } else {
+              // Check if it's a URL without scheme like www.example.com
+              urlToLoad = trimmedContent;
+            }
+          } else {
+            // Check if there's a URL inside the text
+            final urlPattern = RegExp(r'https?:\/\/[^\s]+');
+            final match = urlPattern.firstMatch(content);
+            if (match != null) {
+              urlToLoad = match.group(0);
             }
           }
 
           // If a URL was detected, ask the user what to do
           if (urlToLoad != null) {
-            final choice = await _showShareChoiceDialog(context, urlToLoad);
-            if (choice == 'url') {
-              await _processSharedUrl(context, htmlService, urlToLoad);
-              return;
+            try {
+              // Try to get context from navigatorKey for the dialog
+              final dialogContext = context.mounted
+                  ? context
+                  : (MyApp.navigatorKey.currentState?.context ?? context);
+
+              final choice =
+                  await _showShareChoiceDialog(dialogContext, urlToLoad);
+              if (choice == 'url') {
+                await _processSharedUrl(dialogContext, htmlService, urlToLoad);
+                return;
+              }
+              // If they chose 'text' or cancelled, fall through to text processing
+            } catch (e) {
+              debugPrint(
+                  'UnifiedSharingService: Error showing choice dialog: $e');
+              // Fallback to showing text if dialog fails
             }
-            // If they chose 'text' or cancelled, fall through to text processing
           }
 
           // Handle it as text content
