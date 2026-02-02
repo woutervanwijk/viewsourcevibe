@@ -115,7 +115,7 @@ class MediaView extends StatelessWidget {
         trailing: const Icon(Icons.open_in_new, size: 16),
         onTap: () {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
-          htmlService.loadFromUrl(src);
+          htmlService.loadFromUrl(src, switchToTab: 0);
         },
         onLongPress: () {
           Clipboard.setData(ClipboardData(text: src));
@@ -141,7 +141,7 @@ class MediaView extends StatelessWidget {
       child: InkWell(
         onTap: () {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
-          htmlService.loadFromUrl(src);
+          htmlService.loadFromUrl(src, switchToTab: 0);
         },
         onLongPress: () {
           Clipboard.setData(ClipboardData(text: src));

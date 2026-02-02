@@ -92,14 +92,26 @@ class MetadataView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (favicon != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  favicon,
-                  width: 48,
-                  height: 48,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.public, size: 48, color: Colors.grey),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () {
+                    final htmlService =
+                        Provider.of<HtmlService>(context, listen: false);
+                    htmlService.loadFromUrl(favicon, switchToTab: 0);
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      favicon,
+                      width: 48,
+                      height: 48,
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.public,
+                          size: 48,
+                          color: Colors.grey),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -128,14 +140,25 @@ class MetadataView extends StatelessWidget {
         ),
         if (image != null) ...[
           const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              image,
-              width: double.infinity,
-              height: 200,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => const SizedBox(),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.loadFromUrl(image, switchToTab: 0);
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  image,
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox(),
+                ),
+              ),
             ),
           ),
         ],
@@ -185,8 +208,14 @@ class MetadataView extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 12),
                     dense: true,
                     onTap: () {
+                      final htmlService =
+                          Provider.of<HtmlService>(context, listen: false);
+                      htmlService.loadFromUrl(url.toString(), switchToTab: 0);
+                    },
+                    onLongPress: () {
                       Clipboard.setData(ClipboardData(text: url.toString()));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Copied to clipboard')),
@@ -257,6 +286,9 @@ class MetadataView extends StatelessWidget {
         children: data.entries.map((e) {
           final isLast = data.entries.last.key == e.key;
           final value = unescape.convert(e.value.toString());
+          final isUrl =
+              value.startsWith('http://') || value.startsWith('https://');
+
           return Column(
             children: [
               ListTile(
@@ -269,14 +301,35 @@ class MetadataView extends StatelessWidget {
                 ),
                 subtitle: SelectableText(
                   value,
-                  style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontFamily: 'monospace',
+                    color: isUrl ? Theme.of(context).colorScheme.primary : null,
+                    decoration: isUrl ? TextDecoration.underline : null,
+                  ),
+                  onTap: isUrl
+                      ? () {
+                          final htmlService =
+                              Provider.of<HtmlService>(context, listen: false);
+                          htmlService.loadFromUrl(value, switchToTab: 0);
+                        }
+                      : null,
                 ),
+                trailing: isUrl
+                    ? const Icon(Icons.arrow_forward_ios, size: 12)
+                    : null,
                 dense: true,
                 onTap: () {
-                  Clipboard.setData(ClipboardData(text: value));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Copied to clipboard')),
-                  );
+                  if (isUrl) {
+                    final htmlService =
+                        Provider.of<HtmlService>(context, listen: false);
+                    htmlService.loadFromUrl(value, switchToTab: 0);
+                  } else {
+                    Clipboard.setData(ClipboardData(text: value));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Copied to clipboard')),
+                    );
+                  }
                 },
               ),
               if (!isLast) const Divider(height: 1),
@@ -330,7 +383,7 @@ class MetadataView extends StatelessWidget {
                 onTap: () {
                   final htmlService =
                       Provider.of<HtmlService>(context, listen: false);
-                  htmlService.loadFromUrl(url.toString());
+                  htmlService.loadFromUrl(url.toString(), switchToTab: 0);
                 },
               ),
             )),

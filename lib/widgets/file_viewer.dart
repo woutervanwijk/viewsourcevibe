@@ -4,6 +4,7 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/widgets/code_find_panel.dart';
+import 'package:view_source_vibe/widgets/media_browser.dart';
 
 class FileViewer extends StatelessWidget {
   final HtmlFile file;
@@ -350,6 +351,10 @@ class FileViewer extends StatelessWidget {
             },
             child: Consumer<HtmlService>(
               builder: (context, htmlService, child) {
+                if (htmlService.isMedia) {
+                  return MediaBrowser(file: file);
+                }
+
                 // Build the editor, handling both cached (sync) and new (async) states
                 // explicitly to prevent flickering and crashes.
                 final result = htmlService.buildEditor(

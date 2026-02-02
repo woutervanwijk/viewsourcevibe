@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   List<Widget> _getTabs(bool isHtmlOrXml) {
     return [
-      _buildTab(Icons.code, 'Editor'),
+      _buildTab(Icons.code, 'Source'),
       if (isHtmlOrXml) _buildTab(Icons.info_outline, 'Metadata'),
       if (isHtmlOrXml) _buildTab(Icons.layers_outlined, 'Services'),
       if (isHtmlOrXml) _buildTab(Icons.perm_media_outlined, 'Media'),
@@ -126,6 +126,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // This MUST happen before building the TabBar to avoid length mismatch
     if (htmlService.isHtmlOrXml != _lastIsHtmlOrXml) {
       _updateTabs(htmlService.isHtmlOrXml);
+    }
+
+    // Handle requested tab switch
+    if (htmlService.requestedTabIndex != null) {
+      final targetIndex = htmlService.requestedTabIndex!;
+      if (targetIndex < _tabController.length) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _tabController.animateTo(targetIndex);
+        });
+      }
+      htmlService.consumeTabSwitchRequest();
     }
 
     return Scaffold(

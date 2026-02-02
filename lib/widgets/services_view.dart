@@ -121,7 +121,7 @@ class ServicesView extends StatelessWidget {
                 onTap: () {
                   final htmlService =
                       Provider.of<HtmlService>(context, listen: false);
-                  htmlService.loadFromUrl(url.toString());
+                  htmlService.loadFromUrl(url.toString(), switchToTab: 0);
                 },
               ),
             )),

@@ -244,7 +244,19 @@ class FileTypeDetector {
       'diff': 'Diff', 'patch': 'Diff',
       'gitignore': 'Gitignore', 'ignore': 'Gitignore',
       'editorconfig': 'INI',
-      'txt': 'Text', 'text': 'Text',
+      'txt': 'Text', 'text': 'Text', 'log': 'Text',
+
+      // Images
+      'png': 'Image', 'jpg': 'Image', 'jpeg': 'Image', 'gif': 'Image',
+      'webp': 'Image', 'bmp': 'Image', 'ico': 'Image', 'avif': 'Image',
+
+      // Videos
+      'mp4': 'Video', 'webm': 'Video', 'ogg': 'Video', 'mov': 'Video',
+      'avi': 'Video', 'mkv': 'Video',
+
+      // Audio
+      'mp3': 'Audio', 'wav': 'Audio', 'flac': 'Audio', 'aac': 'Audio',
+      'm4a': 'Audio',
     };
 
     // For URL loading, if there's no clear file extension, default to HTML
@@ -361,6 +373,15 @@ class FileTypeDetector {
       'text/x-scss': 'SCSS',
       'text/x-less': 'LESS',
       'text/x-stylus': 'Stylus',
+
+      // Media types
+      'image/png': 'Image', 'image/jpeg': 'Image', 'image/gif': 'Image',
+      'image/webp': 'Image', 'image/bmp': 'Image', 'image/x-icon': 'Image',
+      'image/avif': 'Image',
+      'video/mp4': 'Video', 'video/webm': 'Video', 'video/ogg': 'Video',
+      'video/quicktime': 'Video',
+      'audio/mpeg': 'Audio', 'audio/wav': 'Audio', 'audio/ogg': 'Audio',
+      'audio/aac': 'Audio', 'audio/x-m4a': 'Audio',
     };
 
     return mimeMap[mimeType] ?? 'Text';
@@ -794,6 +815,9 @@ class FileTypeDetector {
       'text/x-python',
       'text/x-java',
       'text/x-dart',
+      'image/',
+      'video/',
+      'audio/',
     ];
     return knownMimes.any((m) => mimeType.contains(m));
   }

@@ -82,4 +82,29 @@ class HtmlFile {
     };
     return textExtensions.contains(extension);
   }
+
+  bool get isMedia {
+    const mediaExtensions = {
+      'png',
+      'jpg',
+      'jpeg',
+      'gif',
+      'webp',
+      'bmp',
+      'ico',
+      'avif',
+      'mp4',
+      'webm',
+      'ogg',
+      'mov',
+      'avi',
+      'mkv',
+      'mp3',
+      'wav',
+      'flac',
+      'aac',
+      'm4a'
+    };
+    return mediaExtensions.contains(extension);
+  }
 }

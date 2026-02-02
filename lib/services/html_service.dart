@@ -30,6 +30,8 @@ import 'package:view_source_vibe/services/metadata_parser.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
+  int? _requestedTabIndex;
+  int? get requestedTabIndex => _requestedTabIndex;
   HtmlFile? _originalFile; // Store original file for "Automatic" option
   String? _pendingUrl;
   String? _currentInputText;
@@ -103,6 +105,16 @@ class HtmlService with ChangeNotifier {
       (_currentFile?.name.toLowerCase().endsWith('.atom') ?? false);
 
   bool get isHtmlOrXml => isHtml || isXml;
+
+  bool get isMedia =>
+      selectedContentType == 'image' ||
+      selectedContentType == 'video' ||
+      selectedContentType == 'audio' ||
+      (_currentFile?.isMedia ?? false);
+
+  void consumeTabSwitchRequest() {
+    _requestedTabIndex = null;
+  }
 
   HtmlService() {
     _horizontalScrollController = ScrollController();
@@ -654,7 +666,21 @@ class HtmlService with ChangeNotifier {
           filenameLower.endsWith('.sql') ||
           filenameLower.endsWith('.atom') ||
           filenameLower.endsWith('.rss') ||
-          filenameLower.endsWith('.rdf');
+          filenameLower.endsWith('.rdf') ||
+          filenameLower.endsWith('.png') ||
+          filenameLower.endsWith('.jpg') ||
+          filenameLower.endsWith('.jpeg') ||
+          filenameLower.endsWith('.gif') ||
+          filenameLower.endsWith('.webp') ||
+          filenameLower.endsWith('.bmp') ||
+          filenameLower.endsWith('.ico') ||
+          filenameLower.endsWith('.avif') ||
+          filenameLower.endsWith('.mp4') ||
+          filenameLower.endsWith('.webm') ||
+          filenameLower.endsWith('.mov') ||
+          filenameLower.endsWith('.mp3') ||
+          filenameLower.endsWith('.wav') ||
+          filenameLower.endsWith('.flac');
 
       if (hasProperExtension) {
         return filename;
@@ -738,6 +764,15 @@ class HtmlService with ChangeNotifier {
         case 'txt':
         case 'text':
           properFilename = '$baseName.txt';
+          break;
+        case 'image':
+          properFilename = '$baseName.png';
+          break;
+        case 'video':
+          properFilename = '$baseName.mp4';
+          break;
+        case 'audio':
+          properFilename = '$baseName.mp3';
           break;
         default:
           properFilename = '$baseName.$detectedType';
@@ -1048,6 +1083,9 @@ class HtmlService with ChangeNotifier {
       'Rust': 'rust',
       'SQL': 'sql',
       'Text': 'plaintext',
+      'Image': 'image',
+      'Video': 'video',
+      'Audio': 'audio',
     };
 
     return typeMapping[detectedType] ?? 'plaintext';
@@ -1431,9 +1469,10 @@ Technical details: $e''';
     }
   }
 
-  Future<void> loadFromUrl(String url) async {
+  Future<void> loadFromUrl(String url, {int? switchToTab}) async {
     try {
       _pendingUrl = url;
+      _requestedTabIndex = switchToTab;
       _isLoading = true;
       notifyListeners();
 
