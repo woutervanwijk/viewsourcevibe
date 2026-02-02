@@ -54,6 +54,8 @@ class MetadataView extends StatelessWidget {
             context, 'Stylesheets (CSS)', metadata['cssLinks'], Icons.css),
         _buildLinkSection(
             context, 'Scripts (JS)', metadata['jsLinks'], Icons.javascript),
+        _buildLinkSection(context, 'Iframes (HTML)', metadata['iframeLinks'],
+            Icons.web_asset),
         _buildLinkSection(
             context, 'RSS/Atom Feeds', metadata['rssLinks'], Icons.rss_feed),
         const SizedBox(height: 24),

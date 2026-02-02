@@ -49,14 +49,14 @@ class ServicesView extends StatelessWidget {
           style: TextStyle(color: Colors.grey, fontSize: 13),
         ),
         const SizedBox(height: 16),
-        _buildResourceSection(
-            context, 'Scripts (JS)', metadata?['jsLinks'], Icons.javascript),
+        _buildResourceSection(context, 'Scripts (JS)',
+            metadata?['externalJsLinks'], Icons.javascript),
         const SizedBox(height: 16),
-        _buildResourceSection(
-            context, 'Stylesheets (CSS)', metadata?['cssLinks'], Icons.css),
+        _buildResourceSection(context, 'Stylesheets (CSS)',
+            metadata?['externalCssLinks'], Icons.css),
         const SizedBox(height: 16),
         _buildResourceSection(context, 'Iframes (HTML)',
-            metadata?['iframeLinks'], Icons.web_asset),
+            metadata?['externalIframeLinks'], Icons.web_asset),
         const SizedBox(height: 80),
       ],
     );

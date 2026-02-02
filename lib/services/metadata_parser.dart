@@ -17,11 +17,14 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     'rssLinks': <String>[],
     'cssLinks': <String>[],
     'jsLinks': <String>[],
+    'iframeLinks': <String>[],
+    'externalCssLinks': <String>[],
+    'externalJsLinks': <String>[],
+    'externalIframeLinks': <String>[],
     'otherMeta': <String, String>{},
     'icons': <String, String>{},
     'detectedTech': <String, String>{},
     'detectedServices': <String, List<String>>{},
-    'iframeLinks': <String>[],
   };
 
   // Extract Title
@@ -68,7 +71,11 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     if (href != null) {
       final absoluteHref = _resolveUrl(href, baseUrl);
       if (rel == 'stylesheet' || type == 'text/css') {
-        metadata['cssLinks'].add(absoluteHref);
+        if (_isLocalResource(absoluteHref, baseUrl)) {
+          metadata['cssLinks'].add(absoluteHref);
+        } else {
+          metadata['externalCssLinks'].add(absoluteHref);
+        }
       } else if (rel == 'alternate' &&
           (type?.contains('rss') == true || type?.contains('atom') == true)) {
         metadata['rssLinks'].add(absoluteHref);
@@ -85,7 +92,12 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
   for (final match in scriptTags) {
     final src = match.group(1);
     if (src != null && src.isNotEmpty) {
-      metadata['jsLinks'].add(_resolveUrl(src, baseUrl));
+      final absoluteSrc = _resolveUrl(src, baseUrl);
+      if (_isLocalResource(absoluteSrc, baseUrl)) {
+        metadata['jsLinks'].add(absoluteSrc);
+      } else {
+        metadata['externalJsLinks'].add(absoluteSrc);
+      }
     }
   }
 
@@ -97,7 +109,12 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     final attrs = _parseAttributes(attrStr);
     final src = attrs['src'];
     if (src != null) {
-      metadata['iframeLinks'].add(_resolveUrl(src, baseUrl));
+      final absoluteSrc = _resolveUrl(src, baseUrl);
+      if (_isLocalResource(absoluteSrc, baseUrl)) {
+        metadata['iframeLinks'].add(absoluteSrc);
+      } else {
+        metadata['externalIframeLinks'].add(absoluteSrc);
+      }
     }
   }
 
@@ -259,6 +276,29 @@ Map<String, String> _parseAttributes(String attrStr) {
     attrs[match.group(1)!] = match.group(2)!;
   }
   return attrs;
+}
+
+bool _isLocalResource(String url, String baseUrl) {
+  if (url.isEmpty || baseUrl.isEmpty) return true;
+  try {
+    final uri = Uri.parse(url);
+    final base = Uri.parse(baseUrl);
+
+    // If it's a relative URL or has no host, it's local
+    if (!uri.hasAuthority || uri.host.isEmpty) return true;
+
+    final resourceHost = uri.host.toLowerCase();
+    final baseHost = base.host.toLowerCase();
+
+    if (resourceHost == baseHost) return true;
+
+    // Check if it's a subdomain
+    if (resourceHost.endsWith('.$baseHost')) return true;
+
+    return false;
+  } catch (e) {
+    return true; // Assume local on parse error
+  }
 }
 
 String _resolveUrl(String url, String baseUrl) {
