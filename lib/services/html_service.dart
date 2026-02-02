@@ -964,10 +964,21 @@ class HtmlService with ChangeNotifier {
     if (!_isNavigatingBack && _currentFile != null) {
       // Only push to stack if it's a valid history item
       if (_shouldAddToHistory(_currentFile!)) {
+        // Create a copy of the current file with the latest probe result
+        // This ensures that when we go back, we have the probe data from when we left
+        final fileToStack = HtmlFile(
+            name: _currentFile!.name,
+            path: _currentFile!.path,
+            content: _currentFile!.content,
+            lastModified: _currentFile!.lastModified,
+            size: _currentFile!.size,
+            isUrl: _currentFile!.isUrl,
+            probeResult: _probeResult ?? _currentFile!.probeResult);
+
         // Prevent duplicates in back stack (don't push if same as top)
         if (_navigationStack.isEmpty ||
-            _navigationStack.last.path != _currentFile!.path) {
-          _navigationStack.add(_currentFile!);
+            _navigationStack.last.path != fileToStack.path) {
+          _navigationStack.add(fileToStack);
         }
       }
     }
@@ -1344,7 +1355,8 @@ class HtmlService with ChangeNotifier {
 
         final htmlFile = HtmlFile(
           name: processedFilename,
-          path: finalUrl,
+          path:
+              url, // Use the original requested URL to ensure history/back/restart works with the entry point (e.g. for shortlinks or signed URLs)
           content: content,
           lastModified: DateTime.now(),
           size: content.length,
