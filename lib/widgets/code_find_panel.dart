@@ -117,13 +117,14 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
                       onPressed: () {
                         controller.toggleCaseSensitive();
                       }),
-                  _buildCheckText(
-                      context: context,
-                      text: '.*',
-                      checked: value.option.regex,
-                      onPressed: () {
-                        controller.toggleRegex();
-                      })
+                  SizedBox(width: 12),
+                  // _buildCheckText(
+                  //     context: context,
+                  //     text: '.*',
+                  //     checked: value.option.regex,
+                  //     onPressed: () {
+                  //       controller.toggleRegex();
+                  //     })
                 ],
               )
             ],
