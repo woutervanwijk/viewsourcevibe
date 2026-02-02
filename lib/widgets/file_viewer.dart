@@ -257,62 +257,65 @@ class FileViewer extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // Find button
-                        IconButton(
-                          icon: const Icon(Icons.search, size: 20),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () => htmlService.toggleSearch(),
-                          tooltip: 'Find',
-                        ),
-                        const SizedBox(width: 8),
-                        // Font Size picker
-                        PopupMenuButton<double>(
-                          icon: const Icon(Icons.format_size, size: 20),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          tooltip: 'Font Size',
-                          onSelected: (double size) {
-                            settings.fontSize = size;
-                          },
-                          itemBuilder: (BuildContext context) {
-                            return AppSettings.availableFontSizes.map((size) {
-                              return PopupMenuItem<double>(
-                                value: size,
-                                child: Row(
-                                  children: [
-                                    Text('${size.toInt()} px'),
-                                    if (settings.fontSize == size) ...[
-                                      const Spacer(),
-                                      Icon(Icons.check,
-                                          size: 16,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary),
-                                    ],
-                                  ],
-                                ),
-                              );
-                            }).toList();
-                          },
-                        ),
-                        const SizedBox(width: 12),
-                        // Word Wrap button
-                        IconButton(
-                          icon: Icon(
-                            settings.wrapText
-                                ? Icons.wrap_text
-                                : Icons.wrap_text_outlined,
-                            size: 20,
+                        // Find, Font Size and Word Wrap buttons - only show for text content
+                        if (!htmlService.isMedia) ...[
+                          // Find button
+                          IconButton(
+                            icon: const Icon(Icons.search, size: 20),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => htmlService.toggleSearch(),
+                            tooltip: 'Find',
                           ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () {
-                            settings.wrapText = !settings.wrapText;
-                          },
-                          tooltip: 'Word Wrap',
-                        ),
-                        const SizedBox(width: 4),
+                          const SizedBox(width: 8),
+                          // Font Size picker
+                          PopupMenuButton<double>(
+                            icon: const Icon(Icons.format_size, size: 20),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: 'Font Size',
+                            onSelected: (double size) {
+                              settings.fontSize = size;
+                            },
+                            itemBuilder: (BuildContext context) {
+                              return AppSettings.availableFontSizes.map((size) {
+                                return PopupMenuItem<double>(
+                                  value: size,
+                                  child: Row(
+                                    children: [
+                                      Text('${size.toInt()} px'),
+                                      if (settings.fontSize == size) ...[
+                                        const Spacer(),
+                                        Icon(Icons.check,
+                                            size: 16,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              }).toList();
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          // Word Wrap button
+                          IconButton(
+                            icon: Icon(
+                              settings.wrapText
+                                  ? Icons.wrap_text
+                                  : Icons.wrap_text_outlined,
+                              size: 20,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () {
+                              settings.wrapText = !settings.wrapText;
+                            },
+                            tooltip: 'Word Wrap',
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                       ],
                     ),
                   ),

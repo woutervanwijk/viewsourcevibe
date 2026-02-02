@@ -46,35 +46,27 @@ class _MediaBrowserState extends State<MediaBrowser> {
     if (isImage && widget.file.isUrl) {
       return Container(
         color: Theme.of(context).scaffoldBackgroundColor,
-        child: Column(
-          children: [
-            Expanded(
-              child: InteractiveViewer(
-                minScale: 0.1,
-                maxScale: 5.0,
-                child: Center(
-                  child: Image.network(
-                    widget.file.path,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _buildErrorView(),
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
-                        ),
-                      );
-                    },
+        child: InteractiveViewer(
+          minScale: 0.1,
+          maxScale: 5.0,
+          child: Center(
+            child: Image.network(
+              widget.file.path,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => _buildErrorView(),
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null,
                   ),
-                ),
-              ),
+                );
+              },
             ),
-            _buildToolbar(),
-          ],
+          ),
         ),
       );
     }
@@ -87,27 +79,6 @@ class _MediaBrowserState extends State<MediaBrowser> {
     }
 
     return _buildFallbackView();
-  }
-
-  Widget _buildToolbar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 24.0),
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withOpacity(0.5),
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).dividerColor.withOpacity(0.1),
-          ),
-        ),
-      ),
-      child: Text(
-        widget.file.name,
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.grey, fontSize: 11),
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
   }
 
   Widget _buildErrorView() {

@@ -206,27 +206,37 @@ class Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.folder_open),
-          tooltip: 'Open File',
-          onPressed: () => _pickFile(context),
-        ),
-        IconButton(
-          icon: Icon(
-            Platform.isIOS ? CupertinoIcons.share : Icons.share,
-            size: 24,
-          ),
-          tooltip: 'Share',
-          onPressed: () => _shareCurrentFile(context),
-        ),
-        IconButton(
-          icon: const Icon(Icons.settings),
-          tooltip: 'Settings',
-          onPressed: () => _showSettingsScreen(context),
-        ),
-      ],
+    return Consumer<HtmlService>(
+      builder: (context, htmlService, child) {
+        return Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back, size: 24),
+              tooltip: 'Back',
+              onPressed:
+                  htmlService.canGoBack ? () => htmlService.goBack() : null,
+            ),
+            IconButton(
+              icon: const Icon(Icons.folder_open),
+              tooltip: 'Open File',
+              onPressed: () => _pickFile(context),
+            ),
+            IconButton(
+              icon: Icon(
+                Platform.isIOS ? CupertinoIcons.share : Icons.share,
+                size: 24,
+              ),
+              tooltip: 'Share',
+              onPressed: () => _shareCurrentFile(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings),
+              tooltip: 'Settings',
+              onPressed: () => _showSettingsScreen(context),
+            ),
+          ],
+        );
+      },
     );
   }
 }

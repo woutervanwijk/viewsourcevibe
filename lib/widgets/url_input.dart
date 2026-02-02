@@ -52,7 +52,7 @@ class _UrlInputState extends State<UrlInput> {
     super.dispose();
   }
 
-  Future<void> _loadUrl() async {
+  Future<void> _loadUrl({int? switchToTab}) async {
     final url = _urlController.text.trim();
     // if (url.isEmpty) {
     //   setState(() => _errorMessage = 'Please enter a URL');
@@ -62,7 +62,8 @@ class _UrlInputState extends State<UrlInput> {
     setState(() => _errorMessage = '');
 
     try {
-      await Provider.of<HtmlService>(context, listen: false).loadFromUrl(url);
+      await Provider.of<HtmlService>(context, listen: false)
+          .loadFromUrl(url, switchToTab: switchToTab);
 
       // Clear the input after successful load
       // _urlController.clear();
@@ -99,13 +100,6 @@ class _UrlInputState extends State<UrlInput> {
             children: [
               Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: 'Back',
-                    onPressed: htmlService.canGoBack
-                        ? () => htmlService.goBack()
-                        : null,
-                  ),
                   Expanded(
                     child: RawAutocomplete<String>(
                       textEditingController: _urlController,
@@ -127,7 +121,7 @@ class _UrlInputState extends State<UrlInput> {
                       },
                       onSelected: (String selection) {
                         _urlController.text = selection;
-                        _loadUrl();
+                        _loadUrl(switchToTab: 0);
                       },
                       fieldViewBuilder:
                           (context, controller, focusNode, onFieldSubmitted) {
@@ -135,13 +129,6 @@ class _UrlInputState extends State<UrlInput> {
                           controller: controller,
                           focusNode: focusNode,
                           decoration: InputDecoration(
-                            labelText: htmlService.currentFile != null &&
-                                    htmlService.currentFile!.isUrl
-                                ? 'Current URL'
-                                : htmlService.currentFile != null &&
-                                        htmlService.currentFile!.name != ''
-                                    ? 'File: ${htmlService.currentFile!.name}'
-                                    : 'Enter URL',
                             hintText: htmlService.currentFile != null &&
                                     htmlService.currentFile!.isUrl
                                 ? ''
@@ -167,7 +154,7 @@ class _UrlInputState extends State<UrlInput> {
                           textInputAction: TextInputAction.go,
                           onSubmitted: (value) {
                             onFieldSubmitted();
-                            _loadUrl();
+                            _loadUrl(switchToTab: 0);
                           },
                           onTapOutside: (event) {
                             FocusScope.of(context).unfocus();
@@ -183,7 +170,7 @@ class _UrlInputState extends State<UrlInput> {
                             borderRadius: BorderRadius.circular(6),
                             child: Container(
                               width: MediaQuery.of(context).size.width -
-                                  56, // Adjust width for back button
+                                  16, // Adjust width for full screen minus padding
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(6),
                                 color: Theme.of(context).cardColor,
