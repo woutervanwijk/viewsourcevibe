@@ -19,7 +19,6 @@ import 'package:re_highlight/styles/tokyo-night-light.dart';
 import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 import 'package:http/http.dart' as http;
-import 'dart:async' show TimeoutException, Timer;
 import 'dart:io' show SocketException, InternetAddress;
 import 'dart:async';
 import 'dart:convert';
@@ -993,6 +992,22 @@ class HtmlService with ChangeNotifier {
       _probeResult = file.probeResult;
     }
 
+    // Try to determine content type from probe result
+    if (_probeResult != null && _probeResult!['headers'] is Map) {
+      final headers = _probeResult!['headers'] as Map;
+      // Headers keys are often lowercase, but let's check carefully
+      // The headers from http.Response are usually case-insensitive, but when serialized to Map they might not be
+      final contentType = headers['content-type'] ?? headers['Content-Type'];
+
+      if (contentType != null && contentType is String) {
+        final detectedLanguage = getLanguageForMimeType(contentType);
+        if (detectedLanguage != null) {
+          debugPrint('Detected language from content-type: $detectedLanguage');
+          selectedContentType = detectedLanguage;
+        }
+      }
+    }
+
     // Record in history if it has a path/URL
     if (_shouldAddToHistory(file)) {
       _urlHistoryService?.addUrl(file.path);
@@ -1577,6 +1592,41 @@ Technical details: $e''';
       notifyListeners();
       rethrow;
     }
+  }
+
+  /// Get the language name from a MIME type
+  String? getLanguageForMimeType(String mimeType) {
+    if (mimeType.isEmpty) return null;
+
+    // Normalize and strip parameters (e.g., 'text/html; charset=utf-8' -> 'text/html')
+    final baseMime = mimeType.split(';').first.trim().toLowerCase();
+
+    if (baseMime.contains('html')) return 'html';
+    if (baseMime.contains('javascript') ||
+        baseMime == 'application/x-javascript' ||
+        baseMime == 'text/ecmascript') {
+      return 'javascript';
+    }
+    if (baseMime.contains('css')) return 'css';
+    if (baseMime.contains('json')) return 'json';
+    if (baseMime.contains('xml') ||
+        baseMime == 'application/rss+xml' ||
+        baseMime == 'application/atom+xml') {
+      return 'xml';
+    }
+    if (baseMime.contains('markdown') || baseMime == 'text/x-markdown') {
+      return 'markdown';
+    }
+    if (baseMime == 'text/plain') return 'plaintext';
+    if (baseMime == 'text/x-dart' || baseMime == 'application/dart') {
+      return 'dart';
+    }
+    if (baseMime == 'text/x-python' ||
+        baseMime == 'application/x-python-code') {
+      return 'python';
+    }
+
+    return null;
   }
 
   String getLanguageForExtension(String extension) {
@@ -2177,9 +2227,8 @@ Technical details: $e''';
     // If customScrollController is provided, use it.
     // Otherwise, try to find one in the context.
     // If that fails, create a temporary one (though this should rarely happen in a valid app structure).
-    final effectiveVerticalController = customScrollController ??
-        PrimaryScrollController.of(context) ??
-        ScrollController();
+    final effectiveVerticalController =
+        customScrollController ?? PrimaryScrollController.of(context);
 
     // Update our reference for external access (e.g. scrollToZero)
     _verticalScrollController = effectiveVerticalController;
@@ -2455,7 +2504,7 @@ Technical details: $e''';
   }
 
   /// Build the editor widget, returning strictly synchronous Widget if cached,
-  /// or a Future<Widget> if processing is needed.
+  /// or a Future if processing is needed.
   FutureOr<Widget> buildEditor(
       String content, String extension, BuildContext context,
       {double fontSize = 16.0,
@@ -2561,9 +2610,8 @@ Technical details: $e''';
         getLanguageForExtension(extension); // Use existing helper method
 
     // Resolve Scroll Controller
-    final effectiveVerticalController = customScrollController ??
-        PrimaryScrollController.of(context) ??
-        ScrollController();
+    final effectiveVerticalController =
+        customScrollController ?? PrimaryScrollController.of(context);
 
     _verticalScrollController = effectiveVerticalController;
 

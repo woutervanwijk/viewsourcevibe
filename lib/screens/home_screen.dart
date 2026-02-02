@@ -7,6 +7,7 @@ import 'package:view_source_vibe/widgets/toolbar.dart';
 import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/widgets/metadata_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
+import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -138,12 +139,14 @@ class _HomeScreenState extends State<HomeScreen>
                         const NeverScrollableScrollPhysics(), // Disable swipe to prevent conflict with editor
                     children: [
                       // 1. Editor
-                      currentFile != null
-                          ? FileViewer(
-                              file: currentFile,
-                              scrollController: _scrollController,
-                            )
-                          : const Center(child: Text('No File')),
+                      KeepAliveWrapper(
+                        child: currentFile != null
+                            ? FileViewer(
+                                file: currentFile,
+                                scrollController: _scrollController,
+                              )
+                            : const Center(child: Text('No File')),
+                      ),
 
                       // 2. Metadata
                       const MetadataView(),

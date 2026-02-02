@@ -312,7 +312,7 @@ class FileViewer extends StatelessWidget {
                 // Use key to force rebuild when content changes
                 key: ValueKey(
                     '${htmlService.currentFile?.path}_${htmlService.selectedContentType}'),
-                future: result as Future<Widget>,
+                future: result,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.done &&
                       snapshot.hasData) {
