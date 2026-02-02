@@ -5,6 +5,7 @@ class HtmlFile {
   final DateTime lastModified;
   final int size;
   final bool isUrl;
+  final Map<String, dynamic>? probeResult;
 
   HtmlFile({
     required this.name,
@@ -13,9 +14,11 @@ class HtmlFile {
     required this.lastModified,
     required this.size,
     this.isUrl = false,
+    this.probeResult,
   });
 
-  factory HtmlFile.fromContent(String name, String content, {bool isUrl = false}) {
+  factory HtmlFile.fromContent(String name, String content,
+      {bool isUrl = false}) {
     return HtmlFile(
       name: name,
       path: '',
@@ -29,7 +32,7 @@ class HtmlFile {
   String get fileSize {
     const kb = 1024;
     const mb = kb * 1024;
-    
+
     if (size >= mb) {
       return '${(size / mb).toStringAsFixed(2)} MB';
     } else if (size >= kb) {
@@ -54,26 +57,26 @@ class HtmlFile {
       'html', 'htm', 'xhtml', 'css', 'js', 'javascript', 'mjs', 'cjs',
       'ts', 'typescript', 'jsx', 'tsx', 'json', 'json5', 'xml', 'xsd',
       'xsl', 'svg', 'yaml', 'yml', 'vue', 'svelte',
-      
+
       // Markup & Documentation
       'md', 'markdown', 'txt', 'text', 'adoc', 'asciidoc',
-      
+
       // Programming Languages
       'dart', 'py', 'python', 'java', 'kt', 'kts', 'swift', 'go',
       'rs', 'rust', 'php', 'rb', 'ruby', 'cpp', 'cc', 'cxx', 'c++',
       'h', 'hpp', 'hxx', 'c', 'cs', 'scala', 'hs', 'haskell', 'lua',
       'pl', 'perl', 'r', 'sh', 'bash', 'zsh', 'fish', 'ps1', 'psm1',
-      
+
       // Configuration & Data
       'ini', 'conf', 'config', 'properties', 'toml', 'sql', 'graphql',
       'gql', 'dockerfile', 'makefile', 'mk', 'cmake',
-      
+
       // Styling & Preprocessors
       'scss', 'sass', 'less', 'styl', 'stylus',
-      
+
       // Other Common Formats
       'diff', 'patch', 'gitignore', 'ignore', 'editorconfig',
-      
+
       // Additional common text formats
       'log', 'env', 'gradle'
     };

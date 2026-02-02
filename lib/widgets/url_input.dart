@@ -20,15 +20,26 @@ class _UrlInputState extends State<UrlInput> {
   void initState() {
     super.initState();
     _urlController.addListener(_onUrlChanged);
+    _focusNode.addListener(_handleFocusChange);
   }
 
   void _onUrlChanged() {
     setState(() {});
   }
 
+  void _handleFocusChange() {
+    if (!_focusNode.hasFocus && _urlController.text.isEmpty) {
+      final htmlService = Provider.of<HtmlService>(context, listen: false);
+      if (htmlService.currentFile != null && htmlService.currentFile!.isUrl) {
+        _urlController.text = htmlService.currentFile!.path;
+      }
+    }
+  }
+
   @override
   void dispose() {
     _urlController.removeListener(_onUrlChanged);
+    _focusNode.removeListener(_handleFocusChange);
     _urlController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -44,10 +55,6 @@ class _UrlInputState extends State<UrlInput> {
     setState(() => _errorMessage = '');
 
     try {
-      // probe the URL if we are loading a new one
-      // This satisfies "Only an enter will probe for a new url"
-      // We do this in parallel or after load? Use the same URL.
-      Provider.of<HtmlService>(context, listen: false).probeUrl(url).ignore();
       await Provider.of<HtmlService>(context, listen: false).loadFromUrl(url);
 
       // Clear the input after successful load

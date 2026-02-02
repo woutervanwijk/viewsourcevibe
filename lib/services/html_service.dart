@@ -976,6 +976,11 @@ class HtmlService with ChangeNotifier {
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
 
+    // Restore probe result if available
+    if (file.probeResult != null) {
+      _probeResult = file.probeResult;
+    }
+
     // Record in history if it has a path/URL
     if (_shouldAddToHistory(file)) {
       _urlHistoryService?.addUrl(file.path);
@@ -1211,10 +1216,6 @@ class HtmlService with ChangeNotifier {
         url = 'https://$url';
       }
 
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://$url';
-      }
-
       // Record in history is now handled in loadFile
 
       // Parse and validate the URL
@@ -1230,6 +1231,19 @@ class HtmlService with ChangeNotifier {
 
       // Use the http package with timeout and security settings
       final client = http.Client();
+      final stopwatch = Stopwatch()..start();
+      String? ipAddress;
+
+      // Resolve IP (part of probing)
+      try {
+        final addresses = await InternetAddress.lookup(uri.host)
+            .timeout(const Duration(seconds: 2));
+        if (addresses.isNotEmpty) {
+          ipAddress = addresses.first.address;
+        }
+      } catch (e) {
+        debugPrint('DNS Lookup failed: $e');
+      }
 
       // Set proper headers to avoid 403 errors from websites that block non-browser clients
       final headers = {
@@ -1251,6 +1265,53 @@ class HtmlService with ChangeNotifier {
             headers: headers,
           )
           .timeout(const Duration(seconds: 30));
+
+      stopwatch.stop();
+
+      // Construct Probe Result from the response
+      final setCookie = response.headers['set-cookie'];
+      final List<String> cookies =
+          setCookie != null ? setCookie.split(RegExp(r',(?=[^;]+?=)')) : [];
+
+      final securityHeaders = {
+        'Strict-Transport-Security':
+            response.headers['strict-transport-security'],
+        'Content-Security-Policy': response.headers['content-security-policy'],
+        'X-Frame-Options': response.headers['x-frame-options'],
+        'X-Content-Type-Options': response.headers['x-content-type-options'],
+        'Referrer-Policy': response.headers['referrer-policy'],
+        'Permissions-Policy': response.headers['permissions-policy'],
+      };
+
+      int? contentLength = response.contentLength;
+      // Check Content-Length header fallback
+      if ((contentLength == null || contentLength == 0) &&
+          response.headers.containsKey('content-length')) {
+        contentLength = int.tryParse(response.headers['content-length']!);
+      }
+
+      final probeResult = {
+        'statusCode': response.statusCode,
+        'reasonPhrase': response.reasonPhrase,
+        'headers': response.headers,
+        'isRedirect': response.isRedirect || finalUrl != url,
+        'contentLength': contentLength,
+        'finalUrl': finalUrl,
+        'responseTime': stopwatch.elapsedMilliseconds,
+        'ipAddress': ipAddress,
+        'security': securityHeaders,
+        'cookies': cookies,
+      };
+
+      // Check for redirect location if it was a redirect (though we followed it, we might want to show original redirect info if possible, but manual redirect following makes this tricky. We can assume if finalUrl != url, a redirect happened)
+      if (finalUrl != url) {
+        // rough approximation since we followed redirects
+        probeResult['redirectLocation'] = finalUrl;
+      }
+
+      // Update local probe result
+      _probeResult = probeResult;
+      _isProbing = false;
 
       if (response.statusCode == 200) {
         final content = response.body;
@@ -1288,6 +1349,7 @@ class HtmlService with ChangeNotifier {
           lastModified: DateTime.now(),
           size: content.length,
           isUrl: true,
+          probeResult: probeResult,
         );
 
         await loadFile(htmlFile, clearProbe: false);
