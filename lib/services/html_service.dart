@@ -38,6 +38,10 @@ class HtmlService with ChangeNotifier {
   AppStateService? _appStateService;
   UrlHistoryService? _urlHistoryService;
 
+  // Navigation stack for "Back" functionality
+  final List<HtmlFile> _navigationStack = [];
+  bool _isNavigatingBack = false;
+
   // Probe state
   Map<String, dynamic>? _probeResult;
   bool _isProbeOverlayVisible = false;
@@ -68,6 +72,7 @@ class HtmlService with ChangeNotifier {
   Map<String, dynamic>? get probeResult => _probeResult;
   bool get isProbeOverlayVisible => _isProbeOverlayVisible;
   bool get isProbing => _isProbing;
+  bool get canGoBack => _navigationStack.isNotEmpty;
   String? get probeError => _probeError;
 
   // Expose search state
@@ -947,6 +952,11 @@ class HtmlService with ChangeNotifier {
   }
 
   Future<void> loadFile(HtmlFile file, {bool clearProbe = true}) async {
+    // Save current file to navigation stack if we are not going back
+    if (!_isNavigatingBack && _currentFile != null) {
+      _navigationStack.add(_currentFile!);
+    }
+
     await clearFile(clearProbe: clearProbe);
     _currentFile = file;
     _originalFile = file; // Store original file for "Automatic" option
@@ -1165,6 +1175,20 @@ class HtmlService with ChangeNotifier {
     _currentFile = updatedFile;
     notifyListeners();
     _autoSave();
+  }
+
+  /// Go back to the previous file
+  Future<void> goBack() async {
+    if (_navigationStack.isEmpty) return;
+
+    final previousFile = _navigationStack.removeLast();
+    _isNavigatingBack = true;
+    try {
+      await loadFile(previousFile, clearProbe: true);
+    } finally {
+      // Ensure we reset the flag even if loading fails
+      _isNavigatingBack = false;
+    }
   }
 
   Future<void> loadFromUrl(String url) async {
