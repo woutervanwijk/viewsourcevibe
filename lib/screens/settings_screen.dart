@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
+import 'package:view_source_vibe/services/url_history_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -104,7 +105,24 @@ class SettingsScreen extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              // About Section
+              // Data Section
+              const Text(
+                'Data',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ListTile(
+                    title: const Text('Clear Search History'),
+                    subtitle: const Text('Remove all saved URLs from history'),
+                    trailing: const Icon(Icons.delete_outline),
+                    onTap: () => _confirmClearHistory(context),
+                  ),
+                ),
+              ),
               const Text(
                 'About',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -116,7 +134,8 @@ class SettingsScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16.0),
                   child: ListTile(
                     title: const Text('About View Source Vibe'),
-                    subtitle: const Text('Learn more about the app and development process'),
+                    subtitle: const Text(
+                        'Learn more about the app and development process'),
                     trailing: const Icon(Icons.info_outline),
                     onTap: () => _navigateToAboutScreen(context),
                   ),
@@ -355,6 +374,37 @@ class SettingsScreen extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => const AboutScreen(),
+      ),
+    );
+  }
+
+  void _confirmClearHistory(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Search History'),
+        content: const Text(
+            'Are you sure you want to clear your entire search history? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await Provider.of<UrlHistoryService>(context, listen: false)
+                  .clearHistory();
+              if (context.mounted) {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Search history cleared')),
+                );
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear'),
+          ),
+        ],
       ),
     );
   }
