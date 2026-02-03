@@ -199,6 +199,7 @@ class _UrlInputState extends State<UrlInput> {
                                 color: Theme.of(context).cardColor,
                               ),
                               child: ListView.separated(
+                                primary: false,
                                 padding: EdgeInsets.zero,
                                 shrinkWrap: true,
                                 itemCount: options.length,

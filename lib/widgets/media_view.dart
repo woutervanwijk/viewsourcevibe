@@ -61,6 +61,7 @@ class MediaView extends StatelessWidget {
           _buildSectionTitle(context, 'Images (${images.length})'),
           const SizedBox(height: 8),
           GridView.builder(
+            primary: false,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
