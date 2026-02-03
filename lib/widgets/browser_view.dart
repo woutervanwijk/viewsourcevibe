@@ -9,6 +9,7 @@ import 'package:view_source_vibe/widgets/media_browser_platform_proxy.dart'
     as platform_impl;
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/rss_template_service.dart';
 
 class BrowserView extends StatefulWidget {
   final HtmlFile file;
@@ -27,6 +28,7 @@ class BrowserView extends StatefulWidget {
 class _BrowserViewState extends State<BrowserView> {
   late final WebViewController? _controller;
   final String viewID = 'browser-preview-view';
+  bool _isRenderingTemplate = false;
 
   @override
   void initState() {
@@ -48,6 +50,10 @@ class _BrowserViewState extends State<BrowserView> {
             },
             onPageFinished: (String url) {
               if (mounted) {
+                // Should not sync if we are displaying a local template,
+                // otherwise we overwrite the source file with our generated HTML!
+                if (_isRenderingTemplate) return;
+
                 // Use syncWebViewState to update everything (content, metadata, probe)
                 Provider.of<HtmlService>(context, listen: false)
                     .syncWebViewState(url);
@@ -95,12 +101,34 @@ class _BrowserViewState extends State<BrowserView> {
 
     if (widget.file.isUrl) {
       final currentUrl = await _controller.currentUrl();
+
+      // Check if it's an RSS/Atom/XML feed that we want to render nicely
+      final isRssOrXml = widget.file.name.toLowerCase().endsWith('.rss') ||
+          widget.file.name.toLowerCase().endsWith('.atom') ||
+          widget.file.name.toLowerCase().endsWith('.xml') ||
+          widget.file.content.trimLeft().startsWith('<rss') ||
+          widget.file.content.trimLeft().startsWith('<feed') ||
+          (widget.file.content.trimLeft().startsWith('<?xml') &&
+              (widget.file.content.contains('<rss') ||
+                  widget.file.content.contains('<feed')));
+
+      if (isRssOrXml) {
+        _isRenderingTemplate = true;
+        final html = RssTemplateService.convertRssToHtml(
+            widget.file.content, widget.file.path);
+        // Load the generated HTML
+        _controller.loadHtmlString(html, baseUrl: widget.file.path);
+        return;
+      }
+
+      _isRenderingTemplate = false;
+
       // Prevent reloading if we are already at the target URL
-      // This breaks the loop where syncWebViewState updates the file -> updateWidget -> loadRequest -> onPageFinished -> syncWebViewState
       if (currentUrl == widget.file.path) return;
 
       _controller.loadRequest(Uri.parse(widget.file.path));
     } else {
+      _isRenderingTemplate = false;
       _controller.loadHtmlString(widget.file.content);
     }
   }
