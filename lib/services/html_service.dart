@@ -1440,13 +1440,13 @@ class HtmlService with ChangeNotifier {
   }
 
   Future<HtmlFile> _loadFromUrlInternal(String url) async {
+    Map<String, dynamic>? currentProbeResult;
+
     try {
       // Validate and sanitize URL
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://$url';
       }
-
-      // Record in history is now handled in loadFile
 
       // Parse and validate the URL
       final uri = Uri.tryParse(url);
@@ -1475,7 +1475,7 @@ class HtmlService with ChangeNotifier {
         debugPrint('DNS Lookup failed: $e');
       }
 
-      // Set proper headers to avoid 403 errors from websites that block non-browser clients
+      // Set proper headers
       final headers = {
         'User-Agent': 'curl/7.88.1',
         'Accept':
@@ -1483,17 +1483,17 @@ class HtmlService with ChangeNotifier {
         'Accept-Language': 'en-US,en;q=0.5',
       };
 
-      // Manual redirect handling to get the final URL and capture certificate
+      // Manual redirect handling
       final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers,
           originalUri: uri);
 
-      // Update the input text immediately so the UI reflects the redirect while loading body
+      // Update the input text immediately
       if (finalUrl != url) {
         _currentInputText = finalUrl;
         notifyListeners();
       }
 
-      // Use HttpClient for the final request to ensure we have the certificate
+      // Use HttpClient for the final request
       final hClient = HttpClient();
       final hRequest = await hClient.openUrl('GET', Uri.parse(finalUrl));
 
@@ -1516,14 +1516,13 @@ class HtmlService with ChangeNotifier {
 
       stopwatch.stop();
 
-      // Convert HttpClient headers to a Map<String, String> for compatibility
-      // Standardize on lowercase keys for consistent lookup
+      // Convert HttpClient headers
       final respHeaders = <String, String>{};
       hResponse.headers.forEach((name, values) {
         respHeaders[name.toLowerCase()] = values.join(', ');
       });
 
-      // Construct Probe Result from the response
+      // Construct Probe Result
       final setCookie = respHeaders['set-cookie'];
       final List<String> cookies =
           setCookie != null ? setCookie.split(RegExp(r',(?=[^;]+?=)')) : [];
@@ -1538,12 +1537,11 @@ class HtmlService with ChangeNotifier {
       };
 
       int? contentLength = hResponse.contentLength;
-      // Check Content-Length header fallback
       if (contentLength <= 0 && respHeaders.containsKey('content-length')) {
         contentLength = int.tryParse(respHeaders['content-length']!);
       }
 
-      final probeResult = {
+      currentProbeResult = {
         'statusCode': hResponse.statusCode,
         'reasonPhrase': hResponse.reasonPhrase,
         'headers': respHeaders,
@@ -1557,37 +1555,19 @@ class HtmlService with ChangeNotifier {
         'certificate': certInfo,
       };
 
-      // Check for redirect location if it was a redirect (though we followed it, we might want to show original redirect info if possible, but manual redirect following makes this tricky. We can assume if finalUrl != url, a redirect happened)
       if (finalUrl != url) {
-        // rough approximation since we followed redirects
-        probeResult['redirectLocation'] = finalUrl;
+        currentProbeResult['redirectLocation'] = finalUrl;
       }
 
       // Update local probe result
-      _probeResult = probeResult;
+      _probeResult = currentProbeResult;
       _isProbing = false;
 
       if (hResponse.statusCode == 200) {
-        // Security: Limit maximum content size to prevent memory issues
-        if (content.length > 10 * 1024 * 1024) {
-          // 10MB limit
-          throw Exception('File size exceeds maximum limit (10MB)');
-        }
-
-        // Security: Limit maximum content size to prevent memory issues
-        if (content.length > 10 * 1024 * 1024) {
-          // 10MB limit
-          throw Exception('File size exceeds maximum limit (10MB)');
-        }
-
-        // Parse the final URL to extract filename and other information
         final finalUri = Uri.parse(finalUrl);
-
-        // Extract filename from final URL path segments
         final pathFilename =
             finalUri.pathSegments.isNotEmpty ? finalUri.pathSegments.last : '';
 
-        // Generate descriptive filename if the path segment is not a clear filename
         final filename = pathFilename.isNotEmpty &&
                 pathFilename.contains('.') &&
                 !pathFilename.startsWith('_') &&
@@ -1596,32 +1576,40 @@ class HtmlService with ChangeNotifier {
             ? pathFilename
             : generateDescriptiveFilename(finalUri, content);
 
-        // Use robust file type detection to generate appropriate filename
-        final headers = probeResult['headers'] as Map<String, String>?;
-        final contentType = headers?['content-type'];
+        final contentType = respHeaders['content-type'];
         final processedFilename = await detectFileTypeAndGenerateFilename(
             filename, content,
             contentType: contentType);
 
-        final htmlFile = HtmlFile(
+        return HtmlFile(
           name: processedFilename,
-          path: finalUrl, // Use the final URL after redirects for the file path
+          path: finalUrl,
           content: content,
           lastModified: DateTime.now(),
           size: content.length,
           isUrl: true,
-          probeResult: probeResult,
+          probeResult: currentProbeResult,
         );
-
-        return htmlFile;
       } else {
-        throw Exception(
-            'Failed to load URL: ${hResponse.statusCode} ${hResponse.reasonPhrase}');
+        // For non-200 responses, we still return the content
+        final finalUri = Uri.parse(finalUrl);
+        final filename = finalUri.pathSegments.isNotEmpty
+            ? finalUri.pathSegments.last
+            : 'response_${hResponse.statusCode}';
+
+        return HtmlFile(
+          name: filename,
+          path: finalUrl,
+          content: content,
+          lastModified: DateTime.now(),
+          size: content.length,
+          isUrl: true,
+          probeResult: currentProbeResult,
+          isError: hResponse.statusCode >= 400,
+        );
       }
     } catch (e) {
-      // Display error in the editor instead of throwing exception
       String errorMessage;
-
       if (e is TimeoutException) {
         errorMessage = 'Request timed out';
       } else if (e is FormatException) {
@@ -1632,7 +1620,6 @@ class HtmlService with ChangeNotifier {
         errorMessage = e.toString();
       }
 
-      // Create error content similar to how file loading errors are handled
       final errorContent = '''Web URL Could Not Be Loaded
 
 Error: $errorMessage
@@ -1664,7 +1651,7 @@ If this problem persists, you can:
 
 Technical details: $e''';
 
-      final htmlFile = HtmlFile(
+      return HtmlFile(
         name: url,
         path: url,
         content: errorContent,
@@ -1672,9 +1659,8 @@ Technical details: $e''';
         size: errorContent.length,
         isUrl: true,
         isError: true,
+        probeResult: currentProbeResult,
       );
-
-      return htmlFile;
     }
   }
 
