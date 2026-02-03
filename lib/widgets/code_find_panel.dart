@@ -2,22 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
 import 'dart:math';
 
-const EdgeInsetsGeometry _kDefaultFindMargin = EdgeInsets.only(right: 10);
+const EdgeInsetsGeometry _kDefaultFindMargin = EdgeInsets.only(right: 4);
 
-const double _kDefaultFindPanelHeight = 54;
+const double _kDefaultFindPanelHeight = 40; // Reduced from 54
 const double _kDefaultReplacePanelHeight = _kDefaultFindPanelHeight * 2;
-const double _kDefaultFindIconSize = 16;
-const double _kDefaultFindIconWidth = 30;
-const double _kDefaultFindIconHeight = 30;
-const double _kDefaultFindInputFontSize = 13;
-const double _kDefaultFindResultFontSize = 12;
-const EdgeInsetsGeometry _kDefaultFindPadding = EdgeInsets.only(
-    left: 8, right: 8, top: 4, bottom: 4); // Match UrlInput padding
+const double _kDefaultFindIconSize = 14; // Reduced from 16
+const double _kDefaultFindIconWidth = 24; // Reduced from 30
+const double _kDefaultFindIconHeight = 24; // Reduced from 30
+const double _kDefaultFindInputFontSize = 12; // Reduced from 13
+const double _kDefaultFindResultFontSize = 11; // Reduced from 12
+const EdgeInsetsGeometry _kDefaultFindPadding =
+    EdgeInsets.only(left: 4, right: 4, top: 2, bottom: 2);
 const EdgeInsetsGeometry _kDefaultFindInputContentPadding =
     EdgeInsets.symmetric(
-  vertical: 10,
-  horizontal: 12,
-); // Match UrlInput content padding
+  vertical: 8,
+  horizontal: 8,
+);
 
 class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
   final CodeFindController controller;
@@ -259,6 +259,8 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
         icon,
         size: iconSize,
       ),
+      padding: const EdgeInsets.all(2),
+      visualDensity: VisualDensity.compact,
       constraints: const BoxConstraints(
           maxWidth: _kDefaultFindIconWidth, maxHeight: _kDefaultFindIconHeight),
       tooltip: tooltip,
