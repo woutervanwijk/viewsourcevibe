@@ -1206,8 +1206,7 @@ class HtmlService with ChangeNotifier {
 
       if (preferLocalDetection) {
         selectedContentType = localContentType;
-      } else if (localContentType != null &&
-          localContentType != selectedContentType) {
+      } else if (localContentType != selectedContentType) {
         debugPrint(
             'Ignoring local detection ($localContentType) in favor of probe ($selectedContentType)');
       }
@@ -2944,7 +2943,7 @@ Technical details: $e''';
     return CodeEditor(
       key: key,
       controller: controller,
-      showCursorWhenReadOnly: false,
+      showCursorWhenReadOnly: true,
       readOnly: true,
       toolbarController: const ContextMenuControllerImpl(),
       wordWrap: wrapText,
