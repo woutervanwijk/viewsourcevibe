@@ -231,6 +231,7 @@ class DomTreeTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (entry.hasChildren)
                 Icon(
@@ -255,7 +256,6 @@ class DomTreeTile extends StatelessWidget {
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.secondary,
                         fontSize: 11,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
@@ -272,8 +272,6 @@ class DomTreeTile extends StatelessWidget {
                   child: Text(
                     node.label,
                     style: const TextStyle(fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
