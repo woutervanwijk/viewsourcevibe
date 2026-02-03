@@ -150,7 +150,17 @@ class UnifiedSharingService {
           String? urlToLoad;
           // Detect if it's a URL (either the whole string or containing one)
           if (isUrl(trimmedContent)) {
-            urlToLoad = trimmedContent;
+            // It's a clean URL, open it immediately without asking
+            if (context.mounted) {
+              await _processSharedUrl(context, htmlService, trimmedContent);
+            } else {
+              final navContext = MyApp.navigatorKey.currentContext;
+              if (navContext != null && navContext.mounted) {
+                await _processSharedUrl(
+                    navContext, htmlService, trimmedContent);
+              }
+            }
+            return;
           } else if (isPotentialUrl(trimmedContent)) {
             final uri = Uri.tryParse(trimmedContent);
             if (uri != null &&
