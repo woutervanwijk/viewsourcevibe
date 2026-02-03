@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 
 /// Extract metadata from the file content
 Future<Map<String, dynamic>> extractMetadataInIsolate(
@@ -212,14 +213,129 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
   for (final match in imgTags) {
     final attrStr = match.group(1) ?? '';
     final attrs = _parseAttributes(attrStr);
-    final src = attrs['src'];
-    if (src != null && src.isNotEmpty) {
-      final absoluteSrc = _resolveUrl(src, baseUrl);
-      metadata['media']['images'].add({
-        'src': absoluteSrc,
-        'alt': attrs['alt'] ?? '',
-        'title': attrs['title'] ?? '',
-      });
+
+    // Prioritize data-src > data-srcset > src > srcset
+    String? finalSrc = attrs['data-src'];
+    String? srcset = attrs['data-srcset'] ?? attrs['srcset'];
+    final originalSrc = attrs['src'];
+
+    // Robust Fallback: If data-src was not found by attribute parser, try explicit regex
+    // This helps when adjacent attributes (like src) have complex values that might confuse the parser
+    if (finalSrc == null && attrStr.contains('data-src')) {
+      final dataSrcMatch = RegExp(r'data-src="([^"]*)"', caseSensitive: false)
+          .firstMatch(attrStr);
+      if (dataSrcMatch != null) {
+        finalSrc = dataSrcMatch.group(1);
+        debugPrint('Recovered data-src via fallback regex: $finalSrc');
+      }
+    }
+
+    // Robust Fallback for data-srcset
+    if (srcset == null && attrStr.contains('data-srcset')) {
+      final dataSrcsetMatch =
+          RegExp(r'data-srcset="([^"]*)"', caseSensitive: false)
+              .firstMatch(attrStr);
+      if (dataSrcsetMatch != null) {
+        srcset = dataSrcsetMatch.group(1);
+      }
+    }
+
+    // Try to extract from srcset if no direct data-src
+    if ((finalSrc == null || finalSrc.isEmpty) && srcset != null) {
+      // Simple srcset parsing: take the last URL (often highest res)
+      // Format: url width/density, url width/density
+      try {
+        final candidates = srcset.split(',');
+        if (candidates.isNotEmpty) {
+          final lastCandidate = candidates.last.trim();
+          final urlPart = lastCandidate.split(' ').first;
+          if (urlPart.isNotEmpty) {
+            finalSrc = urlPart;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error parsing srcset: $e');
+      }
+    }
+
+    // Fallback to src
+    if (finalSrc == null || finalSrc.isEmpty) {
+      finalSrc = originalSrc;
+    }
+
+    if (finalSrc != null && finalSrc.isNotEmpty) {
+      // If we have a data URI src, check if it's a placeholder we should ignore
+      if (finalSrc == originalSrc && finalSrc.startsWith('data:')) {
+        // If we have extracted a better source (not possible if we are here), or if this IS the only source.
+        // Wait, the logic above sets finalSrc = originalSrc if finalSrc was null.
+        // So if we are here, finalSrc IS the data URI.
+
+        // We should process it as inline image as before
+        if (finalSrc.startsWith('data:image/svg+xml')) {
+          metadata['media']['images'].add({
+            'src': finalSrc,
+            'alt': attrs['alt'] ?? 'Inline SVG',
+            'title': attrs['title'] ?? '',
+            'type': 'base64',
+          });
+        }
+        // Note: We might want to skip other data URIs if they are tiny 1x1 placeholders,
+        // but for now we only explicitly handle SVG data URIs as requested in previous task.
+        // The user said "Ignore placeholder data URIs if a real source is available".
+        // Since we didn't find a better source (finalSrc == originalSrc), we keep it.
+      } else {
+        // It's a real URL (from data-src/srcset or a regular src)
+        // OR a data URI that we decided to keep
+
+        // Actually, re-reading the logic:
+        // if finalSrc was gathered from data-src/srcset, it's likely a real URL.
+        // if finalSrc came from originalSrc, it could be a placeholder data URI.
+
+        // Optimized logic:
+        // 1. Did we find a lazy loaded source?
+        bool foundLazySource =
+            (attrs['data-src'] != null && attrs['data-src']!.isNotEmpty) ||
+                (srcset != null && srcset.isNotEmpty);
+
+        // If we process based on foundLazySource:
+        // If we found a lazy source, we use it (finalSrc is already set to it or derived from it).
+        // WE IGNORE validSrc (which is originalSrc) if it is a data URI placeholder.
+
+        if (!finalSrc.startsWith('data:') || !foundLazySource) {
+          final absoluteSrc = _resolveUrl(finalSrc, baseUrl);
+          metadata['media']['images'].add({
+            'src': absoluteSrc,
+            'alt': attrs['alt'] ?? '',
+            'title': attrs['title'] ?? '',
+          });
+        }
+      }
+    }
+  }
+
+  // Extract Inline SVG Tags
+  // We look for <svg> tags and convert them to data URIs for consistent handling
+  final svgTags =
+      RegExp(r'<svg\s+([^>]*?)>([\s\S]*?)</svg>', caseSensitive: false)
+          .allMatches(html);
+  for (final match in svgTags) {
+    final fullSvg = match.group(0); // The full <svg ...>...</svg> string
+    if (fullSvg != null) {
+      // Create a data URI from the SVG content
+      // We need to encode the SVG content to base64
+      try {
+        final encoded = base64Encode(utf8.encode(fullSvg));
+        final dataUri = 'data:image/svg+xml;base64,$encoded';
+
+        metadata['media']['images'].add({
+          'src': dataUri,
+          'alt': 'Inline SVG Code',
+          'title': 'Extracted from <svg> tag',
+          'type': 'base64',
+        });
+      } catch (e) {
+        debugPrint('Error encoding inline SVG: $e');
+      }
     }
   }
 

@@ -867,13 +867,64 @@ class HtmlService with ChangeNotifier {
           properFilename = '$baseName.txt';
           break;
         case 'image':
-          properFilename = '$baseName.png';
+          if (contentType != null) {
+            final ct = contentType.toLowerCase();
+            if (ct.contains('jpeg') || ct.contains('jpg')) {
+              properFilename = '$baseName.jpg';
+            } else if (ct.contains('gif')) {
+              properFilename = '$baseName.gif';
+            } else if (ct.contains('webp')) {
+              properFilename = '$baseName.webp';
+            } else if (ct.contains('svg')) {
+              properFilename = '$baseName.svg';
+            } else if (ct.contains('icon') || ct.contains('ico')) {
+              properFilename = '$baseName.ico';
+            } else if (ct.contains('avif')) {
+              properFilename = '$baseName.avif';
+            } else {
+              properFilename = '$baseName.png';
+            }
+          } else {
+            properFilename = '$baseName.png';
+          }
           break;
         case 'video':
-          properFilename = '$baseName.mp4';
+          if (contentType != null) {
+            final ct = contentType.toLowerCase();
+            if (ct.contains('webm')) {
+              properFilename = '$baseName.webm';
+            } else if (ct.contains('ogg')) {
+              properFilename = '$baseName.ogg';
+            } else if (ct.contains('quicktime') || ct.contains('mov')) {
+              properFilename = '$baseName.mov';
+            } else if (ct.contains('avi')) {
+              properFilename = '$baseName.avi';
+            } else if (ct.contains('mkv') || ct.contains('matroska')) {
+              properFilename = '$baseName.mkv';
+            } else {
+              properFilename = '$baseName.mp4';
+            }
+          } else {
+            properFilename = '$baseName.mp4';
+          }
           break;
         case 'audio':
-          properFilename = '$baseName.mp3';
+          if (contentType != null) {
+            final ct = contentType.toLowerCase();
+            if (ct.contains('wav')) {
+              properFilename = '$baseName.wav';
+            } else if (ct.contains('ogg')) {
+              properFilename = '$baseName.ogg';
+            } else if (ct.contains('aac')) {
+              properFilename = '$baseName.aac';
+            } else if (ct.contains('flac')) {
+              properFilename = '$baseName.flac';
+            } else {
+              properFilename = '$baseName.mp3';
+            }
+          } else {
+            properFilename = '$baseName.mp3';
+          }
           break;
         default:
           properFilename = '$baseName.$detectedType';
@@ -1134,6 +1185,23 @@ class HtmlService with ChangeNotifier {
       // Map detected type to appropriate content type for syntax highlighting
       // This handles cases where file extension might not match actual content type
       selectedContentType = _mapDetectedTypeToContentType(detectedType);
+
+      // Ensure filename has correct extension based on detection
+      // This is crucial for URLs that don't have file extensions (e.g. API endpoints returning images)
+      if (file.isUrl) {
+        final correctFilename = await detectFileTypeAndGenerateFilename(
+          file.name,
+          file.content,
+          contentType: contentType,
+        );
+
+        if (correctFilename != file.name) {
+          debugPrint('Fixing filename: ${file.name} -> $correctFilename');
+          // Create new file with corrected name
+          file = file.copyWith(name: correctFilename);
+          _currentFile = file;
+        }
+      }
     } catch (e) {
       // If detection fails, fall back to automatic (null)
       selectedContentType = null;
@@ -1424,9 +1492,10 @@ class HtmlService with ChangeNotifier {
       stopwatch.stop();
 
       // Convert HttpClient headers to a Map<String, String> for compatibility
+      // Standardize on lowercase keys for consistent lookup
       final respHeaders = <String, String>{};
       hResponse.headers.forEach((name, values) {
-        respHeaders[name] = values.join(', ');
+        respHeaders[name.toLowerCase()] = values.join(', ');
       });
 
       // Construct Probe Result from the response
@@ -1699,15 +1768,21 @@ Technical details: $e''';
         }
       }
 
-      // Security Headers Check
+      // Standardize on lowercase keys for consistent lookup
+      final normalizedHeaders = <String, String>{};
+      response.headers.forEach((key, value) {
+        normalizedHeaders[key.toLowerCase()] = value;
+      });
+
+      // Security Headers Check (using normalized lowercase keys)
       final securityHeaders = {
         'Strict-Transport-Security':
-            response.headers['strict-transport-security'],
-        'Content-Security-Policy': response.headers['content-security-policy'],
-        'X-Frame-Options': response.headers['x-frame-options'],
-        'X-Content-Type-Options': response.headers['x-content-type-options'],
-        'Referrer-Policy': response.headers['referrer-policy'],
-        'Permissions-Policy': response.headers['permissions-policy'],
+            normalizedHeaders['strict-transport-security'],
+        'Content-Security-Policy': normalizedHeaders['content-security-policy'],
+        'X-Frame-Options': normalizedHeaders['x-frame-options'],
+        'X-Content-Type-Options': normalizedHeaders['x-content-type-options'],
+        'Referrer-Policy': normalizedHeaders['referrer-policy'],
+        'Permissions-Policy': normalizedHeaders['permissions-policy'],
       };
 
       // Cookies
@@ -1718,7 +1793,7 @@ Technical details: $e''';
       final result = {
         'statusCode': response.statusCode,
         'reasonPhrase': response.reasonPhrase,
-        'headers': response.headers,
+        'headers': normalizedHeaders,
         'isRedirect': response.isRedirect,
         'contentLength': contentLength,
         'finalUrl': url,
@@ -1730,7 +1805,7 @@ Technical details: $e''';
 
       // Extract redirect location if present
       if (response.isRedirect) {
-        final location = response.headers['location'];
+        final location = normalizedHeaders['location'];
         if (location != null && location.isNotEmpty) {
           // Resolve relative URLs
           final uri = Uri.parse(url);

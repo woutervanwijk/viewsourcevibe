@@ -55,6 +55,44 @@ void main() {
         expect(await detector.detectFileType(filename: 'file.xyz'), 'Text');
         expect(await detector.detectFileType(filename: 'file.unknown'), 'Text');
       });
+
+      test('Should detect media files by extension for URLs', () async {
+        expect(
+            await detector.detectFileType(
+                filename: 'https://example.com/image.png'),
+            'Image');
+        expect(
+            await detector.detectFileType(
+                filename: 'https://example.com/photo.jpg'),
+            'Image');
+        expect(
+            await detector.detectFileType(
+                filename: 'https://example.com/icon.ico'),
+            'Image');
+        expect(
+            await detector.detectFileType(
+                filename: 'https://example.com/graphic.svg'),
+            'XML');
+        expect(
+            await detector.detectFileType(
+                filename: 'https://example.com/video.mp4'),
+            'Video');
+        expect(
+            await detector.detectFileType(
+                filename: 'https://example.com/audio.mp3'),
+            'Audio');
+      });
+    });
+
+    group('MIME Type Detection', () {
+      test('Should prioritize Content-Type header', () async {
+        expect(
+            await detector.detectFileType(contentType: 'image/png'), 'Image');
+        expect(
+            await detector.detectFileType(
+                contentType: 'text/html; charset=utf-8'),
+            'HTML');
+      });
     });
 
     group('Content-Based Detection', () {
@@ -178,6 +216,21 @@ void main() {
             await htmlService.detectFileTypeAndGenerateFilename(
                 'script.js', content),
             'script.js');
+      });
+
+      test('Should use Content-Type to generate correct extensions', () async {
+        expect(
+            await htmlService.detectFileTypeAndGenerateFilename('image', '',
+                contentType: 'image/png'),
+            'image.png');
+        expect(
+            await htmlService.detectFileTypeAndGenerateFilename('photo', '',
+                contentType: 'image/jpeg'),
+            'photo.jpg');
+        expect(
+            await htmlService.detectFileTypeAndGenerateFilename('vector', '',
+                contentType: 'image/svg+xml'),
+            'vector.svg');
       });
 
       test('Should handle edge cases gracefully', () async {

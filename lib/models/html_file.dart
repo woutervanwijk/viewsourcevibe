@@ -110,4 +110,26 @@ class HtmlFile {
     };
     return mediaExtensions.contains(extension);
   }
+
+  HtmlFile copyWith({
+    String? name,
+    String? path,
+    String? content,
+    DateTime? lastModified,
+    int? size,
+    bool? isUrl,
+    Map<String, dynamic>? probeResult,
+    bool? isError,
+  }) {
+    return HtmlFile(
+      name: name ?? this.name,
+      path: path ?? this.path,
+      content: content ?? this.content,
+      lastModified: lastModified ?? this.lastModified,
+      size: size ?? this.size,
+      isUrl: isUrl ?? this.isUrl,
+      probeResult: probeResult ?? this.probeResult,
+      isError: isError ?? this.isError,
+    );
+  }
 }

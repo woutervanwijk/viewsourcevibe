@@ -102,7 +102,19 @@ class FileTypeDetector {
           'lua',
           'pl',
           'r',
-          'sh'
+          'sh',
+          'png',
+          'jpg',
+          'jpeg',
+          'gif',
+          'webp',
+          'avif',
+          'ico',
+          'svg',
+          'mp4',
+          'webm',
+          'mp3',
+          'wav'
         ];
 
         if (knownExtensions.contains(lastPart.toLowerCase())) {
@@ -818,8 +830,11 @@ class FileTypeDetector {
       'image/',
       'video/',
       'audio/',
+      'application/pdf',
+      'application/x-sh',
+      'application/x-shellscript',
     ];
-    return knownMimes.any((m) => mimeType.contains(m));
+    return knownMimes.any((m) => mimeType == m || mimeType.startsWith(m));
   }
 
   /// Clear detection cache

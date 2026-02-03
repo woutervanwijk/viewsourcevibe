@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
@@ -134,6 +135,19 @@ class MediaView extends StatelessWidget {
   Widget _buildImageItem(BuildContext context, Map<String, dynamic> image) {
     final src = image['src'] ?? '';
     final alt = image['alt'] ?? '';
+    final type = image['type'];
+    final isInline = type == 'base64' || src.startsWith('data:');
+
+    // Decode data URI if present
+    Uint8List? dataBytes;
+    if (isInline && src.startsWith('data:image/svg+xml;base64,')) {
+      try {
+        final base64String = src.split(',').last;
+        dataBytes = base64Decode(base64String);
+      } catch (e) {
+        debugPrint('Error decoding SVG data URI: $e');
+      }
+    }
 
     return Card(
       elevation: 0,
@@ -143,14 +157,18 @@ class MediaView extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: InkWell(
-        onTap: () {
-          final htmlService = Provider.of<HtmlService>(context, listen: false);
-          htmlService.loadFromUrl(src, switchToTab: 0);
-        },
+        // Disable tap for inline images as requested
+        onTap: isInline
+            ? null
+            : () {
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.loadFromUrl(src, switchToTab: 0);
+              },
         onLongPress: () {
           Clipboard.setData(ClipboardData(text: src));
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Image URL copied to clipboard')),
+            const SnackBar(content: Text('Image Source copied to clipboard')),
           );
         },
         child: Column(
@@ -159,35 +177,7 @@ class MediaView extends StatelessWidget {
             Expanded(
               child: CustomPaint(
                 painter: const CheckerboardPainter(),
-                child: src.toLowerCase().endsWith('.svg')
-                    ? SvgPicture.network(
-                        src,
-                        fit: BoxFit.contain,
-                        placeholderBuilder: (context) =>
-                            const Center(child: CircularProgressIndicator()),
-                      )
-                    : Image.network(
-                        src,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          child: const Icon(Icons.broken_image,
-                              color: Colors.grey),
-                        ),
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Center(
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
-                                  : null,
-                            ),
-                          );
-                        },
-                      ),
+                child: _buildImageContent(src, isInline, dataBytes),
               ),
             ),
             Padding(
@@ -203,5 +193,48 @@ class MediaView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildImageContent(String src, bool isInline, Uint8List? dataBytes) {
+    if (isInline && dataBytes != null) {
+      return SvgPicture.memory(
+        dataBytes,
+        fit: BoxFit.contain,
+        placeholderBuilder: (context) =>
+            const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // For inline SVGs that indicate base64 but failed to decode string
+    if (isInline) {
+      return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
+    }
+
+    return src.toLowerCase().endsWith('.svg')
+        ? SvgPicture.network(
+            src,
+            fit: BoxFit.contain,
+            placeholderBuilder: (context) =>
+                const Center(child: CircularProgressIndicator()),
+          )
+        : Image.network(
+            src,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: const Icon(Icons.broken_image, color: Colors.grey),
+            ),
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                      : null,
+                ),
+              );
+            },
+          );
   }
 }
