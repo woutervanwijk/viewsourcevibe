@@ -2596,8 +2596,7 @@ Technical details: $e''';
       {double fontSize = 16.0,
       String themeName = 'github',
       bool wrapText = false,
-      bool showLineNumbers = true,
-      ScrollController? customScrollController}) {
+      bool showLineNumbers = true}) {
     // Performance optimization: Use simplified highlighting for very large files
     final contentSize = content.length;
     bool useSimplifiedHighlighting = contentSize > 10 * 1024 * 1024;
@@ -2608,8 +2607,7 @@ Technical details: $e''';
         extension: extension,
         useSimplified: useSimplifiedHighlighting);
 
-    final editorKey =
-        '${controllerKey}_scroll:${customScrollController?.hashCode ?? 'none'}';
+    final editorKey = controllerKey;
 
     // check if we have the controller cached
     if (_cachedControllers.containsKey(controllerKey)) {
@@ -2618,16 +2616,8 @@ Technical details: $e''';
       // Get or create GlobalKey for this scroll context
       final globalKey = _cachedGlobalKeys[editorKey] ??= GlobalKey();
 
-      return _buildEditorWidget(
-          context,
-          controller,
-          globalKey,
-          extension,
-          themeName,
-          fontSize,
-          wrapText,
-          showLineNumbers,
-          customScrollController);
+      return _buildEditorWidget(context, controller, globalKey, extension,
+          themeName, fontSize, wrapText, showLineNumbers);
     }
 
     // Cache Miss: Perform setup (async)
@@ -2639,7 +2629,6 @@ Technical details: $e''';
         themeName,
         wrapText,
         showLineNumbers,
-        customScrollController,
         useSimplifiedHighlighting,
         controllerKey,
         editorKey);
@@ -2653,7 +2642,6 @@ Technical details: $e''';
     String themeName,
     bool wrapText,
     bool showLineNumbers,
-    ScrollController? customScrollController,
     bool useSimplifiedHighlighting,
     String controllerKey,
     String editorKey,
@@ -2682,7 +2670,7 @@ Technical details: $e''';
     if (!context.mounted) return const SizedBox.shrink();
 
     return _buildEditorWidget(context, controller, globalKey, extension,
-        themeName, fontSize, wrapText, showLineNumbers, customScrollController);
+        themeName, fontSize, wrapText, showLineNumbers);
   }
 
   Widget _buildEditorWidget(
@@ -2694,15 +2682,13 @@ Technical details: $e''';
     double fontSize,
     bool wrapText,
     bool showLineNumbers,
-    ScrollController? customScrollController,
   ) {
     // Determine language
     String languageName =
         getLanguageForExtension(extension); // Use existing helper method
 
     // Resolve Scroll Controller
-    final effectiveVerticalController =
-        customScrollController ?? PrimaryScrollController.of(context);
+    final effectiveVerticalController = PrimaryScrollController.of(context);
 
     _verticalScrollController = effectiveVerticalController;
 

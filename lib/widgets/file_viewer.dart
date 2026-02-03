@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
@@ -10,9 +12,8 @@ import 'package:view_source_vibe/utils/code_beautifier.dart';
 
 class FileViewer extends StatelessWidget {
   final HtmlFile file;
-  final ScrollController? scrollController;
 
-  const FileViewer({super.key, required this.file, this.scrollController});
+  const FileViewer({super.key, required this.file});
 
   void _showContentTypeMenu(BuildContext context) {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
@@ -206,13 +207,20 @@ class FileViewer extends StatelessWidget {
           builder: (context, htmlService, child) {
             if (htmlService.isSearchActive &&
                 htmlService.activeFindController != null) {
-              return Container(
-                color: Theme.of(context).cardColor,
-                child: CodeFindPanelView(
-                  controller: htmlService.activeFindController!,
-                  readOnly: false,
-                  margin: const EdgeInsets.symmetric(
-                      horizontal: 8.0, vertical: 6.0), // Match UrlInput margin
+              return GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  FocusScope.of(context).unfocus();
+                },
+                child: Container(
+                  color: Theme.of(context).cardColor,
+                  child: CodeFindPanelView(
+                    controller: htmlService.activeFindController!,
+                    readOnly: false,
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 6.0), // Match UrlInput margin
+                  ),
                 ),
               );
             }
@@ -412,37 +420,37 @@ class FileViewer extends StatelessWidget {
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
               // On iOS, tapping the status bar triggers a scroll to top.
-              // We detect this by checking for a scroll to 0 that isn't a manual drag.
+              // We detect this by checking for a scroll update with no drag details
+              // that reaches the top boundary.
               if (Theme.of(context).platform == TargetPlatform.iOS &&
-                  notification.metrics.axis == Axis.vertical &&
-                  notification.metrics.pixels <= 0 &&
                   notification is ScrollUpdateNotification &&
-                  notification.dragDetails == null) {
-                // Tapping status bar on iOS
+                  notification.dragDetails == null &&
+                  notification.metrics.pixels >= -50 &&
+                  notification.metrics.pixels <= 10) {
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
 
-                // 1. Scroll vertical to top
-                final vController =
-                    scrollController ?? PrimaryScrollController.of(context);
-                if (vController.hasClients && vController.offset > 0) {
+                // Target the PrimaryScrollController (associated with editor)
+                final vController = PrimaryScrollController.of(context);
+
+                if (vController.hasClients && vController.offset > 10) {
                   vController.animateTo(
                     0,
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOut,
                   );
-                }
 
-                // 2. Scroll horizontal to start
-                final hController = htmlService.horizontalScrollController;
-                if (hController != null &&
-                    hController.hasClients &&
-                    hController.offset > 0) {
-                  hController.animateTo(
-                    0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
+                  // Also scroll horizontal to start for better UX
+                  final hController = htmlService.horizontalScrollController;
+                  if (hController != null &&
+                      hController.hasClients &&
+                      hController.offset > 0) {
+                    hController.animateTo(
+                      0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                    );
+                  }
                 }
               }
               return false;
@@ -454,7 +462,15 @@ class FileViewer extends StatelessWidget {
                 }
 
                 if (htmlService.isWebViewMode) {
-                  return BrowserView(file: file);
+                  return BrowserView(
+                    file: file,
+                    gestureRecognizers: {
+                      Factory<VerticalDragGestureRecognizer>(
+                        () =>
+                            VerticalDragGestureRecognizer()..onUpdate = (_) {},
+                      ),
+                    },
+                  );
                 }
 
                 String displayContent = file.content;
@@ -475,8 +491,6 @@ class FileViewer extends StatelessWidget {
                   themeName: settings.themeName,
                   wrapText: settings.wrapText,
                   showLineNumbers: settings.showLineNumbers,
-                  customScrollController:
-                      scrollController ?? PrimaryScrollController.of(context),
                 );
 
                 // If cached, return immediately (no flicker)

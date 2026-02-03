@@ -21,9 +21,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  final ScrollController _scrollController = ScrollController();
   late TabController _tabController;
   bool _lastIsHtmlOrXml = false;
+  bool _lastShowMetadataTabs = false;
 
   @override
   void initState() {
@@ -48,7 +48,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
 
-    if (isHtmlOrXml == _lastIsHtmlOrXml && !force) return;
+    if (isHtmlOrXml == _lastIsHtmlOrXml &&
+        showMetadataTabs == _lastShowMetadataTabs &&
+        !force) {
+      return;
+    }
 
     final oldIndex = _tabController.index;
     final oldLength = _tabController.length;
@@ -70,13 +74,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
       _tabController.addListener(_handleTabSelection);
       _lastIsHtmlOrXml = isHtmlOrXml;
+      _lastShowMetadataTabs = showMetadataTabs;
     }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -107,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: currentFile != null
             ? FileViewer(
                 file: currentFile,
-                scrollController: _scrollController,
               )
             : const Center(child: Text('No File')),
       ),
@@ -144,7 +147,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     // Update TabController synchronously if content type changed
     // This MUST happen before building the TabBar to avoid length mismatch
-    if (htmlService.isHtmlOrXml != _lastIsHtmlOrXml) {
+    if (htmlService.isHtmlOrXml != _lastIsHtmlOrXml ||
+        htmlService.showMetadataTabs != _lastShowMetadataTabs) {
       _updateTabs(htmlService);
     }
 
@@ -197,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         centerTitle: false,
       ),
       body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
         onTap: () {
           FocusScope.of(context).unfocus();
         },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'dart:convert';
@@ -9,8 +10,13 @@ import 'package:view_source_vibe/widgets/media_browser_platform_proxy.dart'
 
 class BrowserView extends StatefulWidget {
   final HtmlFile file;
+  final Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers;
 
-  const BrowserView({super.key, required this.file});
+  const BrowserView({
+    super.key,
+    required this.file,
+    this.gestureRecognizers,
+  });
 
   @override
   State<BrowserView> createState() => _BrowserViewState();
@@ -89,6 +95,10 @@ class _BrowserViewState extends State<BrowserView> {
       );
     }
 
-    return WebViewWidget(controller: _controller!);
+    return WebViewWidget(
+      controller: _controller!,
+      gestureRecognizers: widget.gestureRecognizers ??
+          const <Factory<OneSequenceGestureRecognizer>>{},
+    );
   }
 }
