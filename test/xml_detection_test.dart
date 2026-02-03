@@ -155,7 +155,8 @@ void main() {
     });
 
     test('tryParseAsXml detects SOAP messages', () {
-      const soap = '''<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">
+      const soap =
+          '''<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">
   <soap:Body>
     <GetPrice>
       <Item>Apples</Item>
@@ -174,21 +175,6 @@ void main() {
 </definitions>''';
 
       expect(htmlService.tryParseAsXml(wsdl), true);
-    });
-
-    test('hasBalancedTags returns true for balanced tags', () {
-      const balanced = '<root><child></child></root>';
-      expect(htmlService.hasBalancedTags(balanced), true);
-    });
-
-    test('hasBalancedTags returns false for unbalanced tags', () {
-      const unbalanced = '<root><child></root>';
-      expect(htmlService.hasBalancedTags(unbalanced), false);
-    });
-
-    test('hasBalancedTags handles self-closing tags', () {
-      const selfClosing = '<root><item/><item/></root>';
-      expect(htmlService.hasBalancedTags(selfClosing), true);
     });
   });
 
@@ -211,7 +197,8 @@ void main() {
     });
 
     test('Plain text without XML structure gets text extension', () {
-      const textContent = '''Some text that looks like it might be XML but isn't:
+      const textContent =
+          '''Some text that looks like it might be XML but isn't:
 <this is not a real tag because it's not properly formatted
 and doesn't have proper closing>''';
 

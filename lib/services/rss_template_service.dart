@@ -13,6 +13,9 @@ class RssTemplateService {
     final name = filename.toLowerCase();
     final trimmedContent = content.trimLeft();
 
+    // Fast fail for empty content
+    if (trimmedContent.isEmpty) return false;
+
     // Fast fail for SVGs (extension or content)
     if (name.endsWith('.svg') ||
         trimmedContent.startsWith('<svg') ||
@@ -23,7 +26,8 @@ class RssTemplateService {
     // Also fast fail for HTML files that might be misidentified as XML
     if (name.endsWith('.html') ||
         name.endsWith('.htm') ||
-        trimmedContent.startsWith('<!DOCTYPE html')) {
+        trimmedContent.startsWith('<!DOCTYPE html') ||
+        trimmedContent.startsWith('<html')) {
       return false;
     }
 
@@ -32,14 +36,22 @@ class RssTemplateService {
       return true;
     }
 
-    // Fallback for .xml or no extension: Check content for feed signatures
-    if (name.endsWith('.xml') ||
-        trimmedContent.startsWith('<?xml') ||
-        trimmedContent.startsWith('<')) {
-      return trimmedContent.contains('<rss') ||
-          trimmedContent.contains('<feed') ||
-          trimmedContent.contains('<rdf:RDF') ||
-          trimmedContent.contains('http://purl.org/rss/1.0/');
+    // Robust check for feed signatures
+    if (trimmedContent.contains('<rss') ||
+        trimmedContent.contains('<feed') ||
+        trimmedContent.contains('<rdf:RDF') ||
+        trimmedContent.contains('http://purl.org/rss/1.0/')) {
+      // For ambiguous cases, try to parse as XML to be sure
+      try {
+        final doc = XmlDocument.parse(trimmedContent);
+        return doc.findElements('rss').isNotEmpty ||
+            doc.findAllElements('channel').isNotEmpty ||
+            doc.findElements('feed').isNotEmpty ||
+            doc.findElements('rdf:RDF').isNotEmpty;
+      } catch (e) {
+        // If it looks like a feed but doesn't parse as XML, it might be malformed but we still try
+        return true;
+      }
     }
 
     return false;

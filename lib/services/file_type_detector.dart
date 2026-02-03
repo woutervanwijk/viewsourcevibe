@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 import 'package:mime_type/mime_type.dart';
+import 'package:html/parser.dart' as html_parser;
+import 'package:xml/xml.dart' as xml;
 
 // Extension method for comparing lists
 extension ListEquals on List<int> {
@@ -404,17 +406,61 @@ class FileTypeDetector {
     final lowerContent = content.toLowerCase();
     final scores = <String, int>{};
 
-    // HTML detection - be specific to avoid false positives with XML/RSS
-    // Only detect as HTML if we have clear HTML indicators and no XML indicators
-    bool hasHtmlIndicators =
-        lowerContent.contains('<html') || lowerContent.contains('<!doctype');
-    bool hasXmlIndicators = lowerContent.contains('<rss ') ||
-        lowerContent.contains('<feed ') ||
-        lowerContent.contains('<?xml') ||
+    // XML/RSS/Atom Detection using proper parsing
+    final isXmlCandidate = lowerContent.startsWith('<?xml') ||
+        lowerContent.contains('<rss') ||
+        lowerContent.contains('<feed') ||
+        lowerContent.contains('<svg') ||
         lowerContent.contains('xmlns=');
 
-    if (hasHtmlIndicators && !hasXmlIndicators) {
-      scores['HTML'] = 20;
+    if (isXmlCandidate) {
+      try {
+        final doc = xml.XmlDocument.parse(content);
+        if (doc.findElements('rss').isNotEmpty ||
+            doc.findAllElements('channel').isNotEmpty ||
+            doc.findElements('feed').isNotEmpty ||
+            doc.findElements('rdf:RDF').isNotEmpty) {
+          scores['XML'] = 30; // High confidence for RSS/Atom/XML
+        } else if (doc.findElements('svg').isNotEmpty) {
+          scores['XML'] = 25; // High confidence for SVG
+        } else if (doc.children.any((node) => node is xml.XmlElement)) {
+          scores['XML'] = 20; // General XML
+        }
+      } catch (e) {
+        // XML parse failed, don't score as XML here
+      }
+    }
+
+    // HTML detection using robust DOM parsing
+    final isHtmlCandidate = lowerContent.contains('<html') ||
+        lowerContent.contains('<!doctype') ||
+        lowerContent.contains('<body') ||
+        lowerContent.contains('<head') ||
+        lowerContent.contains('<script') ||
+        lowerContent.contains('<meta') ||
+        lowerContent.contains('<link') ||
+        lowerContent.contains('<div') ||
+        lowerContent.contains('<p>');
+
+    if (isHtmlCandidate && !scores.containsKey('XML')) {
+      try {
+        final doc = html_parser.parse(content);
+        // Look for structural elements that strongly indicate HTML
+        bool hasHtml = doc.querySelector('html') != null;
+        bool hasBody = doc.querySelector('body') != null;
+        bool hasHead = doc.querySelector('head') != null;
+        int metaCount = doc.querySelectorAll('meta').length;
+        int scriptCount = doc.querySelectorAll('script').length;
+        int linkCount = doc.querySelectorAll('link').length;
+
+        if (hasHtml || (hasBody && hasHead)) {
+          scores['HTML'] = 25;
+        } else if (metaCount > 0 || scriptCount > 0 || linkCount > 0) {
+          scores['HTML'] = 15 + (metaCount + scriptCount + linkCount);
+        }
+      } catch (e) {
+        // Fallback to simple scoring
+      }
     }
 
     // CSS detection - more specific patterns
@@ -489,32 +535,6 @@ class FileTypeDetector {
         lowerContent.contains('* ') ||
         lowerContent.contains('1. ')) {
       scores['Markdown'] = 12;
-    }
-
-    // XML detection - prioritize XML detection and make it more comprehensive
-    // Check for XML declarations, self-closing tags, and specific XML formats like RSS/Atom
-    bool isXml = lowerContent.startsWith('<?xml') ||
-        lowerContent.contains('<xml ') ||
-        lowerContent.contains('<rss ') ||
-        lowerContent.contains('<feed ') || // Atom feeds
-        lowerContent.contains('<channel ') ||
-        lowerContent.contains('<item ') ||
-        lowerContent.contains('xmlns=') ||
-        (lowerContent.contains('<') &&
-            lowerContent.contains('>') &&
-            lowerContent.contains('/>'));
-
-    // Give higher score to XML if we find strong XML indicators
-    if (isXml) {
-      // Even higher score for clear XML formats
-      if (lowerContent.contains('<rss ') ||
-          lowerContent.contains('<feed ') ||
-          lowerContent.contains('<?xml') ||
-          lowerContent.contains('xmlns=')) {
-        scores['XML'] = 25; // High confidence for clear XML
-      } else {
-        scores['XML'] = 20; // Still high confidence for general XML
-      }
     }
 
     // Python detection
@@ -626,6 +646,22 @@ class FileTypeDetector {
   /// Simple content detection as fallback
   String _simpleContentDetection(String content) {
     final lowerContent = content.toLowerCase();
+
+    // Try robust parsing first even in simple detection
+    try {
+      final xmlDoc = xml.XmlDocument.parse(content);
+      if (xmlDoc.children.any((node) => node is xml.XmlElement)) {
+        return 'XML';
+      }
+    } catch (_) {}
+
+    try {
+      final htmlDoc = html_parser.parse(content);
+      if (htmlDoc.querySelector('html') != null ||
+          htmlDoc.querySelector('body') != null) {
+        return 'HTML';
+      }
+    } catch (_) {}
 
     if (lowerContent.contains('<html') ||
         lowerContent.contains('<!doctype html')) {

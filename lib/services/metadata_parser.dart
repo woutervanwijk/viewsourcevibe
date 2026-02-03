@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
+import 'package:html/parser.dart' as html_parser;
+import 'package:html/dom.dart' as dom;
+import 'package:xml/xml.dart' as xml;
 
 /// Extract metadata from the file content
 Future<Map<String, dynamic>> extractMetadataInIsolate(
@@ -35,55 +38,84 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     'article': <String, String>{},
   };
 
-  // Extract Language from <html> tag
-  final htmlTagMatch =
-      RegExp(r'<html([^>]*?)>', caseSensitive: false).firstMatch(html);
-  if (htmlTagMatch != null) {
-    final attrs = _parseAttributes(htmlTagMatch.group(1) ?? '');
-    metadata['language'] = attrs['lang'];
+  // Determine if we should use HTML or XML parser
+  // Simple heuristic: if it looks like SVG or specific XML, use XML parser
+  final lowerHtml = html.trimLeft().toLowerCase();
+  final isXml = lowerHtml.startsWith('<?xml') || lowerHtml.startsWith('<svg');
+
+  if (isXml) {
+    try {
+      final doc = xml.XmlDocument.parse(html);
+      _extractFromXml(doc, metadata, baseUrl);
+    } catch (e) {
+      debugPrint(
+          'MetadataParser: XML parsing failed, falling back to HTML: $e');
+      final doc = html_parser.parse(html);
+      _extractFromHtml(doc, metadata, baseUrl);
+    }
+  } else {
+    final doc = html_parser.parse(html);
+    _extractFromHtml(doc, metadata, baseUrl);
   }
 
-  // Extract Charset
-  final charsetMatch = RegExp(
-          r'''<meta[^>]*\s+charset=(?:"([^"]*)"|'([^']*)'|([^\s>]+))''',
-          caseSensitive: false)
-      .firstMatch(html);
-  if (charsetMatch != null) {
-    metadata['charset'] =
-        charsetMatch.group(1) ?? charsetMatch.group(2) ?? charsetMatch.group(3);
+  // Refine Image/Favicon from OG/Meta
+  metadata['image'] =
+      metadata['openGraph']['og:image'] ?? metadata['twitter']['twitter:image'];
+  metadata['favicon'] = metadata['icons']['apple-touch-icon'] ??
+      metadata['icons']['icon'] ??
+      metadata['icons']['shortcut icon'];
+
+  // Detect CMS and Frameworks (regex on full HTML still useful for quick checks)
+  _detectTechnologies(html, metadata);
+
+  // Detect Services (Trackers, Fonts, etc.)
+  _detectServices(html, metadata);
+
+  // Extract info from JSON-LD
+  _extractJsonLdInfo(html, metadata);
+
+  return metadata;
+}
+
+void _extractFromHtml(
+    dom.Document doc, Map<String, dynamic> metadata, String baseUrl) {
+  // Language from <html>
+  final htmlTag = doc.querySelector('html');
+  if (htmlTag != null) {
+    metadata['language'] = htmlTag.attributes['lang'];
+  }
+
+  // Charset from <meta charset> or <meta http-equiv>
+  final metaCharset = doc.querySelector('meta[charset]');
+  if (metaCharset != null) {
+    metadata['charset'] = metaCharset.attributes['charset'];
   } else {
-    // Fallback to http-equiv
-    final httpEquivMatch = RegExp(
-            r'''<meta[^>]*http-equiv=["']Content-Type["'][^>]*content=["'](.*?charset=(.*?))["']''',
-            caseSensitive: false)
-        .firstMatch(html);
-    if (httpEquivMatch != null) {
-      metadata['charset'] = httpEquivMatch.group(2);
+    final httpEquiv = doc.querySelector('meta[http-equiv="Content-Type"]');
+    if (httpEquiv != null) {
+      final content = httpEquiv.attributes['content'];
+      if (content != null && content.contains('charset=')) {
+        metadata['charset'] = content.split('charset=').last.trim();
+      }
     }
   }
 
-  // Extract Title
-  final titleMatch =
-      RegExp(r'<title[^>]*>(.*?)</title>', dotAll: true, caseSensitive: false)
-          .firstMatch(html);
-  if (titleMatch != null) metadata['title'] = titleMatch.group(1)?.trim();
+  // Title
+  final title = doc.querySelector('title');
+  if (title != null) {
+    metadata['title'] = title.text.trim();
+  }
 
-  // Extract Meta Tags
-  final metaTags =
-      RegExp(r'<meta\s+([^>]*?)>', caseSensitive: false).allMatches(html);
-  for (final match in metaTags) {
-    final attrStr = match.group(1) ?? '';
-    final attrs = _parseAttributes(attrStr);
-
-    final name = attrs['name']?.toLowerCase() ??
-        attrs['property']?.toLowerCase() ??
-        attrs['itemprop']?.toLowerCase();
-    final content = attrs['content'];
+  // Meta Tags
+  final metas = doc.querySelectorAll('meta');
+  for (final meta in metas) {
+    final name = meta.attributes['name']?.toLowerCase() ??
+        meta.attributes['property']?.toLowerCase() ??
+        meta.attributes['itemprop']?.toLowerCase();
+    final content = meta.attributes['content'];
 
     if (name != null && content != null) {
       if (name.startsWith('og:')) {
         metadata['openGraph'][name] = content;
-        // Also check if it's article info
         if (name == 'og:article:author' || name == 'article:author') {
           metadata['article']['Author'] = content;
         } else if (name == 'og:article:published_time' ||
@@ -104,16 +136,20 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
         metadata['article']['Author'] = content;
       } else if (name == 'keywords') {
         metadata['article']['Keywords'] = content;
-      } else if (name == 'publish-date' ||
-          name == 'pubdate' ||
-          name == 'date' ||
-          name == 'datepublished' ||
-          name == 'dc.date.issued') {
+      } else if ([
+        'publish-date',
+        'pubdate',
+        'date',
+        'datepublished',
+        'dc.date.issued'
+      ].contains(name)) {
         metadata['article']['Published'] = content;
-      } else if (name == 'datemodified' ||
-          name == 'revised' ||
-          name == 'last-modified' ||
-          name == 'dc.date.modified') {
+      } else if ([
+        'datemodified',
+        'revised',
+        'last-modified',
+        'dc.date.modified'
+      ].contains(name)) {
         metadata['article']['Modified'] = content;
       } else if (name == 'viewport' ||
           name == 'theme-color' ||
@@ -125,16 +161,12 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     }
   }
 
-  // Extract Link Tags (CSS, RSS, Favicon)
-  final linkTags =
-      RegExp(r'<link\s+([^>]*?)>', caseSensitive: false).allMatches(html);
-  for (final match in linkTags) {
-    final attrStr = match.group(1) ?? '';
-    final attrs = _parseAttributes(attrStr);
-
-    final rel = attrs['rel']?.toLowerCase();
-    final href = attrs['href'];
-    final type = attrs['type']?.toLowerCase();
+  // Link Tags (CSS, RSS, Favicon)
+  final links = doc.querySelectorAll('link');
+  for (final link in links) {
+    final rel = link.attributes['rel']?.toLowerCase();
+    final href = link.attributes['href'];
+    final type = link.attributes['type']?.toLowerCase();
 
     if (href != null) {
       final absoluteHref = _resolveUrl(href, baseUrl);
@@ -153,10 +185,8 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
         metadata['pageConfig'][rel!] = absoluteHref;
       } else if (rel == 'search' && type?.contains('opensearch') == true) {
         metadata['pageConfig']['opensearch'] = absoluteHref;
-      } else if (rel == 'preload' ||
-          rel == 'prefetch' ||
-          rel == 'preconnect' ||
-          rel == 'dns-prefetch') {
+      } else if (['preload', 'prefetch', 'preconnect', 'dns-prefetch']
+          .contains(rel)) {
         metadata['resourceHints']
             .putIfAbsent(rel!, () => <String>[])
             .add(absoluteHref);
@@ -164,12 +194,10 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     }
   }
 
-  // Extract Script Tags
-  final scriptTags =
-      RegExp(r'''<script\s+[^>]*src=["'](.*?)["']''', caseSensitive: false)
-          .allMatches(html);
-  for (final match in scriptTags) {
-    final src = match.group(1);
+  // Scripts
+  final scripts = doc.querySelectorAll('script[src]');
+  for (final script in scripts) {
+    final src = script.attributes['src'];
     if (src != null && src.isNotEmpty) {
       final absoluteSrc = _resolveUrl(src, baseUrl);
       if (_isLocalResource(absoluteSrc, baseUrl)) {
@@ -180,20 +208,16 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     }
   }
 
-  // Extract Iframe Tags
-  final iframeTags =
-      RegExp(r'<iframe\s+([^>]*?)>', caseSensitive: false).allMatches(html);
-  for (final match in iframeTags) {
-    final attrStr = match.group(1) ?? '';
-    final attrs = _parseAttributes(attrStr);
-    final src = attrs['src'];
+  // Iframes
+  final iframes = doc.querySelectorAll('iframe');
+  for (final iframe in iframes) {
+    final src = iframe.attributes['src'];
     if (src != null) {
       final absoluteSrc = _resolveUrl(src, baseUrl);
       if (_isLocalResource(absoluteSrc, baseUrl)) {
         metadata['iframeLinks'].add(absoluteSrc);
       } else {
         metadata['externalIframeLinks'].add(absoluteSrc);
-        // Check for video services
         final lowerSrc = absoluteSrc.toLowerCase();
         if (lowerSrc.contains('youtube.com/embed') ||
             lowerSrc.contains('player.vimeo.com/video')) {
@@ -207,194 +231,135 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     }
   }
 
-  // Extract Images
-  final imgTags =
-      RegExp(r'<img\s+([^>]*?)>', caseSensitive: false).allMatches(html);
-  for (final match in imgTags) {
-    final attrStr = match.group(1) ?? '';
-    final attrs = _parseAttributes(attrStr);
+  // Images
+  final imgs = doc.querySelectorAll('img');
+  for (final img in imgs) {
+    final attrs = img.attributes;
 
-    // Prioritize data-src > data-srcset > src > srcset
-    String? finalSrc = attrs['data-src'];
+    // Comprehensive list of lazy-loading and source attributes
+    final candidates = [
+      attrs['data-src'],
+      attrs['data-lazy-src'],
+      attrs['data-original'],
+      attrs['data-fallback-src'],
+      attrs['src'],
+    ];
+
+    String? finalSrc;
+    for (final candidate in candidates) {
+      if (candidate != null &&
+          candidate.isNotEmpty &&
+          !candidate.startsWith('data:image')) {
+        finalSrc = candidate;
+        break;
+      }
+    }
+
+    // Fallback if only data URI or nothing found
+    finalSrc ??= attrs['src'];
+
+    // Handle srcset
     String? srcset = attrs['data-srcset'] ?? attrs['srcset'];
-    final originalSrc = attrs['src'];
-
-    // Robust Fallback: If data-src was not found by attribute parser, try explicit regex
-    // This helps when adjacent attributes (like src) have complex values that might confuse the parser
-    if (finalSrc == null && attrStr.contains('data-src')) {
-      final dataSrcMatch = RegExp(r'data-src="([^"]*)"', caseSensitive: false)
-          .firstMatch(attrStr);
-      if (dataSrcMatch != null) {
-        finalSrc = dataSrcMatch.group(1);
-        debugPrint('Recovered data-src via fallback regex: $finalSrc');
-      }
-    }
-
-    // Robust Fallback for data-srcset
-    if (srcset == null && attrStr.contains('data-srcset')) {
-      final dataSrcsetMatch =
-          RegExp(r'data-srcset="([^"]*)"', caseSensitive: false)
-              .firstMatch(attrStr);
-      if (dataSrcsetMatch != null) {
-        srcset = dataSrcsetMatch.group(1);
-      }
-    }
-
-    // Try to extract from srcset if no direct data-src
-    if ((finalSrc == null || finalSrc.isEmpty) && srcset != null) {
-      // Simple srcset parsing: take the last URL (often highest res)
-      // Format: url width/density, url width/density
+    if ((finalSrc == null ||
+            finalSrc.isEmpty ||
+            finalSrc.startsWith('data:')) &&
+        srcset != null) {
       try {
-        final candidates = srcset.split(',');
-        if (candidates.isNotEmpty) {
-          final lastCandidate = candidates.last.trim();
-          final urlPart = lastCandidate.split(' ').first;
-          if (urlPart.isNotEmpty) {
-            finalSrc = urlPart;
-          }
+        final candidateUrls = srcset
+            .split(',')
+            .map((s) => s.trim().split(' ').first)
+            .where((s) => s.isNotEmpty);
+        if (candidateUrls.isNotEmpty) {
+          finalSrc = candidateUrls.last; // Typically highest res
         }
       } catch (e) {
         debugPrint('Error parsing srcset: $e');
       }
     }
 
-    // Fallback to src
-    if (finalSrc == null || finalSrc.isEmpty) {
-      finalSrc = originalSrc;
-    }
-
     if (finalSrc != null && finalSrc.isNotEmpty) {
-      // If we have a data URI src, check if it's a placeholder we should ignore
-      if (finalSrc == originalSrc && finalSrc.startsWith('data:')) {
-        // If we have extracted a better source (not possible if we are here), or if this IS the only source.
-        // Wait, the logic above sets finalSrc = originalSrc if finalSrc was null.
-        // So if we are here, finalSrc IS the data URI.
-
-        // We should process it as inline image as before
-        if (finalSrc.startsWith('data:image/svg+xml')) {
-          metadata['media']['images'].add({
-            'src': finalSrc,
-            'alt': attrs['alt'] ?? 'Inline SVG',
-            'title': attrs['title'] ?? '',
-            'type': 'base64',
-          });
-        }
-        // Note: We might want to skip other data URIs if they are tiny 1x1 placeholders,
-        // but for now we only explicitly handle SVG data URIs as requested in previous task.
-        // The user said "Ignore placeholder data URIs if a real source is available".
-        // Since we didn't find a better source (finalSrc == originalSrc), we keep it.
-      } else {
-        // It's a real URL (from data-src/srcset or a regular src)
-        // OR a data URI that we decided to keep
-
-        // Actually, re-reading the logic:
-        // if finalSrc was gathered from data-src/srcset, it's likely a real URL.
-        // if finalSrc came from originalSrc, it could be a placeholder data URI.
-
-        // Optimized logic:
-        // 1. Did we find a lazy loaded source?
-        bool foundLazySource =
-            (attrs['data-src'] != null && attrs['data-src']!.isNotEmpty) ||
-                (srcset != null && srcset.isNotEmpty);
-
-        // If we process based on foundLazySource:
-        // If we found a lazy source, we use it (finalSrc is already set to it or derived from it).
-        // WE IGNORE validSrc (which is originalSrc) if it is a data URI placeholder.
-
-        if (!finalSrc.startsWith('data:') || !foundLazySource) {
-          final absoluteSrc = _resolveUrl(finalSrc, baseUrl);
-          metadata['media']['images'].add({
-            'src': absoluteSrc,
-            'alt': attrs['alt'] ?? '',
-            'title': attrs['title'] ?? '',
-          });
-        }
-      }
-    }
-  }
-
-  // Extract Inline SVG Tags
-  // We look for <svg> tags and convert them to data URIs for consistent handling
-  final svgTags =
-      RegExp(r'<svg\s+([^>]*?)>([\s\S]*?)</svg>', caseSensitive: false)
-          .allMatches(html);
-  for (final match in svgTags) {
-    final fullSvg = match.group(0); // The full <svg ...>...</svg> string
-    if (fullSvg != null) {
-      // Create a data URI from the SVG content
-      // We need to encode the SVG content to base64
-      try {
-        final encoded = base64Encode(utf8.encode(fullSvg));
-        final dataUri = 'data:image/svg+xml;base64,$encoded';
-
+      if (finalSrc.startsWith('data:image/svg+xml')) {
         metadata['media']['images'].add({
-          'src': dataUri,
-          'alt': 'Inline SVG Code',
-          'title': 'Extracted from <svg> tag',
+          'src': finalSrc,
+          'alt': attrs['alt'] ?? 'Inline SVG',
+          'title': attrs['title'] ?? '',
           'type': 'base64',
         });
-      } catch (e) {
-        debugPrint('Error encoding inline SVG: $e');
+      } else if (!finalSrc.startsWith('data:') ||
+          (attrs['src'] == finalSrc && !attrs.containsKey('data-src'))) {
+        final absoluteSrc = _resolveUrl(finalSrc, baseUrl);
+        metadata['media']['images'].add({
+          'src': absoluteSrc,
+          'alt': attrs['alt'] ?? '',
+          'title': attrs['title'] ?? '',
+        });
       }
     }
   }
 
-  // Extract Videos
-  final videoTags =
-      RegExp(r'<video\s+([^>]*?)>', caseSensitive: false).allMatches(html);
-  for (final match in videoTags) {
-    final attrStr = match.group(1) ?? '';
-    final attrs = _parseAttributes(attrStr);
-    final src = attrs['src'];
+  // Inline SVGs
+  final svgs = doc.querySelectorAll('svg');
+  for (final svg in svgs) {
+    try {
+      final fullSvg = svg.outerHtml;
+      final encoded = base64Encode(utf8.encode(fullSvg));
+      metadata['media']['images'].add({
+        'src': 'data:image/svg+xml;base64,$encoded',
+        'alt': 'Inline SVG Code',
+        'title': 'Extracted from <svg> tag',
+        'type': 'base64',
+      });
+    } catch (e) {
+      debugPrint('Error encoding inline SVG: $e');
+    }
+  }
 
+  // Videos
+  final videos = doc.querySelectorAll('video');
+  for (final video in videos) {
+    final src = video.attributes['src'];
     if (src != null && src.isNotEmpty) {
-      final absoluteSrc = _resolveUrl(src, baseUrl);
       metadata['media']['videos'].add({
-        'src': absoluteSrc,
+        'src': _resolveUrl(src, baseUrl),
         'type': 'video-tag',
       });
     }
-
-    // Check for <source> inside <video> (simplified check)
-    // We search for matches within the range of this video tag's likely inner content
-    // But since we are using regex on the whole HTML, we'll just look for all <source> tags
-    // and try to correlate them or just list them all.
-    // For simplicity, we'll do a separate pass for all <source> tags.
   }
 
-  final sourceTags =
-      RegExp(r'<source\s+([^>]*?)>', caseSensitive: false).allMatches(html);
-  for (final match in sourceTags) {
-    final attrStr = match.group(1) ?? '';
-    final attrs = _parseAttributes(attrStr);
-    final src = attrs['src'];
+  final sources = doc.querySelectorAll('source');
+  for (final source in sources) {
+    final src = source.attributes['src'];
     if (src != null && src.isNotEmpty) {
-      final absoluteSrc = _resolveUrl(src, baseUrl);
       metadata['media']['videos'].add({
-        'src': absoluteSrc,
+        'src': _resolveUrl(src, baseUrl),
         'type': 'source-tag',
-        'mimeType': attrs['type'] ?? '',
+        'mimeType': source.attributes['type'] ?? '',
       });
     }
   }
+}
 
-  // Refine Image/Favicon from OG/Meta
-  metadata['image'] =
-      metadata['openGraph']['og:image'] ?? metadata['twitter']['twitter:image'];
-  metadata['favicon'] = metadata['icons']['apple-touch-icon'] ??
-      metadata['icons']['icon'] ??
-      metadata['icons']['shortcut icon'];
+void _extractFromXml(
+    xml.XmlDocument doc, Map<String, dynamic> metadata, String baseUrl) {
+  // Very basic XML extraction for now, mainly for SVGs being viewed as XML
+  final svg = doc.findAllElements('svg').firstOrNull;
+  if (svg != null) {
+    try {
+      final fullSvg = svg.toXmlString();
+      final encoded = base64Encode(utf8.encode(fullSvg));
+      metadata['media']['images'].add({
+        'src': 'data:image/svg+xml;base64,$encoded',
+        'alt': 'XML SVG Content',
+        'title': 'Extracted from XML root',
+        'type': 'base64',
+      });
+    } catch (e) {
+      debugPrint('Error encoding XML SVG: $e');
+    }
+  }
 
-  // Detect CMS and Frameworks
-  _detectTechnologies(html, metadata);
-
-  // Detect Services (Trackers, Fonts, etc.)
-  _detectServices(html, metadata);
-
-  // Extract info from JSON-LD
-  _extractJsonLdInfo(html, metadata);
-
-  return metadata;
+  // RSS/Atom specific extraction could be added here if needed,
+  // but they are usually handled by the BrowserView's RSS rendering logic.
 }
 
 /// Extract info from JSON-LD script tags
@@ -410,9 +375,6 @@ void _extractJsonLdInfo(String html, Map<String, dynamic> metadata) {
       if (jsonStr.isEmpty) continue;
 
       // Basic regex-based extraction to avoid full JSON parsing issues in simple regex parser
-      // and to be more resilient to malformed JSON sometimes found in the wild.
-
-      // Look for "author": "Name" or "author": {"name": "Name"}
       final authorMatch = RegExp(
               r'"author"\s*:\s*(?:{\s*"name"\s*:\s*"([^"]+)"|"[^"]+")',
               caseSensitive: false)
@@ -462,7 +424,6 @@ void _extractJsonLdInfo(String html, Map<String, dynamic> metadata) {
 void _detectTechnologies(String html, Map<String, dynamic> metadata) {
   final Map<String, String> tech = {};
 
-  // 1. Check Meta Generator
   final generator = metadata['otherMeta']['generator']?.toLowerCase() ?? '';
   if (generator.contains('wordpress')) {
     tech['CMS'] = 'WordPress';
@@ -480,7 +441,6 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['CMS'] = 'Wix';
   }
 
-  // 2. Check File Paths and Specific Tags
   if (tech['CMS'] == null) {
     if (html.contains('wp-content') || html.contains('wp-includes')) {
       tech['CMS'] = 'WordPress';
@@ -494,7 +454,6 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     }
   }
 
-  // 3. Detect Frontend Frameworks
   if (_hasPattern(html, r'''_next/static|__NEXT_DATA__''')) {
     tech['Framework'] = 'Next.js';
   } else if (_hasPattern(html, r'''__NUXT__''')) {
@@ -507,14 +466,12 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['Framework'] = 'Angular';
   }
 
-  // 4. Detect CSS Frameworks
   if (_hasPattern(html,
       r'''bootstrap(?:\.min)?\.css|class=["'][^"']*?\b(?:col-|btn-|navbar-)''')) {
     tech['CSS Framework'] = 'Bootstrap';
   }
   if (_hasPattern(html,
       r'''tailwind(?:\.min)?\.css|class=["'][^"']*?\b(?:text-|bg-|p-|m-|flex-|grid-)''')) {
-    // More specific tailwind check to avoid false positives with generic utilities
     if (_hasPattern(html, r'''\b(?:sm:|md:|lg:|xl:|2xl:)[a-z]''')) {
       tech['CSS Framework'] = 'Tailwind CSS';
     }
@@ -634,9 +591,7 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
     });
   });
 
-  // Remove empty categories
   services.removeWhere((key, value) => value.isEmpty);
-
   metadata['detectedServices'] = services;
 }
 
@@ -644,43 +599,19 @@ bool _hasPattern(String text, String pattern) {
   return RegExp(pattern, caseSensitive: false).hasMatch(text);
 }
 
-Map<String, String> _parseAttributes(String attrStr) {
-  final Map<String, String> attrs = {};
-  // Regex to match attributes like name="value", property='value', or unquoted rel=stylesheet
-  final regExp = RegExp(
-      r'([a-zA-Z0-9:-]+)\s*=\s*(?:"([^"]*)"|' "'" r"([^']*)" r'|([^\s>]+))',
-      caseSensitive: false);
-
-  for (final match in regExp.allMatches(attrStr)) {
-    final name = match.group(1)!;
-    final value = match.group(2) ?? match.group(3) ?? match.group(4);
-    if (value != null) {
-      attrs[name.toLowerCase()] = value;
-    }
-  }
-  return attrs;
-}
-
 bool _isLocalResource(String url, String baseUrl) {
   if (url.isEmpty || baseUrl.isEmpty) return true;
   try {
     final uri = Uri.parse(url);
     final base = Uri.parse(baseUrl);
-
-    // If it's a relative URL or has no host, it's local
     if (!uri.hasAuthority || uri.host.isEmpty) return true;
-
     final resourceHost = uri.host.toLowerCase();
     final baseHost = base.host.toLowerCase();
-
     if (resourceHost == baseHost) return true;
-
-    // Check if it's a subdomain
     if (resourceHost.endsWith('.$baseHost')) return true;
-
     return false;
   } catch (e) {
-    return true; // Assume local on parse error
+    return true;
   }
 }
 

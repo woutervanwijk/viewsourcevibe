@@ -28,6 +28,7 @@ import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
 import 'package:webview_flutter/webview_flutter.dart' as wf;
+import 'package:xml/xml.dart' as xml;
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -999,88 +1000,14 @@ class HtmlService with ChangeNotifier {
   /// Try to parse content as XML
   /// Returns true if content appears to be valid XML
   bool tryParseAsXml(String content) {
+    if (content.trim().isEmpty) return false;
     try {
-      // Quick checks for XML-like content
-      final trimmedContent = content.trim();
-
-      // Must start with XML-like content
-      if (!trimmedContent.startsWith('<') || !trimmedContent.contains('>')) {
-        return false;
-      }
-
-      // Check for common XML patterns
-      final lowerContent = trimmedContent.toLowerCase();
-
-      // Common XML declarations and tags
-      bool hasXmlDeclaration = lowerContent.startsWith('<?xml');
-      bool hasXmlns = lowerContent.contains('xmlns=');
-      bool hasXmlTags =
-          lowerContent.contains('<') && lowerContent.contains('>');
-      bool hasSelfClosingTags = lowerContent.contains('/>');
-      bool hasXmlComments =
-          lowerContent.contains('<!--') && lowerContent.contains('-->');
-
-      // Common XML document structures
-      bool hasRootElement = hasBalancedTags(trimmedContent);
-
-      // If it has XML declaration or namespace, it's definitely XML
-      if (hasXmlDeclaration || hasXmlns) {
-        return true;
-      }
-
-      // If it has balanced tags and XML-like structure, likely XML
-      if (hasXmlTags &&
-          hasRootElement &&
-          (hasSelfClosingTags || hasXmlComments)) {
-        return true;
-      }
-
-      // Check for common XML document types
-      if (lowerContent.contains('<rss ') || lowerContent.contains('<feed ')) {
-        return true; // RSS/Atom feeds
-      }
-      if (lowerContent.contains('<svg ') || lowerContent.contains('<svg>')) {
-        return true; // SVG
-      }
-      if (lowerContent.contains('<soap:envelope') ||
-          lowerContent.contains('<soapenv:envelope')) {
-        return true; // SOAP
-      }
-      if (lowerContent.contains('<wsdl:definitions') ||
-          lowerContent.contains('<definitions ')) {
-        return true; // WSDL
-      }
-
-      return false;
+      // Use the robust xml package for parsing
+      final doc = xml.XmlDocument.parse(content);
+      // If it parsed successfully and has at least one element, it's valid XML
+      return doc.children.any((node) => node is xml.XmlElement);
     } catch (e) {
       // If parsing fails, it's not valid XML
-      return false;
-    }
-  }
-
-  /// Check if content has balanced tags (simple check)
-  bool hasBalancedTags(String content) {
-    try {
-      // Simple tag balancing check
-      int openTags = 0;
-      int closeTags = 0;
-
-      for (int i = 0; i < content.length - 1; i++) {
-        if (content[i] == '<' && content[i + 1] != '/') {
-          // Opening tag (not closing tag)
-          if (content[i + 1] != '!' && content[i + 1] != '?') {
-            // Not a comment or declaration
-            openTags++;
-          }
-        } else if (content[i] == '<' && content[i + 1] == '/') {
-          // Closing tag
-          closeTags++;
-        }
-      }
-
-      // Tags are roughly balanced (allow some tolerance for self-closing tags)
-      return openTags >= closeTags && (openTags - closeTags) <= 2;
-    } catch (e) {
       return false;
     }
   }
