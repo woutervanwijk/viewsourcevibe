@@ -5,6 +5,46 @@ import 'dart:io';
 class RssTemplateService {
   static final _unescape = HtmlUnescape();
 
+  /// Determines if the given file content represents a valid RSS/Atom/XML feed
+  /// that should be rendered with the RSS template.
+  ///
+  /// Explicitly excludes SVGs to prevent false positives.
+  static bool isRssFeed(String filename, String content) {
+    final name = filename.toLowerCase();
+    final trimmedContent = content.trimLeft();
+
+    // Fast fail for SVGs (extension or content)
+    if (name.endsWith('.svg') ||
+        trimmedContent.startsWith('<svg') ||
+        trimmedContent.contains('<svg xmlns')) {
+      return false;
+    }
+
+    // Also fast fail for HTML files that might be misidentified as XML
+    if (name.endsWith('.html') ||
+        name.endsWith('.htm') ||
+        trimmedContent.startsWith('<!DOCTYPE html')) {
+      return false;
+    }
+
+    // Check for standard extensions
+    if (name.endsWith('.rss') || name.endsWith('.atom')) {
+      return true;
+    }
+
+    // Fallback for .xml or no extension: Check content for feed signatures
+    if (name.endsWith('.xml') ||
+        trimmedContent.startsWith('<?xml') ||
+        trimmedContent.startsWith('<')) {
+      return trimmedContent.contains('<rss') ||
+          trimmedContent.contains('<feed') ||
+          trimmedContent.contains('<rdf:RDF') ||
+          trimmedContent.contains('http://purl.org/rss/1.0/');
+    }
+
+    return false;
+  }
+
   static String convertRssToHtml(String xmlContent, String feedUrl) {
     try {
       final document = XmlDocument.parse(xmlContent.trim());

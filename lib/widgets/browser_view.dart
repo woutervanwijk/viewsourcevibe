@@ -111,14 +111,8 @@ class _BrowserViewState extends State<BrowserView> {
       final currentUrl = await _controller.currentUrl();
 
       // Check if it's an RSS/Atom/XML feed that we want to render nicely
-      final isRssOrXml = widget.file.name.toLowerCase().endsWith('.rss') ||
-          widget.file.name.toLowerCase().endsWith('.atom') ||
-          widget.file.name.toLowerCase().endsWith('.xml') ||
-          widget.file.content.trimLeft().startsWith('<rss') ||
-          widget.file.content.trimLeft().startsWith('<feed') ||
-          (widget.file.content.trimLeft().startsWith('<?xml') &&
-              (widget.file.content.contains('<rss') ||
-                  widget.file.content.contains('<feed')));
+      final isRssOrXml =
+          RssTemplateService.isRssFeed(widget.file.name, widget.file.content);
 
       if (isRssOrXml) {
         _currentRssUrl = widget.file.path;
