@@ -178,6 +178,8 @@ class _DomTreeViewState extends State<DomTreeView> {
     }
 
     return TreeView<DomTreeNode>(
+      primary:
+          false, // Prevent conflict with FileViewer's PrimaryScrollController
       treeController: _treeController,
       nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {
         return DomTreeTile(

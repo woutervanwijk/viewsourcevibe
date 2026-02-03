@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:view_source_vibe/widgets/media_browser.dart';
 
 class MediaView extends StatelessWidget {
   const MediaView({super.key});
@@ -154,24 +156,37 @@ class MediaView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Image.network(
-                src,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Icon(Icons.broken_image, color: Colors.grey),
-                ),
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                    ),
-                  );
-                },
+              child: CustomPaint(
+                painter: const CheckerboardPainter(),
+                child: src.toLowerCase().endsWith('.svg')
+                    ? SvgPicture.network(
+                        src,
+                        fit: BoxFit.contain,
+                        placeholderBuilder: (context) =>
+                            const Center(child: CircularProgressIndicator()),
+                      )
+                    : Image.network(
+                        src,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          child: const Icon(Icons.broken_image,
+                              color: Colors.grey),
+                        ),
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                      ),
               ),
             ),
             Padding(

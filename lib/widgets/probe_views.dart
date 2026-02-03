@@ -73,6 +73,7 @@ class ProbeGeneralView extends ProbeViewBase {
   Widget buildContent(BuildContext context, HtmlService htmlService,
       Map<String, dynamic> result) {
     return ListView(
+      primary: false,
       padding: const EdgeInsets.all(16),
       children: [
         _buildStatusCard(context, htmlService, result),
@@ -274,6 +275,7 @@ class ProbeHeadersView extends ProbeViewBase {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: ListView.separated(
+                primary: false,
                 itemCount: sortedKeys.length,
                 separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
@@ -321,6 +323,7 @@ class ProbeSecurityView extends ProbeViewBase {
     final Map<String, dynamic> security = result['security'] ?? {};
 
     return ListView(
+      primary: false,
       padding: const EdgeInsets.all(16),
       children: [
         Text(
@@ -568,6 +571,7 @@ class ProbeCookiesView extends ProbeViewBase {
     }
 
     return ListView.builder(
+      primary: false,
       padding: const EdgeInsets.all(16),
       itemCount: cookies.length,
       itemBuilder: (context, index) {

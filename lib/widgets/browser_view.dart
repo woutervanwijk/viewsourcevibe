@@ -94,14 +94,14 @@ class _BrowserViewState extends State<BrowserView> {
     if (_controller == null) return;
 
     if (widget.file.isUrl) {
-      final currentUrl = await _controller!.currentUrl();
+      final currentUrl = await _controller.currentUrl();
       // Prevent reloading if we are already at the target URL
       // This breaks the loop where syncWebViewState updates the file -> updateWidget -> loadRequest -> onPageFinished -> syncWebViewState
       if (currentUrl == widget.file.path) return;
 
-      _controller!.loadRequest(Uri.parse(widget.file.path));
+      _controller.loadRequest(Uri.parse(widget.file.path));
     } else {
-      _controller!.loadHtmlString(widget.file.content);
+      _controller.loadHtmlString(widget.file.content);
     }
   }
 
