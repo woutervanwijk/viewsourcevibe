@@ -1183,8 +1183,34 @@ class HtmlService with ChangeNotifier {
       );
 
       // Map detected type to appropriate content type for syntax highlighting
-      // This handles cases where file extension might not match actual content type
-      selectedContentType = _mapDetectedTypeToContentType(detectedType);
+      final localContentType = _mapDetectedTypeToContentType(detectedType);
+
+      // Determine if we should override the probed content type
+      // We prioritize the probed type (from headers) unless it's generic/unknown
+      // or if we have a strong local detection for a specific format.
+      bool preferLocalDetection = false;
+
+      if (selectedContentType == null) {
+        preferLocalDetection = true;
+      } else {
+        // If probed type is generic, allow local detection to override
+        final isGenericProbe = selectedContentType ==
+                'text' || // text/plain often maps to 'text' or similar
+            contentType == 'application/octet-stream' ||
+            contentType == 'application/x-www-form-urlencoded';
+
+        if (isGenericProbe) {
+          preferLocalDetection = true;
+        }
+      }
+
+      if (preferLocalDetection) {
+        selectedContentType = localContentType;
+      } else if (localContentType != null &&
+          localContentType != selectedContentType) {
+        debugPrint(
+            'Ignoring local detection ($localContentType) in favor of probe ($selectedContentType)');
+      }
 
       // Ensure filename has correct extension based on detection
       // This is crucial for URLs that don't have file extensions (e.g. API endpoints returning images)
