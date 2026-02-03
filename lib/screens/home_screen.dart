@@ -10,6 +10,7 @@ import 'package:view_source_vibe/widgets/metadata_view.dart';
 import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/media_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
+import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -48,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final oldIndex = _tabController.index;
     final oldLength = _tabController.length;
-    final newLength = isHtmlOrXml ? 8 : 5;
+    final newLength = isHtmlOrXml ? 9 : 5;
 
     if (oldLength != newLength || force) {
       _tabController.removeListener(_handleTabSelection);
@@ -76,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (isHtmlOrXml) _buildTab(Icons.info_outline, 'Metadata'),
       if (isHtmlOrXml) _buildTab(Icons.layers_outlined, 'Services'),
       if (isHtmlOrXml) _buildTab(Icons.perm_media_outlined, 'Media'),
+      if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
       _buildTab(Icons.network_check, 'Probe'),
       _buildTab(Icons.list_alt, 'Headers'),
       _buildTab(Icons.security, 'Security'),
@@ -103,6 +105,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       // 4. Media (Conditional)
       if (isHtmlOrXml) const KeepAliveWrapper(child: MediaView()),
+
+      // 5. DOM Tree (Conditional)
+      if (isHtmlOrXml) const KeepAliveWrapper(child: DomTreeView()),
 
       // 5. Probe: General
       const KeepAliveWrapper(child: ProbeGeneralView()),
