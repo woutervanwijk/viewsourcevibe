@@ -104,12 +104,21 @@ class HtmlService with ChangeNotifier {
       (_currentFile?.name.toLowerCase().endsWith('.htm') ?? false) ||
       (_currentFile?.name.toLowerCase().endsWith('.xhtml') ?? false);
 
+  bool get isSvg =>
+      selectedContentType == 'svg' ||
+      (_currentFile?.name.toLowerCase().endsWith('.svg') ?? false);
+
   bool get isXml =>
       selectedContentType == 'xml' ||
+      isSvg ||
       (_currentFile?.name.toLowerCase().endsWith('.xml') ?? false) ||
       (_currentFile?.name.toLowerCase().endsWith('.rss') ?? false) ||
       (_currentFile?.name.toLowerCase().endsWith('.atom') ?? false);
 
+  /// Metadata/Services/Media extraction is only useful for full web pages
+  bool get showMetadataTabs => isHtml;
+
+  /// DOM Tree and Probe tabs are useful for any structured markup
   bool get isHtmlOrXml => isHtml || isXml;
 
   bool get isMedia =>

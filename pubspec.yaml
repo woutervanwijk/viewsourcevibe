@@ -56,6 +56,9 @@ dependencies:
   # Tree view UI
   flutter_fancy_tree_view2: ^1.2.0
   
+  # XML parsing for DOM tree
+  xml: ^6.5.0
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter

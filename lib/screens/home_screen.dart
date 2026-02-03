@@ -34,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Use addPostFrameCallback to initialize correct length after first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final htmlService = Provider.of<HtmlService>(context, listen: false);
-      _updateTabs(htmlService.isHtmlOrXml, force: true);
+      _updateTabs(htmlService, force: true);
     });
   }
 
@@ -44,12 +44,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _updateTabs(bool isHtmlOrXml, {bool force = false}) {
+  void _updateTabs(HtmlService htmlService, {bool force = false}) {
+    final isHtmlOrXml = htmlService.isHtmlOrXml;
+    final showMetadataTabs = htmlService.showMetadataTabs;
+
     if (isHtmlOrXml == _lastIsHtmlOrXml && !force) return;
 
     final oldIndex = _tabController.index;
     final oldLength = _tabController.length;
-    final newLength = isHtmlOrXml ? 9 : 5;
+
+    // Calculate exact length: 1 (Editor) + 4 (Probe/Headers/Security/Cookies)
+    // + (1 if isHtmlOrXml for DOM Tree)
+    // + (3 if showMetadataTabs for Metadata/Services/Media)
+    int newLength = 5;
+    if (isHtmlOrXml) newLength += 1;
+    if (showMetadataTabs) newLength += 3;
 
     if (oldLength != newLength || force) {
       _tabController.removeListener(_handleTabSelection);
@@ -71,12 +80,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  List<Widget> _getTabs(bool isHtmlOrXml) {
+  List<Widget> _getTabs(HtmlService htmlService) {
+    final isHtmlOrXml = htmlService.isHtmlOrXml;
+    final showMetadataTabs = htmlService.showMetadataTabs;
+
     return [
       _buildTab(Icons.code, 'Source'),
-      if (isHtmlOrXml) _buildTab(Icons.info_outline, 'Metadata'),
-      if (isHtmlOrXml) _buildTab(Icons.layers_outlined, 'Services'),
-      if (isHtmlOrXml) _buildTab(Icons.perm_media_outlined, 'Media'),
+      if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
+      if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
+      if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
       if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
       _buildTab(Icons.network_check, 'Probe'),
       _buildTab(Icons.list_alt, 'Headers'),
@@ -85,7 +97,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     ];
   }
 
-  List<Widget> _getTabViews(bool isHtmlOrXml, HtmlFile? currentFile) {
+  List<Widget> _getTabViews(HtmlService htmlService, HtmlFile? currentFile) {
+    final isHtmlOrXml = htmlService.isHtmlOrXml;
+    final showMetadataTabs = htmlService.showMetadataTabs;
+
     return [
       // 1. Editor
       KeepAliveWrapper(
@@ -98,13 +113,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
 
       // 2. Metadata (Conditional)
-      if (isHtmlOrXml) const KeepAliveWrapper(child: MetadataView()),
+      if (showMetadataTabs) const KeepAliveWrapper(child: MetadataView()),
 
       // 3. Services (Conditional)
-      if (isHtmlOrXml) const KeepAliveWrapper(child: ServicesView()),
+      if (showMetadataTabs) const KeepAliveWrapper(child: ServicesView()),
 
       // 4. Media (Conditional)
-      if (isHtmlOrXml) const KeepAliveWrapper(child: MediaView()),
+      if (showMetadataTabs) const KeepAliveWrapper(child: MediaView()),
 
       // 5. DOM Tree (Conditional)
       if (isHtmlOrXml) const KeepAliveWrapper(child: DomTreeView()),
@@ -130,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Update TabController synchronously if content type changed
     // This MUST happen before building the TabBar to avoid length mismatch
     if (htmlService.isHtmlOrXml != _lastIsHtmlOrXml) {
-      _updateTabs(htmlService.isHtmlOrXml);
+      _updateTabs(htmlService);
     }
 
     // Handle requested tab switch
@@ -200,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     Theme.of(context).colorScheme.onSurfaceVariant,
                 indicatorColor: Theme.of(context).colorScheme.primary,
                 indicatorSize: TabBarIndicatorSize.label,
-                tabs: _getTabs(htmlService.isHtmlOrXml),
+                tabs: _getTabs(htmlService),
               ),
             ),
             const Divider(height: 1),
@@ -223,8 +238,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ))
                   : TabBarView(
                       controller: _tabController,
-                      children: _getTabViews(
-                          htmlService.isHtmlOrXml, htmlService.currentFile),
+                      children:
+                          _getTabViews(htmlService, htmlService.currentFile),
                     ),
             ),
           ],

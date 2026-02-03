@@ -2,31 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
+import 'package:xml/xml.dart' as xml;
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:flutter_fancy_tree_view2/flutter_fancy_tree_view2.dart';
 
-class DomNode {
-  final dom.Node node;
-  final List<DomNode> children;
+class DomTreeNode {
+  final String label;
+  final String content; // Outer HTML or Text
+  final Map<String, String> attributes;
+  final List<DomTreeNode> children;
+  final bool isElement;
 
-  DomNode({required this.node, this.children = const []});
-
-  String get label {
-    if (node is dom.Element) {
-      return (node as dom.Element).localName ?? 'unknown';
-    } else if (node is dom.Text) {
-      return (node as dom.Text).text.trim();
-    }
-    return node.toString();
-  }
-
-  Map<Object, String> get attributes {
-    if (node is dom.Element) {
-      return (node as dom.Element).attributes;
-    }
-    return {};
-  }
+  DomTreeNode({
+    required this.label,
+    required this.content,
+    required this.attributes,
+    required this.children,
+    required this.isElement,
+  });
 }
 
 class DomTreeView extends StatefulWidget {
@@ -37,19 +31,19 @@ class DomTreeView extends StatefulWidget {
 }
 
 class _DomTreeViewState extends State<DomTreeView> {
-  late TreeController<DomNode> _treeController;
+  late TreeController<DomTreeNode> _treeController;
   String? _lastContent;
 
   @override
   void initState() {
     super.initState();
-    _treeController = TreeController<DomNode>(
+    _treeController = TreeController<DomTreeNode>(
       roots: [],
-      childrenProvider: (DomNode node) => node.children,
+      childrenProvider: (DomTreeNode node) => node.children,
     );
   }
 
-  void _updateTree(String content) {
+  void _updateTree(HtmlService htmlService, String content) {
     if (content.isEmpty) {
       setState(() {
         _treeController.roots = [];
@@ -57,28 +51,104 @@ class _DomTreeViewState extends State<DomTreeView> {
       return;
     }
 
-    final doc = html_parser.parse(content);
-    final newRoot = _buildDomNode(doc.documentElement!);
+    List<DomTreeNode> roots = [];
+
+    // RSS, ATOM, SVG, XML should use the XML parser for better accuracy
+    final isStrictXml = htmlService.isXml || htmlService.isSvg;
+
+    if (isStrictXml) {
+      try {
+        final doc = xml.XmlDocument.parse(content);
+        roots = doc.children
+            .map((node) => _buildFromXml(node))
+            .whereType<DomTreeNode>()
+            .toList();
+      } catch (e) {
+        // Fallback to HTML parser if XML parsing fails
+        debugPrint('DomTreeView: XML parsing failed, falling back to HTML: $e');
+        final doc = html_parser.parse(content);
+        if (doc.documentElement != null) {
+          final root = _buildFromHtml(doc.documentElement!);
+          if (root != null) roots = [root];
+        }
+      }
+    } else {
+      final doc = html_parser.parse(content);
+      if (doc.documentElement != null) {
+        final root = _buildFromHtml(doc.documentElement!);
+        if (root != null) roots = [root];
+      }
+    }
 
     setState(() {
-      _treeController.roots = [newRoot];
+      _treeController.roots = roots;
       // Expand root by default
-      _treeController.expand(newRoot);
+      if (roots.isNotEmpty) {
+        _treeController.expand(roots.first);
+      }
     });
   }
 
-  DomNode _buildDomNode(dom.Node node) {
-    final childrenNodes = node.nodes.where((n) {
-      if (n is dom.Text) {
-        return n.text.trim().isNotEmpty;
-      }
-      return n is dom.Element;
-    }).toList();
+  DomTreeNode? _buildFromXml(xml.XmlNode node) {
+    if (node is xml.XmlElement) {
+      final children = node.children
+          .map((n) => _buildFromXml(n))
+          .whereType<DomTreeNode>()
+          .toList();
 
-    return DomNode(
-      node: node,
-      children: childrenNodes.map((n) => _buildDomNode(n)).toList(),
-    );
+      return DomTreeNode(
+        label: node.name.toString(),
+        content: node.toXmlString(),
+        attributes: node.attributes.fold<Map<String, String>>({}, (map, attr) {
+          map[attr.name.toString()] = attr.value;
+          return map;
+        }),
+        children: children,
+        isElement: true,
+      );
+    } else if (node is xml.XmlText) {
+      final text = node.value.trim();
+      if (text.isEmpty) return null;
+
+      return DomTreeNode(
+        label: text,
+        content: text,
+        attributes: {},
+        children: [],
+        isElement: false,
+      );
+    }
+    return null;
+  }
+
+  DomTreeNode? _buildFromHtml(dom.Node node) {
+    if (node is dom.Element) {
+      final children = node.nodes
+          .map((n) => _buildFromHtml(n))
+          .whereType<DomTreeNode>()
+          .toList();
+
+      return DomTreeNode(
+        label: node.localName ?? 'unknown',
+        content: node.outerHtml,
+        attributes: node.attributes
+            .map((key, value) => MapEntry(key.toString(), value)),
+        children: children,
+        isElement: true,
+      );
+    } else if (node is dom.Text) {
+      final text = node.text.trim();
+      if (text.isEmpty) return null;
+
+      return DomTreeNode(
+        label: text,
+        content: text,
+        attributes: {},
+        children: [],
+        isElement: false,
+      );
+    }
+    return null;
   }
 
   @override
@@ -94,9 +164,8 @@ class _DomTreeViewState extends State<DomTreeView> {
 
     if (content != _lastContent) {
       _lastContent = content;
-      // Build the tree in a microtask to avoid building during the current build phase.
       Future.microtask(() {
-        if (mounted) _updateTree(content);
+        if (mounted) _updateTree(htmlService, content);
       });
     }
 
@@ -108,9 +177,9 @@ class _DomTreeViewState extends State<DomTreeView> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return TreeView<DomNode>(
+    return TreeView<DomTreeNode>(
       treeController: _treeController,
-      nodeBuilder: (BuildContext context, TreeEntry<DomNode> entry) {
+      nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {
         return DomTreeTile(
           entry: entry,
           onTap: () => _treeController.toggleExpansion(entry.node),
@@ -121,7 +190,7 @@ class _DomTreeViewState extends State<DomTreeView> {
 }
 
 class DomTreeTile extends StatelessWidget {
-  final TreeEntry<DomNode> entry;
+  final TreeEntry<DomTreeNode> entry;
   final VoidCallback onTap;
 
   const DomTreeTile({
@@ -133,7 +202,7 @@ class DomTreeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final node = entry.node;
-    final isElement = node.node is dom.Element;
+    final isElement = node.isElement;
     final attributes = node.attributes;
     final attrString =
         attributes.entries.map((e) => '${e.key}="${e.value}"').join(' ');
@@ -148,15 +217,7 @@ class DomTreeTile extends StatelessWidget {
       child: InkWell(
         onTap: entry.hasChildren ? onTap : null,
         onLongPress: () {
-          final domNode = node.node;
-          final String copyText;
-          if (domNode is dom.Element) {
-            copyText = domNode.outerHtml;
-          } else {
-            copyText = domNode.text ?? '';
-          }
-
-          Clipboard.setData(ClipboardData(text: copyText));
+          Clipboard.setData(ClipboardData(text: node.content));
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -209,6 +270,8 @@ class DomTreeTile extends StatelessWidget {
                   child: Text(
                     node.label,
                     style: const TextStyle(fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
