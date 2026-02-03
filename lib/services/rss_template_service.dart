@@ -37,8 +37,9 @@ class RssTemplateService {
   static String _renderRss(XmlDocument doc, String feedUrl) {
     final channel = doc.findAllElements('channel').firstOrNull ??
         doc.findAllElements('rss').firstOrNull;
-    if (channel == null)
+    if (channel == null) {
       return _renderError("Invalid RSS Feed: No channel found");
+    }
 
     final title = _getText(channel, 'title') ?? 'Untitled Feed';
     final description = _getText(channel, 'description') ?? '';
@@ -168,7 +169,7 @@ class RssTemplateService {
     String? image;
     // ... (Atom logic implies looking for links with rel=enclosure/image type)
 
-    if (image == null && (content != null || summary != null)) {
+    if ((content != null || summary != null)) {
       final html = content ?? summary!;
       final imgMatch = RegExp(r'<img[^>]+src="([^">]+)"').firstMatch(html);
       if (imgMatch != null) {
@@ -298,9 +299,7 @@ class RssTemplateService {
       }
     }
     // RSS style link
-    if (link == null) {
-      link = _extractRegex(content, r'<link>(.*?)</link>');
-    }
+    link ??= _extractRegex(content, r'<link>(.*?)</link>');
 
     final description =
         _extractRegex(content, r'<description[^>]*>(.*?)</description>') ??
@@ -558,15 +557,6 @@ class RssTemplateService {
       return text.substring(0, limit);
     }
     return text;
-  }
-
-  static String _renderGenericXmlError(String content) {
-    // Try fallback here too!
-    try {
-      return _parseWithRegex(content, '');
-    } catch (e) {
-      return content;
-    }
   }
 
   static String _renderError(String message) {

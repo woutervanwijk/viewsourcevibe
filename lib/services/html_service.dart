@@ -68,13 +68,7 @@ class HtmlService with ChangeNotifier {
   String? get webViewLoadingUrl => _webViewLoadingUrl;
   bool _isBeautifyEnabled = false;
   bool get isBeautifyEnabled => _isBeautifyEnabled;
-  wf.WebViewController? _activeWebViewController;
-
-  wf.WebViewController? get activeWebViewController => _activeWebViewController;
-
-  set activeWebViewController(wf.WebViewController? controller) {
-    _activeWebViewController = controller;
-  }
+  wf.WebViewController? activeWebViewController;
 
   // Cache for highlighted content to improve performance
   final Map<String, Widget> _highlightCache = {};
@@ -3033,7 +3027,7 @@ Technical details: $e''';
   }
 
   Future<void> syncWebViewState(String url) async {
-    if (_activeWebViewController == null) return;
+    if (activeWebViewController == null) return;
 
     // Update URL bar immediately
     if (_currentInputText != url) {
@@ -3049,7 +3043,7 @@ Technical details: $e''';
     });
 
     try {
-      final html = await _activeWebViewController!.runJavaScriptReturningResult(
+      final html = await activeWebViewController!.runJavaScriptReturningResult(
           'document.documentElement.outerHTML') as String;
 
       // Unquote if needed
@@ -3100,11 +3094,11 @@ Technical details: $e''';
   }
 
   Future<void> extractCurrentWebViewContent() async {
-    if (_activeWebViewController == null) return;
+    if (activeWebViewController == null) return;
 
     try {
-      final url = await _activeWebViewController!.currentUrl();
-      final html = await _activeWebViewController!.runJavaScriptReturningResult(
+      final url = await activeWebViewController!.currentUrl();
+      final html = await activeWebViewController!.runJavaScriptReturningResult(
           'document.documentElement.outerHTML') as String;
 
       // Unquote if needed (standard JS result processing)

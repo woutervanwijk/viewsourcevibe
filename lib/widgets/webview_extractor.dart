@@ -56,7 +56,7 @@ class _WebViewExtractorState extends State<WebViewExtractor> {
           debugPrint('Error unquoting HTML: $e');
         }
       }
-
+      if (!mounted) return;
       final htmlService = Provider.of<HtmlService>(context, listen: false);
       await htmlService.completeWebViewLoad(finalHtml, url);
       setState(() {
