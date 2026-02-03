@@ -28,7 +28,7 @@ class BrowserView extends StatefulWidget {
 class _BrowserViewState extends State<BrowserView> {
   late final WebViewController? _controller;
   final String viewID = 'browser-preview-view';
-  bool _isRenderingTemplate = false;
+  String? _currentRssUrl;
 
   @override
   void initState() {
@@ -50,9 +50,17 @@ class _BrowserViewState extends State<BrowserView> {
             },
             onPageFinished: (String url) {
               if (mounted) {
-                // Should not sync if we are displaying a local template,
-                // otherwise we overwrite the source file with our generated HTML!
-                if (_isRenderingTemplate) return;
+                // If we are viewing the RSS template, block sync to preserve XML source.
+                if (_currentRssUrl != null && url == _currentRssUrl) {
+                  // If the app model has drifted (e.g. we came back from an article),
+                  // restore the original XML content.
+                  final htmlService =
+                      Provider.of<HtmlService>(context, listen: false);
+                  if (htmlService.currentFile?.path != url) {
+                    htmlService.loadFromUrl(url);
+                  }
+                  return;
+                }
 
                 // Use syncWebViewState to update everything (content, metadata, probe)
                 Provider.of<HtmlService>(context, listen: false)
@@ -113,7 +121,7 @@ class _BrowserViewState extends State<BrowserView> {
                   widget.file.content.contains('<feed')));
 
       if (isRssOrXml) {
-        _isRenderingTemplate = true;
+        _currentRssUrl = widget.file.path;
         final html = RssTemplateService.convertRssToHtml(
             widget.file.content, widget.file.path);
         // Load the generated HTML
@@ -121,14 +129,14 @@ class _BrowserViewState extends State<BrowserView> {
         return;
       }
 
-      _isRenderingTemplate = false;
+      _currentRssUrl = null;
 
       // Prevent reloading if we are already at the target URL
       if (currentUrl == widget.file.path) return;
 
       _controller.loadRequest(Uri.parse(widget.file.path));
     } else {
-      _isRenderingTemplate = false;
+      _currentRssUrl = null;
       _controller.loadHtmlString(widget.file.content);
     }
   }
