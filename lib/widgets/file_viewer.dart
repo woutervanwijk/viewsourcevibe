@@ -225,11 +225,16 @@ class FileViewer extends StatelessWidget {
               );
             }
 
+            final isTapEnabled = !htmlService.isWebViewMode &&
+                !htmlService.isMedia &&
+                file.isTextBased;
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 GestureDetector(
-                  onTap: () => _showContentTypeMenu(context),
+                  onTap:
+                      isTapEnabled ? () => _showContentTypeMenu(context) : null,
                   child: Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -238,7 +243,9 @@ class FileViewer extends StatelessWidget {
                         Icon(
                           isHtmlFile ? Icons.html : Icons.text_snippet,
                           size: 16,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: isTapEnabled
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -248,9 +255,10 @@ class FileViewer extends StatelessWidget {
                             children: [
                               Text(
                                 fileName,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
+                                  color: isTapEnabled ? null : Colors.grey,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),

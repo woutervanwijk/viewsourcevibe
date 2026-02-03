@@ -31,6 +31,7 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
       'images': <Map<String, String>>[],
       'videos': <Map<String, String>>[],
     },
+    'article': <String, String>{},
   };
 
   // Extract Language from <html> tag
@@ -81,10 +82,38 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
     if (name != null && content != null) {
       if (name.startsWith('og:')) {
         metadata['openGraph'][name] = content;
+        // Also check if it's article info
+        if (name == 'og:article:author' || name == 'article:author') {
+          metadata['article']['Author'] = content;
+        } else if (name == 'og:article:published_time' ||
+            name == 'article:published_time') {
+          metadata['article']['Published'] = content;
+        } else if (name == 'og:article:modified_time' ||
+            name == 'article:modified_time') {
+          metadata['article']['Modified'] = content;
+        }
       } else if (name.startsWith('twitter:')) {
         metadata['twitter'][name] = content;
+        if (name == 'twitter:creator') {
+          metadata['article']['Twitter Creator'] = content;
+        }
       } else if (name == 'description') {
         metadata['description'] = content;
+      } else if (name == 'author') {
+        metadata['article']['Author'] = content;
+      } else if (name == 'keywords') {
+        metadata['article']['Keywords'] = content;
+      } else if (name == 'publish-date' ||
+          name == 'pubdate' ||
+          name == 'date' ||
+          name == 'datepublished' ||
+          name == 'dc.date.issued') {
+        metadata['article']['Published'] = content;
+      } else if (name == 'datemodified' ||
+          name == 'revised' ||
+          name == 'last-modified' ||
+          name == 'dc.date.modified') {
+        metadata['article']['Modified'] = content;
       } else if (name == 'viewport' ||
           name == 'theme-color' ||
           name.startsWith('msapplication-')) {
@@ -246,7 +275,71 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
   // Detect Services (Trackers, Fonts, etc.)
   _detectServices(html, metadata);
 
+  // Extract info from JSON-LD
+  _extractJsonLdInfo(html, metadata);
+
   return metadata;
+}
+
+/// Extract info from JSON-LD script tags
+void _extractJsonLdInfo(String html, Map<String, dynamic> metadata) {
+  final jsonLdTags = RegExp(
+          r'''<script[^>]+type=["']application/ld\+json["'][^>]*>([\s\S]*?)</script>''',
+          caseSensitive: false)
+      .allMatches(html);
+
+  for (final match in jsonLdTags) {
+    try {
+      final jsonStr = match.group(1)?.trim() ?? '';
+      if (jsonStr.isEmpty) continue;
+
+      // Basic regex-based extraction to avoid full JSON parsing issues in simple regex parser
+      // and to be more resilient to malformed JSON sometimes found in the wild.
+
+      // Look for "author": "Name" or "author": {"name": "Name"}
+      final authorMatch = RegExp(
+              r'"author"\s*:\s*(?:{\s*"name"\s*:\s*"([^"]+)"|"[^"]+")',
+              caseSensitive: false)
+          .firstMatch(jsonStr);
+      if (authorMatch != null) {
+        final author = authorMatch.group(1) ??
+            authorMatch.group(0)!.split(':').last.replaceAll('"', '').trim();
+        if (author.isNotEmpty && metadata['article']['Author'] == null) {
+          metadata['article']['Author'] = author;
+        }
+      }
+
+      final datePublishedMatch =
+          RegExp(r'"datePublished"\s*:\s*"([^"]+)"', caseSensitive: false)
+              .firstMatch(jsonStr);
+      if (datePublishedMatch != null &&
+          metadata['article']['Published'] == null) {
+        metadata['article']['Published'] = datePublishedMatch.group(1);
+      }
+
+      final dateModifiedMatch =
+          RegExp(r'"dateModified"\s*:\s*"([^"]+)"', caseSensitive: false)
+              .firstMatch(jsonStr);
+      if (dateModifiedMatch != null &&
+          metadata['article']['Modified'] == null) {
+        metadata['article']['Modified'] = dateModifiedMatch.group(1);
+      }
+
+      final publisherMatch = RegExp(
+              r'"publisher"\s*:\s*(?:{\s*"name"\s*:\s*"([^"]+)"|"[^"]+")',
+              caseSensitive: false)
+          .firstMatch(jsonStr);
+      if (publisherMatch != null) {
+        final publisher = publisherMatch.group(1) ??
+            publisherMatch.group(0)!.split(':').last.replaceAll('"', '').trim();
+        if (publisher.isNotEmpty) {
+          metadata['article']['Publisher'] = publisher;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error parsing JSON-LD: $e');
+    }
+  }
 }
 
 /// Guess CMS and Frameworks based on patterns in the HTML

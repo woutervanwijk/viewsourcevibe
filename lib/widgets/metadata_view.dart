@@ -40,6 +40,11 @@ class MetadataView extends StatelessWidget {
           _buildTechSection(context, metadata['detectedTech']),
           const SizedBox(height: 24),
         ],
+        if (metadata['article']?.isNotEmpty == true) ...[
+          _buildSectionTitle(context, 'Article Information'),
+          _buildMapSection(context, metadata['article']),
+          const SizedBox(height: 24),
+        ],
         if (metadata['pageConfig']?.isNotEmpty == true) ...[
           _buildSectionTitle(context, 'Page Configuration'),
           _buildMapSection(context, metadata['pageConfig']),
