@@ -259,7 +259,10 @@ class ProbeHeadersView extends ProbeViewBase {
         children: [
           Text(
             'All Response Headers',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -322,7 +325,10 @@ class ProbeSecurityView extends ProbeViewBase {
       children: [
         Text(
           'Security Header Audit',
-          style: Theme.of(context).textTheme.titleMedium,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         ...security.entries.map((e) {
@@ -365,7 +371,10 @@ class ProbeSecurityView extends ProbeViewBase {
         const SizedBox(height: 24),
         Text(
           'SSL Certificate',
-          style: Theme.of(context).textTheme.titleMedium,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         _buildCertificateCard(context, result['certificate']),
@@ -577,7 +586,8 @@ class ProbeCookiesView extends ProbeViewBase {
           ),
           child: ListTile(
             title: Text(nameValue,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             subtitle: Text(FormatUtils.formatHumanData(attributes.trim()),
                 style: const TextStyle(fontSize: 12)),
             trailing: IconButton(
