@@ -439,9 +439,15 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['CMS'] = 'Webflow';
   } else if (generator.contains('wix')) {
     tech['CMS'] = 'Wix';
+  } else if (generator.contains('docusaurus')) {
+    tech['Static Site'] = 'Docusaurus';
+  } else if (generator.contains('gatsby')) {
+    tech['Static Site'] = 'Gatsby';
+  } else if (generator.contains('astro')) {
+    tech['Static Site'] = 'Astro';
   }
 
-  if (tech['CMS'] == null) {
+  if (tech['CMS'] == null && tech['Static Site'] == null) {
     if (html.contains('wp-content') || html.contains('wp-includes')) {
       tech['CMS'] = 'WordPress';
     } else if (html.contains('cdn.shopify.com') ||
@@ -451,6 +457,15 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
       tech['CMS'] = 'Squarespace';
     } else if (html.contains('data-wf-page')) {
       tech['CMS'] = 'Webflow';
+    } else if (html.contains('contentful.com')) {
+      tech['CMS'] = 'Contentful';
+    } else if (html.contains('umbraco')) {
+      tech['CMS'] = 'Umbraco';
+    } else if (html.contains('sitecore')) {
+      tech['CMS'] = 'Sitecore';
+    } else if (html.contains('adobe-experience-manager') ||
+        html.contains('aem')) {
+      tech['CMS'] = 'Adobe Experience Manager';
     }
   }
 
@@ -458,12 +473,20 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['Framework'] = 'Next.js';
   } else if (_hasPattern(html, r'''__NUXT__''')) {
     tech['Framework'] = 'Nuxt.js';
+  } else if (_hasPattern(html, r'''_sveltekit''')) {
+    tech['Framework'] = 'SvelteKit';
   } else if (_hasPattern(html, r'''data-reactroot''')) {
     tech['Library'] = 'React';
   } else if (_hasPattern(html, r'''data-v-|v-if=|v-for=''')) {
     tech['Library'] = 'Vue.js';
   } else if (_hasPattern(html, r'''ng-version|ng-app''')) {
     tech['Framework'] = 'Angular';
+  } else if (_hasPattern(html, r'''jquery(?:\.min)?\.js''')) {
+    tech['Library'] = 'jQuery';
+  } else if (html.contains('x-data=') || html.contains('x-init=')) {
+    tech['Library'] = 'Alpine.js';
+  } else if (html.contains('hx-get=') || html.contains('hx-post=')) {
+    tech['Library'] = 'HTMX';
   }
 
   if (_hasPattern(html,
@@ -475,6 +498,15 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     if (_hasPattern(html, r'''\b(?:sm:|md:|lg:|xl:|2xl:)[a-z]''')) {
       tech['CSS Framework'] = 'Tailwind CSS';
     }
+  }
+  if (html.contains('bulma') || html.contains('is-primary')) {
+    tech['CSS Framework'] = 'Bulma';
+  } else if (html.contains('uk-')) {
+    tech['CSS Framework'] = 'UIkit';
+  } else if (html.contains('foundation.min.css')) {
+    tech['CSS Framework'] = 'Foundation';
+  } else if (html.contains('mdc-')) {
+    tech['CSS Framework'] = 'Material Components';
   }
 
   metadata['detectedTech'] = tech;
@@ -512,17 +544,32 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
       'Microsoft Clarity': r'www\.clarity\.ms/tag/',
       'Matomo': r'matomo\.js|piwik\.js',
       'Yandex Metrica': r'mc\.yandex\.ru/metrika',
+      'Smartlook': r'cdn\.smartlook\.com',
+      'Lucky Orange': r'cdn\.luckyorange\.com',
+      'Heap': r'heapanalytics\.com',
     },
     'Marketing & CRM': {
       'Intercom': r'widget\.intercom\.io',
       'Zendesk': r'static\.zdassets\.com',
       'Drift': r'js\.driftt\.com',
+      'Crisp': r'client\.crisp\.chat',
+      'Tawk.to': r'embed\.tawk\.to',
+      'Chatwoot': r'chatwoot\.js',
       'Mailchimp': r'chimpstatic\.com',
       'Marketo': r'munchkin\.marketo\.net',
       'Pardot': r'pi\.pardot\.com',
       'Salesforce': r'force\.com',
       'HubSpot CRM': r'js\.hs-scripts\.com',
       'ActiveCampaign': r'trackcmp\.net',
+    },
+    'Privacy & Consent Management': {
+      'Cookiebot': r'cookiebot\.com',
+      'OneTrust': r'onetrust\.com|otSDKStub\.js',
+      'Usercentrics': r'usercentrics\.eu|app\.usercentrics\.eu',
+      'TrustArc': r'trustarc\.com',
+      'CookieYes': r'cookieyes\.com',
+      'Osano': r'osano\.com',
+      'Cassie': r'cassie\.eu',
     },
     'Fonts & Icons': {
       'Google Fonts': r'fonts\.googleapis\.com|fonts\.gstatic\.com',
@@ -531,6 +578,7 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
       'Typeform': r'embed\.typeform\.com',
       'Ionicons': r'ionicons\.com',
       'Boxicons': r'boxicons\.com',
+      'Feather Icons': r'feathericons\.com',
     },
     'E-commerce': {
       'Shopify': r'cdn\.shopify\.com|shopify-payment-button',
@@ -540,6 +588,7 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
       'BigCartel': r'bigcartel\.com',
       'Stripe': r'js\.stripe\.com',
       'PayPal': r'paypal\.com/sdk/js',
+      'Klarna': r'klarnacdn\.net',
     },
     'Advertising': {
       'Taboola': r'taboola\.com',
@@ -554,6 +603,7 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
       'Amazon Advertising': r'amazon-adsystem\.com',
       'Snap Pixel': r'sc-static\.net/scevent\.min\.js',
       'Reddit Pixel': r'redditstatic\.com/ads/pixel\.js',
+      'AdRoll': r'adroll\.com',
     },
     'Cloud, CDN & Infrastructure': {
       'Amazon Web Services (AWS)':
@@ -568,6 +618,7 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
       'DigitalOcean': r'digitalocean\.com',
       'Heroku': r'herokuapp\.com',
       'BunnyCDN': r'bunnycdn\.com',
+      'StackPath': r'stackpathcdn\.com',
     },
     'Social & Widgets': {
       'Twitter/X': r'platform\.twitter\.com',
@@ -580,6 +631,8 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
       'Facebook Chat': r'connect\.facebook\.net/.*xfbml\.customerchat\.js',
       'Spotify': r'open\.spotify\.com/embed',
       'Apple Music': r'embed\.music\.apple\.com',
+      'AddThis': r'addthis\.com',
+      'ShareThis': r'sharethis\.com',
     }
   };
 
