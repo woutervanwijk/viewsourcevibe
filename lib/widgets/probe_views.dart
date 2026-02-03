@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/utils/format_utils.dart';
 
 abstract class ProbeViewBase extends StatelessWidget {
   const ProbeViewBase({super.key});
@@ -57,7 +58,7 @@ abstract class ProbeViewBase extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: SelectableText(value),
+            child: SelectableText(FormatUtils.formatHumanData(value)),
           ),
         ],
       ),
@@ -284,7 +285,7 @@ class ProbeHeadersView extends ProbeViewBase {
                           fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      value,
+                      FormatUtils.formatHumanData(value),
                       style: const TextStyle(
                           fontFamily: 'monospace', fontSize: 13),
                     ),
@@ -348,7 +349,9 @@ class ProbeSecurityView extends ProbeViewBase {
                   style: const TextStyle(
                       fontSize: 14, fontWeight: FontWeight.bold)),
               subtitle: Text(
-                isPresent ? e.value! : 'Missing Header',
+                isPresent
+                    ? FormatUtils.formatHumanData(e.value!)
+                    : 'Missing Header',
                 style: TextStyle(
                   fontSize: 12,
                   fontFamily: 'monospace',
@@ -575,8 +578,8 @@ class ProbeCookiesView extends ProbeViewBase {
           child: ListTile(
             title: Text(nameValue,
                 style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle:
-                Text(attributes.trim(), style: const TextStyle(fontSize: 12)),
+            subtitle: Text(FormatUtils.formatHumanData(attributes.trim()),
+                style: const TextStyle(fontSize: 12)),
             trailing: IconButton(
               icon: const Icon(Icons.copy, size: 18),
               onPressed: () {
