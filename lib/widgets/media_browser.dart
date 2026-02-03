@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 // Conditional import for web-specific features
@@ -50,21 +51,32 @@ class _MediaBrowserState extends State<MediaBrowser> {
           minScale: 0.1,
           maxScale: 5.0,
           child: Center(
-            child: Image.network(
-              widget.file.path,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => _buildErrorView(),
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                );
-              },
+            child: CustomPaint(
+              painter: const CheckerboardPainter(),
+              child: extension == 'svg'
+                  ? SvgPicture.network(
+                      widget.file.path,
+                      fit: BoxFit.contain,
+                      placeholderBuilder: (context) =>
+                          const Center(child: CircularProgressIndicator()),
+                    )
+                  : Image.network(
+                      widget.file.path,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) =>
+                          _buildErrorView(),
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        );
+                      },
+                    ),
             ),
           ),
         ),
@@ -123,4 +135,41 @@ class _MediaBrowserState extends State<MediaBrowser> {
       ),
     );
   }
+}
+
+class CheckerboardPainter extends CustomPainter {
+  const CheckerboardPainter({
+    this.color1 = const Color(0xFFE0E0E0), // Light grey
+    this.color2 = const Color(0xFFFFFFFF), // White
+    this.gridSize = 20.0,
+  });
+
+  final Color color1;
+  final Color color2;
+  final double gridSize;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+
+    // Fill with color2 first
+    paint.color = color2;
+    canvas.drawRect(Offset.zero & size, paint);
+
+    // Draw checkerboard squares
+    paint.color = color1;
+    for (double y = 0; y < size.height; y += gridSize) {
+      for (double x = 0; x < size.width; x += gridSize) {
+        if (((x / gridSize).floor() + (y / gridSize).floor()) % 2 == 0) {
+          canvas.drawRect(
+            Rect.fromLTWH(x, y, gridSize, gridSize),
+            paint,
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

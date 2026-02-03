@@ -281,8 +281,9 @@ class FileViewer extends StatelessWidget {
                             // Find button
                             IconButton(
                               icon: const Icon(Icons.search, size: 20),
-                              padding: EdgeInsets.zero,
+                              padding: const EdgeInsets.all(2),
                               constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
                               onPressed: () => htmlService.toggleSearch(),
                               tooltip: 'Find',
                             ),
@@ -290,7 +291,7 @@ class FileViewer extends StatelessWidget {
                             // Font Size picker
                             PopupMenuButton<double>(
                               icon: const Icon(Icons.format_size, size: 20),
-                              padding: EdgeInsets.zero,
+                              padding: const EdgeInsets.all(2),
                               constraints: const BoxConstraints(),
                               tooltip: 'Font Size',
                               onSelected: (double size) {
@@ -340,8 +341,9 @@ class FileViewer extends StatelessWidget {
                                       ? Theme.of(context).colorScheme.primary
                                       : null,
                                 ),
-                                padding: const EdgeInsets.all(4),
+                                padding: const EdgeInsets.all(2),
                                 constraints: const BoxConstraints(),
+                                visualDensity: VisualDensity.compact,
                                 onPressed: () {
                                   settings.wrapText = !settings.wrapText;
                                 },
@@ -370,8 +372,9 @@ class FileViewer extends StatelessWidget {
                                       ? Theme.of(context).colorScheme.primary
                                       : null,
                                 ),
-                                padding: const EdgeInsets.all(4),
+                                padding: const EdgeInsets.all(2),
                                 constraints: const BoxConstraints(),
+                                visualDensity: VisualDensity.compact,
                                 onPressed: () =>
                                     htmlService.toggleIsBeautifyEnabled(),
                                 tooltip: htmlService.isBeautifyEnabled
@@ -385,8 +388,9 @@ class FileViewer extends StatelessWidget {
                           if (htmlService.isWebViewMode) ...[
                             IconButton(
                               icon: const Icon(Icons.visibility, size: 20),
-                              padding: const EdgeInsets.all(4),
+                              padding: const EdgeInsets.all(2),
                               constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
                               onPressed: () =>
                                   htmlService.extractCurrentWebViewContent(),
                               tooltip: 'Load HTML from Current Page',
@@ -414,8 +418,9 @@ class FileViewer extends StatelessWidget {
                                     ? Theme.of(context).colorScheme.primary
                                     : null,
                               ),
-                              padding: const EdgeInsets.all(4),
+                              padding: const EdgeInsets.all(2),
                               constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
                               onPressed: () =>
                                   htmlService.toggleIsWebViewMode(),
                               tooltip: htmlService.isWebViewMode
