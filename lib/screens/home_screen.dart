@@ -109,16 +109,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // 5. DOM Tree (Conditional)
       if (isHtmlOrXml) const KeepAliveWrapper(child: DomTreeView()),
 
-      // 5. Probe: General
+      // 6. Probe: General
       const KeepAliveWrapper(child: ProbeGeneralView()),
 
-      // 6. Probe: Headers
+      // 7. Probe: Headers
       const KeepAliveWrapper(child: ProbeHeadersView()),
 
-      // 7. Probe: Security
+      // 8. Probe: Security
       const KeepAliveWrapper(child: ProbeSecurityView()),
 
-      // 8. Probe: Cookies
+      // 9. Probe: Cookies
       const KeepAliveWrapper(child: ProbeCookiesView()),
     ];
   }
