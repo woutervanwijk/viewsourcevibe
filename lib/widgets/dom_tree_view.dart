@@ -231,7 +231,7 @@ class DomTreeTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (entry.hasChildren)
                 Icon(
