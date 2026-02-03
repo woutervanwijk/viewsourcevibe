@@ -181,11 +181,16 @@ class UnifiedSharingService {
                   await _showShareChoiceDialog(dialogContext, urlToLoad);
 
               if (choice == 'url') {
-                // Re-check context after async gap
-                final safeContext = (context.mounted)
-                    ? context
-                    : (MyApp.navigatorKey.currentContext ?? context);
-                await _processSharedUrl(safeContext, htmlService, urlToLoad);
+                // Check if original context is still valid
+                if (context.mounted) {
+                  await _processSharedUrl(context, htmlService, urlToLoad);
+                } else {
+                  // Fallback to navigator key context if available
+                  final navContext = MyApp.navigatorKey.currentContext;
+                  if (navContext != null && navContext.mounted) {
+                    await _processSharedUrl(navContext, htmlService, urlToLoad);
+                  }
+                }
                 return;
               }
               // If they chose 'text' or cancelled, fall through to text processing
@@ -197,29 +202,53 @@ class UnifiedSharingService {
           }
 
           // Handle it as text content
-          final finalSafeContext = (context.mounted)
-              ? context
-              : (MyApp.navigatorKey.currentContext ?? context);
-
-          await _processSharedText(
-            finalSafeContext,
-            htmlService,
-            content,
-            fileName: fileName,
-            path: filePath ?? 'shared://${type ?? "content"}',
-            type: type,
-          );
+          if (context.mounted) {
+            await _processSharedText(
+              context,
+              htmlService,
+              content,
+              fileName: fileName,
+              path: filePath ?? 'shared://${type ?? "content"}',
+              type: type,
+            );
+          } else {
+            final navContext = MyApp.navigatorKey.currentContext;
+            if (navContext != null && navContext.mounted) {
+              await _processSharedText(
+                navContext,
+                htmlService,
+                content,
+                fileName: fileName,
+                path: filePath ?? 'shared://${type ?? "content"}',
+                type: type,
+              );
+            }
+          }
         } else {
           // Otherwise handle it as text content (could be a file read by native side)
-          await _processSharedText(
-            context,
-            htmlService,
-            content,
-            fileName: fileName,
-            path: filePath ?? 'shared://${type ?? "content"}',
-            type:
-                type, // Pass the type to determine appropriate default filename
-          );
+          if (context.mounted) {
+            await _processSharedText(
+              context,
+              htmlService,
+              content,
+              fileName: fileName,
+              path: filePath ?? 'shared://${type ?? "content"}',
+              type:
+                  type, // Pass the type to determine appropriate default filename
+            );
+          } else {
+            final navContext = MyApp.navigatorKey.currentContext;
+            if (navContext != null && navContext.mounted) {
+              await _processSharedText(
+                navContext,
+                htmlService,
+                content,
+                fileName: fileName,
+                path: filePath ?? 'shared://${type ?? "content"}',
+                type: type,
+              );
+            }
+          }
         }
       } else if (fileBytes != null && fileBytes.isNotEmpty) {
         await _processSharedFileBytes(

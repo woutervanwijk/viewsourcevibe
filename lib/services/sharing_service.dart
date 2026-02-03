@@ -82,8 +82,9 @@ class SharingService {
         if (isUrl(sharedText)) {
           // This is a valid HTTP/HTTPS URL, treat it as a URL
           debugPrint('SharingService: Shared text is a valid URL: $sharedText');
-          // ignore: use_build_context_synchronously
-          await _processSharedUrl(context, htmlService, sharedText);
+          if (context.mounted) {
+            await _processSharedUrl(context, htmlService, sharedText);
+          }
         } else {
           // Not a valid URL, but check if it's a potential URL that should be opened
           if (UnifiedSharingService.isPotentialUrl(sharedText)) {
@@ -94,8 +95,9 @@ class SharingService {
                   (uri.scheme == 'http' || uri.scheme == 'https')) {
                 debugPrint(
                     'SharingService: Detected potential URL in shared text, opening: $sharedText');
-                // ignore: use_build_context_synchronously
-                await _processSharedUrl(context, htmlService, sharedText);
+                if (context.mounted) {
+                  await _processSharedUrl(context, htmlService, sharedText);
+                }
                 return; // URL handled, no need for text processing
               }
             } catch (e) {
@@ -107,8 +109,9 @@ class SharingService {
           // Not a valid URL, treat as text content
           debugPrint(
               'SharingService: Shared text is not a URL, treating as text: $sharedText');
-          // ignore: use_build_context_synchronously
-          await _processSharedText(context, htmlService, sharedText);
+          if (context.mounted) {
+            await _processSharedText(context, htmlService, sharedText);
+          }
         }
       }
       // Priority 3: Check if shared text is actually a file path

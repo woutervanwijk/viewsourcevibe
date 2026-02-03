@@ -1,12 +1,11 @@
-import 'dart:html' as html;
-import 'dart:ui' as ui;
+import 'dart:ui_web' as ui_web;
+import 'package:web/web.dart' as web;
 
 void registerMediaIframe(String viewID, String url) {
-  // ignore: undefined_prefixed_name
-  ui.platformViewRegistry.registerViewFactory(
+  ui_web.platformViewRegistry.registerViewFactory(
     viewID,
     (int viewId) {
-      final iframe = html.IFrameElement();
+      final iframe = web.HTMLIFrameElement();
       iframe.src = url;
       iframe.style.border = 'none';
       iframe.style.width = '100%';

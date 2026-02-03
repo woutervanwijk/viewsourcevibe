@@ -3,7 +3,7 @@ description: A cross-platform source code viewer app (HTML, CSS, JavaScript, Mar
 version: 1.0.0+1
 
 environment:
-  sdk: ">=2.19.0 <3.0.0"
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -11,6 +11,7 @@ dependencies:
   
   # Core packages
   cupertino_icons: ^1.0.2
+  web: ^1.1.0
   
 
   

@@ -61,9 +61,9 @@ class _BrowserViewState extends State<BrowserView> {
     if (_controller == null) return;
 
     if (widget.file.isUrl) {
-      _controller!.loadRequest(Uri.parse(widget.file.path));
+      _controller.loadRequest(Uri.parse(widget.file.path));
     } else {
-      _controller!.loadHtmlString(widget.file.content);
+      _controller.loadHtmlString(widget.file.content);
     }
   }
 
