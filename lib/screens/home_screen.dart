@@ -12,6 +12,8 @@ import 'package:view_source_vibe/widgets/media_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
+import 'package:view_source_vibe/widgets/webview_extractor.dart';
+import 'package:flutter/foundation.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -224,6 +226,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
             const Divider(height: 1),
+            if (!kIsWeb) const WebViewExtractor(),
             Expanded(
               child: htmlService.currentFile == null
                   ? Padding(

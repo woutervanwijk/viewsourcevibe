@@ -39,7 +39,7 @@ class HtmlService with ChangeNotifier {
   String?
       selectedContentType; // Track the selected content type for syntax highlighting
   ScrollController? _verticalScrollController;
-  ScrollController? _horizontalScrollController;
+  ScrollController? _activeHorizontalScrollController;
   GlobalKey? _codeEditorKey;
   AppStateService? _appStateService;
   UrlHistoryService? _urlHistoryService;
@@ -60,6 +60,11 @@ class HtmlService with ChangeNotifier {
   bool _isWebViewMode = false;
   bool get isWebViewMode => _isWebViewMode;
 
+  // WebView extraction state
+  bool _isWebViewLoading = false;
+  bool get isWebViewLoading => _isWebViewLoading;
+  String? _webViewLoadingUrl;
+  String? get webViewLoadingUrl => _webViewLoadingUrl;
   bool _isBeautifyEnabled = false;
   bool get isBeautifyEnabled => _isBeautifyEnabled;
 
@@ -75,7 +80,7 @@ class HtmlService with ChangeNotifier {
   HtmlFile? get currentFile => _currentFile;
   ScrollController? get scrollController => _verticalScrollController;
   ScrollController? get horizontalScrollController =>
-      _horizontalScrollController;
+      _activeHorizontalScrollController;
   GlobalKey? get codeEditorKey => _codeEditorKey;
 
   // Expose probe state
@@ -132,15 +137,75 @@ class HtmlService with ChangeNotifier {
   }
 
   HtmlService() {
-    _horizontalScrollController = ScrollController();
     _codeEditorKey = GlobalKey();
     _currentInputText = '';
+  }
+
+  void triggerWebViewLoad(String url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://$url';
+    }
+    _webViewLoadingUrl = url;
+    _isWebViewLoading = true;
+    _isLoading = true;
+    notifyListeners();
+  }
+
+  void cancelWebViewLoad() {
+    _webViewLoadingUrl = null;
+    _isWebViewLoading = false;
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> completeWebViewLoad(String html, String url) async {
+    _isWebViewLoading = false;
+    _webViewLoadingUrl = null;
+
+    // Construct a basic probe result for the WebView load
+    final probeResult = {
+      'statusCode': 200,
+      'reasonPhrase': 'OK (via Browser)',
+      'headers': <String, String>{'content-type': 'text/html'},
+      'finalUrl': url,
+      'isRedirect': false,
+    };
+
+    final filename = generateDescriptiveFilename(Uri.parse(url), html);
+    final processedFilename = await detectFileTypeAndGenerateFilename(
+        filename, html,
+        contentType: 'text/html');
+
+    final file = HtmlFile(
+      name: processedFilename,
+      path: url,
+      content: html,
+      lastModified: DateTime.now(),
+      size: html.length,
+      isUrl: true,
+      probeResult: probeResult,
+    );
+
+    // Save probes to local state so they can be viewed
+    _probeResult = probeResult;
+    _isProbing = false;
+
+    await loadFile(file);
+    _isLoading = false;
+    notifyListeners();
   }
 
   @override
   void dispose() {
     _verticalScrollController?.dispose();
-    _horizontalScrollController?.dispose();
+    _activeHorizontalScrollController = null;
+
+    // Dispose all cached horizontal controllers
+    for (final controller in _cachedHorizontalControllers.values) {
+      controller.dispose();
+    }
+    _cachedHorizontalControllers.clear();
+
     super.dispose();
   }
 
@@ -148,16 +213,27 @@ class HtmlService with ChangeNotifier {
   double? getCurrentScrollPosition() {
     if (_verticalScrollController != null &&
         _verticalScrollController!.hasClients) {
-      return _verticalScrollController!.position.pixels;
+      try {
+        // Handle multiple attached clients safely
+        return _verticalScrollController!.positions.last.pixels;
+      } catch (e) {
+        debugPrint('Error getting vertical scroll position: $e');
+        return null;
+      }
     }
     return null;
   }
 
   /// Save current horizontal scroll position
   double? getCurrentHorizontalScrollPosition() {
-    if (_horizontalScrollController != null &&
-        _horizontalScrollController!.hasClients) {
-      return _horizontalScrollController!.position.pixels;
+    if (_activeHorizontalScrollController != null &&
+        _activeHorizontalScrollController!.hasClients) {
+      try {
+        return _activeHorizontalScrollController!.positions.last.pixels;
+      } catch (e) {
+        debugPrint('Error getting horizontal scroll position: $e');
+        return null;
+      }
     }
     return null;
   }
@@ -168,7 +244,11 @@ class HtmlService with ChangeNotifier {
       final controller = _verticalScrollController;
       if (controller != null && controller.hasClients) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          controller.jumpTo(position);
+          try {
+            controller.jumpTo(position);
+          } catch (e) {
+            debugPrint('Error restoring vertical scroll position: $e');
+          }
         });
       }
     }
@@ -192,10 +272,14 @@ class HtmlService with ChangeNotifier {
   /// Restore horizontal scroll position
   void restoreHorizontalScrollPosition(double? position) {
     if (position != null) {
-      final controller = _horizontalScrollController;
+      final controller = _activeHorizontalScrollController;
       if (controller != null && controller.hasClients) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          controller.jumpTo(position);
+          try {
+            controller.jumpTo(position);
+          } catch (e) {
+            debugPrint('Error restoring horizontal scroll position: $e');
+          }
         });
       }
     }
@@ -1124,8 +1208,9 @@ class HtmlService with ChangeNotifier {
       _verticalScrollController?.jumpTo(0);
     }
     await Future.delayed(const Duration(milliseconds: 10));
-    if (_horizontalScrollController?.hasClients ?? false) {
-      _horizontalScrollController?.jumpTo(0);
+    await Future.delayed(const Duration(milliseconds: 10));
+    if (_activeHorizontalScrollController?.hasClients ?? false) {
+      _activeHorizontalScrollController?.jumpTo(0);
     }
     await Future.delayed(const Duration(milliseconds: 10));
   }
@@ -2315,7 +2400,7 @@ Technical details: $e''';
     // Create the scroll controller for CodeEditor
     final codeScrollController = CodeScrollController(
         verticalScroller: effectiveVerticalController,
-        horizontalScroller: _horizontalScrollController);
+        horizontalScroller: _activeHorizontalScrollController);
 
     // Create the final widget
     final codeEditor = CodeEditor(
@@ -2551,11 +2636,17 @@ Technical details: $e''';
   // Cache for editor state to prevent crashes and flickering
   final Map<String, CodeLineEditingController> _cachedControllers = {};
   final Map<String, GlobalKey> _cachedGlobalKeys = {};
+  final Map<String, ScrollController> _cachedHorizontalControllers = {};
 
   /// Clear the editor cache
   void clearHighlightCache() {
     _cachedControllers.clear();
     _cachedGlobalKeys.clear();
+    for (final controller in _cachedHorizontalControllers.values) {
+      controller.dispose();
+    }
+    _cachedHorizontalControllers.clear();
+    _activeHorizontalScrollController = null;
     debugPrint('🧹 Cleared editor cache');
   }
 
@@ -2569,8 +2660,18 @@ Technical details: $e''';
           .toList();
       for (final key in keysToRemove) {
         _cachedControllers.remove(key);
-        // Also remove all associated global keys for this content
+        // Also remove all associated global keys and horizontal controllers for this content
         _cachedGlobalKeys.removeWhere((ekey, _) => ekey.startsWith(key));
+
+        // Find and remove horizontal controllers matching this key prefix
+        final hKeysToRemove = _cachedHorizontalControllers.keys
+            .where((hKey) => hKey.startsWith(key))
+            .toList();
+
+        for (final hKey in hKeysToRemove) {
+          _cachedHorizontalControllers[hKey]?.dispose();
+          _cachedHorizontalControllers.remove(hKey);
+        }
       }
       debugPrint('🔄 Trimmed editor cache to $maxCacheEntries entries');
     }
@@ -2616,8 +2717,21 @@ Technical details: $e''';
       // Get or create GlobalKey for this scroll context
       final globalKey = _cachedGlobalKeys[editorKey] ??= GlobalKey();
 
-      return _buildEditorWidget(context, controller, globalKey, extension,
-          themeName, fontSize, wrapText, showLineNumbers);
+      // Get or create cached horizontal scroll controller
+      final horizontalController =
+          _cachedHorizontalControllers[editorKey] ??= ScrollController();
+      _activeHorizontalScrollController = horizontalController;
+
+      return _buildEditorWidget(
+          context,
+          controller,
+          globalKey,
+          horizontalController,
+          extension,
+          themeName,
+          fontSize,
+          wrapText,
+          showLineNumbers);
     }
 
     // Cache Miss: Perform setup (async)
@@ -2659,24 +2773,42 @@ Technical details: $e''';
     }
 
     // Create Controller & GlobalKey
+    // Create Controller & GlobalKey & Horizontal Scroll Controller
     final controller = CodeLineEditingController.fromText(processedContent);
     final globalKey = GlobalKey();
+    final horizontalController = ScrollController();
 
     // Cache them
     _cachedControllers[controllerKey] = controller;
     _cachedGlobalKeys[editorKey] = globalKey;
+    _cachedHorizontalControllers[editorKey] = horizontalController;
     _enforceCacheSizeLimits();
 
-    if (!context.mounted) return const SizedBox.shrink();
+    if (!context.mounted) {
+      horizontalController
+          .dispose(); // Should not happen often but safe cleanup
+      return const SizedBox.shrink();
+    }
 
-    return _buildEditorWidget(context, controller, globalKey, extension,
-        themeName, fontSize, wrapText, showLineNumbers);
+    _activeHorizontalScrollController = horizontalController;
+
+    return _buildEditorWidget(
+        context,
+        controller,
+        globalKey,
+        horizontalController,
+        extension,
+        themeName,
+        fontSize,
+        wrapText,
+        showLineNumbers);
   }
 
   Widget _buildEditorWidget(
     BuildContext context,
     CodeLineEditingController controller,
     GlobalKey key,
+    ScrollController horizontalController,
     String extension,
     String themeName,
     double fontSize,
@@ -2702,7 +2834,7 @@ Technical details: $e''';
     // Create CodeScrollController linked to CURRENT effective controller
     final codeScrollController = CodeScrollController(
         verticalScroller: effectiveVerticalController,
-        horizontalScroller: _horizontalScrollController);
+        horizontalScroller: horizontalController);
 
     // Return the Editor Widget, using the GlobalKey to preserve state
     return CodeEditor(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
@@ -69,9 +70,20 @@ class _UrlInputState extends State<UrlInput> {
       // _urlController.clear();
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage = 'Error: $e');
+        String errorStr = e.toString().replaceFirst('Exception: ', '');
+        setState(() => _errorMessage = 'Error: $errorStr');
       }
     }
+  }
+
+  Future<void> _loadViaWebView() async {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) return;
+
+    setState(() => _errorMessage = '');
+
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    htmlService.triggerWebViewLoad(url);
   }
 
   @override
@@ -233,15 +245,31 @@ class _UrlInputState extends State<UrlInput> {
                   ),
                 ],
               ),
-              if (_errorMessage.isNotEmpty &&
-                  htmlService.currentFile != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  _errorMessage,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: 11,
-                  ),
+              if (_errorMessage.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _errorMessage,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    if (!kIsWeb)
+                      TextButton.icon(
+                        icon: const Icon(Icons.language, size: 14),
+                        label: const Text('Force load with Browser',
+                            style: TextStyle(fontSize: 11)),
+                        onPressed: _loadViaWebView,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ],
