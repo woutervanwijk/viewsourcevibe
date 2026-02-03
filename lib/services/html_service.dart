@@ -268,7 +268,7 @@ class HtmlService with ChangeNotifier {
     // Capitalize first letter
     humanDomain = humanDomain.isNotEmpty
         ? humanDomain[0].toUpperCase() + humanDomain.substring(1)
-        : 'Web Page';
+        : 'index';
 
     // Extract meaningful path segments
     final pathSegments = uri.pathSegments
@@ -649,8 +649,8 @@ class HtmlService with ChangeNotifier {
         // Use simple descriptive names without extensions
         if (filename.contains('rss') || filename.contains('feed')) {
           return 'RSS Page.xml';
-        } // Simple fallback for generated filen}
-        return 'Web Page.html'; // Simple fallback for generated filenames
+        }
+        return 'index.html'; // Simple fallback for generated filenames
       }
 
       // If filename already has a proper file extension, use it
