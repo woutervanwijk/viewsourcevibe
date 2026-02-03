@@ -92,10 +92,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return [
       _buildTab(Icons.code, 'Source'),
+      if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
       if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
       if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
       if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
-      if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
       _buildTab(Icons.network_check, 'Probe'),
       _buildTab(Icons.list_alt, 'Headers'),
       _buildTab(Icons.security, 'Security'),
@@ -117,17 +117,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             : const Center(child: Text('No File')),
       ),
 
-      // 2. Metadata (Conditional)
+      // 2. DOM Tree (Conditional)
+      if (isHtmlOrXml) const KeepAliveWrapper(child: DomTreeView()),
+
+      // 3. Metadata (Conditional)
       if (showMetadataTabs) const KeepAliveWrapper(child: MetadataView()),
 
-      // 3. Services (Conditional)
+      // 4. Services (Conditional)
       if (showMetadataTabs) const KeepAliveWrapper(child: ServicesView()),
 
-      // 4. Media (Conditional)
+      // 5. Media (Conditional)
       if (showMetadataTabs) const KeepAliveWrapper(child: MediaView()),
-
-      // 5. DOM Tree (Conditional)
-      if (isHtmlOrXml) const KeepAliveWrapper(child: DomTreeView()),
 
       // 6. Probe: General
       const KeepAliveWrapper(child: ProbeGeneralView()),
