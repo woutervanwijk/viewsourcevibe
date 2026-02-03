@@ -245,13 +245,16 @@ class _UrlInputState extends State<UrlInput> {
                   ),
                 ],
               ),
-              if (_errorMessage.isNotEmpty) ...[
+              if (_errorMessage.isNotEmpty ||
+                  (htmlService.currentFile?.isError ?? false)) ...[
                 const SizedBox(height: 4),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        _errorMessage,
+                        _errorMessage.isNotEmpty
+                            ? _errorMessage
+                            : 'Load failed. See details below.',
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
                           fontSize: 11,

@@ -381,6 +381,18 @@ class FileViewer extends StatelessWidget {
                             ),
                             const SizedBox(width: 2),
                           ],
+                          // View Source button - only show in WebView mode
+                          if (htmlService.isWebViewMode) ...[
+                            IconButton(
+                              icon: const Icon(Icons.visibility, size: 20),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              onPressed: () =>
+                                  htmlService.extractCurrentWebViewContent(),
+                              tooltip: 'Load HTML from Current Page',
+                            ),
+                            const SizedBox(width: 2),
+                          ],
                           // WebView Toggle button - Always show for text files
                           Container(
                             decoration: BoxDecoration(

@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:view_source_vibe/widgets/media_browser_platform_proxy.dart'
     if (dart.library.js_util) 'package:view_source_vibe/widgets/media_browser_web_impl.dart'
     as platform_impl;
+import 'package:provider/provider.dart';
+import 'package:view_source_vibe/services/html_service.dart';
 
 class BrowserView extends StatefulWidget {
   final HtmlFile file;
@@ -38,11 +40,36 @@ class _BrowserViewState extends State<BrowserView> {
             onProgress: (int progress) {
               // Update loading bar.
             },
-            onPageStarted: (String url) {},
-            onPageFinished: (String url) {},
+            onPageStarted: (String url) {
+              if (mounted) {
+                Provider.of<HtmlService>(context, listen: false)
+                    .updateWebViewUrl(url);
+              }
+            },
+            onPageFinished: (String url) {
+              if (mounted) {
+                // Use syncWebViewState to update everything (content, metadata, probe)
+                Provider.of<HtmlService>(context, listen: false)
+                    .syncWebViewState(url);
+              }
+            },
+            onUrlChange: (UrlChange change) {
+              if (mounted && change.url != null) {
+                Provider.of<HtmlService>(context, listen: false)
+                    .updateWebViewUrl(change.url!);
+              }
+            },
             onWebResourceError: (WebResourceError error) {},
           ),
         );
+
+      // Register controller with HtmlService
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Provider.of<HtmlService>(context, listen: false)
+              .activeWebViewController = _controller;
+        }
+      });
 
       _loadContent();
     } else {
@@ -63,13 +90,18 @@ class _BrowserViewState extends State<BrowserView> {
     ).toString();
   }
 
-  void _loadContent() {
+  Future<void> _loadContent() async {
     if (_controller == null) return;
 
     if (widget.file.isUrl) {
-      _controller.loadRequest(Uri.parse(widget.file.path));
+      final currentUrl = await _controller!.currentUrl();
+      // Prevent reloading if we are already at the target URL
+      // This breaks the loop where syncWebViewState updates the file -> updateWidget -> loadRequest -> onPageFinished -> syncWebViewState
+      if (currentUrl == widget.file.path) return;
+
+      _controller!.loadRequest(Uri.parse(widget.file.path));
     } else {
-      _controller.loadHtmlString(widget.file.content);
+      _controller!.loadHtmlString(widget.file.content);
     }
   }
 

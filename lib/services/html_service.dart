@@ -27,6 +27,7 @@ import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
+import 'package:webview_flutter/webview_flutter.dart' as wf;
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -67,6 +68,13 @@ class HtmlService with ChangeNotifier {
   String? get webViewLoadingUrl => _webViewLoadingUrl;
   bool _isBeautifyEnabled = false;
   bool get isBeautifyEnabled => _isBeautifyEnabled;
+  wf.WebViewController? _activeWebViewController;
+
+  wf.WebViewController? get activeWebViewController => _activeWebViewController;
+
+  set activeWebViewController(wf.WebViewController? controller) {
+    _activeWebViewController = controller;
+  }
 
   // Cache for highlighted content to improve performance
   final Map<String, Widget> _highlightCache = {};
@@ -1575,6 +1583,7 @@ Technical details: $e''';
         lastModified: DateTime.now(),
         size: errorContent.length,
         isUrl: true,
+        isError: true,
       );
 
       return htmlFile;
@@ -3021,5 +3030,119 @@ Technical details: $e''';
       chunks.add(base64String.substring(i, end));
     }
     return '-----BEGIN CERTIFICATE-----\n${chunks.join('\n')}\n-----END CERTIFICATE-----';
+  }
+
+  Future<void> syncWebViewState(String url) async {
+    if (_activeWebViewController == null) return;
+
+    // Update URL bar immediately
+    if (_currentInputText != url) {
+      _currentInputText = url;
+      notifyListeners();
+    }
+
+    // Trigger probe for the new URL
+    // We don't await this to keep UI responsive
+    probeUrl(url).catchError((e) {
+      debugPrint('Error probing synced URL: $e');
+      return <String, dynamic>{};
+    });
+
+    try {
+      final html = await _activeWebViewController!.runJavaScriptReturningResult(
+          'document.documentElement.outerHTML') as String;
+
+      // Unquote if needed
+      String finalHtml = html;
+      if (finalHtml.startsWith('"') && finalHtml.endsWith('"')) {
+        try {
+          finalHtml = finalHtml
+              .substring(1, finalHtml.length - 1)
+              .replaceAll('\\"', '"')
+              .replaceAll('\\\\', '\\')
+              .replaceAll('\\n', '\n')
+              .replaceAll('\\r', '\r')
+              .replaceAll('\\t', '\t');
+        } catch (e) {
+          debugPrint('Error unquoting HTML: $e');
+        }
+      }
+
+      // Update current file with new content BUT maintain webview mode
+      final processedFilename =
+          await detectFileTypeAndGenerateFilename(url, finalHtml);
+
+      final htmlFile = HtmlFile(
+          name: processedFilename,
+          path: url,
+          content: finalHtml,
+          lastModified: DateTime.now(),
+          size: finalHtml.length,
+          isUrl: true);
+
+      _currentFile = htmlFile;
+
+      // Trigger metadata extraction for the new content
+      await _extractMetadata();
+
+      notifyListeners();
+      _autoSave();
+    } catch (e) {
+      debugPrint('Error syncing WebView state: $e');
+    }
+  }
+
+  void updateWebViewUrl(String url) {
+    if (_currentInputText != url) {
+      _currentInputText = url;
+      notifyListeners();
+    }
+  }
+
+  Future<void> extractCurrentWebViewContent() async {
+    if (_activeWebViewController == null) return;
+
+    try {
+      final url = await _activeWebViewController!.currentUrl();
+      final html = await _activeWebViewController!.runJavaScriptReturningResult(
+          'document.documentElement.outerHTML') as String;
+
+      // Unquote if needed (standard JS result processing)
+      String finalHtml = html;
+      if (finalHtml.startsWith('"') && finalHtml.endsWith('"')) {
+        try {
+          finalHtml = finalHtml
+              .substring(1, finalHtml.length - 1)
+              .replaceAll('\\"', '"')
+              .replaceAll('\\\\', '\\')
+              .replaceAll('\\n', '\n')
+              .replaceAll('\\r', '\r')
+              .replaceAll('\\t', '\t');
+        } catch (e) {
+          debugPrint('Error unquoting HTML: $e');
+        }
+      }
+
+      if (url != null) {
+        final processedFilename =
+            await detectFileTypeAndGenerateFilename(url, finalHtml);
+
+        final htmlFile = HtmlFile(
+            name: processedFilename,
+            path: url,
+            content: finalHtml,
+            lastModified: DateTime.now(),
+            size: finalHtml.length,
+            isUrl: true);
+
+        _currentFile = htmlFile;
+        _currentInputText = url;
+        _isWebViewMode = false; // Switch back to editor to show source
+        notifyListeners();
+        _autoSave();
+      }
+    } catch (e) {
+      debugPrint('Error extracting WebView content: $e');
+    }
   }
 }

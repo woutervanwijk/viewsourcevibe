@@ -5,6 +5,7 @@ class HtmlFile {
   final DateTime lastModified;
   final int size;
   final bool isUrl;
+  final bool isError;
   final Map<String, dynamic>? probeResult;
 
   HtmlFile({
@@ -15,10 +16,11 @@ class HtmlFile {
     required this.size,
     this.isUrl = false,
     this.probeResult,
+    this.isError = false,
   });
 
   factory HtmlFile.fromContent(String name, String content,
-      {bool isUrl = false}) {
+      {bool isUrl = false, bool isError = false}) {
     return HtmlFile(
       name: name,
       path: '',
@@ -26,6 +28,7 @@ class HtmlFile {
       lastModified: DateTime.now(),
       size: content.length,
       isUrl: isUrl,
+      isError: isError,
     );
   }
 
