@@ -29,6 +29,7 @@ class _BrowserViewState extends State<BrowserView> {
   late final WebViewController? _controller;
   final String viewID = 'browser-preview-view';
   String? _currentRssUrl;
+  bool _hasSyncedEarly = false;
 
   @override
   void initState() {
@@ -41,12 +42,25 @@ class _BrowserViewState extends State<BrowserView> {
           NavigationDelegate(
             onProgress: (int progress) {
               if (mounted) {
-                Provider.of<HtmlService>(context, listen: false)
-                    .updateWebViewLoadingProgress(progress / 100.0);
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.updateWebViewLoadingProgress(progress / 100.0);
+
+                // Early Sync: If we've reached a significant threshold (e.g. 70%),
+                // and haven't synced yet, try to pull the HTML content early.
+                if (progress >= 70 && !_hasSyncedEarly) {
+                  _hasSyncedEarly = true;
+                  _controller?.currentUrl().then((url) {
+                    if (url != null && url != 'about:blank') {
+                      htmlService.syncWebViewState(url);
+                    }
+                  }).ignore();
+                }
               }
             },
             onPageStarted: (String url) {
               if (mounted) {
+                _hasSyncedEarly = false;
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
                 htmlService.updateWebViewUrl(url);
@@ -156,6 +170,8 @@ class _BrowserViewState extends State<BrowserView> {
     // We use the file content if available, otherwise just load the URL
     final isRssOrXml = await RssTemplateService.isRssFeed(
         widget.file.name, widget.file.content);
+    // Clear current content first to avoid flicker/stale view
+    // await _controller.loadRequest(Uri.parse('about:blank'));
 
     if (isRssOrXml && widget.file.content.isNotEmpty) {
       // Use temporary internal RSS rendering if needed
@@ -168,7 +184,7 @@ class _BrowserViewState extends State<BrowserView> {
       _currentRssUrl = null;
       if (currentUrl == targetUrl && targetUrl.isNotEmpty) return;
 
-      if (targetUrl.startsWith('http')) {
+      if (targetUrl.startsWith('http') && !targetUrl.contains('about:blank')) {
         await _controller.loadRequest(Uri.parse(targetUrl));
       } else {
         await _controller.loadHtmlString(widget.file.content,
@@ -189,7 +205,14 @@ class _BrowserViewState extends State<BrowserView> {
     return WebViewWidget(
       controller: _controller!,
       gestureRecognizers: widget.gestureRecognizers ??
-          const <Factory<OneSequenceGestureRecognizer>>{},
+          {
+            Factory<VerticalDragGestureRecognizer>(
+              () => VerticalDragGestureRecognizer(),
+            ),
+            Factory<LongPressGestureRecognizer>(
+              () => LongPressGestureRecognizer(),
+            ),
+          },
     );
   }
 }

@@ -28,9 +28,9 @@ class UrlHistoryService with ChangeNotifier {
     _history.remove(url);
     _history.insert(0, url);
 
-    // Limit to 20 items
-    if (_history.length > 20) {
-      _history = _history.sublist(0, 20);
+    // Limit to 200 items
+    if (_history.length > 200) {
+      _history = _history.sublist(0, 200);
     }
 
     await _prefs.setStringList(_historyKey, _history);

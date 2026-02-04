@@ -20,6 +20,7 @@ import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -55,6 +56,7 @@ class HtmlService with ChangeNotifier {
   Map<String, dynamic>? _probeResult;
   bool _isProbing = false;
   String? _probeError;
+  String? _currentlyProbingUrl;
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
@@ -250,7 +252,8 @@ class HtmlService with ChangeNotifier {
     if (url.isEmpty) return;
 
     // Sanitize
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    // Auto-prepend https if no scheme is provided, excluding special schemes like about:
+    if (!url.contains('://') && !url.startsWith('about:')) {
       url = 'https://$url';
     }
 
@@ -305,9 +308,12 @@ class HtmlService with ChangeNotifier {
   }
 
   void cancelWebViewLoad() {
-    _webViewLoadingUrl = null;
+    activeWebViewController?.runJavaScript('window.stop();');
+    //loadRequest(Uri.parse('about:blank'));
+    // _webViewLoadingUrl = null;
     _isWebViewLoading = false;
     _isLoading = false;
+    // _webViewLoadingProgress = 0.0;
     notifyListeners();
   }
 
@@ -581,6 +587,8 @@ class HtmlService with ChangeNotifier {
 
       // Use HttpClient to manually handle redirects and capture certificate
       final hClient = HttpClient();
+      hClient.badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
       final hRequest = await hClient.openUrl('GET', uri);
       hRequest.followRedirects = false;
 
@@ -1541,7 +1549,10 @@ class HtmlService with ChangeNotifier {
 
     try {
       // Validate and sanitize URL
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      // Auto-prepend https if no scheme is provided, excluding special schemes like about:
+      if (!url.contains('://') &&
+          !url.startsWith('about:') &&
+          !url.startsWith('data:')) {
         url = 'https://$url';
       }
 
@@ -1557,7 +1568,7 @@ class HtmlService with ChangeNotifier {
       }
 
       // Use the http package with timeout and security settings
-      final client = http.Client();
+      final client = _createClient();
       final stopwatch = Stopwatch()..start();
       String? ipAddress;
 
@@ -1769,19 +1780,33 @@ Technical details: $e''';
 
   /// Probe a URL to get status code and headers without downloading the full content
   Future<Map<String, dynamic>> probeUrl(String url) async {
+    if (_currentlyProbingUrl == url && _isProbing) {
+      return _probeResult ?? {};
+    }
+
+    // Skip probing for local/pseudo schemes like about:blank
+    if (url.startsWith('about:')) {
+      return {};
+    }
+
     _isProbing = true;
+    _currentlyProbingUrl = url;
     _probeResult = null; // Reset previous results immediately
     _probeError = null;
     notifyListeners();
     _autoSave();
     try {
       // Validate and sanitize URL
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://$url';
+      String targetUrl = url;
+      // Auto-prepend https if no scheme is provided, excluding special schemes like about:
+      if (!targetUrl.contains('://') &&
+          !targetUrl.startsWith('about:') &&
+          !targetUrl.startsWith('data:')) {
+        targetUrl = 'https://$targetUrl';
       }
 
-      final uri = Uri.parse(url);
-      final client = http.Client();
+      final uri = Uri.parse(targetUrl);
+      final client = _createClient();
       final stopwatch = Stopwatch()..start();
       String? ipAddress;
 
@@ -1896,24 +1921,31 @@ Technical details: $e''';
         final location = normalizedHeaders['location'];
         if (location != null && location.isNotEmpty) {
           // Resolve relative URLs
-          final uri = Uri.parse(url);
+          final uri = Uri.parse(targetUrl);
           final redirectUri = uri.resolve(location);
           result['redirectLocation'] = redirectUri.toString();
         }
       }
 
-      _probeResult = result;
-      _isProbing = false;
-      notifyListeners();
-      _autoSave();
-
+      // Only update state if this probe is still relevant
+      if (_currentlyProbingUrl == url) {
+        _probeResult = result;
+      }
       return result;
     } catch (e) {
       debugPrint('Error probing URL: $e');
-      _probeError = e.toString();
-      _isProbing = false;
-      notifyListeners();
+      if (_currentlyProbingUrl == url) {
+        _probeError = e.toString();
+      }
       rethrow;
+    } finally {
+      // Only reset flags if we are still the active probe
+      if (_currentlyProbingUrl == url) {
+        _isProbing = false;
+        _currentlyProbingUrl = null;
+        notifyListeners();
+        _autoSave();
+      }
     }
   }
 
@@ -3223,12 +3255,13 @@ Technical details: $e''';
       notifyListeners();
     }
 
-    // Trigger probe for the new URL
-    // We don't await this to keep UI responsive
-    probeUrl(url).catchError((e) {
-      debugPrint('Error probing synced URL: $e');
-      return <String, dynamic>{};
-    });
+    // Trigger probe for the new URL if not already probing it or if it's different from the result
+    if (_currentlyProbingUrl != url && _probeResult?['finalUrl'] != url) {
+      probeUrl(url).catchError((e) {
+        debugPrint('Error probing synced URL: $e');
+        return <String, dynamic>{};
+      });
+    }
 
     try {
       final html = await activeWebViewController!.runJavaScriptReturningResult(
@@ -3266,6 +3299,13 @@ Technical details: $e''';
     }
   }
 
+  http.Client _createClient() {
+    final ioc = HttpClient();
+    ioc.badCertificateCallback =
+        (X509Certificate cert, String host, int port) => true;
+    return IOClient(ioc);
+  }
+
   void updateWebViewUrl(String url) {
     if (_currentInputText != url) {
       _currentInputText = url;
@@ -3281,10 +3321,12 @@ Technical details: $e''';
 
       // Trigger probe for the new URL to update Headers, Security, etc.
       // We don't await this to keep the UI responsive during WebView interaction
-      probeUrl(url).catchError((e) {
-        debugPrint('Error probing updated webview URL: $e');
-        return <String, dynamic>{};
-      });
+      if (!url.startsWith('about:')) {
+        probeUrl(url).catchError((e) {
+          debugPrint('Error probing updated webview URL: $e');
+          return <String, dynamic>{};
+        });
+      }
     }
   }
 
