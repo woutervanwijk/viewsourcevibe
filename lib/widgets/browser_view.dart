@@ -60,6 +60,9 @@ class _BrowserViewState extends State<BrowserView> {
             },
             onPageStarted: (String url) {
               if (mounted) {
+                // Ignore internal or blank URLs for UI updates
+                if (url == 'about:blank' || url.startsWith('data:')) return;
+
                 _hasSyncedEarly = false;
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
@@ -69,6 +72,9 @@ class _BrowserViewState extends State<BrowserView> {
             },
             onPageFinished: (String url) {
               if (mounted) {
+                // Ignore internal or blank URLs for UI updates
+                if (url == 'about:blank' || url.startsWith('data:')) return;
+
                 // If we are viewing the RSS template, block sync to preserve XML source.
                 if (_currentRssUrl != null && url == _currentRssUrl) {
                   // If the app model has drifted (e.g. we came back from an article),
@@ -90,6 +96,10 @@ class _BrowserViewState extends State<BrowserView> {
             },
             onUrlChange: (UrlChange change) {
               if (mounted && change.url != null) {
+                if (change.url == 'about:blank' ||
+                    change.url!.startsWith('data:')) {
+                  return;
+                }
                 Provider.of<HtmlService>(context, listen: false)
                     .updateWebViewUrl(change.url!);
               }
@@ -189,8 +199,6 @@ class _BrowserViewState extends State<BrowserView> {
     // We use the file content if available, otherwise just load the URL
     final isRssOrXml = await RssTemplateService.isRssFeed(
         widget.file.name, widget.file.content);
-    // Clear current content first to avoid flicker/stale view
-    // await _controller.loadRequest(Uri.parse('about:blank'));
 
     if (isRssOrXml && widget.file.content.isNotEmpty) {
       // Use temporary internal RSS rendering if needed

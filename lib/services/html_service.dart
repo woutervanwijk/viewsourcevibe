@@ -273,6 +273,11 @@ class HtmlService with ChangeNotifier {
     // Start background probe ALWAYS
     probeUrl(url).ignore();
 
+    // Clear background WebView to avoid stale content when switching tabs later
+    if (!kIsWeb && activeWebViewController != null) {
+      activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
+    }
+
     if (forceWebView || (_activeTabIndex == 1 && switchToTab == 1)) {
       // WebView path
       _webViewLoadingUrl = url;
