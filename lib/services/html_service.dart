@@ -3045,6 +3045,26 @@ Technical details: $e''';
     return '-----BEGIN CERTIFICATE-----\n${chunks.join('\n')}\n-----END CERTIFICATE-----';
   }
 
+  String _unquoteHtml(String html) {
+    if (html.startsWith('"') && html.endsWith('"')) {
+      try {
+        // Use jsonDecode to robustly handle all escape sequences (\n, \", \uXXXX, etc.)
+        return jsonDecode(html) as String;
+      } catch (e) {
+        debugPrint('Error unquoting HTML via jsonDecode: $e');
+        // Fallback to manual unquoting if jsonDecode fails
+        return html
+            .substring(1, html.length - 1)
+            .replaceAll('\\"', '"')
+            .replaceAll('\\\\', '\\')
+            .replaceAll('\\n', '\n')
+            .replaceAll('\\r', '\r')
+            .replaceAll('\\t', '\t');
+      }
+    }
+    return html;
+  }
+
   Future<void> syncWebViewState(String url) async {
     if (activeWebViewController == null) return;
 
@@ -3069,20 +3089,7 @@ Technical details: $e''';
           'document.documentElement.outerHTML') as String;
 
       // Unquote if needed
-      String finalHtml = html;
-      if (finalHtml.startsWith('"') && finalHtml.endsWith('"')) {
-        try {
-          finalHtml = finalHtml
-              .substring(1, finalHtml.length - 1)
-              .replaceAll('\\"', '"')
-              .replaceAll('\\\\', '\\')
-              .replaceAll('\\n', '\n')
-              .replaceAll('\\r', '\r')
-              .replaceAll('\\t', '\t');
-        } catch (e) {
-          debugPrint('Error unquoting HTML: $e');
-        }
-      }
+      String finalHtml = _unquoteHtml(html);
 
       // Update current file with new content BUT maintain webview mode
       final processedFilename =
@@ -3137,20 +3144,7 @@ Technical details: $e''';
           'document.documentElement.outerHTML') as String;
 
       // Unquote if needed (standard JS result processing)
-      String finalHtml = html;
-      if (finalHtml.startsWith('"') && finalHtml.endsWith('"')) {
-        try {
-          finalHtml = finalHtml
-              .substring(1, finalHtml.length - 1)
-              .replaceAll('\\"', '"')
-              .replaceAll('\\\\', '\\')
-              .replaceAll('\\n', '\n')
-              .replaceAll('\\r', '\r')
-              .replaceAll('\\t', '\t');
-        } catch (e) {
-          debugPrint('Error unquoting HTML: $e');
-        }
-      }
+      String finalHtml = _unquoteHtml(html);
 
       if (url != null) {
         final processedFilename =

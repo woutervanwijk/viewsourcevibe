@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'dart:convert';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 
@@ -42,9 +43,12 @@ class _WebViewExtractorState extends State<WebViewExtractor> {
       // The result might be a quoted string depending on the platform implementation
       String finalHtml = html;
       if (finalHtml.startsWith('"') && finalHtml.endsWith('"')) {
-        // Simple unquoting if it's a JSON string
         try {
-          // This is a bit naive but common for JS results
+          // Use jsonDecode for robust unescaping (handles \uXXXX, \n, etc.)
+          finalHtml = jsonDecode(finalHtml) as String;
+        } catch (e) {
+          debugPrint('Error unquoting HTML via jsonDecode: $e');
+          // Naive fallback
           finalHtml = finalHtml
               .substring(1, finalHtml.length - 1)
               .replaceAll('\\"', '"')
@@ -52,8 +56,6 @@ class _WebViewExtractorState extends State<WebViewExtractor> {
               .replaceAll('\\n', '\n')
               .replaceAll('\\r', '\r')
               .replaceAll('\\t', '\t');
-        } catch (e) {
-          debugPrint('Error unquoting HTML: $e');
         }
       }
       if (!mounted) return;
