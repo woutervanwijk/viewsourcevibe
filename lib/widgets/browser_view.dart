@@ -40,12 +40,17 @@ class _BrowserViewState extends State<BrowserView> {
         ..setNavigationDelegate(
           NavigationDelegate(
             onProgress: (int progress) {
-              // Update loading bar.
+              if (mounted) {
+                Provider.of<HtmlService>(context, listen: false)
+                    .updateWebViewLoadingProgress(progress / 100.0);
+              }
             },
             onPageStarted: (String url) {
               if (mounted) {
-                Provider.of<HtmlService>(context, listen: false)
-                    .updateWebViewUrl(url);
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.updateWebViewUrl(url);
+                htmlService.updateWebViewLoadingProgress(0.0);
               }
             },
             onPageFinished: (String url) {
@@ -63,8 +68,10 @@ class _BrowserViewState extends State<BrowserView> {
                 }
 
                 // Use syncWebViewState to update everything (content, metadata, probe)
-                Provider.of<HtmlService>(context, listen: false)
-                    .syncWebViewState(url);
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.syncWebViewState(url);
+                htmlService.updateWebViewLoadingProgress(1.0);
               }
             },
             onUrlChange: (UrlChange change) {
@@ -80,12 +87,15 @@ class _BrowserViewState extends State<BrowserView> {
       // Register controller with HtmlService
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          Provider.of<HtmlService>(context, listen: false)
-              .activeWebViewController = _controller;
+          final htmlService = Provider.of<HtmlService>(context, listen: false);
+          htmlService.activeWebViewController = _controller;
+
+          // Only load if we are on the browser tab (index 1)
+          if (htmlService.activeTabIndex == 1) {
+            _loadContent();
+          }
         }
       });
-
-      _loadContent();
     } else {
       _controller = null;
       platform_impl.registerMediaIframe(viewID, _getEffectiveUrl());
@@ -143,7 +153,12 @@ class _BrowserViewState extends State<BrowserView> {
       if (kIsWeb) {
         platform_impl.registerMediaIframe(viewID, _getEffectiveUrl());
       } else {
-        _loadContent();
+        // Only trigger reload automatically IF we are the active tab.
+        // Otherwise, HtmlService will trigger it when we become active.
+        final htmlService = Provider.of<HtmlService>(context, listen: false);
+        if (htmlService.activeTabIndex == 1) {
+          _loadContent();
+        }
       }
     }
   }

@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
-import 'package:view_source_vibe/widgets/browser_view.dart';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
 
 class FileViewer extends StatelessWidget {
@@ -225,9 +222,7 @@ class FileViewer extends StatelessWidget {
               );
             }
 
-            final isTapEnabled = !htmlService.isWebViewMode &&
-                !htmlService.isMedia &&
-                file.isTextBased;
+            final isTapEnabled = !htmlService.isMedia && file.isTextBased;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -275,132 +270,52 @@ class FileViewer extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // Find, Font Size and Word Wrap buttons - only show for text content and if not in WebView mode
                         if (!htmlService.isMedia) ...[
-                          if (!htmlService.isWebViewMode) ...[
-                            // Find button
-                            IconButton(
-                              icon: const Icon(Icons.search, size: 20),
-                              padding: const EdgeInsets.all(2),
-                              constraints: const BoxConstraints(),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () => htmlService.toggleSearch(),
-                              tooltip: 'Find',
-                            ),
-                            const SizedBox(width: 2),
-                            // Font Size picker
-                            PopupMenuButton<double>(
-                              icon: const Icon(Icons.format_size, size: 20),
-                              padding: const EdgeInsets.all(2),
-                              constraints: const BoxConstraints(),
-                              tooltip: 'Font Size',
-                              onSelected: (double size) {
-                                settings.fontSize = size;
-                              },
-                              itemBuilder: (BuildContext context) {
-                                return AppSettings.availableFontSizes
-                                    .map((size) {
-                                  return PopupMenuItem<double>(
-                                    value: size,
-                                    child: Row(
-                                      children: [
-                                        Text('${size.toInt()} px'),
-                                        if (settings.fontSize == size) ...[
-                                          const Spacer(),
-                                          Icon(Icons.check,
-                                              size: 16,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .primary),
-                                        ],
+                          // Find button
+                          IconButton(
+                            icon: const Icon(Icons.search, size: 20),
+                            padding: const EdgeInsets.all(2),
+                            constraints: const BoxConstraints(),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => htmlService.toggleSearch(),
+                            tooltip: 'Find',
+                          ),
+                          const SizedBox(width: 2),
+                          // Font Size picker
+                          PopupMenuButton<double>(
+                            icon: const Icon(Icons.format_size, size: 20),
+                            padding: const EdgeInsets.all(2),
+                            constraints: const BoxConstraints(),
+                            tooltip: 'Font Size',
+                            onSelected: (double size) {
+                              settings.fontSize = size;
+                            },
+                            itemBuilder: (BuildContext context) {
+                              return AppSettings.availableFontSizes.map((size) {
+                                return PopupMenuItem<double>(
+                                  value: size,
+                                  child: Row(
+                                    children: [
+                                      Text('${size.toInt()} px'),
+                                      if (settings.fontSize == size) ...[
+                                        const Spacer(),
+                                        Icon(Icons.check,
+                                            size: 16,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary),
                                       ],
-                                    ),
-                                  );
-                                }).toList();
-                              },
-                            ),
-                            const SizedBox(width: 2),
-                            // Word Wrap button
-                            Container(
-                              decoration: BoxDecoration(
-                                color: settings.wrapText
-                                    ? Theme.of(context)
-                                        .colorScheme
-                                        .primary
-                                        .withAlpha(40)
-                                    : null,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: IconButton(
-                                icon: Icon(
-                                  settings.wrapText
-                                      ? Icons.wrap_text
-                                      : Icons.wrap_text_outlined,
-                                  size: 20,
-                                  color: settings.wrapText
-                                      ? Theme.of(context).colorScheme.primary
-                                      : null,
-                                ),
-                                padding: const EdgeInsets.all(2),
-                                constraints: const BoxConstraints(),
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () {
-                                  settings.wrapText = !settings.wrapText;
-                                },
-                                tooltip: 'Word Wrap',
-                              ),
-                            ),
-                            const SizedBox(width: 2),
-                            // Beautify Toggle button
-                            Container(
-                              decoration: BoxDecoration(
-                                color: htmlService.isBeautifyEnabled
-                                    ? Theme.of(context)
-                                        .colorScheme
-                                        .primary
-                                        .withAlpha(40)
-                                    : null,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: IconButton(
-                                icon: Icon(
-                                  htmlService.isBeautifyEnabled
-                                      ? Icons.format_indent_increase
-                                      : Icons.format_indent_increase_outlined,
-                                  size: 20,
-                                  color: htmlService.isBeautifyEnabled
-                                      ? Theme.of(context).colorScheme.primary
-                                      : null,
-                                ),
-                                padding: const EdgeInsets.all(2),
-                                constraints: const BoxConstraints(),
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () =>
-                                    htmlService.toggleIsBeautifyEnabled(),
-                                tooltip: htmlService.isBeautifyEnabled
-                                    ? 'Show Raw'
-                                    : 'Beautify Code',
-                              ),
-                            ),
-                            const SizedBox(width: 2),
-                          ],
-                          // View Source button - only show in WebView mode
-                          if (htmlService.isWebViewMode) ...[
-                            IconButton(
-                              icon: const Icon(Icons.visibility, size: 20),
-                              padding: const EdgeInsets.all(2),
-                              constraints: const BoxConstraints(),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () =>
-                                  htmlService.extractCurrentWebViewContent(),
-                              tooltip: 'Load HTML from Current Page',
-                            ),
-                            const SizedBox(width: 2),
-                          ],
-                          // WebView Toggle button - Always show for text files
+                                    ],
+                                  ),
+                                );
+                              }).toList();
+                            },
+                          ),
+                          const SizedBox(width: 2),
+                          // Word Wrap button
                           Container(
                             decoration: BoxDecoration(
-                              color: htmlService.isWebViewMode
+                              color: settings.wrapText
                                   ? Theme.of(context)
                                       .colorScheme
                                       .primary
@@ -410,11 +325,42 @@ class FileViewer extends StatelessWidget {
                             ),
                             child: IconButton(
                               icon: Icon(
-                                htmlService.isWebViewMode
-                                    ? Icons.code
-                                    : Icons.language,
+                                settings.wrapText
+                                    ? Icons.wrap_text
+                                    : Icons.wrap_text_outlined,
                                 size: 20,
-                                color: htmlService.isWebViewMode
+                                color: settings.wrapText
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                              ),
+                              padding: const EdgeInsets.all(2),
+                              constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () {
+                                settings.wrapText = !settings.wrapText;
+                              },
+                              tooltip: 'Word Wrap',
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          // Beautify Toggle button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: htmlService.isBeautifyEnabled
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withAlpha(40)
+                                  : null,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: IconButton(
+                              icon: Icon(
+                                htmlService.isBeautifyEnabled
+                                    ? Icons.format_indent_increase
+                                    : Icons.format_indent_increase_outlined,
+                                size: 20,
+                                color: htmlService.isBeautifyEnabled
                                     ? Theme.of(context).colorScheme.primary
                                     : null,
                               ),
@@ -422,10 +368,10 @@ class FileViewer extends StatelessWidget {
                               constraints: const BoxConstraints(),
                               visualDensity: VisualDensity.compact,
                               onPressed: () =>
-                                  htmlService.toggleIsWebViewMode(),
-                              tooltip: htmlService.isWebViewMode
-                                  ? 'Show Editor'
-                                  : 'Show Browser Preview',
+                                  htmlService.toggleIsBeautifyEnabled(),
+                              tooltip: htmlService.isBeautifyEnabled
+                                  ? 'Show Raw'
+                                  : 'Beautify Code',
                             ),
                           ),
                           const SizedBox(width: 2),
@@ -484,18 +430,6 @@ class FileViewer extends StatelessWidget {
               builder: (context, htmlService, child) {
                 if (htmlService.isMedia) {
                   return MediaBrowser(file: file);
-                }
-
-                if (htmlService.isWebViewMode) {
-                  return BrowserView(
-                    file: file,
-                    gestureRecognizers: {
-                      Factory<VerticalDragGestureRecognizer>(
-                        () =>
-                            VerticalDragGestureRecognizer()..onUpdate = (_) {},
-                      ),
-                    },
-                  );
                 }
 
                 String displayContent = file.content;

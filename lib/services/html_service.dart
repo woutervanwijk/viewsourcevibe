@@ -59,8 +59,8 @@ class HtmlService with ChangeNotifier {
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
 
-  bool _isWebViewMode = false;
-  bool get isWebViewMode => _isWebViewMode;
+  double _webViewLoadingProgress = 0.0;
+  double get webViewLoadingProgress => _webViewLoadingProgress;
 
   // WebView extraction state
   bool _isWebViewLoading = false;
@@ -76,6 +76,10 @@ class HtmlService with ChangeNotifier {
 
   // Track the currently active find controller
   CodeFindController? _activeFindController;
+
+  // Index of the currently active tab in HomeScreen
+  int _activeTabIndex = 0;
+  int get activeTabIndex => _activeTabIndex;
 
   // Debouncing for syntax highlighting
   Timer? _highlightDebounceTimer;
@@ -139,6 +143,34 @@ class HtmlService with ChangeNotifier {
     _requestedTabIndex = null;
   }
 
+  void setActiveTabIndex(int index) {
+    if (_activeTabIndex != index) {
+      _activeTabIndex = index;
+      notifyListeners();
+    }
+  }
+
+  /// Trigger a browser reload if the URL has changed and the browser tab is visible
+  Future<void> triggerBrowserReload() async {
+    if (activeWebViewController != null &&
+        _currentFile != null &&
+        _currentFile!.isUrl) {
+      final currentBrowserUrl = await activeWebViewController!.currentUrl();
+      if (currentBrowserUrl != _currentFile!.path) {
+        debugPrint('Triggering browser reload for: ${_currentFile!.path}');
+        await activeWebViewController!
+            .loadRequest(Uri.parse(_currentFile!.path));
+      }
+    }
+  }
+
+  void updateWebViewLoadingProgress(double progress) {
+    if (_webViewLoadingProgress != progress) {
+      _webViewLoadingProgress = progress;
+      notifyListeners();
+    }
+  }
+
   HtmlService() {
     _codeEditorKey = GlobalKey();
     _currentInputText = '';
@@ -151,6 +183,7 @@ class HtmlService with ChangeNotifier {
     _webViewLoadingUrl = url;
     _isWebViewLoading = true;
     _isLoading = true;
+    _requestedTabIndex = 1; // Switch to Browser tab
     notifyListeners();
   }
 
@@ -1025,7 +1058,6 @@ class HtmlService with ChangeNotifier {
   }
 
   Future<void> loadFile(HtmlFile file, {bool clearProbe = true}) async {
-    _isWebViewMode = false; // Reset view mode on new file
     _isBeautifyEnabled = false; // Reset beautify mode on new file
     // Save current file to navigation stack if we are not going back
     if (!_isNavigatingBack && _currentFile != null) {
@@ -1211,11 +1243,6 @@ class HtmlService with ChangeNotifier {
     };
 
     return typeMapping[detectedType] ?? 'plaintext';
-  }
-
-  void toggleIsWebViewMode() {
-    _isWebViewMode = !_isWebViewMode;
-    notifyListeners();
   }
 
   void toggleIsBeautifyEnabled() {
@@ -1608,6 +1635,13 @@ Technical details: $e''';
       final file = await _loadFromUrlInternal(url);
       _pendingUrl = null;
       await loadFile(file);
+
+      // Trigger browser reload if we are on the browser tab
+      // Browser tab is typically index 1
+      if (_activeTabIndex == 1) {
+        triggerBrowserReload().ignore();
+      }
+
       // loadFile already calls _autoSave() but we can be explicit here too
       _autoSave();
     } catch (e) {
@@ -3160,7 +3194,8 @@ Technical details: $e''';
 
         _currentFile = htmlFile;
         _currentInputText = url;
-        _isWebViewMode = false; // Switch back to editor to show source
+        _requestedTabIndex =
+            0; // Switch to Source tab to show extracted content
         notifyListeners();
         _autoSave();
       }

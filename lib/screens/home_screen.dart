@@ -12,8 +12,7 @@ import 'package:view_source_vibe/widgets/media_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
-import 'package:view_source_vibe/widgets/webview_extractor.dart';
-import 'package:flutter/foundation.dart';
+import 'package:view_source_vibe/widgets/browser_view.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -30,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _tabController.addListener(_handleTabSelection);
 
     // Use addPostFrameCallback to initialize correct length after first build
@@ -41,6 +40,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _handleTabSelection() {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    htmlService.setActiveTabIndex(_tabController.index);
+
+    // If switching to Browser tab (index 1), trigger reload if needed
+    if (_tabController.index == 1) {
+      htmlService.triggerBrowserReload().ignore();
+    }
+
     setState(() {
       // Rebuild to update FAB visibility based on _tabController.index
     });
@@ -59,10 +66,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final oldIndex = _tabController.index;
     final oldLength = _tabController.length;
 
-    // Calculate exact length: 1 (Editor) + 4 (Probe/Headers/Security/Cookies)
+    // Calculate exact length: 1 (Editor) + 1 (Browser) + 4 (Probe/Headers/Security/Cookies)
     // + (1 if isHtmlOrXml for DOM Tree)
     // + (3 if showMetadataTabs for Metadata/Services/Media)
-    int newLength = 5;
+    int newLength = 6;
     if (isHtmlOrXml) newLength += 1;
     if (showMetadataTabs) newLength += 3;
 
@@ -92,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return [
       _buildTab(Icons.code, 'Source'),
+      _buildTab(Icons.language, 'Browser'),
       if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
       if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
       if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
@@ -116,8 +124,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               )
             : const Center(child: Text('No File')),
       ),
-
-      // 2. DOM Tree (Conditional)
+      // 2. Browser
+      KeepAliveWrapper(
+        child: currentFile != null && (currentFile.isUrl || isHtmlOrXml)
+            ? BrowserView(file: currentFile)
+            : const Center(child: Text('Not available for this file')),
+      ),
+      // 3. DOM Tree (Conditional)
       if (isHtmlOrXml) const KeepAliveWrapper(child: DomTreeView()),
 
       // 3. Metadata (Conditional)
@@ -226,7 +239,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
             const Divider(height: 1),
-            if (!kIsWeb) const WebViewExtractor(),
             Expanded(
               child: htmlService.currentFile == null
                   ? Padding(

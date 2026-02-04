@@ -150,14 +150,36 @@ class _UrlInputState extends State<UrlInput> {
                             prefixIcon: const Icon(Icons.link, size: 20),
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(6)),
-                            suffixIcon: htmlService.isLoading
-                                ? const Padding(
-                                    padding: EdgeInsets.all(16.0),
+                            suffixIcon: (htmlService.isLoading ||
+                                    (htmlService.webViewLoadingProgress > 0 &&
+                                        htmlService.webViewLoadingProgress <
+                                            1.0))
+                                ? Padding(
+                                    padding: const EdgeInsets.all(12.0),
                                     child: SizedBox(
-                                      width: 8,
-                                      height: 8,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 1,
+                                      width: 16,
+                                      height: 16,
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          CircularProgressIndicator(
+                                            value: htmlService
+                                                        .webViewLoadingProgress >
+                                                    0
+                                                ? htmlService
+                                                    .webViewLoadingProgress
+                                                : null,
+                                            strokeWidth: 2,
+                                          ),
+                                          if (htmlService
+                                                  .webViewLoadingProgress >
+                                              0)
+                                            Text(
+                                              '${(htmlService.webViewLoadingProgress * 100).toInt()}%',
+                                              style:
+                                                  const TextStyle(fontSize: 8),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   )
@@ -267,7 +289,7 @@ class _UrlInputState extends State<UrlInput> {
                     if (!kIsWeb)
                       TextButton.icon(
                         icon: const Icon(Icons.language, size: 14),
-                        label: const Text('Force load with Browser',
+                        label: const Text('Try in Browser Tab',
                             style: TextStyle(fontSize: 11)),
                         onPressed: _loadViaWebView,
                         style: TextButton.styleFrom(
