@@ -10,7 +10,7 @@ abstract class ProbeViewBase extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Consumer<HtmlService>(builder: (context, htmlService, child) {
-      if (htmlService.isProbing) {
+      if (htmlService.isProbing || htmlService.isLoading) {
         return const Center(child: CircularProgressIndicator());
       }
       if (htmlService.probeError != null) {

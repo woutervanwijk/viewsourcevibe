@@ -189,8 +189,7 @@ class HtmlService with ChangeNotifier {
       probeResult: probeResult,
     );
 
-    // Save probes to local state so they can be viewed
-    _probeResult = probeResult;
+    // Note: _probeResult will be updated by loadFile(file)
     _isProbing = false;
 
     await loadFile(file);
@@ -1246,6 +1245,7 @@ class HtmlService with ChangeNotifier {
       _probeResult = null; // Clear probe results
       _probeError = null; // Clear probe errors
     }
+    _pageMetadata = null; // Clear page metadata
     clearHighlightCache(); // Clear syntax highlighting cache
     notifyListeners();
     _autoSave();
@@ -1486,8 +1486,8 @@ class HtmlService with ChangeNotifier {
         currentProbeResult['redirectLocation'] = finalUrl;
       }
 
-      // Update local probe result
-      _probeResult = currentProbeResult;
+      // Note: _probeResult is NOT updated here anymore.
+      // It will be updated by loadFile(file) using the results in HtmlFile.
       _isProbing = false;
 
       if (hResponse.statusCode == 200) {
@@ -1597,6 +1597,12 @@ Technical details: $e''';
       _pendingUrl = url;
       _requestedTabIndex = switchToTab;
       _isLoading = true;
+
+      // Clear previous probe results immediately when a new load starts
+      _probeResult = null;
+      _probeError = null;
+      _pageMetadata = null;
+
       notifyListeners();
 
       final file = await _loadFromUrlInternal(url);
@@ -2349,7 +2355,7 @@ Technical details: $e''';
 
     // Performance optimization: Use simplified highlighting for very large files
     bool useSimplifiedHighlighting =
-        contentSize > 10 * 1024 * 1024; // 10MB threshold
+        contentSize > 1 * 1024 * 1024; // 1MB threshold
 
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
@@ -2384,7 +2390,7 @@ Technical details: $e''';
 
       // Limit the amount of content processed for syntax highlighting
       // while still showing the full content
-      final maxHighlightLength = 50000; // ~50KB for highlighting
+      final maxHighlightLength = 200000; // ~200KB for highlighting
       if (content.length > maxHighlightLength) {
         // Take the first part for highlighting, but keep full content for display
         processedContent = content.substring(0, maxHighlightLength);
@@ -2716,7 +2722,7 @@ Technical details: $e''';
       bool showLineNumbers = true}) {
     // Performance optimization: Use simplified highlighting for very large files
     final contentSize = content.length;
-    bool useSimplifiedHighlighting = contentSize > 10 * 1024 * 1024;
+    bool useSimplifiedHighlighting = contentSize > 1 * 1024 * 1024;
 
     // Generate keys
     final controllerKey = _generateControllerCacheKey(
@@ -2782,7 +2788,7 @@ Technical details: $e''';
     // Process content (simulated async if heavy)
     String processedContent = content;
     if (useSimplifiedHighlighting) {
-      final maxHighlightLength = 50000;
+      final maxHighlightLength = 200000;
       if (content.length > maxHighlightLength) {
         processedContent = content.substring(0, maxHighlightLength);
       }
@@ -3045,6 +3051,9 @@ Technical details: $e''';
     // Update URL bar immediately
     if (_currentInputText != url) {
       _currentInputText = url;
+      _probeResult = null;
+      _probeError = null;
+      _pageMetadata = null;
       notifyListeners();
     }
 
@@ -3102,7 +3111,20 @@ Technical details: $e''';
   void updateWebViewUrl(String url) {
     if (_currentInputText != url) {
       _currentInputText = url;
+
+      // Clear previous probe results immediately when a new navigation starts in WebView
+      _probeResult = null;
+      _probeError = null;
+      _pageMetadata = null;
+
       notifyListeners();
+
+      // Trigger probe for the new URL to update Headers, Security, etc.
+      // We don't await this to keep the UI responsive during WebView interaction
+      probeUrl(url).catchError((e) {
+        debugPrint('Error probing updated webview URL: $e');
+        return <String, dynamic>{};
+      });
     }
   }
 

@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:mime_type/mime_type.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:xml/xml.dart' as xml;
@@ -403,7 +403,14 @@ class FileTypeDetector {
 
   /// Detect file type by content analysis with scoring
   String _detectByContent(String content) {
-    final lowerContent = content.toLowerCase();
+    // For large files, only analyze the first 256KB for performance
+    String analysisContent = content;
+    if (content.length > 256 * 1024) {
+      analysisContent = content.substring(0, 256 * 1024);
+      debugPrint('🔍 Truncating content for detection (large file)');
+    }
+
+    final lowerContent = analysisContent.toLowerCase();
     final scores = <String, int>{};
 
     // XML/RSS/Atom Detection using proper parsing
@@ -415,7 +422,7 @@ class FileTypeDetector {
 
     if (isXmlCandidate) {
       try {
-        final doc = xml.XmlDocument.parse(content);
+        final doc = xml.XmlDocument.parse(analysisContent);
         if (doc.findElements('rss').isNotEmpty ||
             doc.findAllElements('channel').isNotEmpty ||
             doc.findElements('feed').isNotEmpty ||
@@ -444,7 +451,7 @@ class FileTypeDetector {
 
     if (isHtmlCandidate && !scores.containsKey('XML')) {
       try {
-        final doc = html_parser.parse(content);
+        final doc = html_parser.parse(analysisContent);
         // Look for structural elements that strongly indicate HTML
         bool hasHtml = doc.querySelector('html') != null;
         bool hasBody = doc.querySelector('body') != null;
