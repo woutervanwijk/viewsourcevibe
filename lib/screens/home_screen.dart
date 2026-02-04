@@ -93,6 +93,40 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  Future<void> _handleRefresh() async {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    final url = htmlService.currentInputText;
+    if (url != null && url.isNotEmpty) {
+      await htmlService.loadUrl(url, switchToTab: _tabController.index);
+    }
+  }
+
+  Widget _buildRefreshable(Widget child) {
+    return TabPageWrapper(
+      child: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildScrollableRefreshable(Widget child) {
+    return TabPageWrapper(
+      child: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: true,
+              child: child,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<Widget> _getTabs(HtmlService htmlService) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
@@ -119,40 +153,50 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // 1. Editor
       KeepAliveWrapper(
         child: currentFile != null
-            ? FileViewer(
-                file: currentFile,
+            ? _buildRefreshable(
+                FileViewer(
+                  file: currentFile,
+                ),
               )
-            : const Center(child: Text('No File')),
+            : _buildScrollableRefreshable(
+                const Center(child: Text('No File')),
+              ),
       ),
       // 2. Browser
       KeepAliveWrapper(
-        child: currentFile != null && (currentFile.isUrl || isHtmlOrXml)
-            ? BrowserView(file: currentFile)
-            : const Center(child: Text('Not available for this file')),
+        child: _buildScrollableRefreshable(
+          currentFile != null && (currentFile.isUrl || isHtmlOrXml)
+              ? BrowserView(file: currentFile)
+              : const Center(child: Text('Not available for this file')),
+        ),
       ),
       // 3. DOM Tree (Conditional)
-      if (isHtmlOrXml) const KeepAliveWrapper(child: DomTreeView()),
+      if (isHtmlOrXml)
+        KeepAliveWrapper(child: _buildRefreshable(const DomTreeView())),
 
       // 3. Metadata (Conditional)
-      if (showMetadataTabs) const KeepAliveWrapper(child: MetadataView()),
+      if (showMetadataTabs)
+        KeepAliveWrapper(child: _buildRefreshable(const MetadataView())),
 
       // 4. Services (Conditional)
-      if (showMetadataTabs) const KeepAliveWrapper(child: ServicesView()),
+      if (showMetadataTabs)
+        KeepAliveWrapper(child: _buildRefreshable(const ServicesView())),
 
       // 5. Media (Conditional)
-      if (showMetadataTabs) const KeepAliveWrapper(child: MediaView()),
+      if (showMetadataTabs)
+        KeepAliveWrapper(child: _buildRefreshable(const MediaView())),
 
       // 6. Probe: General
-      const KeepAliveWrapper(child: ProbeGeneralView()),
+      KeepAliveWrapper(child: _buildRefreshable(const ProbeGeneralView())),
 
       // 7. Probe: Headers
-      const KeepAliveWrapper(child: ProbeHeadersView()),
+      KeepAliveWrapper(child: _buildRefreshable(const ProbeHeadersView())),
 
       // 8. Probe: Security
-      const KeepAliveWrapper(child: ProbeSecurityView()),
+      KeepAliveWrapper(child: _buildRefreshable(const ProbeSecurityView())),
 
       // 9. Probe: Cookies
-      const KeepAliveWrapper(child: ProbeCookiesView()),
+      KeepAliveWrapper(child: _buildRefreshable(const ProbeCookiesView())),
     ];
   }
 
@@ -278,6 +322,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Text(text),
         ],
       ),
+    );
+  }
+}
+
+class TabPageWrapper extends StatefulWidget {
+  final Widget child;
+  const TabPageWrapper({super.key, required this.child});
+
+  @override
+  State<TabPageWrapper> createState() => _TabPageWrapperState();
+}
+
+class _TabPageWrapperState extends State<TabPageWrapper> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PrimaryScrollController(
+      controller: _controller,
+      child: widget.child,
     );
   }
 }

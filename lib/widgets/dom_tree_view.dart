@@ -229,18 +229,18 @@ class DomTreeTile extends StatelessWidget {
           );
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (entry.hasChildren)
                 Icon(
                   entry.isExpanded ? Icons.arrow_drop_down : Icons.arrow_right,
-                  size: 20,
+                  size: 12,
                 )
               else
-                const SizedBox(width: 20),
-              const SizedBox(width: 4),
+                const SizedBox(width: 0),
+              const SizedBox(width: 0),
               if (isElement) ...[
                 Text(
                   '<${node.label}',
