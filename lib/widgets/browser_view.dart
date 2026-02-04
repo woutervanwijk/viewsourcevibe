@@ -114,52 +114,66 @@ class _BrowserViewState extends State<BrowserView> {
     ).toString();
   }
 
-  Future<void> _loadContent() async {
-    if (_controller == null) return;
-
-    if (widget.file.isUrl) {
-      final currentUrl = await _controller.currentUrl();
-
-      // Check if it's an RSS/Atom/XML feed that we want to render nicely
-      final isRssOrXml =
-          RssTemplateService.isRssFeed(widget.file.name, widget.file.content);
-
-      if (isRssOrXml) {
-        _currentRssUrl = widget.file.path;
-        final html = RssTemplateService.convertRssToHtml(
-            widget.file.content, widget.file.path);
-        // Load the generated HTML
-        _controller.loadHtmlString(html, baseUrl: widget.file.path);
-        return;
-      }
-
-      _currentRssUrl = null;
-
-      // Prevent reloading if we are already at the target URL
-      if (currentUrl == widget.file.path) return;
-
-      _controller.loadRequest(Uri.parse(widget.file.path));
-    } else {
-      _currentRssUrl = null;
-      _controller.loadHtmlString(widget.file.content);
-    }
-  }
-
   @override
   void didUpdateWidget(BrowserView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // If the file changed (e.g. from local to URL or different content), reload.
     if (oldWidget.file.path != widget.file.path ||
         oldWidget.file.content != widget.file.content) {
-      if (kIsWeb) {
-        platform_impl.registerMediaIframe(viewID, _getEffectiveUrl());
-      } else {
-        // Only trigger reload automatically IF we are the active tab.
-        // Otherwise, HtmlService will trigger it when we become active.
-        final htmlService = Provider.of<HtmlService>(context, listen: false);
-        if (htmlService.activeTabIndex == 1) {
-          _loadContent();
-        }
-      }
+      _loadContentIfVisible();
+    }
+  }
+
+  void _loadContentIfVisible() {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    if (htmlService.activeTabIndex == 1) {
+      _loadContent();
+    }
+  }
+
+  Future<void> _loadContent() async {
+    if (_controller == null) return;
+
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    String targetUrl = widget.file.path;
+
+    // If there's a specialized loading URL (e.g. forceWebView path), use it.
+    if (htmlService.webViewLoadingUrl != null) {
+      targetUrl = htmlService.webViewLoadingUrl!;
+    } else if (_currentRssUrl != null && targetUrl == _currentRssUrl) {
+      // Already handled RSS
+      return;
+    }
+
+    if (kIsWeb) {
+      platform_impl.registerMediaIframe(viewID, _getEffectiveUrl());
+      return;
+    }
+
+    final currentUrl = await _controller.currentUrl();
+
+    // Check if it's an RSS/Atom/XML feed
+    // We use the file content if available, otherwise just load the URL
+    final isRssOrXml =
+        RssTemplateService.isRssFeed(widget.file.name, widget.file.content);
+
+    if (isRssOrXml && widget.file.content.isNotEmpty) {
+      _currentRssUrl = targetUrl;
+      final html =
+          RssTemplateService.convertRssToHtml(widget.file.content, targetUrl);
+      _controller.loadHtmlString(html, baseUrl: targetUrl);
+      return;
+    }
+
+    _currentRssUrl = null;
+
+    if (currentUrl == targetUrl && targetUrl.isNotEmpty) return;
+
+    if (targetUrl.startsWith('http')) {
+      await _controller.loadRequest(Uri.parse(targetUrl));
+    } else {
+      await _controller.loadHtmlString(widget.file.content,
+          baseUrl: widget.file.path);
     }
   }
 

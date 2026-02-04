@@ -185,6 +185,11 @@ class FileViewer extends StatelessWidget {
     }
   }
 
+  String _formatNumber(int number) {
+    return number.toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
@@ -249,7 +254,9 @@ class FileViewer extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                fileName,
+                                _getDisplayNameForContentType(
+                                    htmlService.selectedContentType ??
+                                        file.extension),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
@@ -258,7 +265,7 @@ class FileViewer extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
-                                '${lines.length} lines • ${file.fileSize}',
+                                '${_formatNumber(lines.length)} lines • ${_formatNumber(file.size)} bytes',
                                 style: TextStyle(
                                   color: Theme.of(context)
                                       .colorScheme

@@ -64,7 +64,7 @@ class _UrlInputState extends State<UrlInput> {
 
     try {
       await Provider.of<HtmlService>(context, listen: false)
-          .loadFromUrl(url, switchToTab: switchToTab);
+          .loadFromUrl(url, switchToTab: switchToTab ?? 0);
 
       // Clear the input after successful load
       // _urlController.clear();

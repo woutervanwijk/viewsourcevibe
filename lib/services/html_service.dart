@@ -110,22 +110,44 @@ class HtmlService with ChangeNotifier {
   CodeFindController? get activeFindController => _activeFindController;
   bool get isSearchActive => _activeFindController?.value != null;
 
-  bool get isHtml =>
-      selectedContentType == 'html' ||
-      (_currentFile?.name.toLowerCase().endsWith('.html') ?? false) ||
-      (_currentFile?.name.toLowerCase().endsWith('.htm') ?? false) ||
-      (_currentFile?.name.toLowerCase().endsWith('.xhtml') ?? false);
+  bool get isHtml {
+    final contentType =
+        _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
+            '';
+    if (contentType.contains('text/html') ||
+        contentType.contains('application/xhtml+xml')) return true;
 
-  bool get isSvg =>
-      selectedContentType == 'svg' ||
-      (_currentFile?.name.toLowerCase().endsWith('.svg') ?? false);
+    return selectedContentType == 'html' ||
+        (_currentFile?.name.toLowerCase().endsWith('.html') ?? false) ||
+        (_currentFile?.name.toLowerCase().endsWith('.htm') ?? false) ||
+        (_currentFile?.name.toLowerCase().endsWith('.xhtml') ?? false);
+  }
 
-  bool get isXml =>
-      selectedContentType == 'xml' ||
-      isSvg ||
-      (_currentFile?.name.toLowerCase().endsWith('.xml') ?? false) ||
-      (_currentFile?.name.toLowerCase().endsWith('.rss') ?? false) ||
-      (_currentFile?.name.toLowerCase().endsWith('.atom') ?? false);
+  bool get isSvg {
+    final contentType =
+        _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
+            '';
+    if (contentType.contains('image/svg+xml')) return true;
+
+    return selectedContentType == 'svg' ||
+        (_currentFile?.name.toLowerCase().endsWith('.svg') ?? false);
+  }
+
+  bool get isXml {
+    final contentType =
+        _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
+            '';
+    if (contentType.contains('application/xml') ||
+        contentType.contains('text/xml')) return true;
+    if (contentType.contains('application/rss+xml') ||
+        contentType.contains('application/atom+xml')) return true;
+
+    return selectedContentType == 'xml' ||
+        isSvg ||
+        (_currentFile?.name.toLowerCase().endsWith('.xml') ?? false) ||
+        (_currentFile?.name.toLowerCase().endsWith('.rss') ?? false) ||
+        (_currentFile?.name.toLowerCase().endsWith('.atom') ?? false);
+  }
 
   /// Metadata/Services/Media extraction is only useful for full web pages
   bool get showMetadataTabs => isHtml;
@@ -133,11 +155,23 @@ class HtmlService with ChangeNotifier {
   /// DOM Tree and Probe tabs are useful for any structured markup
   bool get isHtmlOrXml => isHtml || isXml;
 
-  bool get isMedia =>
-      selectedContentType == 'image' ||
-      selectedContentType == 'video' ||
-      selectedContentType == 'audio' ||
-      (_currentFile?.isMedia ?? false);
+  bool get isMedia {
+    final contentType =
+        _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
+            '';
+    if (contentType.contains('image/') ||
+        contentType.contains('video/') ||
+        contentType.contains('audio/')) {
+      // SVG is technically an image but we handle it as XML/Source
+      if (isSvg) return false;
+      return true;
+    }
+
+    return selectedContentType == 'image' ||
+        selectedContentType == 'video' ||
+        selectedContentType == 'audio' ||
+        (_currentFile?.isMedia ?? false);
+  }
 
   void consumeTabSwitchRequest() {
     _requestedTabIndex = null;
@@ -176,15 +210,64 @@ class HtmlService with ChangeNotifier {
     _currentInputText = '';
   }
 
-  void triggerWebViewLoad(String url) {
+  /// Unified entry point for loading a URL
+  Future<void> loadUrl(String url,
+      {int switchToTab = 0, bool forceWebView = false}) async {
+    if (url.isEmpty) return;
+
+    // Sanitize
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://$url';
     }
-    _webViewLoadingUrl = url;
-    _isWebViewLoading = true;
+
+    _currentInputText = url;
+    _pendingUrl = url;
+    _requestedTabIndex = switchToTab;
     _isLoading = true;
-    _requestedTabIndex = 1; // Switch to Browser tab
+
+    // Clear state
+    _probeResult = null;
+    _probeError = null;
+    _pageMetadata = null;
+    _webViewLoadingProgress = 0.0;
+
     notifyListeners();
+
+    // Start background probe ALWAYS
+    probeUrl(url).ignore();
+
+    if (forceWebView || (_activeTabIndex == 1 && switchToTab == 1)) {
+      // WebView path
+      _webViewLoadingUrl = url;
+      _isWebViewLoading = true;
+      _requestedTabIndex = 1;
+      notifyListeners();
+      // BrowserView will pick up _webViewLoadingUrl change
+    } else {
+      // Standard path
+      try {
+        final file = await _loadFromUrlInternal(url);
+        _pendingUrl = null;
+        await loadFile(file);
+
+        // If we are currently on Browser tab, trigger a reload there too
+        if (_activeTabIndex == 1) {
+          triggerBrowserReload().ignore();
+        }
+      } catch (e) {
+        _pendingUrl = null;
+        _isLoading = false;
+        notifyListeners();
+        rethrow;
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  void triggerWebViewLoad(String url) {
+    loadUrl(url, switchToTab: 1, forceWebView: true);
   }
 
   void cancelWebViewLoad() {
@@ -1386,9 +1469,14 @@ class HtmlService with ChangeNotifier {
     final previousFile = _navigationStack.removeLast();
     _isNavigatingBack = true;
     try {
-      await loadFile(previousFile, clearProbe: true);
+      _currentInputText = previousFile.path;
+      await loadFile(previousFile, clearProbe: false);
+
+      // If we are on the browser tab, ensure it reloads the previous URL
+      if (_activeTabIndex == 1) {
+        triggerBrowserReload().ignore();
+      }
     } finally {
-      // Ensure we reset the flag even if loading fails
       _isNavigatingBack = false;
     }
   }
@@ -1618,41 +1706,8 @@ Technical details: $e''';
     }
   }
 
-  Future<void> loadFromUrl(String url, {int? switchToTab}) async {
-    try {
-      _currentInputText = url;
-      _pendingUrl = url;
-      _requestedTabIndex = switchToTab;
-      _isLoading = true;
-
-      // Clear previous probe results immediately when a new load starts
-      _probeResult = null;
-      _probeError = null;
-      _pageMetadata = null;
-
-      notifyListeners();
-
-      final file = await _loadFromUrlInternal(url);
-      _pendingUrl = null;
-      await loadFile(file);
-
-      // Trigger browser reload if we are on the browser tab
-      // Browser tab is typically index 1
-      if (_activeTabIndex == 1) {
-        triggerBrowserReload().ignore();
-      }
-
-      // loadFile already calls _autoSave() but we can be explicit here too
-      _autoSave();
-    } catch (e) {
-      _pendingUrl = null;
-      _isLoading = false;
-      notifyListeners();
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+  Future<void> loadFromUrl(String url, {int switchToTab = 0}) async {
+    return loadUrl(url, switchToTab: switchToTab);
   }
 
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
@@ -3105,6 +3160,8 @@ Technical details: $e''';
     // Update URL bar immediately
     if (_currentInputText != url) {
       _currentInputText = url;
+      _webViewLoadingUrl =
+          null; // Clear specialized loading URL once synchronized
       _probeResult = null;
       _probeError = null;
       _pageMetadata = null;
@@ -3152,6 +3209,8 @@ Technical details: $e''';
   void updateWebViewUrl(String url) {
     if (_currentInputText != url) {
       _currentInputText = url;
+      _webViewLoadingUrl =
+          null; // Clear specialized loading URL once synchronized
 
       // Clear previous probe results immediately when a new navigation starts in WebView
       _probeResult = null;
