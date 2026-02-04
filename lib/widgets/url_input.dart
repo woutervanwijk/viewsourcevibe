@@ -154,32 +154,36 @@ class _UrlInputState extends State<UrlInput> {
                                     (htmlService.webViewLoadingProgress > 0 &&
                                         htmlService.webViewLoadingProgress <
                                             1.0))
-                                ? Padding(
-                                    padding: const EdgeInsets.all(12.0),
-                                    child: SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: Stack(
-                                        alignment: Alignment.center,
-                                        children: [
-                                          CircularProgressIndicator(
-                                            value: htmlService
-                                                        .webViewLoadingProgress >
-                                                    0
-                                                ? htmlService
-                                                    .webViewLoadingProgress
-                                                : null,
-                                            strokeWidth: 2,
-                                          ),
-                                          if (htmlService
-                                                  .webViewLoadingProgress >
-                                              0)
-                                            Text(
-                                              '${(htmlService.webViewLoadingProgress * 100).toInt()}%',
-                                              style:
-                                                  const TextStyle(fontSize: 8),
+                                ? GestureDetector(
+                                    onTap: () =>
+                                        htmlService.cancelWebViewLoad(),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12.0),
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            CircularProgressIndicator(
+                                              value: htmlService
+                                                          .webViewLoadingProgress >
+                                                      0
+                                                  ? htmlService
+                                                      .webViewLoadingProgress
+                                                  : null,
+                                              strokeWidth: 2,
                                             ),
-                                        ],
+                                            if (htmlService
+                                                    .webViewLoadingProgress >
+                                                0)
+                                              Text(
+                                                '${(htmlService.webViewLoadingProgress * 100).toInt()}%',
+                                                style: const TextStyle(
+                                                    fontSize: 8),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   )
