@@ -240,6 +240,7 @@ class DomTreeTile extends StatelessWidget {
                 )
               else
                 const SizedBox(width: 20),
+              const SizedBox(width: 4),
               if (isElement) ...[
                 Text(
                   '<${node.label}',
@@ -251,11 +252,14 @@ class DomTreeTile extends StatelessWidget {
                 ),
                 if (attrString.isNotEmpty)
                   Flexible(
-                    child: Text(
-                      ' $attrString',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.secondary,
-                        fontSize: 11,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4.0),
+                      child: Text(
+                        attrString,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.secondary,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   ),
