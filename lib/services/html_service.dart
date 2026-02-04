@@ -307,6 +307,13 @@ class HtmlService with ChangeNotifier {
     loadUrl(url, switchToTab: 1, forceWebView: true);
   }
 
+  void handleWebViewError(String errorDescription) {
+    debugPrint('WebView Error: $errorDescription');
+    _isWebViewLoading = false;
+    _isLoading = false;
+    notifyListeners();
+  }
+
   void cancelWebViewLoad() {
     activeWebViewController?.runJavaScript('window.stop();');
     //loadRequest(Uri.parse('about:blank'));
@@ -3252,6 +3259,11 @@ Technical details: $e''';
       _probeResult = null;
       _probeError = null;
       _pageMetadata = null;
+
+      // Clear loading flags
+      _isWebViewLoading = false;
+      _isLoading = false;
+
       notifyListeners();
     }
 

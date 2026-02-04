@@ -147,7 +147,14 @@ class _UrlInputState extends State<UrlInput> {
                                 : htmlService.currentFile != null
                                     ? 'Local file loaded: ${htmlService.currentFile!.name}'
                                     : '',
-                            prefixIcon: const Icon(Icons.link, size: 20),
+                            prefixIcon: IconButton(
+                              icon: const Icon(Icons.link, size: 20),
+                              tooltip: 'Reload',
+                              onPressed: () {
+                                _loadUrl(
+                                    switchToTab: htmlService.activeTabIndex);
+                              },
+                            ),
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(6)),
                             suffixIcon: (htmlService.isLoading ||
@@ -158,10 +165,10 @@ class _UrlInputState extends State<UrlInput> {
                                     onTap: () =>
                                         htmlService.cancelWebViewLoad(),
                                     child: Padding(
-                                      padding: const EdgeInsets.all(12.0),
+                                      padding: const EdgeInsets.all(16.0),
                                       child: SizedBox(
-                                        width: 16,
-                                        height: 16,
+                                        width: 12,
+                                        height: 12,
                                         child: Stack(
                                           alignment: Alignment.center,
                                           children: [
@@ -172,16 +179,16 @@ class _UrlInputState extends State<UrlInput> {
                                                   ? htmlService
                                                       .webViewLoadingProgress
                                                   : null,
-                                              strokeWidth: 2,
+                                              strokeWidth: 1,
                                             ),
-                                            if (htmlService
-                                                    .webViewLoadingProgress >
-                                                0)
-                                              Text(
-                                                '${(htmlService.webViewLoadingProgress * 100).toInt()}%',
-                                                style: const TextStyle(
-                                                    fontSize: 8),
-                                              ),
+                                            // if (htmlService
+                                            //         .webViewLoadingProgress >
+                                            //     0)
+                                            //   Text(
+                                            //     '${(htmlService.webViewLoadingProgress * 100).toInt()}%',
+                                            //     style: const TextStyle(
+                                            //         fontSize: 8),
+                                            //   ),
                                           ],
                                         ),
                                       ),

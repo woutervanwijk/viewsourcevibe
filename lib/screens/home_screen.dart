@@ -172,31 +172,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
       // 3. DOM Tree (Conditional)
       if (isHtmlOrXml)
-        KeepAliveWrapper(child: _buildRefreshable(const DomTreeView())),
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const DomTreeView())),
 
       // 3. Metadata (Conditional)
       if (showMetadataTabs)
-        KeepAliveWrapper(child: _buildRefreshable(const MetadataView())),
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const MetadataView())),
 
       // 4. Services (Conditional)
       if (showMetadataTabs)
-        KeepAliveWrapper(child: _buildRefreshable(const ServicesView())),
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const ServicesView())),
 
       // 5. Media (Conditional)
       if (showMetadataTabs)
-        KeepAliveWrapper(child: _buildRefreshable(const MediaView())),
+        KeepAliveWrapper(child: _buildScrollableRefreshable(const MediaView())),
 
       // 6. Probe: General
-      KeepAliveWrapper(child: _buildRefreshable(const ProbeGeneralView())),
+      KeepAliveWrapper(
+          child: _buildScrollableRefreshable(const ProbeGeneralView())),
 
       // 7. Probe: Headers
-      KeepAliveWrapper(child: _buildRefreshable(const ProbeHeadersView())),
+      KeepAliveWrapper(
+          child: _buildScrollableRefreshable(const ProbeHeadersView())),
 
       // 8. Probe: Security
-      KeepAliveWrapper(child: _buildRefreshable(const ProbeSecurityView())),
+      KeepAliveWrapper(
+          child: _buildScrollableRefreshable(const ProbeSecurityView())),
 
       // 9. Probe: Cookies
-      KeepAliveWrapper(child: _buildRefreshable(const ProbeCookiesView())),
+      KeepAliveWrapper(
+          child: _buildScrollableRefreshable(const ProbeCookiesView())),
     ];
   }
 

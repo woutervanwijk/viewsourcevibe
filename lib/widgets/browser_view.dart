@@ -94,7 +94,26 @@ class _BrowserViewState extends State<BrowserView> {
                     .updateWebViewUrl(change.url!);
               }
             },
-            onWebResourceError: (WebResourceError error) {},
+            onWebResourceError: (WebResourceError error) {
+              if (mounted) {
+                // If the main frame failed, stop loading indicator
+                // We could check error.isForMainFrame if available, or just stop assuming generic error
+                // On Android, SSL errors return -202 or generic codes.
+                if (error.errorCode == -202 ||
+                    error.description.contains('SSL')) {
+                  // Specific handling for SSL
+                  final htmlService =
+                      Provider.of<HtmlService>(context, listen: false);
+                  htmlService.handleWebViewError(
+                      'SSL Handshake Failed: ${error.description}. The system WebView enforces strict security.');
+                } else if (error.errorCode != -999) {
+                  // -999 is typically "cancelled" (e.g. valid reload)
+                  final htmlService =
+                      Provider.of<HtmlService>(context, listen: false);
+                  htmlService.handleWebViewError(error.description);
+                }
+              }
+            },
           ),
         );
 
