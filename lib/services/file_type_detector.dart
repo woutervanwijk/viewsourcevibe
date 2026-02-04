@@ -156,7 +156,11 @@ class FileTypeDetector {
 
     // Strategy 4: Content-based detection with scoring
     if (content != null && content.isNotEmpty) {
-      detectedType = _detectByContent(content);
+      if (content.length > 32 * 1024) {
+        detectedType = await compute(_detectByContentInternal, content);
+      } else {
+        detectedType = _detectByContentInternal(content);
+      }
 
       // Special handling for URLs: if content detection returns 'Text' for a URL,
       // it means the content is unclear, so default to HTML
@@ -402,7 +406,7 @@ class FileTypeDetector {
   }
 
   /// Detect file type by content analysis with scoring
-  String _detectByContent(String content) {
+  static String _detectByContentInternal(String content) {
     // For large files, only analyze the first 256KB for performance
     String analysisContent = content;
     if (content.length > 256 * 1024) {
@@ -647,11 +651,11 @@ class FileTypeDetector {
     }
 
     // Fallback to simple heuristics
-    return _simpleContentDetection(content);
+    return _simpleContentDetectionInternal(content);
   }
 
   /// Simple content detection as fallback
-  String _simpleContentDetection(String content) {
+  static String _simpleContentDetectionInternal(String content) {
     final lowerContent = content.toLowerCase();
 
     // Try robust parsing first even in simple detection
@@ -685,7 +689,9 @@ class FileTypeDetector {
     }
     if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
         (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
-      return 'JSON';
+      if (lowerContent.contains('"') || lowerContent.contains(':')) {
+        return 'JSON';
+      }
     }
     if (lowerContent.startsWith('---') || lowerContent.contains(': ')) {
       return 'YAML';

@@ -154,26 +154,26 @@ class _BrowserViewState extends State<BrowserView> {
 
     // Check if it's an RSS/Atom/XML feed
     // We use the file content if available, otherwise just load the URL
-    final isRssOrXml =
-        RssTemplateService.isRssFeed(widget.file.name, widget.file.content);
+    final isRssOrXml = await RssTemplateService.isRssFeed(
+        widget.file.name, widget.file.content);
 
     if (isRssOrXml && widget.file.content.isNotEmpty) {
-      _currentRssUrl = targetUrl;
-      final html =
-          RssTemplateService.convertRssToHtml(widget.file.content, targetUrl);
+      // Use temporary internal RSS rendering if needed
+      final html = await RssTemplateService.convertRssToHtml(
+          widget.file.content, targetUrl);
       _controller.loadHtmlString(html, baseUrl: targetUrl);
-      return;
-    }
-
-    _currentRssUrl = null;
-
-    if (currentUrl == targetUrl && targetUrl.isNotEmpty) return;
-
-    if (targetUrl.startsWith('http')) {
-      await _controller.loadRequest(Uri.parse(targetUrl));
+      _currentRssUrl = targetUrl;
     } else {
-      await _controller.loadHtmlString(widget.file.content,
-          baseUrl: widget.file.path);
+      // If not RSS, or RSS but content is empty, proceed with normal loading
+      _currentRssUrl = null;
+      if (currentUrl == targetUrl && targetUrl.isNotEmpty) return;
+
+      if (targetUrl.startsWith('http')) {
+        await _controller.loadRequest(Uri.parse(targetUrl));
+      } else {
+        await _controller.loadHtmlString(widget.file.content,
+            baseUrl: widget.file.path);
+      }
     }
   }
 

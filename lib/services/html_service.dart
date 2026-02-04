@@ -18,6 +18,7 @@ import 'package:re_highlight/styles/tokyo-night-dark.dart';
 import 'package:re_highlight/styles/tokyo-night-light.dart';
 import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'dart:async';
@@ -115,12 +116,29 @@ class HtmlService with ChangeNotifier {
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
             '';
     if (contentType.contains('text/html') ||
-        contentType.contains('application/xhtml+xml')) return true;
+        contentType.contains('application/xhtml+xml')) {
+      return true;
+    }
 
-    return selectedContentType == 'html' ||
+    // Secondary check: selected content type or current file extension
+    final bool looksLikeHtml = selectedContentType == 'html' ||
         (_currentFile?.name.toLowerCase().endsWith('.html') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.htm') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.xhtml') ?? false);
+
+    if (looksLikeHtml) return true;
+
+    // Tertiary check: If we are midway through loading a URL and probe/file are not ready,
+    // guess from the input text (URL) to keep UI stable.
+    final String url = (_currentInputText ?? '').toLowerCase();
+    return url.contains('.html') ||
+        url.contains('.htm') ||
+        url.contains('.xhtml') ||
+        (url.startsWith('http') &&
+            !url.contains('.') &&
+            !url.endsWith('.rss') &&
+            !url.endsWith('.xml') &&
+            !url.endsWith('.json'));
   }
 
   bool get isSvg {
@@ -138,19 +156,35 @@ class HtmlService with ChangeNotifier {
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
             '';
     if (contentType.contains('application/xml') ||
-        contentType.contains('text/xml')) return true;
+        contentType.contains('text/xml')) {
+      return true;
+    }
     if (contentType.contains('application/rss+xml') ||
-        contentType.contains('application/atom+xml')) return true;
+        contentType.contains('application/atom+xml')) {
+      return true;
+    }
 
-    return selectedContentType == 'xml' ||
+    // Secondary check: selections or file extensions
+    final bool looksLikeXml = selectedContentType == 'xml' ||
         isSvg ||
         (_currentFile?.name.toLowerCase().endsWith('.xml') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.rss') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.atom') ?? false);
+
+    if (looksLikeXml) return true;
+
+    // Tertiary check: URL guessing for transition stability
+    final String url = (_currentInputText ?? '').toLowerCase();
+    return url.endsWith('.xml') ||
+        url.endsWith('.rss') ||
+        url.endsWith('.atom') ||
+        url.contains('.xml?') ||
+        url.contains('.rss?') ||
+        url.contains('.atom?');
   }
 
   /// Metadata/Services/Media extraction is only useful for full web pages
-  bool get showMetadataTabs => isHtml;
+  bool get showMetadataTabs => isHtml || isXml;
 
   /// DOM Tree and Probe tabs are useful for any structured markup
   bool get isHtmlOrXml => isHtml || isXml;
@@ -726,7 +760,7 @@ class HtmlService with ChangeNotifier {
         lowerContent.contains('xmlns=') ||
         lowerContent.contains('<channel ') ||
         lowerContent.contains('<item ') ||
-        (!isHtml && tryParseAsXml(content));
+        (!isHtml && _tryParseAsXmlInternal(content));
 
     // Assign file type based on detection (priority: XML > HTML > CSS > JS > other languages)
     // XML detection comes first to fix RSS feed issue
@@ -1049,12 +1083,13 @@ class HtmlService with ChangeNotifier {
       return properFilename;
     } catch (e) {
       // Fallback to simple detection if robust detection fails
-      return _fallbackContentDetection(filename, content);
+      return await _fallbackContentDetection(filename, content);
     }
   }
 
   /// Fallback content detection when robust detection fails
-  String _fallbackContentDetection(String filename, String content) {
+  Future<String> _fallbackContentDetection(
+      String filename, String content) async {
     // Handle empty or unclear filenames
     if (filename.isEmpty ||
         filename == '/' ||
@@ -1068,53 +1103,73 @@ class HtmlService with ChangeNotifier {
       return filename;
     }
 
+    // Simple content-based detection in isolate if large
+    String detectedType;
+    if (content.length > 32 * 1024) {
+      detectedType = await compute(_fallbackContentDetectionInternal, content);
+    } else {
+      detectedType = _fallbackContentDetectionInternal(content);
+    }
+
+    return '$filename${detectedType == 'Text' ? '.txt' : detectedType == 'HTML' ? '.html' : detectedType == 'XML' ? '.xml' : detectedType == 'JSON' ? '.json' : detectedType == 'YAML' ? '.yaml' : detectedType == 'Markdown' ? '.md' : detectedType == 'CSS' ? '.css' : detectedType == 'JavaScript' ? '.js' : detectedType == 'Python' ? '.py' : detectedType == 'Java' ? '.java' : detectedType == 'C++' ? '.cpp' : detectedType == 'SQL' ? '.sql' : '.txt'}';
+  }
+
+  static String _fallbackContentDetectionInternal(String content) {
     // Simple content-based detection
     final lowerContent = content.toLowerCase();
 
     if (lowerContent.contains('<html') ||
         lowerContent.contains('<!doctype html')) {
-      return 'HTML File';
+      return 'HTML';
     }
     if (lowerContent.contains('body {') || lowerContent.contains('@media')) {
-      return 'CSS File';
+      return 'CSS';
     }
     if (lowerContent.contains('function ') || lowerContent.contains('const ')) {
-      return 'JavaScript File';
+      return 'JavaScript';
     }
     if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
         (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
-      return 'JSON File';
+      return 'JSON';
     }
     if (lowerContent.startsWith('---') || lowerContent.contains(': ')) {
-      return 'YAML File';
+      return 'YAML';
     }
     if (lowerContent.startsWith('# ') || lowerContent.contains('## ')) {
-      return 'Markdown File';
+      return 'Markdown';
     }
-    if (tryParseAsXml(content)) {
-      return 'XML File';
+    if (_tryParseAsXmlInternal(content)) {
+      return 'XML';
     }
     if (lowerContent.contains('public class ') ||
         lowerContent.contains('system.out.println')) {
-      return 'Java File';
+      return 'Java';
     }
     if (lowerContent.contains('#include ') ||
         lowerContent.contains('int main(')) {
-      return 'C++ File';
+      return 'C++';
     }
     if (lowerContent.contains('def ') || lowerContent.contains('print(')) {
-      return 'Python File';
+      return 'Python';
     }
     if (lowerContent.contains('select ') || lowerContent.contains('from ')) {
-      return 'SQL File';
+      return 'SQL';
     }
 
-    return 'Text File';
+    return 'Text';
   }
 
   /// Try to parse content as XML
   /// Returns true if content appears to be valid XML
-  bool tryParseAsXml(String content) {
+  Future<bool> tryParseAsXml(String content) async {
+    if (content.trim().isEmpty) return false;
+    if (content.length > 32 * 1024) {
+      return await compute(_tryParseAsXmlInternal, content);
+    }
+    return _tryParseAsXmlInternal(content);
+  }
+
+  static bool _tryParseAsXmlInternal(String content) {
     if (content.trim().isEmpty) return false;
     try {
       // Use the robust xml package for parsing
@@ -3196,10 +3251,15 @@ Technical details: $e''';
 
       _currentFile = htmlFile;
 
-      // Trigger metadata extraction for the new content
-      await _extractMetadata();
-
+      // Notify immediately so Source and Browser tabs reflect the new content/URL
       notifyListeners();
+
+      // Trigger metadata extraction for the new content in background
+      _extractMetadata().then((_) {
+        // Final notification after metadata is ready
+        notifyListeners();
+      }).ignore();
+
       _autoSave();
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');
@@ -3256,6 +3316,10 @@ Technical details: $e''';
         _requestedTabIndex =
             0; // Switch to Source tab to show extracted content
         notifyListeners();
+
+        // Trigger metadata extraction in background
+        _extractMetadata().then((_) => notifyListeners()).ignore();
+
         _autoSave();
       }
     } catch (e) {

@@ -1,6 +1,7 @@
-import 'package:html_unescape/html_unescape.dart';
 import 'package:xml/xml.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:html_unescape/html_unescape.dart';
 
 class RssTemplateService {
   static final _unescape = HtmlUnescape();
@@ -9,7 +10,7 @@ class RssTemplateService {
   /// that should be rendered with the RSS template.
   ///
   /// Explicitly excludes SVGs to prevent false positives.
-  static bool isRssFeed(String filename, String content) {
+  static Future<bool> isRssFeed(String filename, String content) async {
     final name = filename.toLowerCase();
     final trimmedContent = content.trimLeft();
 
@@ -41,23 +42,44 @@ class RssTemplateService {
         trimmedContent.contains('<feed') ||
         trimmedContent.contains('<rdf:RDF') ||
         trimmedContent.contains('http://purl.org/rss/1.0/')) {
-      // For ambiguous cases, try to parse as XML to be sure
-      try {
-        final doc = XmlDocument.parse(trimmedContent);
-        return doc.findElements('rss').isNotEmpty ||
-            doc.findAllElements('channel').isNotEmpty ||
-            doc.findElements('feed').isNotEmpty ||
-            doc.findElements('rdf:RDF').isNotEmpty;
-      } catch (e) {
-        // If it looks like a feed but doesn't parse as XML, it might be malformed but we still try
-        return true;
+      // For ambiguous cases or if the file is large, parse XML in an isolate
+      if (trimmedContent.length > 50 * 1024) {
+        return await compute(_isRssFeedInternal, trimmedContent);
       }
+
+      return _isRssFeedInternal(trimmedContent);
     }
 
     return false;
   }
 
-  static String convertRssToHtml(String xmlContent, String feedUrl) {
+  static bool _isRssFeedInternal(String content) {
+    try {
+      final doc = XmlDocument.parse(content);
+      return doc.findElements('rss').isNotEmpty ||
+          doc.findAllElements('channel').isNotEmpty ||
+          doc.findElements('feed').isNotEmpty ||
+          doc.findElements('rdf:RDF').isNotEmpty;
+    } catch (e) {
+      // If it looks like a feed but doesn't parse as XML, it might be malformed but we still try
+      return true;
+    }
+  }
+
+  static Future<String> convertRssToHtml(
+      String xmlContent, String feedUrl) async {
+    // For large content, always use isolate
+    if (xmlContent.length > 32 * 1024) {
+      return await compute(
+          _convertRssToHtmlInternal, {'xml': xmlContent, 'url': feedUrl});
+    }
+    return _convertRssToHtmlInternal({'xml': xmlContent, 'url': feedUrl});
+  }
+
+  static String _convertRssToHtmlInternal(Map<String, String> args) {
+    final xmlContent = args['xml']!;
+    final feedUrl = args['url']!;
+
     try {
       final document = XmlDocument.parse(xmlContent.trim());
 
@@ -81,10 +103,6 @@ class RssTemplateService {
       return _parseWithRegex(xmlContent, feedUrl);
     }
   }
-
-  // ... (Existing XML Rendering Methods: _renderRss, _renderAtom, _parseItem, _parseEntry) ...
-  // I will need to keep these, but since I'm rewriting the file to add fallback, I'll essentially paste the old code back with the new method.
-  // Actually, I should use `replace_file_content` to append the new method and update `convertRssToHtml`.
 
   static String _renderRss(XmlDocument doc, String feedUrl) {
     final channel = doc.findAllElements('channel').firstOrNull ??
