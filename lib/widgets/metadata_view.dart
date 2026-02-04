@@ -82,6 +82,18 @@ class MetadataView extends StatelessWidget {
     );
   }
 
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB'];
+    var i = 0;
+    double size = bytes.toDouble();
+    while (size >= 1024 && i < suffixes.length - 1) {
+      size /= 1024;
+      i++;
+    }
+    return '${size.toStringAsFixed(2)} ${suffixes[i]}';
+  }
+
   Widget _buildHeaderSection(
       BuildContext context, Map<String, dynamic> metadata) {
     final unescape = HtmlUnescape();
@@ -139,6 +151,41 @@ class MetadataView extends StatelessWidget {
                           color: Colors.grey[600],
                         ),
                   ),
+                  if (metadata['pageWeight'] != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Network Transfer: ${_formatBytes(metadata['pageWeight']['transfer'])}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSecondaryContainer,
+                            ),
+                          ),
+                          Text(
+                            'Uncompressed Size: ${_formatBytes(metadata['pageWeight']['decoded'])}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSecondaryContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -61,6 +61,9 @@ class HtmlService with ChangeNotifier {
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
+  Map<String, int>? _lastPageWeight; // Store weights: transfer and decoded
+  List<Map<String, dynamic>>?
+      _resourcePerformanceData; // Store detailed resource data
 
   double _webViewLoadingProgress = 0.0;
   double get webViewLoadingProgress => _webViewLoadingProgress;
@@ -265,7 +268,12 @@ class HtmlService with ChangeNotifier {
     // Clear state
     _probeResult = null;
     _probeError = null;
+    // Clear state
+    _probeResult = null;
+    _probeError = null;
     _pageMetadata = null;
+    _lastPageWeight = null;
+    _resourcePerformanceData = null;
     _webViewLoadingProgress = 0.0;
 
     notifyListeners();
@@ -3167,12 +3175,86 @@ Technical details: $e''';
 
     try {
       _pageMetadata = await extractMetadataInIsolate(html, baseUrl);
+      if (_lastPageWeight != null) {
+        _pageMetadata!['pageWeight'] = _lastPageWeight;
+      }
+
+      // Correlate resource sizes with metadata
+      if (_pageMetadata != null && _resourcePerformanceData != null) {
+        _enrichMetadataWithSizes(baseUrl);
+      }
     } catch (e) {
       debugPrint('Error extracting metadata in isolate: $e');
       _pageMetadata = null;
     }
 
     notifyListeners();
+  }
+
+  /// Matches extracted metadata links with performance resource data to find sizes
+  void _enrichMetadataWithSizes(String baseUrl) {
+    if (_resourcePerformanceData == null || _pageMetadata == null) return;
+
+    // Helper to find size
+    Map<String, int>? findSize(String? src) {
+      if (src == null || src.isEmpty) return null;
+
+      // Try exact match first
+      var match = _resourcePerformanceData!.firstWhere(
+        (r) => r['name'] == src,
+        orElse: () => {},
+      );
+
+      if (match.isEmpty) {
+        // Try matching by suffix if exact URL fails
+        try {
+          final srcName = src.split('/').last;
+          if (srcName.length > 3) {
+            match = _resourcePerformanceData!.firstWhere(
+                (r) => r['name'].toString().endsWith(srcName),
+                orElse: () => {});
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (match.isNotEmpty) {
+        return {'transfer': match['transfer'], 'decoded': match['decoded']};
+      }
+      return null;
+    }
+
+    // Enrich Images
+    if (_pageMetadata!['media'] != null &&
+        _pageMetadata!['media']['images'] != null) {
+      for (var img in _pageMetadata!['media']['images']) {
+        final size = findSize(img['src']);
+        if (size != null) {
+          img['size'] = size;
+        }
+      }
+    }
+
+    // Enrich CSS
+    if (_pageMetadata!['cssLinks'] != null) {
+      for (var css in _pageMetadata!['cssLinks']) {
+        final size = findSize(css['href']);
+        if (size != null) {
+          css['size'] = size;
+        }
+      }
+    }
+
+    // Enrich JS
+    if (_pageMetadata!['jsLinks'] != null) {
+      for (var js in _pageMetadata!['jsLinks']) {
+        final size = findSize(js['src']);
+        if (size != null) {
+          js['size'] = size;
+        }
+      }
+    }
   }
 
   Map<String, dynamic> _extractCertificateInfo(X509Certificate cert) {
@@ -3281,8 +3363,47 @@ Technical details: $e''';
     }
 
     try {
-      final html = await activeWebViewController!.runJavaScriptReturningResult(
-          'document.documentElement.outerHTML') as String;
+      // Execute JS to get HTML and Page Weight concurrently
+      final htmlFuture = activeWebViewController!
+          .runJavaScriptReturningResult('document.documentElement.outerHTML');
+
+      // Updated JS to return a JSON string with both transfer and decoded sizes
+      final weightFuture = activeWebViewController!.runJavaScriptReturningResult(
+          '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; for(var i=0; i<r.length; i++) { tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: r[i].name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); } var n=performance.getEntriesByType("navigation")[0]; if(n) { tTx+=(n.transferSize||0); tDec+=(n.decodedBodySize||0); } return JSON.stringify({tx: tTx, dec: tDec, list: list}); })();');
+
+      final results = await Future.wait([htmlFuture, weightFuture]);
+
+      final html = results[0] as String;
+
+      try {
+        final weightRaw = results[1];
+        String jsonStr = '';
+        if (weightRaw is String) {
+          // On some platforms/versions runJavaScriptReturningResult returns the string result directly
+          // But if it was JSON.stringify, it returns a JSON string.
+          // However, if the result implies a string in JS, Flutter might wrap it in quotes or not.
+          // Usually `runJavaScriptReturningResult` returns standard types.
+          // Since we return JSON.stringify, it is a String.
+          // Note: Android might return "\"{\\\"tx\\\":...}\"".
+          // We might need to unquote.
+          jsonStr = weightRaw;
+          if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
+            jsonStr =
+                jsonStr.substring(1, jsonStr.length - 1).replaceAll(r'\"', '"');
+          }
+        }
+
+        if (jsonStr.isNotEmpty) {
+          final Map<String, dynamic> weightMap = jsonDecode(jsonStr);
+          _lastPageWeight = {
+            'transfer': (weightMap['tx'] as num).toInt(),
+            'decoded': (weightMap['dec'] as num).toInt(),
+          };
+        }
+      } catch (e) {
+        debugPrint('Error parsing page weight: $e');
+        _lastPageWeight = null;
+      }
 
       // Unquote if needed
       String finalHtml = _unquoteHtml(html);
