@@ -246,6 +246,7 @@ void main() async {
 
   // Link services for auto-save and history
   htmlService.setAppStateService(appStateService);
+  htmlService.setAppSettings(appSettings);
   htmlService.setUrlHistoryService(urlHistoryService);
 
   // Initialize settings persistence

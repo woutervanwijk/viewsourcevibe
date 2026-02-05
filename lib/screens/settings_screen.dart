@@ -105,6 +105,35 @@ class SettingsScreen extends StatelessWidget {
 
               const SizedBox(height: 24),
 
+              // Behavior Settings Section
+              const Text(
+                'Behavior',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      // Browser Default Toggle
+                      SwitchListTile(
+                        title: const Text('Always use Browser'),
+                        subtitle: const Text(
+                            'Load pages in browser immediately. Disable to load source via Curl first (the more pure loading option to see e.g. cookie walls, etc. and when sites block Curl requests)'),
+                        value: settings.useBrowserByDefault,
+                        onChanged: (value) =>
+                            settings.useBrowserByDefault = value,
+                        secondary: const Icon(Icons.public),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
               // Data Section
               const Text(
                 'Data',

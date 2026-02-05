@@ -44,8 +44,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     htmlService.setActiveTabIndex(_tabController.index);
 
-    // If switching to Browser tab (index 1), trigger reload if needed
-    if (_tabController.index == 1) {
+    // If switching to Browser tab, trigger reload if needed
+    if (_tabController.index == htmlService.browserTabIndex) {
       htmlService.triggerBrowserReload().ignore();
     }
 
@@ -131,10 +131,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Widget> _getTabs(HtmlService htmlService) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
+    final useBrowserByDefault = htmlService.browserTabIndex == 0;
+
+    final sourceTab = _buildTab(Icons.code, 'Source');
+    final browserTab = _buildTab(Icons.language, 'Browser');
 
     return [
-      _buildTab(Icons.code, 'Source'),
-      _buildTab(Icons.language, 'Browser'),
+      if (useBrowserByDefault) browserTab else sourceTab,
+      if (useBrowserByDefault) sourceTab else browserTab,
       if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
       if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
       if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
@@ -149,28 +153,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Widget> _getTabViews(HtmlService htmlService, HtmlFile? currentFile) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
+    final useBrowserByDefault = htmlService.browserTabIndex == 0;
+
+    final sourceView = KeepAliveWrapper(
+      child: currentFile != null
+          ? _buildRefreshable(
+              FileViewer(
+                file: currentFile,
+              ),
+            )
+          : _buildScrollableRefreshable(
+              const Center(child: Text('No File')),
+            ),
+    );
+
+    final browserView = KeepAliveWrapper(
+      child: _buildScrollableRefreshable(
+        currentFile != null &&
+                (currentFile.isUrl || isHtmlOrXml || useBrowserByDefault)
+            ? BrowserView(file: currentFile)
+            : const Center(child: Text('Not available for this file')),
+      ),
+    );
 
     return [
-      // 1. Editor
-      KeepAliveWrapper(
-        child: currentFile != null
-            ? _buildRefreshable(
-                FileViewer(
-                  file: currentFile,
-                ),
-              )
-            : _buildScrollableRefreshable(
-                const Center(child: Text('No File')),
-              ),
-      ),
-      // 2. Browser
-      KeepAliveWrapper(
-        child: _buildScrollableRefreshable(
-          currentFile != null && (currentFile.isUrl || isHtmlOrXml)
-              ? BrowserView(file: currentFile)
-              : const Center(child: Text('Not available for this file')),
-        ),
-      ),
+      if (useBrowserByDefault) browserView else sourceView,
+      if (useBrowserByDefault) sourceView else browserView,
+
       // 3. DOM Tree (Conditional)
       if (isHtmlOrXml)
         KeepAliveWrapper(

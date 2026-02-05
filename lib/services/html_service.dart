@@ -28,6 +28,7 @@ import 'dart:convert';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
 import 'package:webview_flutter/webview_flutter.dart' as wf;
@@ -47,6 +48,7 @@ class HtmlService with ChangeNotifier {
   ScrollController? _activeHorizontalScrollController;
   GlobalKey? _codeEditorKey;
   AppStateService? _appStateService;
+  AppSettings? _appSettings;
   UrlHistoryService? _urlHistoryService;
 
   // Navigation stack for "Back" functionality
@@ -88,6 +90,12 @@ class HtmlService with ChangeNotifier {
   // Index of the currently active tab in HomeScreen
   int _activeTabIndex = 0;
   int get activeTabIndex => _activeTabIndex;
+
+  // Dynamic Tab Indices based on settings
+  // Dynamic Tab Indices based on settings
+  bool get _useBrowserByDefault => _appSettings?.useBrowserByDefault ?? true;
+  int get browserTabIndex => _useBrowserByDefault ? 0 : 1;
+  int get sourceTabIndex => _useBrowserByDefault ? 1 : 0;
 
   // Debouncing for syntax highlighting
   Timer? _highlightDebounceTimer;
@@ -224,9 +232,41 @@ class HtmlService with ChangeNotifier {
       notifyListeners();
 
       // If switching to Browser tab, reload if needed (lazy loading)
-      if (index == 1) {
+      if (index == browserTabIndex) {
         triggerBrowserReload();
       }
+
+      // If switching to Source tab in Browser-First mode, load the source if missing
+      if (index == sourceTabIndex &&
+          _useBrowserByDefault &&
+          (_currentFile?.content.isEmpty ?? true) &&
+          (_currentFile?.isUrl ?? false)) {
+        debugPrint('Lazy loading source for: ${_currentFile!.path}');
+        _loadSourceOnly(_currentFile!.path);
+      }
+    }
+  }
+
+  /// Lazy load source code without resetting the whole flow
+  Future<void> _loadSourceOnly(String url) async {
+    if (_isLoading) return;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final file = await _loadFromUrlInternal(url);
+
+      // Only update if we are still on the same URL
+      if (_currentFile?.path == url) {
+        await loadFile(file);
+      }
+    } catch (e) {
+      debugPrint('Error lazy loading source: $e');
+      _probeError = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -294,7 +334,7 @@ class HtmlService with ChangeNotifier {
 
     // Browser Lazy Loading Logic
     if (activeWebViewController != null) {
-      if (_activeTabIndex == 1) {
+      if (_activeTabIndex == browserTabIndex) {
         // If Browser is active, load immediately (don't wait for source)
         // This satisfies "don't wait for the tab to activate... do it directly"
         activeWebViewController!.loadRequest(Uri.parse(url)).ignore();
@@ -305,15 +345,36 @@ class HtmlService with ChangeNotifier {
       }
     }
 
-    if (forceWebView || (_activeTabIndex == 1 && switchToTab == 1)) {
+    // Browser-First Mode: If enabled, force WebView (Browser) loading logic
+    // This skips the standard file download and focuses the browser tab
+    bool shouldUseBrowserLogic = forceWebView || _useBrowserByDefault;
+
+    if (shouldUseBrowserLogic) {
       // WebView path
       _webViewLoadingUrl = url;
       _isWebViewLoading = true;
-      _requestedTabIndex = 1;
+      _requestedTabIndex = browserTabIndex; // Dynamic index
       notifyListeners();
       // BrowserView will pick up _webViewLoadingUrl change
+
+      // If we are strictly browser-first (not just "forceWebView" override),
+      // we might want to minimally update file state to valid "URL" state
+      if (_useBrowserByDefault && !forceWebView) {
+        // Create a synthetic file object so the UI is happy
+        _currentFile = HtmlFile(
+          name: 'Browser',
+          path: url,
+          content: '', // Empty content, browser handles it
+          lastModified: DateTime.now(),
+          size: 0,
+          isUrl: true,
+        );
+        _originalFile = _currentFile;
+        notifyListeners();
+      }
     } else {
-      // Standard path
+      // Standard path (Source First)
+      // Only run this if we are NOT using browser by default
       try {
         final file = await _loadFromUrlInternal(url);
         _pendingUrl = null;
@@ -398,6 +459,8 @@ class HtmlService with ChangeNotifier {
     }
     _cachedHorizontalControllers.clear();
 
+    _appSettings?.removeListener(notifyListeners);
+
     super.dispose();
   }
 
@@ -448,6 +511,12 @@ class HtmlService with ChangeNotifier {
 
   void setAppStateService(AppStateService service) {
     _appStateService = service;
+  }
+
+  void setAppSettings(AppSettings settings) {
+    _appSettings = settings;
+    // Listen to settings changes to update tab indices dynamically
+    _appSettings?.addListener(notifyListeners);
   }
 
   void setUrlHistoryService(UrlHistoryService service) {

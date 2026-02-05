@@ -24,6 +24,7 @@ class AppSettings with ChangeNotifier {
   static const String _prefsFontSize = 'fontSize';
   static const String _prefsShowLineNumbers = 'showLineNumbers';
   static const String _prefsWrapText = 'wrapText';
+  static const String _prefsUseBrowserByDefault = 'useBrowserByDefault';
 
   // Shared Preferences instance
   SharedPreferences? _prefs;
@@ -39,6 +40,7 @@ class AppSettings with ChangeNotifier {
 
   // Behavior settings
   bool _wrapText = false;
+  bool _useBrowserByDefault = true;
 
   // Getters
   ThemeModeOption get themeMode => _themeMode;
@@ -47,6 +49,7 @@ class AppSettings with ChangeNotifier {
   double get fontSize => _fontSize;
   bool get showLineNumbers => _showLineNumbers;
   bool get wrapText => _wrapText;
+  bool get useBrowserByDefault => _useBrowserByDefault;
 
   // Setters with notification and persistence
   set themeMode(ThemeModeOption value) {
@@ -250,6 +253,14 @@ class AppSettings with ChangeNotifier {
     }
   }
 
+  set useBrowserByDefault(bool value) {
+    if (_useBrowserByDefault != value) {
+      _useBrowserByDefault = value;
+      _saveSetting(_prefsUseBrowserByDefault, value);
+      notifyListeners();
+    }
+  }
+
   // Initialize shared preferences
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -272,6 +283,7 @@ class AppSettings with ChangeNotifier {
     _fontSize = _prefs!.getDouble(_prefsFontSize) ?? 16.0;
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
+    _useBrowserByDefault = _prefs!.getBool(_prefsUseBrowserByDefault) ?? true;
 
     // Auto-switch theme if in system mode and theme doesn't match current dark mode
     if (_themeMode == ThemeModeOption.system) {
@@ -300,6 +312,7 @@ class AppSettings with ChangeNotifier {
     _fontSize = 16.0;
     _showLineNumbers = true;
     _wrapText = false;
+    _useBrowserByDefault = true;
 
     // Save the default values
     _saveAllSettings();
@@ -316,6 +329,7 @@ class AppSettings with ChangeNotifier {
     await _saveSetting(_prefsFontSize, _fontSize);
     await _saveSetting(_prefsShowLineNumbers, _showLineNumbers);
     await _saveSetting(_prefsWrapText, _wrapText);
+    await _saveSetting(_prefsUseBrowserByDefault, _useBrowserByDefault);
   }
 
   // Theme categories and metadata

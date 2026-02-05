@@ -133,8 +133,8 @@ class _BrowserViewState extends State<BrowserView> {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
           htmlService.activeWebViewController = _controller;
 
-          // Only load if we are on the browser tab (index 1)
-          if (htmlService.activeTabIndex == 1) {
+          // Only load if we are on the browser tab
+          if (htmlService.activeTabIndex == htmlService.browserTabIndex) {
             _loadContent();
           }
         }
@@ -169,7 +169,7 @@ class _BrowserViewState extends State<BrowserView> {
 
   void _loadContentIfVisible() {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
-    if (htmlService.activeTabIndex == 1) {
+    if (htmlService.activeTabIndex == htmlService.browserTabIndex) {
       _loadContent();
     }
   }
