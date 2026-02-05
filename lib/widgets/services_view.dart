@@ -30,42 +30,46 @@ class ServicesView extends StatelessWidget {
       );
     }
 
-    return ListView(
-      primary: false,
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      children: [
-        _buildSectionTitle(context, 'Detected Services'),
-        const Text(
-          'Common third-party services, trackers, and infrastructure used by this page.',
-          style: TextStyle(color: Colors.grey, fontSize: 13),
-        ),
-        const SizedBox(height: 24),
-        ...services.entries.map((entry) {
-          return _buildServiceCategory(context, entry.key, entry.value);
-        }),
-        const Divider(height: 48),
-        _buildSectionTitle(context, 'External Resources'),
-        const Text(
-          'JavaScript and CSS files loaded by this page.',
-          style: TextStyle(color: Colors.grey, fontSize: 13),
-        ),
-        const SizedBox(height: 16),
-        _buildResourceSection(
-            context,
-            'Scripts (JS)',
-            metadata?['jsLinks'] ?? metadata?['externalJsLinks'],
-            Icons.javascript),
-        const SizedBox(height: 16),
-        _buildResourceSection(context, 'Stylesheets (CSS)',
-            metadata?['cssLinks'] ?? metadata?['externalCssLinks'], Icons.css),
-        const SizedBox(height: 16),
-        _buildResourceSection(
-            context,
-            'Iframes (HTML)',
-            metadata?['iframeLinks'] ?? metadata?['externalIframeLinks'],
-            Icons.web_asset),
-        const SizedBox(height: 80),
-      ],
+      child: Column(
+        children: [
+          _buildSectionTitle(context, 'Detected Services'),
+          const Text(
+            'Common third-party services, trackers, and infrastructure used by this page.',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+          ...services.entries.map((entry) {
+            return _buildServiceCategory(context, entry.key, entry.value);
+          }),
+          const Divider(height: 48),
+          _buildSectionTitle(context, 'External Resources'),
+          const Text(
+            'JavaScript and CSS files loaded by this page.',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          _buildResourceSection(
+              context,
+              'Scripts (JS)',
+              metadata?['jsLinks'] ?? metadata?['externalJsLinks'],
+              Icons.javascript),
+          const SizedBox(height: 16),
+          _buildResourceSection(
+              context,
+              'Stylesheets (CSS)',
+              metadata?['cssLinks'] ?? metadata?['externalCssLinks'],
+              Icons.css),
+          const SizedBox(height: 16),
+          _buildResourceSection(
+              context,
+              'Iframes (HTML)',
+              metadata?['iframeLinks'] ?? metadata?['externalIframeLinks'],
+              Icons.web_asset),
+          const SizedBox(height: 80),
+        ],
+      ),
     );
   }
 

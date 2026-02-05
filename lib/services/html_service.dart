@@ -81,9 +81,6 @@ class HtmlService with ChangeNotifier {
   final Map<String, String> _beautifiedCache = {};
   wf.WebViewController? activeWebViewController;
 
-  // Cache for highlighted content to improve performance
-  final Map<String, Widget> _highlightCache = {};
-
   // Track the currently active find controller
   CodeFindController? _activeFindController;
 
@@ -2673,25 +2670,11 @@ Technical details: $e''';
     // Get the appropriate language for syntax highlighting
     final languageName = getLanguageForExtension(extension);
 
-    // Generate a cache key based on content hash and parameters
-    final cacheKey = _generateHighlightCacheKey(
-        content: content,
-        extension: extension,
-        fontSize: fontSize,
-        themeName: themeName,
-        wrapText: wrapText,
-        showLineNumbers: showLineNumbers,
-        useSimplified: useSimplifiedHighlighting);
-
-    // Add scroll controller identity to cache key to avoid issues if it changes
-    final String fullCacheKey =
-        '${cacheKey}_scroll:${customScrollController?.hashCode ?? 'none'}';
-
     // check widget cache
-    if (_highlightCache.containsKey(fullCacheKey)) {
-      debugPrint('🔄 Using cached highlighted widget');
-      return _highlightCache[fullCacheKey]!;
-    }
+    // if (_highlightCache.containsKey(fullCacheKey)) {
+    //   debugPrint('🔄 Using cached highlighted widget');
+    //   return _highlightCache[fullCacheKey]!;
+    // }
 
     // Create a controller for the code editor
     // Performance optimization: Use chunked content for very large files
@@ -2790,7 +2773,9 @@ Technical details: $e''';
     // Enforce cache size limits
     _enforceCacheSizeLimits();
 
-    _highlightCache[fullCacheKey] = codeEditor;
+    // Do not cache the CodeEditor widget itself as it can lead to "CodeCursorBlinkController was used after being disposed"
+    // errors when the widget is reused after being unmounted/disposed.
+    // _highlightCache[fullCacheKey] = codeEditor;
 
     return codeEditor;
   }
@@ -2923,22 +2908,6 @@ Technical details: $e''';
         // Fallback to github theme
         return githubTheme;
     }
-  }
-
-  /// Generate cache key for highlighted content
-  String _generateHighlightCacheKey({
-    required String content,
-    required String extension,
-    required double fontSize,
-    required String themeName,
-    required bool wrapText,
-    required bool showLineNumbers,
-    required bool useSimplified,
-  }) {
-    // Create a hash of the content to use as part of the cache key
-    final contentHash = _simpleHash(content);
-
-    return 'hl:${contentHash}_ext:${extension}_fs:${fontSize.toStringAsFixed(1)}_th:${themeName}_wrap:${wrapText}_lines:${showLineNumbers}_simple:$useSimplified';
   }
 
   /// Generate a cache key for the CodeLineEditingController (content-dependent only)

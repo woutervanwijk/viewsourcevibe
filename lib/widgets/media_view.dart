@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
@@ -48,36 +49,37 @@ class MediaView extends StatelessWidget {
       );
     }
 
-    return ListView(
-      primary: false,
+    return Padding(
       padding: const EdgeInsets.all(16),
-      children: [
-        if (videos.isNotEmpty) ...[
-          _buildSectionTitle(context, 'Videos (${videos.length})'),
-          const SizedBox(height: 8),
-          ...videos.map((video) => _buildVideoItem(context, video)),
-          const SizedBox(height: 24),
-        ],
-        if (images.isNotEmpty) ...[
-          _buildSectionTitle(context, 'Images (${images.length})'),
-          const SizedBox(height: 8),
-          GridView.builder(
-            primary: false,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.8,
+      child: Column(
+        children: [
+          if (videos.isNotEmpty) ...[
+            _buildSectionTitle(context, 'Videos (${videos.length})'),
+            const SizedBox(height: 8),
+            ...videos.map((video) => _buildVideoItem(context, video)),
+            const SizedBox(height: 24),
+          ],
+          if (images.isNotEmpty) ...[
+            _buildSectionTitle(context, 'Images (${images.length})'),
+            const SizedBox(height: 8),
+            GridView.builder(
+              primary: false,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: images.length,
+              itemBuilder: (context, index) =>
+                  _buildImageItem(context, images[index]),
             ),
-            itemCount: images.length,
-            itemBuilder: (context, index) =>
-                _buildImageItem(context, images[index]),
-          ),
+          ],
+          const SizedBox(height: 80),
         ],
-        const SizedBox(height: 80),
-      ],
+      ),
     );
   }
 
@@ -239,8 +241,8 @@ class MediaView extends StatelessWidget {
     }
 
     return src.toLowerCase().endsWith('.svg')
-        ? SvgPicture.network(
-            src,
+        ? SafeNetworkSvg(
+            url: src,
             fit: BoxFit.contain,
             placeholderBuilder: (context) =>
                 const Center(child: CircularProgressIndicator()),
@@ -264,5 +266,93 @@ class MediaView extends StatelessWidget {
               );
             },
           );
+  }
+}
+
+class SafeNetworkSvg extends StatefulWidget {
+  final String url;
+  final BoxFit fit;
+  final WidgetBuilder placeholderBuilder;
+
+  const SafeNetworkSvg({
+    super.key,
+    required this.url,
+    this.fit = BoxFit.contain,
+    required this.placeholderBuilder,
+  });
+
+  @override
+  State<SafeNetworkSvg> createState() => _SafeNetworkSvgState();
+}
+
+class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
+  Future<Uint8List?>? _loadingFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadingFuture = _loadSvg();
+  }
+
+  Future<Uint8List?> _loadSvg() async {
+    try {
+      // Use HtmlService's platform-agnostic HTTP client if possible, but for simple
+      // check we can stick to basic logic or use the existing HtmlService from context if I could access it.
+      // But creating a new Client is safer for isolation.
+      // Note: We need to import http package
+      // Since I cannot easily add imports in this tool call without replacing the top,
+      // I will assume I can add the import in a separate call or use a workaround.
+      // Actually, I should add the import first.
+
+      // Since I can't add import here, I will depend on HtmlService helper?
+      // No, HtmlService doesn't expose a simple "getBytes" for arbitrary URL easily without side effects.
+
+      // I'll assume standard http GET for now and fix imports in next step.
+      // Or I can use NetworkAssetBundle which is available in Flutter.
+
+      final bundle = NetworkAssetBundle(Uri.parse(widget.url));
+      final data = await bundle.load("");
+      final bytes = data.buffer.asUint8List();
+
+      // Simple validation to prevent HTML parsing
+      // Check first 1KB for <html or <!DOCTYPE htmlTags
+      final head = String.fromCharCodes(
+        bytes.sublist(0, bytes.length < 1024 ? bytes.length : 1024),
+      ).toLowerCase();
+
+      if (head.contains('<html') || head.contains('<!doctype html')) {
+        debugPrint(
+            'SVG Validation Failed: Content looks like HTML for ${widget.url}');
+        return null; // Invalid SVG
+      }
+
+      return bytes;
+    } catch (e) {
+      debugPrint('Error loading SVG: $e');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _loadingFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return widget.placeholderBuilder(context);
+        }
+
+        if (snapshot.hasError || snapshot.data == null) {
+          return const Center(
+              child: Icon(Icons.broken_image, color: Colors.grey));
+        }
+
+        return SvgPicture.memory(
+          snapshot.data!,
+          fit: widget.fit,
+          placeholderBuilder: widget.placeholderBuilder,
+        );
+      },
+    );
   }
 }

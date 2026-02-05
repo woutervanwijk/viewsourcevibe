@@ -178,23 +178,29 @@ class _DomTreeViewState extends State<DomTreeView> {
     }
 
     if (content.isEmpty) {
-      return const Center(child: Text('No content to parse'));
+      return const SliverFillRemaining(
+        child: Center(child: Text('No content to parse')),
+      );
     }
 
     if (_treeController.roots.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const SliverFillRemaining(
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
 
-    return TreeView<DomTreeNode>(
-      primary:
-          false, // Prevent conflict with FileViewer's PrimaryScrollController
-      treeController: _treeController,
-      nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {
-        return DomTreeTile(
-          entry: entry,
-          onTap: () => _treeController.toggleExpansion(entry.node),
-        );
-      },
+    return SliverFillRemaining(
+      child: TreeView<DomTreeNode>(
+        primary: false,
+        physics: const AlwaysScrollableScrollPhysics(),
+        treeController: _treeController,
+        nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {
+          return DomTreeTile(
+            entry: entry,
+            onTap: () => _treeController.toggleExpansion(entry.node),
+          );
+        },
+      ),
     );
   }
 }

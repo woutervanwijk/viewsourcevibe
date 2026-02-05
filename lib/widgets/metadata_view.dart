@@ -29,56 +29,57 @@ class MetadataView extends StatelessWidget {
       );
     }
 
-    return ListView(
-      primary: false,
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      children: [
-        _buildHeaderSection(context, metadata),
-        const SizedBox(height: 24),
-        if (metadata['detectedTech']?.isNotEmpty == true) ...[
-          _buildSectionTitle(context, 'Technology Stack'),
-          _buildTechSection(context, metadata['detectedTech']),
+      child: Column(
+        children: [
+          _buildHeaderSection(context, metadata),
           const SizedBox(height: 24),
-        ],
-        if (metadata['article']?.isNotEmpty == true) ...[
-          _buildSectionTitle(context, 'Article Information'),
-          _buildMapSection(context, metadata['article']),
+          if (metadata['detectedTech']?.isNotEmpty == true) ...[
+            _buildSectionTitle(context, 'Technology Stack'),
+            _buildTechSection(context, metadata['detectedTech']),
+            const SizedBox(height: 24),
+          ],
+          if (metadata['article']?.isNotEmpty == true) ...[
+            _buildSectionTitle(context, 'Article Information'),
+            _buildMapSection(context, metadata['article']),
+            const SizedBox(height: 24),
+          ],
+          if (metadata['pageConfig']?.isNotEmpty == true) ...[
+            _buildSectionTitle(context, 'Page Configuration'),
+            _buildMapSection(context, metadata['pageConfig']),
+            const SizedBox(height: 24),
+          ],
+          if (metadata['resourceHints']?.isNotEmpty == true) ...[
+            _buildSectionTitle(context, 'Optimization (Resource Hints)'),
+            _buildHintSection(context, metadata['resourceHints']),
+            const SizedBox(height: 24),
+          ],
+          if (metadata['openGraph']?.isNotEmpty == true) ...[
+            _buildSectionTitle(context, 'OpenGraph Tags'),
+            _buildMapSection(context, metadata['openGraph']),
+            const SizedBox(height: 24),
+          ],
+          if (metadata['twitter']?.isNotEmpty == true) ...[
+            _buildSectionTitle(context, 'Twitter Card Info'),
+            _buildMapSection(context, metadata['twitter']),
+            const SizedBox(height: 24),
+          ],
+          _buildSectionTitle(context, 'Linked Resources'),
+          _buildLinkSection(
+              context, 'Stylesheets (CSS)', metadata['cssLinks'], Icons.css),
+          _buildLinkSection(
+              context, 'Scripts (JS)', metadata['jsLinks'], Icons.javascript),
+          _buildLinkSection(context, 'Iframes (HTML)', metadata['iframeLinks'],
+              Icons.web_asset),
+          _buildLinkSection(
+              context, 'RSS/Atom Feeds', metadata['rssLinks'], Icons.rss_feed),
           const SizedBox(height: 24),
+          _buildSectionTitle(context, 'Other Meta Tags'),
+          _buildMapSection(context, metadata['otherMeta']),
+          const SizedBox(height: 80),
         ],
-        if (metadata['pageConfig']?.isNotEmpty == true) ...[
-          _buildSectionTitle(context, 'Page Configuration'),
-          _buildMapSection(context, metadata['pageConfig']),
-          const SizedBox(height: 24),
-        ],
-        if (metadata['resourceHints']?.isNotEmpty == true) ...[
-          _buildSectionTitle(context, 'Optimization (Resource Hints)'),
-          _buildHintSection(context, metadata['resourceHints']),
-          const SizedBox(height: 24),
-        ],
-        if (metadata['openGraph']?.isNotEmpty == true) ...[
-          _buildSectionTitle(context, 'OpenGraph Tags'),
-          _buildMapSection(context, metadata['openGraph']),
-          const SizedBox(height: 24),
-        ],
-        if (metadata['twitter']?.isNotEmpty == true) ...[
-          _buildSectionTitle(context, 'Twitter Card Info'),
-          _buildMapSection(context, metadata['twitter']),
-          const SizedBox(height: 24),
-        ],
-        _buildSectionTitle(context, 'Linked Resources'),
-        _buildLinkSection(
-            context, 'Stylesheets (CSS)', metadata['cssLinks'], Icons.css),
-        _buildLinkSection(
-            context, 'Scripts (JS)', metadata['jsLinks'], Icons.javascript),
-        _buildLinkSection(context, 'Iframes (HTML)', metadata['iframeLinks'],
-            Icons.web_asset),
-        _buildLinkSection(
-            context, 'RSS/Atom Feeds', metadata['rssLinks'], Icons.rss_feed),
-        const SizedBox(height: 24),
-        _buildSectionTitle(context, 'Other Meta Tags'),
-        _buildMapSection(context, metadata['otherMeta']),
-        const SizedBox(height: 80),
-      ],
+      ),
     );
   }
 

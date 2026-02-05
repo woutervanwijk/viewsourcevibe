@@ -111,17 +111,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildScrollableRefreshable(Widget child) {
+  Widget _buildScrollableRefreshable(Widget child,
+      {bool hasScrollBody = true}) {
     return TabPageWrapper(
       child: RefreshIndicator(
         onRefresh: _handleRefresh,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverFillRemaining(
-              hasScrollBody: true,
-              child: child,
-            ),
+            if (hasScrollBody)
+              SliverFillRemaining(
+                hasScrollBody: true,
+                child: child,
+              )
+            else
+              SliverToBoxAdapter(
+                child: child,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Special builder for Sliver widgets (like SliverTreeView)
+  Widget _buildSliverRefreshable(Widget sliver) {
+    return TabPageWrapper(
+      child: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            sliver,
           ],
         ),
       ),
@@ -182,22 +203,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       // 3. DOM Tree (Conditional)
       if (isHtmlOrXml)
-        KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const DomTreeView())),
+        KeepAliveWrapper(child: _buildSliverRefreshable(const DomTreeView())),
 
       // 3. Metadata (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const MetadataView())),
+            child: _buildScrollableRefreshable(const MetadataView(),
+                hasScrollBody: false)),
 
       // 4. Services (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const ServicesView())),
+            child: _buildScrollableRefreshable(const ServicesView(),
+                hasScrollBody: false)),
 
       // 5. Media (Conditional)
       if (showMetadataTabs)
-        KeepAliveWrapper(child: _buildScrollableRefreshable(const MediaView())),
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const MediaView(),
+                hasScrollBody: false)),
 
       // 6. Probe: General
       KeepAliveWrapper(

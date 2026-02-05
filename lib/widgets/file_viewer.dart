@@ -467,7 +467,7 @@ class FileViewer extends StatelessWidget {
                             Container(
                               color: Theme.of(context)
                                   .scaffoldBackgroundColor
-                                  .withOpacity(0.8),
+                                  .withValues(alpha: 0.8),
                               child: const Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
