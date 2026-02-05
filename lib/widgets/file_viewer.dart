@@ -5,7 +5,6 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
-import 'package:view_source_vibe/utils/code_beautifier.dart';
 
 class FileViewer extends StatelessWidget {
   final HtmlFile file;
@@ -439,62 +438,109 @@ class FileViewer extends StatelessWidget {
                   return MediaBrowser(file: file);
                 }
 
-                String displayContent = file.content;
                 if (htmlService.isBeautifyEnabled) {
-                  displayContent = CodeBeautifier.beautify(
-                    file.content,
-                    htmlService.selectedContentType ?? file.extension,
+                  return FutureBuilder<String>(
+                    // Key ensures rebuild when content or type changes
+                    key: ValueKey(
+                        'beautify_${file.path}_${htmlService.selectedContentType ?? file.extension}'),
+                    future: htmlService.getBeautifiedContent(file.content,
+                        htmlService.selectedContentType ?? file.extension),
+                    builder: (context, snapshot) {
+                      final bool isLoading =
+                          snapshot.connectionState != ConnectionState.done ||
+                              !snapshot.hasData; // || snapshot.data == null?
+
+                      // Use current data if available, or fallback to file content (old content)
+                      // This keeps the editor mounted with *some* content while loading
+                      String displayContent = snapshot.data ?? file.content;
+
+                      return Stack(
+                        children: [
+                          _buildEditorWithFuture(
+                            context,
+                            htmlService,
+                            displayContent,
+                            settings,
+                            file,
+                          ),
+                          if (isLoading)
+                            Container(
+                              color: Theme.of(context)
+                                  .scaffoldBackgroundColor
+                                  .withOpacity(0.8),
+                              child: const Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    CircularProgressIndicator(),
+                                    SizedBox(height: 16),
+                                    Text('Beautifying code...',
+                                        style: TextStyle(color: Colors.grey)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   );
                 }
 
-                // Build the editor, handling both cached (sync) and new (async) states
-                // explicitly to prevent flickering and crashes.
-                final result = htmlService.buildEditor(
-                  displayContent,
-                  htmlService.selectedContentType ?? file.extension,
-                  context,
-                  fontSize: settings.fontSize,
-                  themeName: settings.themeName,
-                  wrapText: settings.wrapText,
-                  showLineNumbers: settings.showLineNumbers,
-                );
-
-                // If cached, return immediately (no flicker)
-                if (result is Widget) {
-                  return result;
-                }
-
-                // If async, show loading indicator
-                return FutureBuilder<Widget>(
-                  // Use key to force rebuild when content changes
-                  key: ValueKey(
-                      '${htmlService.currentFile?.path}_${htmlService.selectedContentType}'),
-                  future: result,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.done &&
-                        snapshot.hasData) {
-                      return snapshot.data!;
-                    }
-
-                    // Show loading indicator
-                    return const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Processing syntax highlighting...',
-                              style: TextStyle(color: Colors.grey)),
-                        ],
-                      ),
-                    );
-                  },
-                );
+                // Default content if beautify is disabled
+                return _buildEditorWithFuture(
+                    context, htmlService, file.content, settings, file);
               },
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildEditorWithFuture(BuildContext context, HtmlService htmlService,
+      String displayContent, AppSettings settings, HtmlFile file) {
+    // Build the editor, handling both cached (sync) and new (async) states
+    // explicitly to prevent flickering and crashes.
+    final result = htmlService.buildEditor(
+      displayContent,
+      htmlService.selectedContentType ?? file.extension,
+      context,
+      fontSize: settings.fontSize,
+      themeName: settings.themeName,
+      wrapText: settings.wrapText,
+      showLineNumbers: settings.showLineNumbers,
+    );
+
+    // If cached, return immediately (no flicker)
+    if (result is Widget) {
+      return result;
+    }
+
+    // If async, show loading indicator
+    return FutureBuilder<Widget>(
+      // Use key to force rebuild when content changes
+      key: ValueKey(
+          '${htmlService.currentFile?.path}_${htmlService.selectedContentType}_${displayContent.length}'),
+      future: result,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.hasData) {
+          return snapshot.data!;
+        }
+
+        // Show loading indicator
+        return const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Processing syntax highlighting...',
+                  style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        );
+      },
     );
   }
 }

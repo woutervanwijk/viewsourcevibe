@@ -206,7 +206,7 @@ class MediaView extends StatelessWidget {
                   if (image['size'] != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      '${_formatBytes(image['size']['transfer'])} / ${_formatBytes(image['size']['decoded'])}',
+                      _formatBytes(image['size']['decoded']),
                       style: TextStyle(
                         fontSize: 9,
                         color: Theme.of(context).colorScheme.primary,

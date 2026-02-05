@@ -1,4 +1,22 @@
+import 'package:flutter/foundation.dart';
+
+class BeautifyRequest {
+  final String content;
+  final String type;
+
+  BeautifyRequest(this.content, this.type);
+}
+
+// Top-level function for compute
+String _beautifyEntry(BeautifyRequest request) {
+  return CodeBeautifier.beautify(request.content, request.type);
+}
+
 class CodeBeautifier {
+  static Future<String> beautifyAsync(String content, String type) async {
+    return compute(_beautifyEntry, BeautifyRequest(content, type));
+  }
+
   static String beautify(String content, String type) {
     if (content.isEmpty) return content;
 

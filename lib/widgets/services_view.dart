@@ -143,7 +143,7 @@ class ServicesView extends StatelessWidget {
               ),
               subtitle: size != null
                   ? Text(
-                      '${_formatBytes(size['transfer'])} / ${_formatBytes(size['decoded'])}',
+                      _formatBytes(size['decoded']),
                       style: TextStyle(
                         fontSize: 10,
                         color: Theme.of(context).colorScheme.primary,

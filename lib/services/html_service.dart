@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
@@ -61,7 +62,7 @@ class HtmlService with ChangeNotifier {
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
-  Map<String, int>? _lastPageWeight; // Store weights: transfer and decoded
+  Map<String, dynamic>? _lastPageWeight; // Store weights: transfer and decoded
   List<Map<String, dynamic>>?
       _resourcePerformanceData; // Store detailed resource data
 
@@ -75,6 +76,7 @@ class HtmlService with ChangeNotifier {
   String? get webViewLoadingUrl => _webViewLoadingUrl;
   bool _isBeautifyEnabled = false;
   bool get isBeautifyEnabled => _isBeautifyEnabled;
+  final Map<String, String> _beautifiedCache = {};
   wf.WebViewController? activeWebViewController;
 
   // Cache for highlighted content to improve performance
@@ -277,6 +279,10 @@ class HtmlService with ChangeNotifier {
     _webViewLoadingProgress = 0.0;
 
     notifyListeners();
+
+    // Clear beautify cache on new load
+    _beautifiedCache.clear();
+    _isBeautifyEnabled = false;
 
     // Start background probe ALWAYS
     probeUrl(url).ignore();
@@ -1411,9 +1417,42 @@ class HtmlService with ChangeNotifier {
     return typeMapping[detectedType] ?? 'plaintext';
   }
 
-  void toggleIsBeautifyEnabled() {
-    _isBeautifyEnabled = !_isBeautifyEnabled;
-    notifyListeners();
+  bool _isBeautifyToggling = false;
+
+  Future<void> toggleIsBeautifyEnabled() async {
+    if (_isBeautifyToggling) return;
+    _isBeautifyToggling = true;
+
+    try {
+      // Unfocus the editor to prevent 'CodeCursorBlinkController' crash on dispose
+      // This stops the cursor blinking timer before the widget is swaped/disposed
+      FocusManager.instance.primaryFocus?.unfocus();
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Clear the editor cache to force fresh controllers/keys
+      // This prevents reusing a controller that might have been disposed or has attached blink timers
+      _cachedControllers.clear();
+      _cachedGlobalKeys.clear();
+      _cachedHorizontalControllers.clear();
+
+      _isBeautifyEnabled = !_isBeautifyEnabled;
+      notifyListeners();
+    } finally {
+      // Allow toggling again after a short cooling period
+      await Future.delayed(const Duration(milliseconds: 200));
+      _isBeautifyToggling = false;
+    }
+  }
+
+  Future<String> getBeautifiedContent(String content, String type) async {
+    final key = '${content.hashCode}_$type';
+    if (_beautifiedCache.containsKey(key)) {
+      return _beautifiedCache[key]!;
+    }
+
+    final result = await CodeBeautifier.beautifyAsync(content, type);
+    _beautifiedCache[key] = result;
+    return result;
   }
 
   Future<void> scrollToZero() async {
@@ -1440,6 +1479,7 @@ class HtmlService with ChangeNotifier {
     }
     _pageMetadata = null; // Clear page metadata
     clearHighlightCache(); // Clear syntax highlighting cache
+    _beautifiedCache.clear(); // Clear beautify cache
     notifyListeners();
     _autoSave();
   }
@@ -3399,7 +3439,7 @@ Technical details: $e''';
 
       // Updated JS to return a JSON string with both transfer and decoded sizes
       final weightFuture = activeWebViewController!.runJavaScriptReturningResult(
-          '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; for(var i=0; i<r.length; i++) { tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: r[i].name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); } var n=performance.getEntriesByType("navigation")[0]; if(n) { tTx+=(n.transferSize||0); tDec+=(n.decodedBodySize||0); } return JSON.stringify({tx: tTx, dec: tDec, list: list}); })();');
+          '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; for(var i=0; i<r.length; i++) { tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: r[i].name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); } var n=performance.getEntriesByType("navigation")[0]; if(n) { var nTx=(n.transferSize||0); var nDec=(n.decodedBodySize||0); tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } return JSON.stringify({tx: tTx, dec: tDec, list: list}); })();');
 
       final results = await Future.wait([htmlFuture, weightFuture]);
 
@@ -3429,44 +3469,131 @@ Technical details: $e''';
                         'decoded': (e['d'] as num? ?? 0).toInt(),
                       }));
 
-              // Recalculate totals from list to be sure
-              // The JS sum includes navigation (HTML), but let's ensure we add resources correctly
-              // We'll trust the JS for the BASE HTML size (navigation entry),
-              // but we can sanity check or re-sum if needed.
-              // Actually, simply relying on the JS sum *should* be fine, but if the user insists,
-              // let's explicitly add them up if the content length seems small.
+              // Calculate detailed breakdown and total sum in one pass
+              int scriptCount = 0;
+              int scriptTx = 0;
+              int scriptDec = 0;
 
-              // However, simpler approach: The user wants "imgs, js, css" added.
-              // Let's just re-sum everything in Dart to be absolutely transparent.
-              int resTx = 0;
-              int resDec = 0;
+              int cssCount = 0;
+              int cssTx = 0;
+              int cssDec = 0;
+
+              int imgCount = 0;
+              int imgTx = 0;
+              int imgDec = 0;
+
+              // Note: main document is now included in the list by JS snippet
+              int htmlCount = 0;
+              int htmlTx = 0;
+              int htmlDec = 0;
+
+              int otherCount = 0;
+              int otherTx = 0;
+              int otherDec = 0;
+
+              int calculatedTotalTx = 0;
+              int calculatedTotalDec = 0;
+
               for (var r in _resourcePerformanceData!) {
-                resTx += (r['transfer'] as int);
-                resDec += (r['decoded'] as int);
+                final String name = (r['name'] as String? ?? '').toLowerCase();
+                final int messageTx = (r['transfer'] as num? ?? 0).toInt();
+                final int messageDec = (r['decoded'] as num? ?? 0).toInt();
+
+                calculatedTotalTx += messageTx;
+                calculatedTotalDec += messageDec;
+
+                if (name.endsWith('.js') ||
+                    name.contains('.js?') ||
+                    name.contains('script')) {
+                  scriptCount++;
+                  scriptTx += messageTx;
+                  scriptDec += messageDec;
+                } else if (name.endsWith('.css') ||
+                    name.contains('.css?') ||
+                    name.contains('style')) {
+                  cssCount++;
+                  cssTx += messageTx;
+                  cssDec += messageDec;
+                } else if (name.endsWith('.png') ||
+                    name.endsWith('.jpg') ||
+                    name.endsWith('.jpeg') ||
+                    name.endsWith('.gif') ||
+                    name.endsWith('.webp') ||
+                    name.endsWith('.svg') ||
+                    name.endsWith('.ico') ||
+                    name.contains('image')) {
+                  imgCount++;
+                  imgTx += messageTx;
+                  imgDec += messageDec;
+                } else if (name.endsWith('.html') ||
+                    name.endsWith('.htm') ||
+                    name.contains('document') ||
+                    name == url.toLowerCase() ||
+                    // If name is just a path without extension, often HTML
+                    (!name.contains('.') && name.startsWith('http'))) {
+                  htmlCount++;
+                  htmlTx += messageTx;
+                  htmlDec += messageDec;
+                } else {
+                  otherCount++;
+                  otherTx += messageTx;
+                  otherDec += messageDec;
+                }
               }
 
-              // If the JS total is significantly different (e.g. missing navigation),
-              // we might want to adjust.
-              // But usually JS total = navigation + resources.
-              // Let's explicitly set the totals to match the sum of resources + content size (approx)
-              // or just trust the detailed resource list sum + the HTML size.
+              // Use calculated total if global total is zero (e.g. some webview versions)
+              if (totalTx == 0 && calculatedTotalTx > 0) {
+                totalTx = calculatedTotalTx;
+                totalDec = calculatedTotalDec;
 
-              // If totalTx is 0 but we have resources, use the resource sum
-              if (totalTx == 0 && resTx > 0) {
-                totalTx = resTx;
-                totalDec = resDec;
-                // Add HTML size roughly
-                totalTx += (html.length);
-                totalDec += html.length;
+                // If HTML count is still 0 (JS didn't catch navigation entry for some reason),
+                // add the manual HTML size as fallback
+                if (htmlCount == 0) {
+                  totalDec += html.length;
+                  // Use length as approx for transfer if unknown
+                  totalTx += html.length;
+
+                  // And add to HTML breakdown
+                  htmlCount++;
+                  htmlTx += html.length;
+                  htmlDec += html.length;
+                }
               }
+
+              _lastPageWeight = {
+                'transfer': totalTx,
+                'decoded': totalDec,
+                'breakdown': {
+                  'scripts': {
+                    'count': scriptCount,
+                    'transfer': scriptTx,
+                    'decoded': scriptDec
+                  },
+                  'css': {
+                    'count': cssCount,
+                    'transfer': cssTx,
+                    'decoded': cssDec
+                  },
+                  'images': {
+                    'count': imgCount,
+                    'transfer': imgTx,
+                    'decoded': imgDec
+                  },
+                  'html': {
+                    'count': htmlCount,
+                    'transfer': htmlTx,
+                    'decoded': htmlDec
+                  },
+                  'other': {
+                    'count': otherCount,
+                    'transfer': otherTx,
+                    'decoded': otherDec
+                  },
+                }
+              };
+              debugPrint(
+                  'WebView Sync: Weights parsed successfully. Total resources: ${_resourcePerformanceData?.length}');
             }
-
-            _lastPageWeight = {
-              'transfer': totalTx,
-              'decoded': totalDec,
-            };
-            debugPrint(
-                'WebView Sync: Weights parsed successfully. Total resources: ${_resourcePerformanceData?.length}');
           }
         }
       } catch (e) {
@@ -3568,6 +3695,11 @@ Technical details: $e''';
         _currentInputText = url;
         _requestedTabIndex =
             0; // Switch to Source tab to show extracted content
+
+        // Clear cache and reset beautify on new file load
+        _beautifiedCache.clear();
+        _isBeautifyEnabled = false;
+
         notifyListeners();
 
         // Trigger metadata extraction in background

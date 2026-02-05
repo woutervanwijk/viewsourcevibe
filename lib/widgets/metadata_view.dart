@@ -151,41 +151,8 @@ class MetadataView extends StatelessWidget {
                           color: Colors.grey[600],
                         ),
                   ),
-                  if (metadata['pageWeight'] != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Network Transfer: ${_formatBytes(metadata['pageWeight']['transfer'])}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSecondaryContainer,
-                            ),
-                          ),
-                          Text(
-                            'Uncompressed Size: ${_formatBytes(metadata['pageWeight']['decoded'])}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSecondaryContainer,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  const SizedBox(height: 12),
+                  _buildPageWeightSection(context, metadata['pageWeight']),
                 ],
               ),
             ),
@@ -439,7 +406,7 @@ class MetadataView extends StatelessWidget {
               ),
               subtitle: size != null
                   ? Text(
-                      '${_formatBytes(size['transfer'])} / ${_formatBytes(size['decoded'])}',
+                      _formatBytes(size['decoded']),
                       style: TextStyle(
                         fontSize: 10,
                         color: Theme.of(context).colorScheme.primary,
@@ -459,6 +426,114 @@ class MetadataView extends StatelessWidget {
         }),
         const SizedBox(height: 12),
       ],
+    );
+  }
+
+  Widget _buildPageWeightSection(
+      BuildContext context, Map<String, dynamic>? weight) {
+    if (weight == null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest
+              .withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.info_outline,
+                size: 20, color: Theme.of(context).colorScheme.secondary),
+            const SizedBox(height: 8),
+            Text(
+              'Page size not available because the browser is not loaded.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final breakdown = weight['breakdown'] as Map<String, dynamic>?;
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total Page Size',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              Text(
+                _formatBytes(weight['decoded']),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ),
+          if (breakdown != null) ...[
+            const Divider(height: 12, thickness: 0.5),
+            _buildWeightRow(context, 'Scripts', breakdown['scripts']),
+            _buildWeightRow(context, 'CSS', breakdown['css']),
+            _buildWeightRow(context, 'Images', breakdown['images']),
+            _buildWeightRow(context, 'HTML', breakdown['html']),
+            _buildWeightRow(context, 'Other', breakdown['other']),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeightRow(
+      BuildContext context, String label, Map<String, dynamic>? data) {
+    if (data == null || (data['count'] as int? ?? 0) == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$label (${data['count']})',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            _formatBytes(data['decoded']),
+            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+          ),
+        ],
+      ),
     );
   }
 }
