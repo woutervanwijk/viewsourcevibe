@@ -222,6 +222,11 @@ class HtmlService with ChangeNotifier {
     if (_activeTabIndex != index) {
       _activeTabIndex = index;
       notifyListeners();
+
+      // If switching to Browser tab, reload if needed (lazy loading)
+      if (index == 1) {
+        triggerBrowserReload();
+      }
     }
   }
 
@@ -287,9 +292,17 @@ class HtmlService with ChangeNotifier {
     // Start background probe ALWAYS
     probeUrl(url).ignore();
 
-    // Clear background WebView to avoid stale content when switching tabs later
-    if (!kIsWeb && activeWebViewController != null) {
-      activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
+    // Browser Lazy Loading Logic
+    if (activeWebViewController != null) {
+      if (_activeTabIndex == 1) {
+        // If Browser is active, load immediately (don't wait for source)
+        // This satisfies "don't wait for the tab to activate... do it directly"
+        activeWebViewController!.loadRequest(Uri.parse(url)).ignore();
+      } else {
+        // If Browser is inactive, clear to about:blank to stop background activity
+        // This satisfies "triggered... browser doesnt immediately load... goes to about:blank"
+        activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
+      }
     }
 
     if (forceWebView || (_activeTabIndex == 1 && switchToTab == 1)) {
