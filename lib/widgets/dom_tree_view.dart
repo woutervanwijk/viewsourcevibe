@@ -215,11 +215,122 @@ class DomTreeTile extends StatelessWidget {
     required this.onTap,
   });
 
+  /// Get color for specific tags
+  Color _getTagColor(BuildContext context, String tagName) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    switch (tagName.toLowerCase()) {
+      case 'div':
+        return isDark ? Colors.lightBlueAccent : Colors.blue[800]!;
+      case 'p':
+      case 'span':
+        return isDark ? Colors.greenAccent : Colors.green[800]!;
+      case 'a':
+        return isDark ? Colors.orangeAccent : Colors.deepOrange;
+      case 'img':
+      case 'video':
+      case 'audio':
+        return isDark ? Colors.purpleAccent : Colors.purple[700]!;
+      case 'script':
+      case 'style':
+      case 'link':
+      case 'meta':
+        return Colors.grey;
+      case 'h1':
+      case 'h2':
+      case 'h3':
+      case 'h4':
+      case 'h5':
+      case 'h6':
+        return isDark ? Colors.yellowAccent : Colors.orange[900]!;
+      case 'form':
+      case 'input':
+      case 'button':
+        return isDark ? Colors.tealAccent : Colors.teal[800]!;
+      default:
+        return Theme.of(context).colorScheme.primary;
+    }
+  }
+
+  /// Get icons for specific tags
+  List<IconData> _getTagIcons(DomTreeNode node) {
+    final icons = <IconData>[];
+    final tagName = node.label.toLowerCase();
+    final attrs = node.attributes;
+
+    // Base icon for the tag
+    switch (tagName) {
+      case 'div':
+        icons.add(Icons.check_box_outline_blank);
+        break;
+      case 'p':
+        icons.add(Icons.format_align_left);
+        break;
+      case 'a':
+        icons.add(Icons.link);
+        break;
+      case 'img':
+        icons.add(Icons.image);
+        break;
+      case 'video':
+        icons.add(Icons.videocam);
+        break;
+      case 'audio':
+        icons.add(Icons.audiotrack);
+        break;
+      case 'script':
+        icons.add(Icons.code);
+        break;
+      case 'style':
+        icons.add(Icons.brush);
+        break;
+      case 'link':
+        icons.add(Icons.link_off); // Or generic link icon
+        break;
+      case 'meta':
+        icons.add(Icons.info_outline);
+        break;
+      case 'form':
+        icons.add(Icons.input);
+        break;
+      case 'input':
+      case 'button':
+        icons.add(Icons.smart_button);
+        break;
+      case 'table':
+        icons.add(Icons.table_chart);
+        break;
+      case 'ul':
+      case 'ol':
+        icons.add(Icons.format_list_bulleted);
+        break;
+      case 'li':
+        icons.add(Icons.circle);
+        break;
+      case 'span':
+        icons.add(Icons.short_text);
+        break;
+    }
+
+    // External resource indicator
+    if (tagName == 'script' && attrs.containsKey('src')) {
+      icons.add(Icons.open_in_new);
+    } else if (tagName == 'link' && attrs.containsKey('href')) {
+      icons.add(Icons.open_in_new);
+    } else if (tagName == 'img' && attrs.containsKey('src')) {
+      // Don't add external link icon for images, we show thumbnail instead
+    }
+
+    return icons;
+  }
+
   @override
   Widget build(BuildContext context) {
     final node = entry.node;
     final isElement = node.isElement;
     final attributes = node.attributes;
+    final tagName = node.label.toLowerCase();
+
+    // Format attributes for display
     final attrString =
         attributes.entries.map((e) => '${e.key}="${e.value}"').join(' ');
 
@@ -245,26 +356,61 @@ class DomTreeTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment:
+                CrossAxisAlignment.start, // Align to top for multi-line text
             children: [
+              // Expansion arrow
               if (entry.hasChildren)
                 Icon(
                   entry.isExpanded ? Icons.arrow_drop_down : Icons.arrow_right,
-                  size: 12,
+                  size: 16,
+                  color: Colors.grey,
                 )
               else
-                const SizedBox(width: 0),
-              const SizedBox(width: 0),
+                const SizedBox(width: 16),
+
+              const SizedBox(width: 4),
+
               if (isElement) ...[
+                // Icon or Thumbnail (Thumbnail replaces icon for img)
+                if (tagName == 'img' && attributes.containsKey('src'))
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4.0),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: Image.network(
+                          attributes['src']!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.broken_image,
+                              size: 14,
+                              color: Colors.grey[600]),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  // Standard Tag Icons
+                  ..._getTagIcons(node).map((icon) => Padding(
+                        padding: const EdgeInsets.only(right: 4.0),
+                        child: Icon(icon, size: 14, color: Colors.grey[600]),
+                      )),
+
+                // Tag Name with Color
                 Text(
                   '<${node.label}',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
+                    color: _getTagColor(context, node.label),
                     fontWeight: FontWeight.bold,
                     fontFamily: 'monospace',
                     fontSize: 13,
                   ),
                 ),
+
+                // Attributes (Restored full visibility)
                 if (attrString.isNotEmpty)
                   Flexible(
                     child: Padding(
@@ -279,21 +425,27 @@ class DomTreeTile extends StatelessWidget {
                       ),
                     ),
                   ),
+
+                // Closing Bracket
                 Text(
                   '>',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
+                    color: _getTagColor(context, node.label),
                     fontWeight: FontWeight.bold,
                     fontFamily: 'monospace',
                     fontSize: 13,
                   ),
                 ),
               ] else ...[
+                // Text Node
                 Expanded(
                   child: Text(
                     node.label,
-                    style:
-                        const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: Colors.grey,
+                    ),
                   ),
                 ),
               ],
