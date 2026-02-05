@@ -3429,11 +3429,12 @@ Technical details: $e''';
       // Don't clear probe/metadata here, as it might have been set by the HTTP load
       // We only clear if we are navigating to a genuinely new URL via WebView interaction
       // which is handled by onPageStarted/onUrlChange in BrowserView calling updateWebViewUrl
+    }
 
-      // Clear loading flags
+    // Clear loading flags ALWAYS when sync happens (page finished)
+    if (_isWebViewLoading || _isLoading) {
       _isWebViewLoading = false;
       _isLoading = false;
-
       notifyListeners();
     }
 
