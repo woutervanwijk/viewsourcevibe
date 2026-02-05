@@ -16,26 +16,26 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
   final baseUrl = args['baseUrl']!;
 
   final Map<String, dynamic> metadata = {
-    'openGraph': <String, String>{},
-    'twitter': <String, String>{},
-    'rssLinks': <String>[],
-    'cssLinks': <String>[],
-    'jsLinks': <String>[],
-    'iframeLinks': <String>[],
-    'externalCssLinks': <String>[],
-    'externalJsLinks': <String>[],
-    'externalIframeLinks': <String>[],
-    'otherMeta': <String, String>{},
-    'icons': <String, String>{},
-    'detectedTech': <String, String>{},
+    'openGraph': <String, dynamic>{},
+    'twitter': <String, dynamic>{},
+    'rssLinks': <dynamic>[],
+    'cssLinks': <dynamic>[],
+    'jsLinks': <dynamic>[],
+    'iframeLinks': <dynamic>[],
+    'externalCssLinks': <dynamic>[],
+    'externalJsLinks': <dynamic>[],
+    'externalIframeLinks': <dynamic>[],
+    'otherMeta': <String, dynamic>{},
+    'icons': <String, dynamic>{},
+    'detectedTech': <String, dynamic>{},
     'detectedServices': <String, List<String>>{},
     'resourceHints': <String, List<String>>{},
-    'pageConfig': <String, String>{},
+    'pageConfig': <String, dynamic>{},
     'media': {
-      'images': <Map<String, String>>[],
-      'videos': <Map<String, String>>[],
+      'images': <Map<String, dynamic>>[],
+      'videos': <Map<String, dynamic>>[],
     },
-    'article': <String, String>{},
+    'article': <String, dynamic>{},
   };
 
   // Determine if we should use HTML or XML parser

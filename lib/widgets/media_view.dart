@@ -81,6 +81,18 @@ class MediaView extends StatelessWidget {
     );
   }
 
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB'];
+    var i = 0;
+    double size = bytes.toDouble();
+    while (size >= 1024 && i < suffixes.length - 1) {
+      size /= 1024;
+      i++;
+    }
+    return '${size.toStringAsFixed(1)}${suffixes[i]}';
+  }
+
   Widget _buildSectionTitle(BuildContext context, String title) {
     return Text(
       title,
@@ -182,11 +194,27 @@ class MediaView extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Text(
-                alt.isNotEmpty ? alt : 'No alt text',
-                style: const TextStyle(fontSize: 10),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    alt.isNotEmpty ? alt : 'No alt text',
+                    style: const TextStyle(fontSize: 10),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (image['size'] != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_formatBytes(image['size']['transfer'])} / ${_formatBytes(image['size']['decoded'])}',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],

@@ -29,7 +29,33 @@ class SharingService : FlutterPlugin, MethodCallHandler {
             "shareText" -> shareText(call, result)
             "shareHtml" -> shareHtml(call, result)
             "shareFile" -> shareFile(call, result)
+            "shareUrl" -> shareUrl(call, result)
             else -> result.notImplemented()
+        }
+    }
+
+    private fun shareUrl(call: MethodCall, result: Result) {
+        val url = call.argument<String>("url")
+        
+        if (url == null) {
+            result.error("INVALID_ARGUMENTS", "URL argument is required", null)
+            return
+        }
+        
+        val intent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TEXT, url)
+            type = "text/plain"
+        }
+        
+        val shareIntent = Intent.createChooser(intent, "Share URL")
+        shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        
+        try {
+            context.startActivity(shareIntent)
+            result.success(true)
+        } catch (e: Exception) {
+            result.error("SHARE_FAILED", "Failed to share URL: ${e.message}", null)
         }
     }
 

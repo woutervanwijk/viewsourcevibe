@@ -414,32 +414,49 @@ class MetadataView extends StatelessWidget {
             ],
           ),
         ),
-        ...links.map((url) => Card(
-              elevation: 0,
-              margin: const EdgeInsets.only(bottom: 4),
-              color: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(alpha: 0.3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+        ...links.map((link) {
+          final String url = link is Map
+              ? (link['src'] ?? link['href'] ?? '')
+              : link.toString();
+          final Map<String, dynamic>? size = link is Map ? link['size'] : null;
+
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 4),
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withValues(alpha: 0.3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ListTile(
+              title: Text(
+                url,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              child: ListTile(
-                title: Text(
-                  url.toString(),
-                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 12),
-                dense: true,
-                onTap: () {
-                  final htmlService =
-                      Provider.of<HtmlService>(context, listen: false);
-                  htmlService.loadFromUrl(url.toString(), switchToTab: 0);
-                },
-              ),
-            )),
+              subtitle: size != null
+                  ? Text(
+                      '${_formatBytes(size['transfer'])} / ${_formatBytes(size['decoded'])}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
+              trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+              dense: true,
+              onTap: () {
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.loadFromUrl(url, switchToTab: 0);
+              },
+            ),
+          );
+        }),
         const SizedBox(height: 12),
       ],
     );

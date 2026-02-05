@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -229,91 +230,109 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       htmlService.consumeTabSwitchRequest();
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: GestureDetector(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const AboutScreen(),
-              ),
-            );
-          },
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: Image.asset(
-                    'assets/icon.webp',
-                    width: 28,
-                    height: 28,
-                    fit: BoxFit.contain,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+        final htmlService = Provider.of<HtmlService>(context, listen: false);
+        if (htmlService.canGoBack) {
+          htmlService.goBack();
+        } else {
+          // Default behavior: exit app if at root
+          final NavigatorState navigator = Navigator.of(context);
+          if (navigator.canPop()) {
+            navigator.pop();
+          } else {
+            await SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AboutScreen(),
+                ),
+              );
+            },
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: Image.asset(
+                      'assets/icon.webp',
+                      width: 28,
+                      height: 28,
+                      fit: BoxFit.contain,
+                    ),
                   ),
-                ),
-                const Text(
-                  'View\nSource\nVibe',
-                  style: TextStyle(fontSize: 10, height: 1),
-                ),
-              ],
+                  const Text(
+                    'View\nSource\nVibe',
+                    style: TextStyle(fontSize: 10, height: 1),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        actions: const [
-          Toolbar(),
-        ],
-        centerTitle: false,
-      ),
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          FocusScope.of(context).unfocus();
-        },
-        child: Column(
-          children: [
-            const UrlInput(),
-            // The Toolbar with Navigation Tabs
-            Container(
-              color: Theme.of(context).colorScheme.surface,
-              child: TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                labelColor: Theme.of(context).colorScheme.primary,
-                unselectedLabelColor:
-                    Theme.of(context).colorScheme.onSurfaceVariant,
-                indicatorColor: Theme.of(context).colorScheme.primary,
-                indicatorSize: TabBarIndicatorSize.label,
-                tabs: _getTabs(htmlService),
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: htmlService.currentFile == null
-                  ? Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Center(
-                        child: Text(
-                          'No file loaded\n\nEnter an url to view the source\nOr share a file or url to this app\nOr tap the folder icon to open a local file',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withAlpha(153),
-                          ),
-                        ),
-                      ))
-                  : TabBarView(
-                      controller: _tabController,
-                      children:
-                          _getTabViews(htmlService, htmlService.currentFile),
-                    ),
-            ),
+          actions: const [
+            Toolbar(),
           ],
+          centerTitle: false,
+        ),
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () {
+            FocusScope.of(context).unfocus();
+          },
+          child: Column(
+            children: [
+              const UrlInput(),
+              // The Toolbar with Navigation Tabs
+              Container(
+                color: Theme.of(context).colorScheme.surface,
+                child: TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor:
+                      Theme.of(context).colorScheme.onSurfaceVariant,
+                  indicatorColor: Theme.of(context).colorScheme.primary,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  tabs: _getTabs(htmlService),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: htmlService.currentFile == null
+                    ? Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Center(
+                          child: Text(
+                            'No file loaded\n\nEnter an url to view the source\nOr share a file or url to this app\nOr tap the folder icon to open a local file',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withAlpha(153),
+                            ),
+                          ),
+                        ))
+                    : TabBarView(
+                        controller: _tabController,
+                        children:
+                            _getTabViews(htmlService, htmlService.currentFile),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

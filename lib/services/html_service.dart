@@ -299,11 +299,6 @@ class HtmlService with ChangeNotifier {
         final file = await _loadFromUrlInternal(url);
         _pendingUrl = null;
         await loadFile(file);
-
-        // If we are currently on Browser tab, trigger a reload there too
-        if (_activeTabIndex == 1) {
-          triggerBrowserReload().ignore();
-        }
       } catch (e) {
         _pendingUrl = null;
         _isLoading = false;
@@ -1370,8 +1365,13 @@ class HtmlService with ChangeNotifier {
             _currentFile!.name.endsWith('.xhtml'))) {
       _extractMetadata();
     } else {
-      _pageMetadata = null;
-      notifyListeners();
+      // If content type changed to something without metadata, clear it
+      // But don't clear it just because we are loading - wait for detection
+      if (_pageMetadata != null &&
+          !(selectedContentType == 'html' || selectedContentType == 'xml')) {
+        _pageMetadata = null;
+        notifyListeners();
+      }
     }
 
     // Note: State saving is handled by the AppLifecycleObserver
@@ -1554,11 +1554,6 @@ class HtmlService with ChangeNotifier {
     try {
       _currentInputText = previousFile.path;
       await loadFile(previousFile, clearProbe: false);
-
-      // If we are on the browser tab, ensure it reloads the previous URL
-      if (_activeTabIndex == 1) {
-        triggerBrowserReload().ignore();
-      }
     } finally {
       _isNavigatingBack = false;
     }
@@ -3174,7 +3169,13 @@ Technical details: $e''';
     final baseUrl = _currentFile!.isUrl ? _currentFile!.path : '';
 
     try {
-      _pageMetadata = await extractMetadataInIsolate(html, baseUrl);
+      debugPrint(
+          'Metadata: Starting extraction for ${baseUrl.substring(0, (baseUrl.length > 50 ? 50 : baseUrl.length))}... content length: ${html.length}');
+      final rawMetadata = await extractMetadataInIsolate(html, baseUrl);
+      _pageMetadata = Map<String, dynamic>.from(rawMetadata);
+      debugPrint(
+          'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS');
+
       if (_lastPageWeight != null) {
         _pageMetadata!['pageWeight'] = _lastPageWeight;
       }
@@ -3228,30 +3229,58 @@ Technical details: $e''';
     // Enrich Images
     if (_pageMetadata!['media'] != null &&
         _pageMetadata!['media']['images'] != null) {
-      for (var img in _pageMetadata!['media']['images']) {
-        final size = findSize(img['src']);
-        if (size != null) {
-          img['size'] = size;
+      final List<dynamic> images = _pageMetadata!['media']['images'];
+      for (int i = 0; i < images.length; i++) {
+        if (images[i] is Map) {
+          // Create a mutable copy that is safely Map<String, dynamic>
+          final Map<String, dynamic> safeImg =
+              Map<String, dynamic>.from(images[i]);
+          final size = findSize(safeImg['src']);
+          if (size != null) {
+            safeImg['size'] = size;
+            images[i] = safeImg; // Update the list with the safe map
+          }
         }
       }
     }
 
     // Enrich CSS
     if (_pageMetadata!['cssLinks'] != null) {
-      for (var css in _pageMetadata!['cssLinks']) {
-        final size = findSize(css['href']);
+      // Ensure list is mutable and dynamic sized
+      _pageMetadata!['cssLinks'] =
+          List<dynamic>.from(_pageMetadata!['cssLinks']);
+      final List<dynamic> links = _pageMetadata!['cssLinks'];
+      for (int i = 0; i < links.length; i++) {
+        var css = links[i];
+        final String href = css is Map ? (css['href'] ?? '') : css.toString();
+        final size = findSize(href);
         if (size != null) {
-          css['size'] = size;
+          if (css is Map) {
+            css['size'] = size;
+          } else {
+            // Convert String to Map to store size
+            links[i] = {'href': href, 'size': size};
+          }
         }
       }
     }
 
     // Enrich JS
     if (_pageMetadata!['jsLinks'] != null) {
-      for (var js in _pageMetadata!['jsLinks']) {
-        final size = findSize(js['src']);
+      // Ensure list is mutable and dynamic sized
+      _pageMetadata!['jsLinks'] = List<dynamic>.from(_pageMetadata!['jsLinks']);
+      final List<dynamic> links = _pageMetadata!['jsLinks'];
+      for (int i = 0; i < links.length; i++) {
+        var js = links[i];
+        final String src = js is Map ? (js['src'] ?? '') : js.toString();
+        final size = findSize(src);
         if (size != null) {
-          js['size'] = size;
+          if (js is Map) {
+            js['size'] = size;
+          } else {
+            // Convert String to Map to store size
+            links[i] = {'src': src, 'size': size};
+          }
         }
       }
     }
@@ -3343,9 +3372,10 @@ Technical details: $e''';
       _currentInputText = url;
       _webViewLoadingUrl =
           null; // Clear specialized loading URL once synchronized
-      _probeResult = null;
-      _probeError = null;
-      _pageMetadata = null;
+
+      // Don't clear probe/metadata here, as it might have been set by the HTTP load
+      // We only clear if we are navigating to a genuinely new URL via WebView interaction
+      // which is handled by onPageStarted/onUrlChange in BrowserView calling updateWebViewUrl
 
       // Clear loading flags
       _isWebViewLoading = false;
@@ -3379,26 +3409,30 @@ Technical details: $e''';
         final weightRaw = results[1];
         String jsonStr = '';
         if (weightRaw is String) {
-          // On some platforms/versions runJavaScriptReturningResult returns the string result directly
-          // But if it was JSON.stringify, it returns a JSON string.
-          // However, if the result implies a string in JS, Flutter might wrap it in quotes or not.
-          // Usually `runJavaScriptReturningResult` returns standard types.
-          // Since we return JSON.stringify, it is a String.
-          // Note: Android might return "\"{\\\"tx\\\":...}\"".
-          // We might need to unquote.
-          jsonStr = weightRaw;
-          if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
-            jsonStr =
-                jsonStr.substring(1, jsonStr.length - 1).replaceAll(r'\"', '"');
-          }
+          // Use _unquoteHtml to robustly handle standard and Android WebView quoting
+          jsonStr = _unquoteHtml(weightRaw);
         }
 
         if (jsonStr.isNotEmpty) {
-          final Map<String, dynamic> weightMap = jsonDecode(jsonStr);
-          _lastPageWeight = {
-            'transfer': (weightMap['tx'] as num).toInt(),
-            'decoded': (weightMap['dec'] as num).toInt(),
-          };
+          final dynamic decoded = jsonDecode(jsonStr);
+          if (decoded is Map) {
+            final weightMap = Map<String, dynamic>.from(decoded);
+            _lastPageWeight = {
+              'transfer': (weightMap['tx'] as num? ?? 0).toInt(),
+              'decoded': (weightMap['dec'] as num? ?? 0).toInt(),
+            };
+
+            if (weightMap['list'] != null && weightMap['list'] is List) {
+              _resourcePerformanceData = List<Map<String, dynamic>>.from(
+                  (weightMap['list'] as List).map((e) => {
+                        'name': e['n'],
+                        'transfer': (e['t'] as num? ?? 0).toInt(),
+                        'decoded': (e['d'] as num? ?? 0).toInt(),
+                      }));
+            }
+            debugPrint(
+                'WebView Sync: Weights parsed successfully. Total resources: ${_resourcePerformanceData?.length}');
+          }
         }
       } catch (e) {
         debugPrint('Error parsing page weight: $e');
@@ -3420,6 +3454,8 @@ Technical details: $e''';
           size: finalHtml.length,
           isUrl: true);
 
+      debugPrint(
+          'WebView Sync: Setting _currentFile to ${htmlFile.name} (${htmlFile.path}). IsHtmlOrXml: $isHtmlOrXml');
       _currentFile = htmlFile;
 
       // Notify immediately so Source and Browser tabs reflect the new content/URL
@@ -3427,6 +3463,8 @@ Technical details: $e''';
 
       // Trigger metadata extraction for the new content in background
       _extractMetadata().then((_) {
+        debugPrint(
+            'Metadata: Final notification sent. pageMetadata is present: ${_pageMetadata != null}');
         // Final notification after metadata is ready
         notifyListeners();
       }).ignore();

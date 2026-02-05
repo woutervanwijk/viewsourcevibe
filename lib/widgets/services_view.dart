@@ -50,17 +50,35 @@ class ServicesView extends StatelessWidget {
           style: TextStyle(color: Colors.grey, fontSize: 13),
         ),
         const SizedBox(height: 16),
-        _buildResourceSection(context, 'Scripts (JS)',
-            metadata?['externalJsLinks'], Icons.javascript),
+        _buildResourceSection(
+            context,
+            'Scripts (JS)',
+            metadata?['jsLinks'] ?? metadata?['externalJsLinks'],
+            Icons.javascript),
         const SizedBox(height: 16),
         _buildResourceSection(context, 'Stylesheets (CSS)',
-            metadata?['externalCssLinks'], Icons.css),
+            metadata?['cssLinks'] ?? metadata?['externalCssLinks'], Icons.css),
         const SizedBox(height: 16),
-        _buildResourceSection(context, 'Iframes (HTML)',
-            metadata?['externalIframeLinks'], Icons.web_asset),
+        _buildResourceSection(
+            context,
+            'Iframes (HTML)',
+            metadata?['iframeLinks'] ?? metadata?['externalIframeLinks'],
+            Icons.web_asset),
         const SizedBox(height: 80),
       ],
     );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB'];
+    var i = 0;
+    double size = bytes.toDouble();
+    while (size >= 1024 && i < suffixes.length - 1) {
+      size /= 1024;
+      i++;
+    }
+    return '${size.toStringAsFixed(1)}${suffixes[i]}';
   }
 
   Widget _buildResourceSection(
@@ -100,32 +118,49 @@ class ServicesView extends StatelessWidget {
             ],
           ),
         ),
-        ...links.map((url) => Card(
-              elevation: 0,
-              margin: const EdgeInsets.only(bottom: 4),
-              color: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(alpha: 0.3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+        ...links.map((link) {
+          final String url = link is Map
+              ? (link['src'] ?? link['href'] ?? '')
+              : link.toString();
+          final Map<String, dynamic>? size = link is Map ? link['size'] : null;
+
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 4),
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withValues(alpha: 0.3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ListTile(
+              title: Text(
+                url,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              child: ListTile(
-                title: Text(
-                  url.toString(),
-                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 12),
-                dense: true,
-                onTap: () {
-                  final htmlService =
-                      Provider.of<HtmlService>(context, listen: false);
-                  htmlService.loadFromUrl(url.toString(), switchToTab: 0);
-                },
-              ),
-            )),
+              subtitle: size != null
+                  ? Text(
+                      '${_formatBytes(size['transfer'])} / ${_formatBytes(size['decoded'])}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
+              trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+              dense: true,
+              onTap: () {
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.loadFromUrl(url, switchToTab: 0);
+              },
+            ),
+          );
+        }),
       ],
     );
   }
