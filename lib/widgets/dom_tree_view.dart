@@ -84,7 +84,15 @@ class _DomTreeViewState extends State<DomTreeView> {
       _treeController.roots = roots;
       // Expand root by default
       if (roots.isNotEmpty) {
-        _treeController.expand(roots.first);
+        final root = roots.first;
+        _treeController.expand(root);
+
+        // Also expand head and body elements by default for better visibility
+        for (var child in root.children) {
+          if (child.label == 'head' || child.label == 'body') {
+            _treeController.expand(child);
+          }
+        }
       }
     });
   }
@@ -247,6 +255,7 @@ class DomTreeTile extends StatelessWidget {
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
                     fontSize: 13,
                   ),
                 ),
@@ -258,6 +267,7 @@ class DomTreeTile extends StatelessWidget {
                         attrString,
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.secondary,
+                          fontFamily: 'monospace',
                           fontSize: 11,
                         ),
                       ),
@@ -268,6 +278,7 @@ class DomTreeTile extends StatelessWidget {
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
                     fontSize: 13,
                   ),
                 ),
@@ -275,7 +286,8 @@ class DomTreeTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     node.label,
-                    style: const TextStyle(fontSize: 12),
+                    style:
+                        const TextStyle(fontSize: 12, fontFamily: 'monospace'),
                   ),
                 ),
               ],
