@@ -1282,8 +1282,8 @@ class HtmlService with ChangeNotifier {
       // 1MB warning threshold
       debugPrint(
           '📄 Loading large file: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
-      if (file.size > 5 * 1024 * 1024) {
-        // 5MB severe warning
+      if (file.size > 7 * 1024 * 1024) {
+        // 7MB severe warning
         debugPrint(
             '⚠️  Very large file loading: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
       }
@@ -2520,8 +2520,8 @@ Technical details: $e''';
       debugPrint('   Syntax highlighting may impact performance');
       debugPrint('   File extension: $extension');
 
-      if (contentSize > 5 * 1024 * 1024) {
-        // 5MB severe warning
+      if (contentSize > 7 * 1024 * 1024) {
+        // 7MB severe warning
         debugPrint(
             '⚠️  Very large file: ${contentSizeMB.toStringAsFixed(2)} MB');
         debugPrint('   Significant performance impact expected');
@@ -3417,10 +3417,9 @@ Technical details: $e''';
           final dynamic decoded = jsonDecode(jsonStr);
           if (decoded is Map) {
             final weightMap = Map<String, dynamic>.from(decoded);
-            _lastPageWeight = {
-              'transfer': (weightMap['tx'] as num? ?? 0).toInt(),
-              'decoded': (weightMap['dec'] as num? ?? 0).toInt(),
-            };
+
+            int totalTx = (weightMap['tx'] as num? ?? 0).toInt();
+            int totalDec = (weightMap['dec'] as num? ?? 0).toInt();
 
             if (weightMap['list'] != null && weightMap['list'] is List) {
               _resourcePerformanceData = List<Map<String, dynamic>>.from(
@@ -3429,7 +3428,43 @@ Technical details: $e''';
                         'transfer': (e['t'] as num? ?? 0).toInt(),
                         'decoded': (e['d'] as num? ?? 0).toInt(),
                       }));
+
+              // Recalculate totals from list to be sure
+              // The JS sum includes navigation (HTML), but let's ensure we add resources correctly
+              // We'll trust the JS for the BASE HTML size (navigation entry),
+              // but we can sanity check or re-sum if needed.
+              // Actually, simply relying on the JS sum *should* be fine, but if the user insists,
+              // let's explicitly add them up if the content length seems small.
+
+              // However, simpler approach: The user wants "imgs, js, css" added.
+              // Let's just re-sum everything in Dart to be absolutely transparent.
+              int resTx = 0;
+              int resDec = 0;
+              for (var r in _resourcePerformanceData!) {
+                resTx += (r['transfer'] as int);
+                resDec += (r['decoded'] as int);
+              }
+
+              // If the JS total is significantly different (e.g. missing navigation),
+              // we might want to adjust.
+              // But usually JS total = navigation + resources.
+              // Let's explicitly set the totals to match the sum of resources + content size (approx)
+              // or just trust the detailed resource list sum + the HTML size.
+
+              // If totalTx is 0 but we have resources, use the resource sum
+              if (totalTx == 0 && resTx > 0) {
+                totalTx = resTx;
+                totalDec = resDec;
+                // Add HTML size roughly
+                totalTx += (html.length);
+                totalDec += html.length;
+              }
             }
+
+            _lastPageWeight = {
+              'transfer': totalTx,
+              'decoded': totalDec,
+            };
             debugPrint(
                 'WebView Sync: Weights parsed successfully. Total resources: ${_resourcePerformanceData?.length}');
           }

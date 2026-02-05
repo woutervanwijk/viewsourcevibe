@@ -115,6 +115,19 @@ class UnifiedSharingService {
     }
   }
 
+  /// Check if there is pending shared content available from the platform
+  /// This is used during app startup to decide whether to skip session restoration
+  static Future<bool> hasPendingSharedContent() async {
+    try {
+      final result =
+          await _sharedContentChannel.invokeMethod('getSharedContent');
+      return result != null && result is Map && result.isNotEmpty;
+    } catch (e) {
+      debugPrint('UnifiedSharingService: Error checking pending content: $e');
+      return false;
+    }
+  }
+
   /// Handle shared content by routing to the appropriate processing method
   static Future<void> handleSharedContent(
     BuildContext context,

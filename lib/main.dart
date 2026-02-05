@@ -10,6 +10,7 @@ import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
 import 'package:app_links/app_links.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:universal_io/io.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 /// Sets up URL scheme handling for deep linking
 Future<void> setupUrlHandling(HtmlService htmlService) async {
@@ -307,98 +308,112 @@ void main() async {
     // After deep link, also setup the stream for future links
     setupUrlHandling(htmlService);
   } else {
-    // No deep link, restore previous session
+    // Check for pending shared content (Android/iOS Share Sheet)
+    bool hasSharedContent = false;
     try {
-      final savedState = appStateService.loadAppState();
-      if (savedState != null) {
-        debugPrint('🔄 Restoring app state from previous session');
-
-        // Restore the file/URL if available
-
-        // Priority 1: Restore pending URL if one was loading when app closed
-        if (savedState.pendingUrl != null &&
-            savedState.pendingUrl!.isNotEmpty) {
-          debugPrint('🌐 Restoring pending URL: ${savedState.pendingUrl}');
-          htmlService.loadFromUrl(savedState.pendingUrl!);
-        }
-        // Priority 2: Restore previous file/URL
-        else if (savedState.filePath != null &&
-            savedState.filePath!.isNotEmpty) {
-          if (savedState.isUrl == true) {
-            // It's a URL
-            try {
-              debugPrint('🌐 Restoring URL: ${savedState.filePath}');
-              htmlService.loadFromUrl(savedState.filePath!);
-            } catch (e) {
-              debugPrint('❌ Failed to restore URL: $e');
-            }
-          } else {
-            // It's a local file
-            try {
-              final file = File(savedState.filePath!);
-              if (await file.exists()) {
-                debugPrint('📁 Restoring file: ${savedState.filePath}');
-                final content = await file.readAsString();
-                final htmlFile = HtmlFile(
-                  name: savedState.fileName ??
-                      savedState.filePath!.split('/').last,
-                  path: savedState.filePath!,
-                  content: content,
-                  lastModified: await file.lastModified(),
-                  size: await file.length(),
-                  isUrl: false,
-                );
-                await htmlService.loadFile(htmlFile);
-              } else {
-                debugPrint(
-                    '❌ Restored file no longer exists: ${savedState.filePath}');
-              }
-            } catch (e) {
-              debugPrint('❌ Failed to restore file: $e');
-            }
-          }
-        }
-
-        // Restore input text if available (overrides URL bar but doesn't trigger load)
-        if (savedState.inputText != null) {
-          htmlService.currentInputText = savedState.inputText;
-          debugPrint('✏️ Restored input text: ${savedState.inputText}');
-        }
-
-        // Restore content type if available (must be done after loadFile/loadFromUrl)
-        if (savedState.contentType != null &&
-            savedState.contentType!.isNotEmpty) {
-          htmlService.selectedContentType = savedState.contentType;
-          debugPrint('🎨 Restored content type: ${savedState.contentType}');
-        }
-
-        // Restore probe state
-        if (savedState.isProbeVisible != null ||
-            savedState.probeResultJson != null) {
-          htmlService.restoreProbeState(
-              savedState.isProbeVisible, savedState.probeResultJson);
-          debugPrint('🔍 Restored probe state');
-        }
-
-        // Restore scroll positions (must be done after UI is built as it needs clients)
-        if (savedState.scrollPosition != null ||
-            savedState.horizontalScrollPosition != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (savedState.scrollPosition != null) {
-              htmlService.restoreScrollPosition(savedState.scrollPosition);
-            }
-            if (savedState.horizontalScrollPosition != null) {
-              htmlService.restoreHorizontalScrollPosition(
-                  savedState.horizontalScrollPosition);
-            }
-            debugPrint('📜 Restored scroll positions');
-          });
-        }
-      } else {
-        debugPrint('ℹ️ No saved state found to restore');
+      hasSharedContent = await UnifiedSharingService.hasPendingSharedContent();
+      if (hasSharedContent) {
+        debugPrint(
+            '🚀 Pending shared content detected, skipping session restoration');
       }
     } catch (e) {
-      debugPrint('❌ Error during session restoration: $e');
+      debugPrint('⚠️ Error checking for shared content: $e');
+    }
+
+    // No deep link and no shared content, restore previous session
+    if (!hasSharedContent) {
+      try {
+        final savedState = appStateService.loadAppState();
+        if (savedState != null) {
+          debugPrint('🔄 Restoring app state from previous session');
+
+          // Restore the file/URL if available
+
+          // Priority 1: Restore pending URL if one was loading when app closed
+          if (savedState.pendingUrl != null &&
+              savedState.pendingUrl!.isNotEmpty) {
+            debugPrint('🌐 Restoring pending URL: ${savedState.pendingUrl}');
+            htmlService.loadFromUrl(savedState.pendingUrl!);
+          }
+          // Priority 2: Restore previous file/URL
+          else if (savedState.filePath != null &&
+              savedState.filePath!.isNotEmpty) {
+            if (savedState.isUrl == true) {
+              // It's a URL
+              try {
+                debugPrint('🌐 Restoring URL: ${savedState.filePath}');
+                htmlService.loadFromUrl(savedState.filePath!);
+              } catch (e) {
+                debugPrint('❌ Failed to restore URL: $e');
+              }
+            } else {
+              // It's a local file
+              try {
+                final file = File(savedState.filePath!);
+                if (await file.exists()) {
+                  debugPrint('📁 Restoring file: ${savedState.filePath}');
+                  final content = await file.readAsString();
+                  final htmlFile = HtmlFile(
+                    name: savedState.fileName ??
+                        savedState.filePath!.split('/').last,
+                    path: savedState.filePath!,
+                    content: content,
+                    lastModified: await file.lastModified(),
+                    size: await file.length(),
+                    isUrl: false,
+                  );
+                  await htmlService.loadFile(htmlFile);
+                } else {
+                  debugPrint(
+                      '❌ Restored file no longer exists: ${savedState.filePath}');
+                }
+              } catch (e) {
+                debugPrint('❌ Failed to restore file: $e');
+              }
+            }
+          }
+
+          // Restore input text if available (overrides URL bar but doesn't trigger load)
+          if (savedState.inputText != null) {
+            htmlService.currentInputText = savedState.inputText;
+            debugPrint('✏️ Restored input text: ${savedState.inputText}');
+          }
+
+          // Restore content type if available (must be done after loadFile/loadFromUrl)
+          if (savedState.contentType != null &&
+              savedState.contentType!.isNotEmpty) {
+            htmlService.selectedContentType = savedState.contentType;
+            debugPrint('🎨 Restored content type: ${savedState.contentType}');
+          }
+
+          // Restore probe state
+          if (savedState.isProbeVisible != null ||
+              savedState.probeResultJson != null) {
+            htmlService.restoreProbeState(
+                savedState.isProbeVisible, savedState.probeResultJson);
+            debugPrint('🔍 Restored probe state');
+          }
+
+          // Restore scroll positions (must be done after UI is built as it needs clients)
+          if (savedState.scrollPosition != null ||
+              savedState.horizontalScrollPosition != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (savedState.scrollPosition != null) {
+                htmlService.restoreScrollPosition(savedState.scrollPosition);
+              }
+              if (savedState.horizontalScrollPosition != null) {
+                htmlService.restoreHorizontalScrollPosition(
+                    savedState.horizontalScrollPosition);
+              }
+              debugPrint('📜 Restored scroll positions');
+            });
+          }
+        } else {
+          debugPrint('ℹ️ No saved state found to restore');
+        }
+      } catch (e) {
+        debugPrint('❌ Error during session restoration: $e');
+      }
     }
 
     // Still setup URL handling for future links even if no initial link was found
