@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       // 3. DOM Tree (Conditional)
       if (isHtmlOrXml)
-        KeepAliveWrapper(child: _buildSliverRefreshable(const DomTreeView())),
+        KeepAliveWrapper(child: _buildRefreshable(const DomTreeView())),
 
       // 3. Metadata (Conditional)
       if (showMetadataTabs)

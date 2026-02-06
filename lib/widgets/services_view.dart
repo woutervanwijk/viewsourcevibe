@@ -212,6 +212,10 @@ class ServicesView extends StatelessWidget {
         icon = Icons.share_outlined;
         color = Colors.green;
         break;
+      case 'Uncategorized':
+        icon = Icons.help_outline;
+        color = Colors.grey;
+        break;
       default:
         icon = Icons.category_outlined;
         color = Colors.grey;
@@ -282,7 +286,13 @@ class ServicesView extends StatelessWidget {
       final String? provider = c['provider'];
       final String category = c['category'] ?? 'unknown';
 
-      if (provider == null || provider.isEmpty) continue;
+      // If provider is missing, group under Uncategorized
+      if (provider == null || provider.isEmpty) {
+        grouped
+            .putIfAbsent('Uncategorized', () => {})
+            .add(c['name'] ?? 'Unknown Cookie');
+        continue;
+      }
 
       String displayCat = 'Cloud & Infrastructure';
       switch (category) {

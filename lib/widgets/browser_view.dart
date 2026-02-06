@@ -233,15 +233,8 @@ class _BrowserViewState extends State<BrowserView> {
 
     return WebViewWidget(
       controller: _controller!,
-      gestureRecognizers: widget.gestureRecognizers ??
-          {
-            Factory<VerticalDragGestureRecognizer>(
-              () => VerticalDragGestureRecognizer(),
-            ),
-            Factory<LongPressGestureRecognizer>(
-              () => LongPressGestureRecognizer(),
-            ),
-          },
+      // gestures must bubble up for RefreshIndicator to work
+      // we rely on the platform view's default behavior
     );
   }
 }

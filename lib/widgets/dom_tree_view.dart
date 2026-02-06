@@ -178,29 +178,23 @@ class _DomTreeViewState extends State<DomTreeView> {
     }
 
     if (content.isEmpty) {
-      return const SliverFillRemaining(
-        child: Center(child: Text('No content to parse')),
-      );
+      return const Center(child: Text('No content to parse'));
     }
 
     if (_treeController.roots.isEmpty) {
-      return const SliverFillRemaining(
-        child: Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return SliverFillRemaining(
-      child: TreeView<DomTreeNode>(
-        primary: false,
-        physics: const AlwaysScrollableScrollPhysics(),
-        treeController: _treeController,
-        nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {
-          return DomTreeTile(
-            entry: entry,
-            onTap: () => _treeController.toggleExpansion(entry.node),
-          );
-        },
-      ),
+    return TreeView<DomTreeNode>(
+      primary: false,
+      physics: const AlwaysScrollableScrollPhysics(),
+      treeController: _treeController,
+      nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {
+        return DomTreeTile(
+          entry: entry,
+          onTap: () => _treeController.toggleExpansion(entry.node),
+        );
+      },
     );
   }
 }
