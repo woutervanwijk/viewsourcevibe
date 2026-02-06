@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
+import 'package:view_source_vibe/services/html_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -152,6 +153,32 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
               ),
+
+              const SizedBox(height: 8),
+
+              Card(
+                child: Column(
+                  children: [
+                    ListTile(
+                      title: const Text('Clear Browser Cache'),
+                      subtitle: const Text('Clear cached images and files'),
+                      trailing: const Icon(Icons.cached),
+                      onTap: () => _clearBrowserCache(context),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Clear Everything'),
+                      subtitle:
+                          const Text('Clear cache, cookies, and local storage'),
+                      trailing:
+                          const Icon(Icons.delete_forever, color: Colors.red),
+                      onTap: () => _confirmClearEverything(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
               const Text(
                 'About',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -432,6 +459,49 @@ class SettingsScreen extends StatelessWidget {
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _clearBrowserCache(BuildContext context) async {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    await htmlService.clearBrowserCache();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Browser cache cleared')),
+      );
+    }
+  }
+
+  void _confirmClearEverything(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Everything'),
+        content: const Text(
+            'Are you sure you want to clear all browser data including cookies, cache, and local storage? You will be logged out of websites.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final htmlService =
+                  Provider.of<HtmlService>(context, listen: false);
+              await htmlService.clearBrowserStorage();
+              if (context.mounted) {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Browser storage and cookies cleared')),
+                );
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear All'),
           ),
         ],
       ),

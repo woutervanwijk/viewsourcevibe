@@ -3724,9 +3724,35 @@ Technical details: $e''';
       }).ignore();
 
       _autoSave();
+      _autoSave();
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');
     }
+  }
+
+  /// Clear the WebView cache (excluding cookies/localStorage if possible, but WebViewController.clearCache usually does disk cache)
+  Future<void> clearBrowserCache() async {
+    if (activeWebViewController != null) {
+      await activeWebViewController!.clearCache();
+      debugPrint('Browser cache cleared');
+    }
+  }
+
+  /// Clear all browser data: Cache, Local Storage, and Cookies
+  Future<void> clearBrowserStorage() async {
+    if (activeWebViewController != null) {
+      await activeWebViewController!.clearCache();
+      await activeWebViewController!.clearLocalStorage();
+    }
+    // Clear cookies using the static/singleton CookieManager
+    await wf.WebViewCookieManager().clearCookies();
+
+    // Reset probe results as they might contain now-invalid cookie data
+    _probeResult = null;
+    _pageMetadata = null;
+
+    debugPrint('Browser storage (cache, local storage, cookies) cleared');
+    notifyListeners();
   }
 
   http.Client _createClient() {
