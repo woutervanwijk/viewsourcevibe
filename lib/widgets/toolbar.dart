@@ -120,61 +120,58 @@ class Toolbar extends StatelessWidget {
 
     if (currentFile == null) return;
 
-    bool shareUrl = false;
-
-    // If it's a URL, ask the user what they want to share (only for text files)
-    if (currentFile.isUrl) {
-      if (!htmlService.isMedia) {
-        final choice = await showModalBottomSheet<String>(
-          context: context,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          builder: (context) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    'Share Options',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+    final String? choice = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Share Options',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-                ListTile(
-                  leading: const Icon(Icons.link),
-                  title: const Text('Share URL'),
-                  subtitle: Text(currentFile.path,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  onTap: () => Navigator.pop(context, 'url'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.description_outlined),
-                  title: const Text('Share Source Text'),
-                  onTap: () => Navigator.pop(context, 'text'),
-                ),
-                const SizedBox(height: 8),
-              ],
+              ),
             ),
-          ),
-        );
+            if (currentFile.isUrl)
+              ListTile(
+                leading: const Icon(Icons.link),
+                title: const Text('Share URL'),
+                subtitle: Text(currentFile.path,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                onTap: () => Navigator.pop(context, 'url'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: const Text('Share as File'),
+              subtitle: Text(currentFile.name,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              onTap: () => Navigator.pop(context, 'file'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.text_fields),
+              title: const Text('Share as Text'),
+              onTap: () => Navigator.pop(context, 'text'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
 
-        if (choice == null) return; // User cancelled
-        shareUrl = choice == 'url';
-      } else {
-        // For media or other non-text files, just share the URL
-        shareUrl = true;
-      }
-    }
+    if (choice == null) return;
 
     try {
-      if (shareUrl) {
+      if (choice == 'url') {
         await UnifiedSharingService.shareUrl(currentFile.path);
-      } else {
-        if (currentFile.content.isEmpty) {
+      } else if (choice == 'file') {
+        if (currentFile.content.isEmpty && !htmlService.isMedia) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('No content to share')),
@@ -182,28 +179,32 @@ class Toolbar extends StatelessWidget {
           }
           return;
         }
-
-        // Try to share using the platform sharing method
-        // If that fails, fall back to copying to clipboard
-        try {
-          await UnifiedSharingService.shareHtml(currentFile.content,
-              filename: currentFile.name);
-        } catch (e) {
-          debugPrint('Platform sharing failed, falling back to clipboard: $e');
-          // Fall back to copying to clipboard
-          await Clipboard.setData(ClipboardData(text: currentFile.content));
+        await UnifiedSharingService.shareHtml(currentFile.content,
+            filename: currentFile.name);
+      } else if (choice == 'text') {
+        if (currentFile.content.isEmpty && !htmlService.isMedia) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Content copied to clipboard')),
+              const SnackBar(content: Text('No content to share')),
             );
           }
+          return;
         }
+        await UnifiedSharingService.shareText(currentFile.content);
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sharing: $e')),
-        );
+        // Fallback for text sharing if platform fails
+        if (choice == 'text') {
+          await Clipboard.setData(ClipboardData(text: currentFile.content));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Content copied to clipboard')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error sharing: $e')),
+          );
+        }
       }
       debugPrint('Share error: $e');
     }
