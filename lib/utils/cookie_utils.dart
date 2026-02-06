@@ -3,6 +3,7 @@ enum CookieCategory {
   analytics,
   advertising,
   social,
+  functional, // Added new category
   unknown,
 }
 
@@ -26,7 +27,7 @@ class CookieInfo {
 
 class CookieUtils {
   static final Map<String, Map<String, dynamic>> _knownCookies = {
-    // Analytics (Google)
+    // --- Google & DoubleClick ---
     '_ga': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '_gid': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '_gat': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
@@ -34,34 +35,119 @@ class CookieUtils {
     '__utmb': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '__utmc': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '__utmz': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
+    '__utmt': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
+    '_gcl_au': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     'NID': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     '1P_JAR': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'AEC': {'cat': CookieCategory.essential, 'prov': 'Google'},
+    'CONSENT': {'cat': CookieCategory.essential, 'prov': 'Google'},
+    'SOCS': {'cat': CookieCategory.essential, 'prov': 'Google'},
+    'SID': {'cat': CookieCategory.essential, 'prov': 'Google'},
+    'HSID': {'cat': CookieCategory.essential, 'prov': 'Google'},
+    'SSID': {'cat': CookieCategory.essential, 'prov': 'Google'},
+    'APISID': {'cat': CookieCategory.essential, 'prov': 'Google'},
+    'SAPISID': {'cat': CookieCategory.essential, 'prov': 'Google'},
+    '__Secure-3PSID': {'cat': CookieCategory.advertising, 'prov': 'Google'},
+    '__Secure-1PSID': {'cat': CookieCategory.advertising, 'prov': 'Google'},
+    'IDE': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick'},
+    'DSID': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick'},
+    '_greza_p': {'cat': CookieCategory.functional, 'prov': 'Google Recaptcha'},
 
-    // Azure / Microsoft
+    // --- Meta / Facebook ---
+    '_fbp': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
+    '_fbc': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
+    'fr': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
+    'sb': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
+    'datr': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
+    'c_user': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
+    'xs': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
+    'wd': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
+
+    // --- Microsoft / LinkedIn / Azure ---
     'ARRAffinity': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'ARRAffinitySameSite': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'TiPMix': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'x-ms-gateway-slice': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'ASP.NET_SessionId': {'cat': CookieCategory.essential, 'prov': 'ASP.NET'},
+    'MSCC': {'cat': CookieCategory.essential, 'prov': 'Microsoft'},
+    'MUID': {'cat': CookieCategory.advertising, 'prov': 'Microsoft'},
+    'MUIDB': {'cat': CookieCategory.advertising, 'prov': 'Microsoft'},
+    'li_at': {'cat': CookieCategory.essential, 'prov': 'LinkedIn'},
+    'li_sugr': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
+    'UserMatchHistory': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
+    'bscookie': {'cat': CookieCategory.social, 'prov': 'LinkedIn'},
+    'lidc': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
+    'lang': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
 
-    // Cloudflare
+    // --- Amazon / AWS ---
+    'aws-target-visitor-id': {'cat': CookieCategory.analytics, 'prov': 'AWS'},
+    'aws-target-data-provider-id': {
+      'cat': CookieCategory.analytics,
+      'prov': 'AWS'
+    },
+    'AWSALB': {'cat': CookieCategory.functional, 'prov': 'AWS Load Balancer'},
+    'AWSALBCORS': {
+      'cat': CookieCategory.functional,
+      'prov': 'AWS Load Balancer'
+    },
+    'sp-cdn': {'cat': CookieCategory.functional, 'prov': 'Amazon'},
+
+    // --- Cloudflare ---
     '__cf_bm': {'cat': CookieCategory.essential, 'prov': 'Cloudflare'},
     'cf_clearance': {'cat': CookieCategory.essential, 'prov': 'Cloudflare'},
+    '__cflb': {'cat': CookieCategory.functional, 'prov': 'Cloudflare'},
+    '_cfuvid': {'cat': CookieCategory.functional, 'prov': 'Cloudflare'},
 
-    // Facebook
-    '_fbp': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
-    'fr': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
+    // --- Twitter / X ---
+    'guest_id': {'cat': CookieCategory.analytics, 'prov': 'Twitter'},
+    'guest_id_ads': {'cat': CookieCategory.advertising, 'prov': 'Twitter'},
+    'guest_id_marketing': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Twitter'
+    },
+    'personalization_id': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Twitter'
+    },
+    '_twitter_sess': {'cat': CookieCategory.essential, 'prov': 'Twitter'},
+    'ct0': {'cat': CookieCategory.essential, 'prov': 'Twitter'},
+    'auth_token': {'cat': CookieCategory.essential, 'prov': 'Twitter'},
 
-    // PHP
+    // --- TikTok ---
+    'tt_webid': {'cat': CookieCategory.analytics, 'prov': 'TikTok'},
+    'tt_webid_v2': {'cat': CookieCategory.analytics, 'prov': 'TikTok'},
+    '_tiktok_headers': {'cat': CookieCategory.functional, 'prov': 'TikTok'},
+
+    // --- Advertising & Tracking (General) ---
+    'uuid': {'cat': CookieCategory.advertising, 'prov': 'General AdTech'},
+    'uuid2': {'cat': CookieCategory.advertising, 'prov': 'AppNexus'},
+    'sess': {'cat': CookieCategory.advertising, 'prov': 'AppNexus'},
+    '_cmpQcif3pcsupported': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consent Manager'
+    },
+    'euconsent-v2': {'cat': CookieCategory.functional, 'prov': 'IAB Consent'},
+
+    // --- Analytics (General) ---
+    '_hjid': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    '_hjIncludedInSample': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    '_hjSessionUser': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    'mp_': {'cat': CookieCategory.analytics, 'prov': 'Mixpanel'},
+
+    // --- Server / CMS / Tech ---
     'PHPSESSID': {'cat': CookieCategory.essential, 'prov': 'PHP'},
-
-    // Java
     'JSESSIONID': {'cat': CookieCategory.essential, 'prov': 'Java'},
-
-    // DoubleClick
-    'IDE': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick'},
-    'DSID': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick'},
+    'X-Mapping-': {'cat': CookieCategory.functional, 'prov': 'Load Balancer'},
+    'DYNSRV': {'cat': CookieCategory.functional, 'prov': 'Load Balancer'},
+    'wordpress_test_cookie': {
+      'cat': CookieCategory.functional,
+      'prov': 'WordPress'
+    },
+    'wp-settings-': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
+    'wp-settings-time-': {
+      'cat': CookieCategory.functional,
+      'prov': 'WordPress'
+    },
   };
 
   static CookieInfo analyze(String rawCookie, String source) {

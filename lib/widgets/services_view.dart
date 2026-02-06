@@ -43,6 +43,10 @@ class ServicesView extends StatelessWidget {
           ...services.entries.map((entry) {
             return _buildServiceCategory(context, entry.key, entry.value);
           }),
+          if (metadata?['analyzedCookies'] != null &&
+              (metadata!['analyzedCookies'] as List).isNotEmpty)
+            ..._buildCookieSection(
+                context, metadata['analyzedCookies'] as List),
           const Divider(height: 48),
           _buildSectionTitle(context, 'External Resources'),
           const Text(
@@ -265,5 +269,54 @@ class ServicesView extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildCookieSection(
+      BuildContext context, List<dynamic> cookies) {
+    // Group providers by display category
+    final Map<String, Set<String>> grouped = {};
+
+    for (var c in cookies) {
+      if (c is! Map) continue;
+
+      final String? provider = c['provider'];
+      final String category = c['category'] ?? 'unknown';
+
+      if (provider == null || provider.isEmpty) continue;
+
+      String displayCat = 'Cloud & Infrastructure';
+      switch (category) {
+        case 'analytics':
+          displayCat = 'Analytics & Trackers';
+          break;
+        case 'advertising':
+          displayCat = 'Advertising';
+          break;
+        case 'social':
+          displayCat = 'Social & Widgets';
+          break;
+        case 'functional':
+        case 'essential':
+          displayCat = 'Cloud & Infrastructure';
+          break;
+      }
+
+      grouped.putIfAbsent(displayCat, () => {}).add(provider);
+    }
+
+    if (grouped.isEmpty) return [];
+
+    return [
+      const Divider(height: 48),
+      _buildSectionTitle(context, 'Detected from Cookies'),
+      const Text(
+        'Technologies identified by analyzing the cookies set by this page.',
+        style: TextStyle(color: Colors.grey, fontSize: 13),
+      ),
+      const SizedBox(height: 24),
+      ...grouped.entries.map((entry) {
+        return _buildServiceCategory(context, entry.key, entry.value.toList());
+      }),
+    ];
   }
 }
