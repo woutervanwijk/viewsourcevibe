@@ -135,6 +135,10 @@ class _BrowserViewState extends State<BrowserView> {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
           htmlService.activeWebViewController = _controller;
 
+          _controller?.setOnScrollPositionChange((scrollChange) {
+            htmlService.webViewScrollY = scrollChange.y;
+          });
+
           // Only load if we are on the browser tab
           if (htmlService.activeTabIndex == htmlService.browserTabIndex) {
             _loadContent();
@@ -233,6 +237,8 @@ class _BrowserViewState extends State<BrowserView> {
 
     return WebViewWidget(
       controller: _controller!,
+      gestureRecognizers: widget.gestureRecognizers ??
+          const <Factory<OneSequenceGestureRecognizer>>{},
       // gestures must bubble up for RefreshIndicator to work
       // we rely on the platform view's default behavior
     );

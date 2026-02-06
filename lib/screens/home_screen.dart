@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -173,12 +175,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
     );
 
-    final browserView = KeepAliveWrapper(
-      child: _buildScrollableRefreshable(
-        currentFile != null &&
-                (currentFile.isUrl || isHtmlOrXml || useBrowserByDefault)
-            ? BrowserView(file: currentFile)
-            : const Center(child: Text('Not available for this file')),
+    final browserView = TabPageWrapper(
+      isBrowserTab: true,
+      child: KeepAliveWrapper(
+        child: _buildRefreshable(
+          currentFile != null &&
+                  (currentFile.isUrl || isHtmlOrXml || useBrowserByDefault)
+              ? BrowserView(
+                  file: currentFile,
+                  gestureRecognizers: {
+                    Factory<VerticalDragGestureRecognizer>(
+                        () => VerticalDragGestureRecognizer()),
+                  },
+                )
+              : const Center(child: Text('Not available for this file')),
+        ),
       ),
     );
 
@@ -372,7 +383,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
 class TabPageWrapper extends StatefulWidget {
   final Widget child;
-  const TabPageWrapper({super.key, required this.child});
+  final bool isBrowserTab;
+  const TabPageWrapper(
+      {super.key, required this.child, this.isBrowserTab = false});
 
   @override
   State<TabPageWrapper> createState() => _TabPageWrapperState();
@@ -380,18 +393,86 @@ class TabPageWrapper extends StatefulWidget {
 
 class _TabPageWrapperState extends State<TabPageWrapper> {
   final ScrollController _controller = ScrollController();
+  bool _showFab = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_scrollListener);
+  }
+
+  void _scrollListener() {
+    if (_controller.hasClients) {
+      if (_controller.offset > 200 && !_showFab) {
+        setState(() => _showFab = true);
+      } else if (_controller.offset <= 200 && _showFab) {
+        setState(() => _showFab = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_scrollListener);
     _controller.dispose();
     super.dispose();
   }
 
+  void _scrollToTop() {
+    // 1. Regular scrolling for the tab wrapper or primary scroll controller
+    if (_controller.hasClients) {
+      _controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+
+    // 2. Specialized handling for WebView in BrowserView
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    if (htmlService.activeWebViewController != null) {
+      // WebView scroll to top (internal content)
+      htmlService.activeWebViewController?.scrollTo(0, 0);
+    }
+
+    // 3. Fallback: also try PrimaryScrollController if it's different
+    final primary = PrimaryScrollController.of(context);
+    if (primary.hasClients && primary != _controller) {
+      primary.animateTo(0,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final htmlService = Provider.of<HtmlService>(context);
+
+    // If it's the browser tab, the FAB visibility depends on the internal WebView scroll
+    bool effectiveShowFab = _showFab;
+    if (widget.isBrowserTab) {
+      effectiveShowFab = htmlService.webViewScrollY > 200;
+    }
+
     return PrimaryScrollController(
       controller: _controller,
-      child: widget.child,
+      child: Stack(
+        children: [
+          widget.child,
+          if (effectiveShowFab)
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: FloatingActionButton(
+                mini: true,
+                onPressed: _scrollToTop,
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                foregroundColor:
+                    Theme.of(context).colorScheme.onPrimaryContainer,
+                child: const Icon(Icons.arrow_upward),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

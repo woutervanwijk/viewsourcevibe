@@ -186,7 +186,7 @@ class _DomTreeViewState extends State<DomTreeView> {
     }
 
     return TreeView<DomTreeNode>(
-      primary: false,
+      primary: true,
       physics: const AlwaysScrollableScrollPhysics(),
       treeController: _treeController,
       nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {

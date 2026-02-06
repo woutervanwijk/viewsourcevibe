@@ -81,6 +81,16 @@ class HtmlService with ChangeNotifier {
   bool _isBeautifyEnabled = false;
   bool get isBeautifyEnabled => _isBeautifyEnabled;
   final Map<String, String> _beautifiedCache = {};
+  double _webViewScrollY = 0.0;
+  double get webViewScrollY => _webViewScrollY;
+
+  set webViewScrollY(double value) {
+    if (_webViewScrollY != value) {
+      _webViewScrollY = value;
+      notifyListeners();
+    }
+  }
+
   wf.WebViewController? activeWebViewController;
 
   // Track the currently active find controller
