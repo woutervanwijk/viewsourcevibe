@@ -58,6 +58,7 @@ class HtmlService with ChangeNotifier {
 
   // Probe state
   Map<String, dynamic>? _probeResult;
+  http.Client? _httpClient;
   bool _isProbing = false;
   String? _probeError;
   String? _currentlyProbingUrl;
@@ -3699,6 +3700,13 @@ Technical details: $e''';
         _lastPageWeight = null;
       }
 
+      // Enrich resource sizes if needed (background)
+      // This is done after the initial parsed weight is set, to not block the UI
+      _enrichResourceSizes().then((_) {
+        debugPrint('Resource enrichment complete');
+        notifyListeners();
+      }).ignore();
+
       // Unquote if needed
       String finalHtml = _unquoteHtml(html);
 
@@ -3739,6 +3747,165 @@ Technical details: $e''';
       _autoSave();
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');
+    }
+  }
+
+  /// Fetches content-length for resources that reported 0 size (likely due to CORS)
+  Future<void> _enrichResourceSizes() async {
+    if (_resourcePerformanceData == null) return;
+
+    final resourcesToUpdate = _resourcePerformanceData!
+        .where((r) =>
+            (r['transfer'] as int) == 0 &&
+            (r['name'] as String).startsWith('http'))
+        .toList();
+
+    if (resourcesToUpdate.isEmpty) return;
+
+    debugPrint(
+        'enrichResourceSizes: Found ${resourcesToUpdate.length} resources with 0 size to check.');
+
+    // Limit concurrency to avoid choking the network
+    const int batchSize = 5;
+    for (var i = 0; i < resourcesToUpdate.length; i += batchSize) {
+      final end = (i + batchSize < resourcesToUpdate.length)
+          ? i + batchSize
+          : resourcesToUpdate.length;
+      final batch = resourcesToUpdate.sublist(i, end);
+
+      await Future.wait(batch.map((resource) async {
+        try {
+          final url = resource['name'] as String;
+          final size = await _fetchResourceSize(url);
+          if (size > 0) {
+            resource['transfer'] = size;
+            // We can't know decoded size without downloading body, so assume transfer ~= decoded
+            // This is better than 0.
+            resource['decoded'] = size;
+          }
+        } catch (e) {
+          debugPrint('Error fetching size for ${resource['name']}: $e');
+        }
+      }));
+    }
+
+    // Recalculate totals based on new data
+    _recalculatePageWeight();
+  }
+
+  Future<int> _fetchResourceSize(String url) async {
+    try {
+      final client = _httpClient ??= http.Client();
+      final response =
+          await client.head(Uri.parse(url)).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final contentLength = response.headers['content-length'];
+        if (contentLength != null) {
+          return int.tryParse(contentLength) ?? 0;
+        }
+      }
+    } catch (_) {
+      // Ignore errors, we just won't have the size
+    }
+    return 0;
+  }
+
+  void _recalculatePageWeight() {
+    if (_resourcePerformanceData == null) return;
+
+    int scriptCount = 0;
+    int scriptTx = 0;
+    int scriptDec = 0;
+
+    int cssCount = 0;
+    int cssTx = 0;
+    int cssDec = 0;
+
+    int imgCount = 0;
+    int imgTx = 0;
+    int imgDec = 0;
+
+    int htmlCount = 0;
+    int htmlTx = 0;
+    int htmlDec = 0;
+
+    int otherCount = 0;
+    int otherTx = 0;
+    int otherDec = 0;
+
+    int totalTx = 0;
+    int totalDec = 0;
+
+    for (var r in _resourcePerformanceData!) {
+      final String name = (r['name'] as String? ?? '').toLowerCase();
+      final int messageTx = (r['transfer'] as num? ?? 0).toInt();
+      final int messageDec = (r['decoded'] as num? ?? 0).toInt();
+
+      totalTx += messageTx;
+      totalDec += messageDec;
+
+      if (name.endsWith('.js') ||
+          name.contains('.js?') ||
+          name.contains('script')) {
+        scriptCount++;
+        scriptTx += messageTx;
+        scriptDec += messageDec;
+      } else if (name.endsWith('.css') ||
+          name.contains('.css?') ||
+          name.contains('style')) {
+        cssCount++;
+        cssTx += messageTx;
+        cssDec += messageDec;
+      } else if (name.endsWith('.png') ||
+          name.endsWith('.jpg') ||
+          name.endsWith('.jpeg') ||
+          name.endsWith('.gif') ||
+          name.endsWith('.webp') ||
+          name.endsWith('.svg') ||
+          name.endsWith('.ico') ||
+          name.contains('image')) {
+        imgCount++;
+        imgTx += messageTx;
+        imgDec += messageDec;
+      } else if (name.endsWith('.html') ||
+          name.endsWith('.htm') ||
+          name.contains('document') ||
+          // If name is just a path without extension, often HTML
+          (!name.contains('.') && name.startsWith('http'))) {
+        htmlCount++;
+        htmlTx += messageTx;
+        htmlDec += messageDec;
+      } else {
+        otherCount++;
+        otherTx += messageTx;
+        otherDec += messageDec;
+      }
+    }
+
+    // Update _lastPageWeight
+    _lastPageWeight = {
+      'transfer': totalTx,
+      'decoded': totalDec,
+      'breakdown': {
+        'scripts': {
+          'count': scriptCount,
+          'transfer': scriptTx,
+          'decoded': scriptDec
+        },
+        'css': {'count': cssCount, 'transfer': cssTx, 'decoded': cssDec},
+        'images': {'count': imgCount, 'transfer': imgTx, 'decoded': imgDec},
+        'html': {'count': htmlCount, 'transfer': htmlTx, 'decoded': htmlDec},
+        'other': {
+          'count': otherCount,
+          'transfer': otherTx,
+          'decoded': otherDec
+        },
+      }
+    };
+
+    // Also update the pageMetadata pageWeight field if it exists
+    if (_pageMetadata != null) {
+      _pageMetadata!['pageWeight'] = _lastPageWeight;
     }
   }
 

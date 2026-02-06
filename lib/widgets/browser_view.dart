@@ -3,9 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 // Import Android specific packages
-import 'package:webview_flutter_android/webview_flutter_android.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'dart:io' show Platform;
 import 'package:view_source_vibe/models/html_file.dart';
 import 'dart:convert';
 import 'package:view_source_vibe/widgets/media_browser_platform_proxy.dart'
@@ -34,24 +31,10 @@ class _BrowserViewState extends State<BrowserView> {
   final String viewID = 'browser-preview-view';
   String? _currentRssUrl;
   bool _hasSyncedEarly = false;
-  bool _useHybridComposition = false;
 
   @override
   void initState() {
     super.initState();
-
-    // Check Android version for Hybrid Composition
-    if (!kIsWeb && Platform.isAndroid) {
-      DeviceInfoPlugin().androidInfo.then((AndroidDeviceInfo info) {
-        // Android 10 is API 29. Hybrid Composition is recommended for versions older than 10.
-        // Texture Layer (default) works best on 10+.
-        if (mounted && info.version.sdkInt < 29) {
-          setState(() {
-            _useHybridComposition = true;
-          });
-        }
-      });
-    }
 
     if (!kIsWeb) {
       _controller = WebViewController()
@@ -245,28 +228,6 @@ class _BrowserViewState extends State<BrowserView> {
       return HtmlElementView(
         viewType: viewID,
         key: ValueKey(_getEffectiveUrl()),
-      );
-    }
-
-    // On Android < 10 (API 29), use Hybrid Composition to fix keyboard/accessibility issues.
-    // newer versions use Texture Layer (default) which is more performant.
-    if (_useHybridComposition &&
-        _controller != null &&
-        _controller!.platform is AndroidWebViewController) {
-      return AndroidWebViewWidget(
-        AndroidWebViewWidgetCreationParams(
-          controller: _controller!.platform as AndroidWebViewController,
-          displayWithHybridComposition: true,
-          gestureRecognizers: widget.gestureRecognizers ??
-              {
-                Factory<VerticalDragGestureRecognizer>(
-                  () => VerticalDragGestureRecognizer(),
-                ),
-                Factory<LongPressGestureRecognizer>(
-                  () => LongPressGestureRecognizer(),
-                ),
-              },
-        ),
       );
     }
 
