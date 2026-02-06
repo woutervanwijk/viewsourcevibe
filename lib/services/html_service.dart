@@ -3495,16 +3495,75 @@ Technical details: $e''';
     }
 
     try {
-      // 1. Critical: Get HTML
-      String html = '';
+      // 1. Critical: Get Content (HTML or Raw)
+      String content = '';
       try {
-        html = await activeWebViewController!.runJavaScriptReturningResult(
-            'document.documentElement.outerHTML') as String;
+        // Robust extraction: validation is done in Dart, not JS, to prevent hangs
+        // We set a strict timeout to ensure the UI never freezes
+        final htmlFuture = activeWebViewController!
+            .runJavaScriptReturningResult('document.documentElement.outerHTML')
+            .timeout(const Duration(milliseconds: 1500));
+
+        content = await htmlFuture as String;
+
+        // Unquote HTML immediately to work with actual content
+        content = _unquoteHtml(content);
+
+        // Check for "Raw File" wrappers (browsers wrap text/json in <pre>)
+        // doing this in Dart is safer and faster than complex JS injection
+        final lowerUrl = url.toLowerCase();
+        final isLikelyRawFile = lowerUrl.endsWith('.js') ||
+            lowerUrl.endsWith('.json') ||
+            lowerUrl.endsWith('.css') ||
+            lowerUrl.endsWith('.txt') ||
+            lowerUrl.endsWith('.xml') ||
+            lowerUrl.endsWith('.yaml') ||
+            lowerUrl.endsWith('.yml') ||
+            lowerUrl.endsWith('.md');
+
+        if (isLikelyRawFile) {
+          // Simple parser to extract content from <pre> tag if it exists
+          // Structure is usually: <html><head>...</head><body><pre>CONTENT</pre></body></html>
+          // or just <html><body><pre>CONTENT</pre></body></html>
+          if (content.contains('<pre') && content.contains('</pre>')) {
+            try {
+              // Find content inside <pre> tags
+              final startIndex =
+                  content.indexOf('>', content.indexOf('<pre')) + 1;
+              final endIndex = content.lastIndexOf('</pre>');
+              if (startIndex > 0 && endIndex > startIndex) {
+                // Extract and decode (browser might have entity-encoded the raw/json content)
+                String rawContent = content.substring(startIndex, endIndex);
+
+                // specialized handling: decode HTML entities back to raw text
+                // This is minimal; a full entity decoder might be needed if the browser escapes rigorously
+                // keeping it simple for now to solve the main issue: getting THE text
+                rawContent = rawContent
+                    .replaceAll('&lt;', '<')
+                    .replaceAll('&gt;', '>')
+                    .replaceAll('&amp;', '&')
+                    .replaceAll('&quot;', '"')
+                    .replaceAll('&#39;', "'");
+
+                content = rawContent;
+                debugPrint(
+                    'HTML Service: Extracted raw content from PRE tag for $url');
+              }
+            } catch (e) {
+              debugPrint('HTML Service: Error parsing PRE tag content: $e');
+              // fall back to full HTML
+            }
+          }
+        }
       } catch (e) {
-        debugPrint('Error getting HTML from WebView: $e');
-        // If we can't get HTML, we really can't do much. But let's verify if we can proceed.
-        // If this fails, the whole sync fails.
-        rethrow;
+        debugPrint('Error getting content from WebView (Timeout or Error): $e');
+
+        // If we fail to get content, we must still try to set SOMETHING if possible,
+        // but if it timed out, we might just have to skip.
+        // However, we should try to keep the "Source" tab operational.
+        if (content.isEmpty) {
+          content = '<!-- Error syncing content: $e -->';
+        }
       }
 
       // 2. Optional: Get Page Weight & Cookies
@@ -3681,7 +3740,7 @@ Technical details: $e''';
       }).ignore();
 
       // Unquote if needed (WebView returns JSON string sometimes)
-      String finalHtml = _unquoteHtml(html);
+      String finalContent = _unquoteHtml(content);
 
       // 3. Update the File State
       // Create a new HtmlFile with the actual URL and content from the WebView
@@ -3691,7 +3750,7 @@ Technical details: $e''';
       // Use helper if present, else simple name
       String filename = 'Page';
       try {
-        filename = generateDescriptiveFilename(Uri.parse(url), finalHtml);
+        filename = generateDescriptiveFilename(Uri.parse(url), finalContent);
       } catch (e) {
         filename = 'Page';
       }
@@ -3699,9 +3758,9 @@ Technical details: $e''';
       final file = HtmlFile(
         name: filename,
         path: url,
-        content: finalHtml,
+        content: finalContent,
         lastModified: DateTime.now(),
-        size: finalHtml.length,
+        size: finalContent.length,
         isUrl: true,
         probeResult: _probeResult, // Pass existing probe result
       );
