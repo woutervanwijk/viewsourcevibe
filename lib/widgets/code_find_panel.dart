@@ -110,10 +110,11 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  _buildCheckText(
+                  _buildCheckIcon(
                       context: context,
-                      text: 'Aa',
+                      icon: Icons.abc,
                       checked: value.option.caseSensitive,
+                      tooltip: 'Match Case',
                       onPressed: () {
                         controller.toggleCaseSensitive();
                       }),
@@ -228,11 +229,12 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  Widget _buildCheckText({
+  Widget _buildCheckIcon({
     required BuildContext context,
-    required String text,
+    required IconData icon,
     required bool checked,
     required VoidCallback onPressed,
+    String? tooltip,
   }) {
     final Color selectedColor =
         iconSelectedColor ?? Theme.of(context).primaryColor;
@@ -240,13 +242,13 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
         onTap: onPressed,
         child: MouseRegion(
           cursor: SystemMouseCursors.click,
-          child: SizedBox(
-            width: _kDefaultFindIconWidth * 0.75,
-            child: Text(text,
-                style: TextStyle(
-                  color: checked ? selectedColor : iconColor,
-                  fontSize: inputFontSize,
-                )),
+          child: Tooltip(
+            message: tooltip ?? '',
+            child: Icon(
+              icon,
+              size: iconSize,
+              color: checked ? selectedColor : iconColor,
+            ),
           ),
         ));
   }

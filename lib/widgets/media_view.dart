@@ -31,7 +31,17 @@ class MediaView extends StatelessWidget {
       );
     }
 
-    final List<dynamic> images = metadata['media']['images'] ?? [];
+    final List<dynamic> images = List.from(metadata['media']['images'] ?? [])
+      ..sort((a, b) {
+        final sizeA = (a as Map)['size']?['decoded'] ?? 0;
+        final sizeB = (b as Map)['size']?['decoded'] ?? 0;
+        if (sizeB != sizeA) {
+          return (sizeB as num).compareTo(sizeA as num);
+        }
+        return (a['src'] ?? '')
+            .toString()
+            .compareTo((b['src'] ?? '').toString());
+      });
     final List<dynamic> videos = metadata['media']['videos'] ?? [];
 
     if (images.isEmpty && videos.isEmpty) {
