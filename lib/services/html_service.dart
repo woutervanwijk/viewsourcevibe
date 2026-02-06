@@ -22,6 +22,7 @@ import 'package:re_highlight/styles/lightfair.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
+import 'package:view_source_vibe/utils/cookie_utils.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -3265,7 +3266,7 @@ Technical details: $e''';
       final rawMetadata = await extractMetadataInIsolate(html, baseUrl);
       _pageMetadata = Map<String, dynamic>.from(rawMetadata);
       debugPrint(
-          'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS');
+          'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS, ${_pageMetadata?['media']?['images']?.length} Images');
 
       if (_lastPageWeight != null) {
         _pageMetadata!['pageWeight'] = _lastPageWeight;
@@ -3273,10 +3274,12 @@ Technical details: $e''';
 
       // Correlate resource sizes with metadata
       if (_pageMetadata != null && _resourcePerformanceData != null) {
+        debugPrint(
+            'Metadata: Enriching with performance data (${_resourcePerformanceData!.length} entries)');
         _enrichMetadataWithSizes(baseUrl);
       }
-    } catch (e) {
-      debugPrint('Error extracting metadata in isolate: $e');
+    } catch (e, stack) {
+      debugPrint('Error extracting metadata in isolate: $e\n$stack');
       _pageMetadata = null;
     }
 
@@ -3485,23 +3488,27 @@ Technical details: $e''';
     }
 
     try {
-      // Execute JS to get HTML and Page Weight concurrently
-      final htmlFuture = activeWebViewController!
-          .runJavaScriptReturningResult('document.documentElement.outerHTML');
-
-      // Updated JS to return a JSON string with both transfer and decoded sizes
-      final weightFuture = activeWebViewController!.runJavaScriptReturningResult(
-          '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; for(var i=0; i<r.length; i++) { tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: r[i].name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); } var n=performance.getEntriesByType("navigation")[0]; if(n) { var nTx=(n.transferSize||0); var nDec=(n.decodedBodySize||0); tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } return JSON.stringify({tx: tTx, dec: tDec, list: list}); })();');
-
-      final results = await Future.wait([htmlFuture, weightFuture]);
-
-      final html = results[0] as String;
-
+      // 1. Critical: Get HTML
+      String html = '';
       try {
-        final weightRaw = results[1];
+        html = await activeWebViewController!.runJavaScriptReturningResult(
+            'document.documentElement.outerHTML') as String;
+      } catch (e) {
+        debugPrint('Error getting HTML from WebView: $e');
+        // If we can't get HTML, we really can't do much. But let's verify if we can proceed.
+        // If this fails, the whole sync fails.
+        rethrow;
+      }
+
+      // 2. Optional: Get Page Weight & Cookies
+      // We try/catch this separately so it doesn't block the main content update
+      try {
+        final weightRaw = await activeWebViewController!
+            .runJavaScriptReturningResult(
+                '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; for(var i=0; i<r.length; i++) { tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: r[i].name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); } var n=performance.getEntriesByType("navigation")[0]; if(n) { var nTx=(n.transferSize||0); var nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, list: list, cookies: document.cookie}); })();');
+
         String jsonStr = '';
         if (weightRaw is String) {
-          // Use _unquoteHtml to robustly handle standard and Android WebView quoting
           jsonStr = _unquoteHtml(weightRaw);
         }
 
@@ -3509,6 +3516,39 @@ Technical details: $e''';
           final dynamic decoded = jsonDecode(jsonStr);
           if (decoded is Map) {
             final weightMap = Map<String, dynamic>.from(decoded);
+
+            // Extract cookies if present
+            final String browserCookies =
+                weightMap['cookies']?.toString() ?? '';
+            debugPrint('DEBUG: Browser cookies found: "$browserCookies"');
+
+            // Merge and Analyze cookies if EITHER Source has data
+            if (_probeResult != null) {
+              final List<String> serverCookies =
+                  (_probeResult!['cookies'] as List?)?.cast<String>() ?? [];
+              debugPrint(
+                  'DEBUG: Server cookies found: ${serverCookies.length}');
+
+              if (browserCookies.isNotEmpty || serverCookies.isNotEmpty) {
+                final analyzed =
+                    CookieUtils.mergeCookies(serverCookies, browserCookies);
+                debugPrint('DEBUG: Merged cookies count: ${analyzed.length}');
+
+                _probeResult!['analyzedCookies'] = analyzed
+                    .map((c) => {
+                          'name': c.name,
+                          'value': c.value,
+                          'category': c.category
+                              .toString()
+                              .split('.')
+                              .last, // 'analytics', 'essential' etc
+                          'provider': c.provider,
+                          'source': c.source
+                        })
+                    .toList();
+                notifyListeners();
+              }
+            }
 
             int totalTx = (weightMap['tx'] as num? ?? 0).toInt();
             int totalDec = (weightMap['dec'] as num? ?? 0).toInt();

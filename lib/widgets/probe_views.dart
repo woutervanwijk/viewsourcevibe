@@ -554,6 +554,141 @@ class ProbeCookiesView extends ProbeViewBase {
   @override
   Widget buildContent(BuildContext context, HtmlService htmlService,
       Map<String, dynamic> result) {
+    // Prefer analyzed cookies if available (merged Server + Browser + Categories)
+    final List<dynamic>? analyzedCookies = result['analyzedCookies'];
+
+    if (analyzedCookies != null && analyzedCookies.isNotEmpty) {
+      return ListView.builder(
+        primary: false,
+        padding: const EdgeInsets.all(16),
+        itemCount: analyzedCookies.length,
+        itemBuilder: (context, index) {
+          final cookie = analyzedCookies[index] as Map<String, dynamic>;
+          final name = cookie['name'] as String;
+          final value = cookie['value'] as String;
+          final category = cookie['category'] as String;
+          final provider = cookie['provider'] as String?;
+          final source = cookie['source'] as String;
+
+          Color badgeColor;
+          switch (category) {
+            case 'essential':
+              badgeColor = Colors.green;
+              break;
+            case 'analytics':
+              badgeColor = Colors.blue;
+              break;
+            case 'advertising':
+              badgeColor = Colors.orange;
+              break;
+            case 'social':
+              badgeColor = Colors.purple;
+              break;
+            default:
+              badgeColor = Colors.grey;
+          }
+
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'monospace'),
+                    ),
+                  ),
+                  if (provider != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                            color: badgeColor.withValues(alpha: 0.5)),
+                      ),
+                      child: Text(
+                        provider,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: badgeColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        color: Colors.grey),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.category, size: 12, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        category.toUpperCase(),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(
+                          source == 'Browser'
+                              ? Icons.web
+                              : source == 'Server'
+                                  ? Icons.dns
+                                  : Icons.merge_type,
+                          size: 12,
+                          color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        source,
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.copy, size: 18),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: '$name=$value'));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Cookie copied'),
+                        duration: Duration(milliseconds: 500)),
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // Fallback to basic list if no analysis available
     final List<String> cookies =
         (result['cookies'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
@@ -564,7 +699,9 @@ class ProbeCookiesView extends ProbeViewBase {
           children: [
             Icon(Icons.cookie_outlined, size: 48, color: Colors.grey),
             SizedBox(height: 16),
-            Text('No cookies set by this server.'),
+            Text('No cookies detected.'),
+            Text('(Try reloading the browser)',
+                style: TextStyle(color: Colors.grey, fontSize: 12)),
           ],
         ),
       );
