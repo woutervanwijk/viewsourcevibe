@@ -29,6 +29,7 @@ class CookieUtils {
   static final Map<String, Map<String, dynamic>> _knownCookies = {
     // --- Google & DoubleClick ---
     '_ga': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
+    '_ga_': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '_gid': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '_gat': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '__utma': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
@@ -36,7 +37,7 @@ class CookieUtils {
     '__utmc': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '__utmz': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '__utmt': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
-    '_gcl_au': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
+    '_gcl_au': {'cat': CookieCategory.advertising, 'prov': 'Google Ads'},
     'NID': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     '1P_JAR': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'AEC': {'cat': CookieCategory.essential, 'prov': 'Google'},
@@ -54,8 +55,8 @@ class CookieUtils {
     '_greza_p': {'cat': CookieCategory.functional, 'prov': 'Google Recaptcha'},
 
     // --- Meta / Facebook ---
-    '_fbp': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
-    '_fbc': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
+    '_fbp': {'cat': CookieCategory.advertising, 'prov': 'Meta Pixel'},
+    '_fbc': {'cat': CookieCategory.advertising, 'prov': 'Meta Pixel'},
     'fr': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'sb': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
     'datr': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
@@ -63,21 +64,41 @@ class CookieUtils {
     'xs': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
     'wd': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
 
+    // --- YouTube ---
+    'YSC': {'cat': CookieCategory.advertising, 'prov': 'YouTube'},
+    'VISITOR_INFO1_LIVE': {
+      'cat': CookieCategory.advertising,
+      'prov': 'YouTube'
+    },
+    'PREF': {'cat': CookieCategory.functional, 'prov': 'YouTube'},
+
     // --- Microsoft / LinkedIn / Azure ---
+    '_clck': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
+    '_clsk': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
+    'CLID': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
+    'ANONCHK': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
+    'MR': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
+    'SM': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
     'ARRAffinity': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'ARRAffinitySameSite': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'TiPMix': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'x-ms-gateway-slice': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'ASP.NET_SessionId': {'cat': CookieCategory.essential, 'prov': 'ASP.NET'},
     'MSCC': {'cat': CookieCategory.essential, 'prov': 'Microsoft'},
-    'MUID': {'cat': CookieCategory.advertising, 'prov': 'Microsoft'},
-    'MUIDB': {'cat': CookieCategory.advertising, 'prov': 'Microsoft'},
+    'MUID': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
+    'MUIDB': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
     'li_at': {'cat': CookieCategory.essential, 'prov': 'LinkedIn'},
     'li_sugr': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'UserMatchHistory': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
     'bscookie': {'cat': CookieCategory.social, 'prov': 'LinkedIn'},
     'lidc': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'lang': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
+
+    // --- Snowplow ---
+    '_sp_': {'cat': CookieCategory.analytics, 'prov': 'Snowplow'},
+
+    // --- CookieHub ---
+    'cookiehub': {'cat': CookieCategory.essential, 'prov': 'CookieHub'},
 
     // --- Amazon / AWS ---
     'aws-target-visitor-id': {'cat': CookieCategory.analytics, 'prov': 'AWS'},
@@ -135,6 +156,7 @@ class CookieUtils {
     'mp_': {'cat': CookieCategory.analytics, 'prov': 'Mixpanel'},
 
     // --- Server / CMS / Tech ---
+    'eviivo': {'cat': CookieCategory.essential, 'prov': 'eviivo'},
     'PHPSESSID': {'cat': CookieCategory.essential, 'prov': 'PHP'},
     'JSESSIONID': {'cat': CookieCategory.essential, 'prov': 'Java'},
     'X-Mapping-': {'cat': CookieCategory.functional, 'prov': 'Load Balancer'},

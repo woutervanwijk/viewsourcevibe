@@ -431,6 +431,8 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['CMS'] = 'Joomla';
   } else if (generator.contains('drupal')) {
     tech['CMS'] = 'Drupal';
+  } else if (generator.contains('prestashop')) {
+    tech['CMS'] = 'PrestaShop';
   } else if (generator.contains('ghost')) {
     tech['CMS'] = 'Ghost';
   } else if (generator.contains('hugo')) {
@@ -439,6 +441,12 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['CMS'] = 'Webflow';
   } else if (generator.contains('wix')) {
     tech['CMS'] = 'Wix';
+  } else if (generator.contains('shopify')) {
+    tech['CMS'] = 'Shopify';
+  } else if (generator.contains('prestashop')) {
+    tech['CMS'] = 'PrestaShop';
+  } else if (generator.contains('bitrix')) {
+    tech['CMS'] = '1C-Bitrix';
   } else if (generator.contains('docusaurus')) {
     tech['Static Site'] = 'Docusaurus';
   } else if (generator.contains('gatsby')) {
@@ -447,9 +455,23 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['Static Site'] = 'Astro';
   }
 
+  // Path and Pattern-based CMS detection
   if (tech['CMS'] == null && tech['Static Site'] == null) {
     if (html.contains('wp-content') || html.contains('wp-includes')) {
       tech['CMS'] = 'WordPress';
+    } else if (html.contains('/templates/') &&
+        (html.contains('/media/jui/') || html.contains('/media/system/'))) {
+      tech['CMS'] = 'Joomla';
+    } else if (html.contains('/sites/all/modules/') ||
+        html.contains('/sites/default/files/')) {
+      tech['CMS'] = 'Drupal';
+    } else if (html.contains('/modules/') &&
+        (html.contains('prestashop') || html.contains('/themes/'))) {
+      // PrestaShop often has themes/[theme]/assets/ or modules/[module]
+      if (html.contains('var prestashop =') ||
+          html.contains('id_product_attribute')) {
+        tech['CMS'] = 'PrestaShop';
+      }
     } else if (html.contains('cdn.shopify.com') ||
         html.contains('shopify-payment-button')) {
       tech['CMS'] = 'Shopify';
@@ -469,6 +491,53 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     }
   }
 
+  // Plugin & Extension Detection
+  final List<String> plugins = [];
+  if (tech['CMS'] == 'WordPress') {
+    if (html.contains('woocommerce') ||
+        html.contains('/plugins/woocommerce/')) {
+      plugins.add('WooCommerce');
+    }
+    if (html.contains('elementor') || html.contains('elementor-section')) {
+      plugins.add('Elementor');
+    }
+    if (html.contains('Yoast SEO') ||
+        html.contains('/plugins/wordpress-seo/')) {
+      plugins.add('Yoast SEO');
+    }
+    if (html.contains('Rank Math') || html.contains('rank-math-')) {
+      plugins.add('Rank Math');
+    }
+    if (html.contains('wpcf7') || html.contains('contact-form-7')) {
+      plugins.add('Contact Form 7');
+    }
+    if (html.contains('wp-rocket') || html.contains('WP Rocket')) {
+      plugins.add('WP Rocket');
+    }
+    if (html.contains('W3 Total Cache') || html.contains('/w3-total-cache/')) {
+      plugins.add('W3 Total Cache');
+    }
+    if (html.contains('js-composer') || html.contains('wpb-js-composer')) {
+      plugins.add('WPBakery Page Builder');
+    }
+    if (html.contains('revslider') || html.contains('Slider Revolution')) {
+      plugins.add('Slider Revolution');
+    }
+  } else if (tech['CMS'] == 'Joomla') {
+    if (html.contains('com_virtuemart')) plugins.add('VirtueMart');
+    if (html.contains('com_rsform')) plugins.add('RSForm');
+    if (html.contains('com_jce')) plugins.add('JCE Editor');
+    if (html.contains('com_k2')) plugins.add('K2');
+  } else if (tech['CMS'] == 'Drupal') {
+    if (html.contains('views-view')) plugins.add('Views');
+    if (html.contains('webform-client-form')) plugins.add('Webform');
+  }
+
+  if (plugins.isNotEmpty) {
+    tech['Plugins'] = plugins.join(', ');
+  }
+
+  // Frameworks & Libraries
   if (_hasPattern(html, r'''_next/static|__NEXT_DATA__''')) {
     tech['Framework'] = 'Next.js';
   } else if (_hasPattern(html, r'''__NUXT__''')) {
@@ -489,6 +558,7 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['Library'] = 'HTMX';
   }
 
+  // CSS Frameworks
   if (_hasPattern(html,
       r'''bootstrap(?:\.min)?\.css|class=["'][^"']*?\b(?:col-|btn-|navbar-)''')) {
     tech['CSS Framework'] = 'Bootstrap';

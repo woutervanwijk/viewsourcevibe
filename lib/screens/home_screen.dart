@@ -134,21 +134,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// Special builder for Sliver widgets (like SliverTreeView)
-  Widget _buildSliverRefreshable(Widget sliver) {
-    return TabPageWrapper(
-      child: RefreshIndicator(
-        onRefresh: _handleRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            sliver,
-          ],
-        ),
-      ),
-    );
-  }
-
   List<Widget> _getTabs(HtmlService htmlService) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
