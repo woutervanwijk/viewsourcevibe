@@ -65,8 +65,9 @@ class MediaView extends StatelessWidget {
               primary: false,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent:
+                    200, // Responsive: more columns on wider screens
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
                 childAspectRatio: 0.8,
@@ -189,14 +190,22 @@ class MediaView extends StatelessWidget {
           children: [
             Expanded(
               child: CustomPaint(
-                painter: const CheckerboardPainter(),
+                painter: CheckerboardPainter(
+                  color1: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]!
+                      : const Color(0xFFE0E0E0),
+                  color2: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[900]!
+                      : const Color(0xFFFFFFFF),
+                ),
                 child: _buildImageContent(src, isInline, dataBytes),
               ),
             ),
-            Padding(
+            Container(
+              color: Theme.of(context).colorScheme.surface,
               padding: const EdgeInsets.all(8.0),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
                     alt.isNotEmpty ? alt : 'No alt text',
@@ -204,7 +213,8 @@ class MediaView extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (image['size'] != null) ...[
+                  if (image['size'] != null &&
+                      (image['size']['decoded'] ?? 0) > 0) ...[
                     const SizedBox(height: 4),
                     Text(
                       _formatBytes(image['size']['decoded']),
@@ -225,6 +235,10 @@ class MediaView extends StatelessWidget {
   }
 
   Widget _buildImageContent(String src, bool isInline, Uint8List? dataBytes) {
+    // If the image has a transparent background, the checkerboard shows through.
+    // The text is separate (in a Column), so it shouldn't be obscured by the image itself.
+    // However, if the aspect ratio is tight, the text might be pushed off or clipped.
+    // We already use Expanded for the image, so it should shrink to fit available space.
     if (isInline && dataBytes != null) {
       return SvgPicture.memory(
         dataBytes,

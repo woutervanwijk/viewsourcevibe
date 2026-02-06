@@ -1304,9 +1304,8 @@ class HtmlService with ChangeNotifier {
     return true;
   }
 
-  Future<void> loadFile(HtmlFile file, {bool clearProbe = true}) async {
-    _isBeautifyEnabled = false; // Reset beautify mode on new file
-    // Save current file to navigation stack if we are not going back
+  /// Push the current file to the navigation stack
+  void _pushToNavigationStack() {
     if (!_isNavigatingBack && _currentFile != null) {
       // Only push to stack if it's a valid history item
       if (_shouldAddToHistory(_currentFile!)) {
@@ -1328,6 +1327,13 @@ class HtmlService with ChangeNotifier {
         }
       }
     }
+  }
+
+  Future<void> loadFile(HtmlFile file, {bool clearProbe = true}) async {
+    _isBeautifyEnabled = false; // Reset beautify mode on new file
+
+    // Save current file to navigation stack if we are not going back
+    _pushToNavigationStack();
 
     await clearFile(clearProbe: clearProbe);
     _currentFile = file;
@@ -3710,7 +3716,14 @@ Technical details: $e''';
 
       debugPrint(
           'WebView Sync: Setting _currentFile to ${htmlFile.name} (${htmlFile.path}). IsHtmlOrXml: $isHtmlOrXml');
+
+      // Update history and navigation stack logic
+      _pushToNavigationStack();
+
       _currentFile = htmlFile;
+
+      // Update URL history
+      _urlHistoryService?.addUrl(url);
 
       // Notify immediately so Source and Browser tabs reflect the new content/URL
       notifyListeners();
@@ -3723,7 +3736,6 @@ Technical details: $e''';
         notifyListeners();
       }).ignore();
 
-      _autoSave();
       _autoSave();
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');

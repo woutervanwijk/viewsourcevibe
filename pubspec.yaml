@@ -41,6 +41,8 @@ dependencies:
   re_editor: ^0.8.0
   re_highlight: ^0.0.3
   webview_flutter: ^4.10.0
+  webview_flutter_android: ^3.16.9
+  device_info_plus: ^10.1.0
 
   # File type detection
   mime_type: ^1.0.0
