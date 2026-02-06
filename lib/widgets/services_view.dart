@@ -57,19 +57,28 @@ class ServicesView extends StatelessWidget {
           _buildResourceSection(
               context,
               'Scripts (JS)',
-              metadata?['jsLinks'] ?? metadata?['externalJsLinks'],
+              [
+                ...(metadata?['jsLinks'] ?? []),
+                ...(metadata?['externalJsLinks'] ?? [])
+              ],
               Icons.javascript),
           const SizedBox(height: 16),
           _buildResourceSection(
               context,
               'Stylesheets (CSS)',
-              metadata?['cssLinks'] ?? metadata?['externalCssLinks'],
+              [
+                ...(metadata?['cssLinks'] ?? []),
+                ...(metadata?['externalCssLinks'] ?? [])
+              ],
               Icons.css),
           const SizedBox(height: 16),
           _buildResourceSection(
               context,
               'Iframes (HTML)',
-              metadata?['iframeLinks'] ?? metadata?['externalIframeLinks'],
+              [
+                ...(metadata?['iframeLinks'] ?? []),
+                ...(metadata?['externalIframeLinks'] ?? [])
+              ],
               Icons.web_asset),
           const SizedBox(height: 80),
         ],
@@ -164,7 +173,8 @@ class ServicesView extends StatelessWidget {
               onTap: () {
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
-                htmlService.loadFromUrl(url, switchToTab: 0);
+                htmlService.loadFromUrl(url,
+                    switchToTab: htmlService.sourceTabIndex);
               },
             ),
           );

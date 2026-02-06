@@ -35,9 +35,10 @@ class _UrlInputState extends State<UrlInput> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _urlController.text.isEmpty && !_focusNode.hasFocus) {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
-          if (htmlService.currentFile != null &&
-              htmlService.currentFile!.isUrl) {
-            _urlController.text = htmlService.currentFile!.path;
+          if (htmlService.currentFile != null) {
+            _urlController.text = htmlService.currentFile!.isUrl
+                ? htmlService.currentFile!.path
+                : htmlService.currentFile!.name;
           }
         }
       });

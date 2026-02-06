@@ -28,11 +28,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
   bool _lastIsHtmlOrXml = false;
   bool _lastShowMetadataTabs = false;
+  bool _lastShowServerTabs = false;
+  bool _lastIsBrowserSupported = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabSelection);
 
     // Use addPostFrameCallback to initialize correct length after first build
@@ -59,9 +61,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _updateTabs(HtmlService htmlService, {bool force = false}) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
+    final showServerTabs = htmlService.showServerTabs;
+    final isBrowserSupported = htmlService.isBrowserSupported;
 
     if (isHtmlOrXml == _lastIsHtmlOrXml &&
         showMetadataTabs == _lastShowMetadataTabs &&
+        showServerTabs == _lastShowServerTabs &&
+        isBrowserSupported == _lastIsBrowserSupported &&
         !force) {
       return;
     }
@@ -69,12 +75,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final oldIndex = _tabController.index;
     final oldLength = _tabController.length;
 
-    // Calculate exact length: 1 (Editor) + 1 (Browser) + 4 (Probe/Headers/Security/Cookies)
+    // Calculate exact length: 1 (Editor)
+    // + (1 if isBrowserSupported for Browser)
     // + (1 if isHtmlOrXml for DOM Tree)
     // + (3 if showMetadataTabs for Metadata/Services/Media)
-    int newLength = 6;
+    // + (4 if showServerTabs for Probe/Headers/Security/Cookies)
+    int newLength = 1; // Editor
+    if (isBrowserSupported) newLength += 1;
     if (isHtmlOrXml) newLength += 1;
     if (showMetadataTabs) newLength += 3;
+    if (showServerTabs) newLength += 4;
 
     if (oldLength != newLength || force) {
       _tabController.removeListener(_handleTabSelection);
@@ -87,6 +97,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _tabController.addListener(_handleTabSelection);
       _lastIsHtmlOrXml = isHtmlOrXml;
       _lastShowMetadataTabs = showMetadataTabs;
+      _lastShowServerTabs = showServerTabs;
+      _lastIsBrowserSupported = isBrowserSupported;
     }
   }
 
@@ -139,10 +151,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Widget> _getTabs(HtmlService htmlService) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
+    final showServerTabs = htmlService.showServerTabs;
+    final isBrowserSupported = htmlService.isBrowserSupported;
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
 
     final sourceTab = _buildTab(Icons.code, 'Source');
     final browserTab = _buildTab(Icons.language, 'Browser');
+
+    if (!isBrowserSupported) {
+      return [
+        sourceTab,
+        if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
+        if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
+        if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
+        if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
+        if (showServerTabs) ...[
+          _buildTab(Icons.network_check, 'Probe'),
+          _buildTab(Icons.list_alt, 'Headers'),
+          _buildTab(Icons.security, 'Security'),
+          _buildTab(Icons.cookie_outlined, 'Cookies'),
+        ],
+      ];
+    }
 
     return [
       if (useBrowserByDefault) browserTab else sourceTab,
@@ -151,16 +181,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
       if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
       if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
-      _buildTab(Icons.network_check, 'Probe'),
-      _buildTab(Icons.list_alt, 'Headers'),
-      _buildTab(Icons.security, 'Security'),
-      _buildTab(Icons.cookie_outlined, 'Cookies'),
+      if (showServerTabs) ...[
+        _buildTab(Icons.network_check, 'Probe'),
+        _buildTab(Icons.list_alt, 'Headers'),
+        _buildTab(Icons.security, 'Security'),
+        _buildTab(Icons.cookie_outlined, 'Cookies'),
+      ],
     ];
   }
 
   List<Widget> _getTabViews(HtmlService htmlService, HtmlFile? currentFile) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
+    final showServerTabs = htmlService.showServerTabs;
+    final isBrowserSupported = htmlService.isBrowserSupported;
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
 
     final sourceView = KeepAliveWrapper(
@@ -193,6 +227,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
 
+    if (!isBrowserSupported) {
+      return [
+        sourceView,
+        if (isHtmlOrXml)
+          KeepAliveWrapper(child: _buildRefreshable(const DomTreeView())),
+        if (showMetadataTabs)
+          KeepAliveWrapper(
+              child: _buildScrollableRefreshable(const MetadataView(),
+                  hasScrollBody: false)),
+        if (showMetadataTabs)
+          KeepAliveWrapper(
+              child: _buildScrollableRefreshable(const ServicesView(),
+                  hasScrollBody: false)),
+        if (showMetadataTabs)
+          KeepAliveWrapper(
+              child: _buildScrollableRefreshable(const MediaView(),
+                  hasScrollBody: false)),
+        if (showServerTabs) ...[
+          KeepAliveWrapper(
+              child: _buildScrollableRefreshable(const ProbeGeneralView())),
+          KeepAliveWrapper(
+              child: _buildScrollableRefreshable(const ProbeHeadersView())),
+          KeepAliveWrapper(
+              child: _buildScrollableRefreshable(const ProbeSecurityView())),
+          KeepAliveWrapper(
+              child: _buildScrollableRefreshable(const ProbeCookiesView())),
+        ],
+      ];
+    }
+
     return [
       if (useBrowserByDefault) browserView else sourceView,
       if (useBrowserByDefault) sourceView else browserView,
@@ -220,20 +284,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 hasScrollBody: false)),
 
       // 6. Probe: General
-      KeepAliveWrapper(
-          child: _buildScrollableRefreshable(const ProbeGeneralView())),
+      if (showServerTabs) ...[
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const ProbeGeneralView())),
 
-      // 7. Probe: Headers
-      KeepAliveWrapper(
-          child: _buildScrollableRefreshable(const ProbeHeadersView())),
+        // 7. Probe: Headers
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const ProbeHeadersView())),
 
-      // 8. Probe: Security
-      KeepAliveWrapper(
-          child: _buildScrollableRefreshable(const ProbeSecurityView())),
+        // 8. Probe: Security
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const ProbeSecurityView())),
 
-      // 9. Probe: Cookies
-      KeepAliveWrapper(
-          child: _buildScrollableRefreshable(const ProbeCookiesView())),
+        // 9. Probe: Cookies
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const ProbeCookiesView())),
+      ],
     ];
   }
 
@@ -244,7 +310,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Update TabController synchronously if content type changed
     // This MUST happen before building the TabBar to avoid length mismatch
     if (htmlService.isHtmlOrXml != _lastIsHtmlOrXml ||
-        htmlService.showMetadataTabs != _lastShowMetadataTabs) {
+        htmlService.showMetadataTabs != _lastShowMetadataTabs ||
+        htmlService.showServerTabs != _lastShowServerTabs ||
+        htmlService.isBrowserSupported != _lastIsBrowserSupported) {
       _updateTabs(htmlService);
     }
 

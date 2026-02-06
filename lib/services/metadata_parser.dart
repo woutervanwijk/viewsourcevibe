@@ -79,6 +79,13 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
 
 void _extractFromHtml(
     dom.Document doc, Map<String, dynamic> metadata, String baseUrl) {
+  int imageOrder = 0;
+
+  final Set<String> seenCssUrls = {};
+  final Set<String> seenJsUrls = {};
+  final Set<String> seenImageKeys = {};
+  final Set<String> seenContentKeys = {};
+
   // Language from <html>
   final htmlTag = doc.querySelector('html');
   if (htmlTag != null) {
@@ -171,10 +178,14 @@ void _extractFromHtml(
     if (href != null) {
       final absoluteHref = _resolveUrl(href, baseUrl);
       if (rel == 'stylesheet' || type == 'text/css') {
-        if (_isLocalResource(absoluteHref, baseUrl)) {
-          metadata['cssLinks'].add(absoluteHref);
-        } else {
-          metadata['externalCssLinks'].add(absoluteHref);
+        final normalizationKey = _normalizeUrl(absoluteHref);
+        if (!seenCssUrls.contains(normalizationKey)) {
+          seenCssUrls.add(normalizationKey);
+          if (_isLocalResource(absoluteHref, baseUrl)) {
+            metadata['cssLinks'].add(absoluteHref);
+          } else {
+            metadata['externalCssLinks'].add(absoluteHref);
+          }
         }
       } else if (rel == 'alternate' &&
           (type?.contains('rss') == true || type?.contains('atom') == true)) {
@@ -200,10 +211,14 @@ void _extractFromHtml(
     final src = script.attributes['src'];
     if (src != null && src.isNotEmpty) {
       final absoluteSrc = _resolveUrl(src, baseUrl);
-      if (_isLocalResource(absoluteSrc, baseUrl)) {
-        metadata['jsLinks'].add(absoluteSrc);
-      } else {
-        metadata['externalJsLinks'].add(absoluteSrc);
+      final normalizationKey = _normalizeUrl(absoluteSrc);
+      if (!seenJsUrls.contains(normalizationKey)) {
+        seenJsUrls.add(normalizationKey);
+        if (_isLocalResource(absoluteSrc, baseUrl)) {
+          metadata['jsLinks'].add(absoluteSrc);
+        } else {
+          metadata['externalJsLinks'].add(absoluteSrc);
+        }
       }
     }
   }
@@ -212,7 +227,7 @@ void _extractFromHtml(
   final iframes = doc.querySelectorAll('iframe');
   for (final iframe in iframes) {
     final src = iframe.attributes['src'];
-    if (src != null) {
+    if (src != null && src.isNotEmpty) {
       final absoluteSrc = _resolveUrl(src, baseUrl);
       if (_isLocalResource(absoluteSrc, baseUrl)) {
         metadata['iframeLinks'].add(absoluteSrc);
@@ -236,7 +251,6 @@ void _extractFromHtml(
   for (final img in imgs) {
     final attrs = img.attributes;
 
-    // Comprehensive list of lazy-loading and source attributes
     final candidates = [
       attrs['data-src'],
       attrs['data-lazy-src'],
@@ -255,7 +269,6 @@ void _extractFromHtml(
       }
     }
 
-    // Fallback if only data URI or nothing found
     finalSrc ??= attrs['src'];
 
     // Handle srcset
@@ -270,7 +283,7 @@ void _extractFromHtml(
             .map((s) => s.trim().split(' ').first)
             .where((s) => s.isNotEmpty);
         if (candidateUrls.isNotEmpty) {
-          finalSrc = candidateUrls.last; // Typically highest res
+          finalSrc = candidateUrls.last;
         }
       } catch (e) {
         debugPrint('Error parsing srcset: $e');
@@ -278,21 +291,31 @@ void _extractFromHtml(
     }
 
     if (finalSrc != null && finalSrc.isNotEmpty) {
-      if (finalSrc.startsWith('data:image/svg+xml')) {
-        metadata['media']['images'].add({
-          'src': finalSrc,
-          'alt': attrs['alt'] ?? 'Inline SVG',
-          'title': attrs['title'] ?? '',
-          'type': 'base64',
-        });
-      } else if (!finalSrc.startsWith('data:') ||
-          (attrs['src'] == finalSrc && !attrs.containsKey('data-src'))) {
+      if (finalSrc.startsWith('data:')) {
+        // Deduplicate data URIs by content fingerprint
+        if (!seenContentKeys.contains(finalSrc)) {
+          seenContentKeys.add(finalSrc);
+          metadata['media']['images'].add({
+            'src': finalSrc,
+            'alt': attrs['alt'] ?? 'Embedded Image',
+            'title': attrs['title'] ?? '',
+            'type': 'base64',
+            'order': imageOrder++,
+          });
+        }
+      } else {
         final absoluteSrc = _resolveUrl(finalSrc, baseUrl);
-        metadata['media']['images'].add({
-          'src': absoluteSrc,
-          'alt': attrs['alt'] ?? '',
-          'title': attrs['title'] ?? '',
-        });
+        final normalizationKey = _normalizeUrl(absoluteSrc);
+
+        if (!seenImageKeys.contains(normalizationKey)) {
+          seenImageKeys.add(normalizationKey);
+          metadata['media']['images'].add({
+            'src': absoluteSrc,
+            'alt': attrs['alt'] ?? '',
+            'title': attrs['title'] ?? '',
+            'order': imageOrder++,
+          });
+        }
       }
     }
   }
@@ -302,12 +325,18 @@ void _extractFromHtml(
   for (final svg in svgs) {
     try {
       final fullSvg = svg.outerHtml;
+      // Use the raw HTML as the content key for SVGs
+      // This catches duplicates even if they are embedded differently
+      if (seenContentKeys.contains(fullSvg)) continue;
+      seenContentKeys.add(fullSvg);
+
       final encoded = base64Encode(utf8.encode(fullSvg));
       metadata['media']['images'].add({
         'src': 'data:image/svg+xml;base64,$encoded',
         'alt': 'Inline SVG Code',
         'title': 'Extracted from <svg> tag',
         'type': 'base64',
+        'order': imageOrder++,
       });
     } catch (e) {
       debugPrint('Error encoding inline SVG: $e');
@@ -336,6 +365,35 @@ void _extractFromHtml(
         'mimeType': source.attributes['type'] ?? '',
       });
     }
+  }
+}
+
+String _normalizeUrl(String url) {
+  if (url.startsWith('data:')) return url;
+  try {
+    final uri = Uri.parse(url);
+    if (uri.queryParameters.isEmpty) return url;
+
+    final cleanParams = Map<String, String>.from(uri.queryParameters);
+    const cacheBusters = {'v', 'ver', 't', 'hash', 'version', '_', 'ts'};
+    bool changed = false;
+    cleanParams.removeWhere((key, _) {
+      if (cacheBusters.contains(key.toLowerCase())) {
+        changed = true;
+        return true;
+      }
+      return false;
+    });
+
+    if (!changed) return url;
+
+    return uri
+        .replace(
+          queryParameters: cleanParams.isEmpty ? null : cleanParams,
+        )
+        .toString();
+  } catch (_) {
+    return url;
   }
 }
 

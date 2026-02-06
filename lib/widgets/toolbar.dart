@@ -197,6 +197,7 @@ class Toolbar extends StatelessWidget {
         // Fallback for text sharing if platform fails
         if (choice == 'text') {
           await Clipboard.setData(ClipboardData(text: currentFile.content));
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Content copied to clipboard')),
           );

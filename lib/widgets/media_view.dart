@@ -33,14 +33,34 @@ class MediaView extends StatelessWidget {
 
     final List<dynamic> images = List.from(metadata['media']['images'] ?? [])
       ..sort((a, b) {
-        final sizeA = (a as Map)['size']?['decoded'] ?? 0;
-        final sizeB = (b as Map)['size']?['decoded'] ?? 0;
+        final mapA = a as Map;
+        final mapB = b as Map;
+
+        // Highest Priority: Move inline SVGs (base64) to the bottom
+        final isInlineA = mapA['type'] == 'base64';
+        final isInlineB = mapB['type'] == 'base64';
+        if (isInlineA != isInlineB) {
+          return isInlineA ? 1 : -1;
+        }
+
+        final sizeA = mapA['size']?['decoded'] ?? 0;
+        final sizeB = mapB['size']?['decoded'] ?? 0;
+
+        // Secondary: Sort by file size descending
         if (sizeB != sizeA) {
           return (sizeB as num).compareTo(sizeA as num);
         }
-        return (a['src'] ?? '')
+
+        // Tertiary: Sort by original appearance order in HTML
+        final orderA = mapA['order'] ?? 0;
+        final orderB = mapB['order'] ?? 0;
+        if (orderA != orderB) {
+          return (orderA as num).compareTo(orderB as num);
+        }
+
+        return (mapA['src'] ?? '')
             .toString()
-            .compareTo((b['src'] ?? '').toString());
+            .compareTo((mapB['src'] ?? '').toString());
       });
     final List<dynamic> videos = metadata['media']['videos'] ?? [];
 

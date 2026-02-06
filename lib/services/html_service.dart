@@ -207,11 +207,28 @@ class HtmlService with ChangeNotifier {
         url.contains('.atom?');
   }
 
+  /// internal helper to identify pure XML vs HTML/SVG
+  bool get _isStrictXml => isXml && !isHtml && !isSvg;
+
   /// Metadata/Services/Media extraction is only useful for full web pages
-  bool get showMetadataTabs => isHtml || isXml;
+  bool get showMetadataTabs => isHtml;
 
   /// DOM Tree and Probe tabs are useful for any structured markup
   bool get isHtmlOrXml => isHtml || isXml;
+
+  /// Server-dependent tabs (Probe, Headers, Security, Cookies) only for URLs
+  /// We hide these for strict XML to keep the interface focused
+  bool get showServerTabs => (_currentFile?.isUrl ?? false) && !_isStrictXml;
+
+  /// Browser tab is supported for URLs, HTML, SVG, and common media formats.
+  /// We hide it for strict XML as it doesn't provide a useful visual render.
+  bool get isBrowserSupported {
+    if (isSvg) return true;
+    if (isMedia) return true;
+    if (_isStrictXml) return false;
+    if (_currentFile?.isUrl ?? false) return true;
+    return isHtml;
+  }
 
   bool get isMedia {
     final contentType =
@@ -1302,8 +1319,9 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  /// internal helper to cleaner check if file is valid for history
+  /// internal helper to check if file is valid for history
   bool _shouldAddToHistory(HtmlFile file) {
+    if (!file.isUrl) return false;
     if (file.path.isEmpty) return false;
     // Don't add shared text content to history
     if (file.path.startsWith('shared://')) return false;
@@ -1373,7 +1391,8 @@ class HtmlService with ChangeNotifier {
 
     // Record in history if it has a path/URL
     if (_shouldAddToHistory(file)) {
-      _urlHistoryService?.addUrl(file.path);
+      // For local files, only add the name to history for a cleaner display
+      _urlHistoryService?.addUrl(file.isUrl ? file.path : file.name);
     }
 
     // Switch back to editor if this is a local file
@@ -1454,7 +1473,8 @@ class HtmlService with ChangeNotifier {
       selectedContentType = null;
     }
 
-    _currentInputText = file.path;
+    // For local files, show the name in the URL bar instead of the full path
+    _currentInputText = file.isUrl ? file.path : file.name;
     notifyListeners();
     _autoSave();
     await scrollToZero();
@@ -1689,7 +1709,10 @@ class HtmlService with ChangeNotifier {
     final previousFile = _navigationStack.removeLast();
     _isNavigatingBack = true;
     try {
-      _currentInputText = previousFile.path;
+      // Use the public setter to trigger notifyListeners() immediately
+      // This ensures the UrlInput widget's text controller updates instantly
+      currentInputText =
+          previousFile.isUrl ? previousFile.path : previousFile.name;
       await loadFile(previousFile, clearProbe: false);
     } finally {
       _isNavigatingBack = false;
