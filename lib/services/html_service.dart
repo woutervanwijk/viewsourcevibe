@@ -3557,9 +3557,7 @@ Technical details: $e''';
               }
             }
 
-            int totalTx = (weightMap['tx'] as num? ?? 0).toInt();
-            int totalDec = (weightMap['dec'] as num? ?? 0).toInt();
-
+            // Parse detailed resource data
             if (weightMap['list'] != null && weightMap['list'] is List) {
               _resourcePerformanceData = List<Map<String, dynamic>>.from(
                   (weightMap['list'] as List).map((e) => {
@@ -3567,39 +3565,37 @@ Technical details: $e''';
                         'transfer': (e['t'] as num? ?? 0).toInt(),
                         'decoded': (e['d'] as num? ?? 0).toInt(),
                       }));
+            }
 
-              // Calculate detailed breakdown and total sum in one pass
-              int scriptCount = 0;
-              int scriptTx = 0;
-              int scriptDec = 0;
+            // Calculate totals and breakdown
+            int totalTx = (weightMap['tx'] as num? ?? 0).toInt();
+            int totalDec = (weightMap['dec'] as num? ?? 0).toInt();
 
-              int cssCount = 0;
-              int cssTx = 0;
-              int cssDec = 0;
+            int scriptCount = 0;
+            int scriptTx = 0;
+            int scriptDec = 0;
 
-              int imgCount = 0;
-              int imgTx = 0;
-              int imgDec = 0;
+            int cssCount = 0;
+            int cssTx = 0;
+            int cssDec = 0;
 
-              // Note: main document is now included in the list by JS snippet
-              int htmlCount = 0;
-              int htmlTx = 0;
-              int htmlDec = 0;
+            int imgCount = 0;
+            int imgTx = 0;
+            int imgDec = 0;
 
-              int otherCount = 0;
-              int otherTx = 0;
-              int otherDec = 0;
+            int htmlCount = 0;
+            int htmlTx = 0;
+            int htmlDec = 0;
 
-              int calculatedTotalTx = 0;
-              int calculatedTotalDec = 0;
+            int otherCount = 0;
+            int otherTx = 0;
+            int otherDec = 0;
 
+            if (_resourcePerformanceData != null) {
               for (var r in _resourcePerformanceData!) {
                 final String name = (r['name'] as String? ?? '').toLowerCase();
                 final int messageTx = (r['transfer'] as num? ?? 0).toInt();
                 final int messageDec = (r['decoded'] as num? ?? 0).toInt();
-
-                calculatedTotalTx += messageTx;
-                calculatedTotalDec += messageDec;
 
                 if (name.endsWith('.js') ||
                     name.contains('.js?') ||
@@ -3627,7 +3623,6 @@ Technical details: $e''';
                 } else if (name.endsWith('.html') ||
                     name.endsWith('.htm') ||
                     name.contains('document') ||
-                    name == url.toLowerCase() ||
                     // If name is just a path without extension, often HTML
                     (!name.contains('.') && name.startsWith('http'))) {
                   htmlCount++;
@@ -3639,65 +3634,43 @@ Technical details: $e''';
                   otherDec += messageDec;
                 }
               }
-
-              // Use calculated total if global total is zero (e.g. some webview versions)
-              if (totalTx == 0 && calculatedTotalTx > 0) {
-                totalTx = calculatedTotalTx;
-                totalDec = calculatedTotalDec;
-
-                // If HTML count is still 0 (JS didn't catch navigation entry for some reason),
-                // add the manual HTML size as fallback
-                if (htmlCount == 0) {
-                  totalDec += html.length;
-                  // Use length as approx for transfer if unknown
-                  totalTx += html.length;
-
-                  // And add to HTML breakdown
-                  htmlCount++;
-                  htmlTx += html.length;
-                  htmlDec += html.length;
-                }
-              }
-
-              _lastPageWeight = {
-                'transfer': totalTx,
-                'decoded': totalDec,
-                'breakdown': {
-                  'scripts': {
-                    'count': scriptCount,
-                    'transfer': scriptTx,
-                    'decoded': scriptDec
-                  },
-                  'css': {
-                    'count': cssCount,
-                    'transfer': cssTx,
-                    'decoded': cssDec
-                  },
-                  'images': {
-                    'count': imgCount,
-                    'transfer': imgTx,
-                    'decoded': imgDec
-                  },
-                  'html': {
-                    'count': htmlCount,
-                    'transfer': htmlTx,
-                    'decoded': htmlDec
-                  },
-                  'other': {
-                    'count': otherCount,
-                    'transfer': otherTx,
-                    'decoded': otherDec
-                  },
-                }
-              };
-              debugPrint(
-                  'WebView Sync: Weights parsed successfully. Total resources: ${_resourcePerformanceData?.length}');
             }
+
+            _lastPageWeight = {
+              'transfer': totalTx,
+              'decoded': totalDec,
+              'breakdown': {
+                'scripts': {
+                  'count': scriptCount,
+                  'transfer': scriptTx,
+                  'decoded': scriptDec
+                },
+                'css': {
+                  'count': cssCount,
+                  'transfer': cssTx,
+                  'decoded': cssDec
+                },
+                'images': {
+                  'count': imgCount,
+                  'transfer': imgTx,
+                  'decoded': imgDec
+                },
+                'html': {
+                  'count': htmlCount,
+                  'transfer': htmlTx,
+                  'decoded': htmlDec
+                },
+                'other': {
+                  'count': otherCount,
+                  'transfer': otherTx,
+                  'decoded': otherDec
+                },
+              }
+            };
           }
         }
       } catch (e) {
-        debugPrint('Error parsing page weight: $e');
-        _lastPageWeight = null;
+        debugPrint('Error getting page weight/cookies: $e');
       }
 
       // Enrich resource sizes if needed (background)
@@ -3707,44 +3680,34 @@ Technical details: $e''';
         notifyListeners();
       }).ignore();
 
-      // Unquote if needed
+      // Unquote if needed (WebView returns JSON string sometimes)
       String finalHtml = _unquoteHtml(html);
 
-      // Update current file with new content BUT maintain webview mode
-      final processedFilename =
-          await detectFileTypeAndGenerateFilename(url, finalHtml);
+      // 3. Update the File State
+      // Create a new HtmlFile with the actual URL and content from the WebView
+      // This is crucial for handling redirects (e.g. bbc.com -> bbc.co.uk)
+      // providing the app with the correct "Source of Truth"
 
-      final htmlFile = HtmlFile(
-          name: processedFilename,
-          path: url,
-          content: finalHtml,
-          lastModified: DateTime.now(),
-          size: finalHtml.length,
-          isUrl: true);
+      // Use helper if present, else simple name
+      String filename = 'Page';
+      try {
+        filename = generateDescriptiveFilename(Uri.parse(url), finalHtml);
+      } catch (e) {
+        filename = 'Page';
+      }
 
-      debugPrint(
-          'WebView Sync: Setting _currentFile to ${htmlFile.name} (${htmlFile.path}). IsHtmlOrXml: $isHtmlOrXml');
+      final file = HtmlFile(
+        name: filename,
+        path: url,
+        content: finalHtml,
+        lastModified: DateTime.now(),
+        size: finalHtml.length,
+        isUrl: true,
+        probeResult: _probeResult, // Pass existing probe result
+      );
 
-      // Update history and navigation stack logic
-      _pushToNavigationStack();
-
-      _currentFile = htmlFile;
-
-      // Update URL history
-      _urlHistoryService?.addUrl(url);
-
-      // Notify immediately so Source and Browser tabs reflect the new content/URL
-      notifyListeners();
-
-      // Trigger metadata extraction for the new content in background
-      _extractMetadata().then((_) {
-        debugPrint(
-            'Metadata: Final notification sent. pageMetadata is present: ${_pageMetadata != null}');
-        // Final notification after metadata is ready
-        notifyListeners();
-      }).ignore();
-
-      _autoSave();
+      // Update the app state effectively
+      await loadFile(file, clearProbe: false);
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');
     }
