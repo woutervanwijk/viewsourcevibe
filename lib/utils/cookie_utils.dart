@@ -38,6 +38,9 @@ class CookieUtils {
     '__utmz': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '__utmt': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '_gcl_au': {'cat': CookieCategory.advertising, 'prov': 'Google Ads'},
+    '__gads': {'cat': CookieCategory.advertising, 'prov': 'Google Ads'},
+    '__gpi': {'cat': CookieCategory.advertising, 'prov': 'Google Ads'},
+    '__gpa': {'cat': CookieCategory.advertising, 'prov': 'Google Ads'},
     'NID': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     '1P_JAR': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'AEC': {'cat': CookieCategory.essential, 'prov': 'Google'},
@@ -72,21 +75,23 @@ class CookieUtils {
     },
     'PREF': {'cat': CookieCategory.functional, 'prov': 'YouTube'},
 
-    // --- Microsoft / LinkedIn / Azure ---
+    // --- Microsoft / LinkedIn / Clarity ---
     '_clck': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
     '_clsk': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
     'CLID': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
     'ANONCHK': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
     'MR': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
     'SM': {'cat': CookieCategory.analytics, 'prov': 'Microsoft Clarity'},
+    '_uetsid': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
+    '_uetvid': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
+    'MUID': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
+    'MUIDB': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
     'ARRAffinity': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'ARRAffinitySameSite': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'TiPMix': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'x-ms-gateway-slice': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'ASP.NET_SessionId': {'cat': CookieCategory.essential, 'prov': 'ASP.NET'},
     'MSCC': {'cat': CookieCategory.essential, 'prov': 'Microsoft'},
-    'MUID': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
-    'MUIDB': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
     'li_at': {'cat': CookieCategory.essential, 'prov': 'LinkedIn'},
     'li_sugr': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'UserMatchHistory': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
@@ -94,11 +99,51 @@ class CookieUtils {
     'lidc': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'lang': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
 
+    // --- HubSpot ---
+    'hubspotutk': {'cat': CookieCategory.analytics, 'prov': 'HubSpot'},
+    '__hssc': {'cat': CookieCategory.analytics, 'prov': 'HubSpot'},
+    '__hssrc': {'cat': CookieCategory.analytics, 'prov': 'HubSpot'},
+    '__hstc': {'cat': CookieCategory.analytics, 'prov': 'HubSpot'},
+    'messagesUtk': {'cat': CookieCategory.functional, 'prov': 'HubSpot Chat'},
+
+    // --- Matomo / Piwik ---
+    '_pk_id': {'cat': CookieCategory.analytics, 'prov': 'Matomo'},
+    '_pk_ses': {'cat': CookieCategory.analytics, 'prov': 'Matomo'},
+    '_pk_ref': {'cat': CookieCategory.analytics, 'prov': 'Matomo'},
+    'mtm_': {'cat': CookieCategory.analytics, 'prov': 'Matomo'},
+
+    // --- Hotjar ---
+    '_hjSession_': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    '_hjSessionUser_': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    '_hjIncludedInSample': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    '_hjAbsoluteSessionInProgress': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Hotjar'
+    },
+
+    // --- Shopify ---
+    '_s_id': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
+    '_s_session': {'cat': CookieCategory.essential, 'prov': 'Shopify'},
+    '_shopify_s': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
+    '_shopify_y': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
+    'cart': {'cat': CookieCategory.essential, 'prov': 'Shopify'},
+    'cart_sig': {'cat': CookieCategory.essential, 'prov': 'Shopify'},
+    'keep_alive': {'cat': CookieCategory.essential, 'prov': 'Shopify'},
+
+    // --- Segment ---
+    'ajs_anonymous_id': {'cat': CookieCategory.analytics, 'prov': 'Segment'},
+    'ajs_user_id': {'cat': CookieCategory.analytics, 'prov': 'Segment'},
+
     // --- Snowplow ---
     '_sp_': {'cat': CookieCategory.analytics, 'prov': 'Snowplow'},
 
-    // --- CookieHub ---
+    // --- CookieHub / Consent ---
     'cookiehub': {'cat': CookieCategory.essential, 'prov': 'CookieHub'},
+    'OptanonConsent': {'cat': CookieCategory.essential, 'prov': 'OneTrust'},
+    'OptanonAlertBoxClosed': {
+      'cat': CookieCategory.essential,
+      'prov': 'OneTrust'
+    },
 
     // --- Amazon / AWS ---
     'aws-target-visitor-id': {'cat': CookieCategory.analytics, 'prov': 'AWS'},
@@ -140,9 +185,11 @@ class CookieUtils {
     '_tiktok_headers': {'cat': CookieCategory.functional, 'prov': 'TikTok'},
 
     // --- Advertising & Tracking (General) ---
+    '__qca': {'cat': CookieCategory.advertising, 'prov': 'Quantcast'},
     'uuid': {'cat': CookieCategory.advertising, 'prov': 'General AdTech'},
     'uuid2': {'cat': CookieCategory.advertising, 'prov': 'AppNexus'},
     'sess': {'cat': CookieCategory.advertising, 'prov': 'AppNexus'},
+    'pdomid': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
     '_cmpQcif3pcsupported': {
       'cat': CookieCategory.functional,
       'prov': 'Consent Manager'
@@ -150,10 +197,14 @@ class CookieUtils {
     'euconsent-v2': {'cat': CookieCategory.functional, 'prov': 'IAB Consent'},
 
     // --- Analytics (General) ---
-    '_hjid': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
-    '_hjIncludedInSample': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
-    '_hjSessionUser': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
     'mp_': {'cat': CookieCategory.analytics, 'prov': 'Mixpanel'},
+    'optimizelyEndUserId': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Optimizely'
+    },
+    '_ym_uid': {'cat': CookieCategory.analytics, 'prov': 'Yandex Metrica'},
+    '_ym_d': {'cat': CookieCategory.analytics, 'prov': 'Yandex Metrica'},
+    '_ym_isad': {'cat': CookieCategory.analytics, 'prov': 'Yandex Metrica'},
 
     // --- Server / CMS / Tech ---
     'eviivo': {'cat': CookieCategory.essential, 'prov': 'eviivo'},

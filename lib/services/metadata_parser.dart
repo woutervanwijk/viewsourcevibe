@@ -227,7 +227,7 @@ void _extractFromHtml(
   final iframes = doc.querySelectorAll('iframe');
   for (final iframe in iframes) {
     final src = iframe.attributes['src'];
-    if (src != null && src.isNotEmpty) {
+    if (src != null && src.isNotEmpty && src != 'about:blank') {
       final absoluteSrc = _resolveUrl(src, baseUrl);
       if (_isLocalResource(absoluteSrc, baseUrl)) {
         metadata['iframeLinks'].add(absoluteSrc);

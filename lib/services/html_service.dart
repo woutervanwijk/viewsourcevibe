@@ -3334,6 +3334,13 @@ Technical details: $e''';
     Map<String, int>? findSize(String? src) {
       if (src == null || src.isEmpty) return null;
 
+      // Special case: Data URIs or Base64 SVGs (already embedded)
+      // Extract size from the string itself if possible
+      if (src.startsWith('data:') || src.startsWith('<svg')) {
+        // Approximate byte size: length * 3/4 for base64, but length is fine for diagnostic use
+        return {'transfer': src.length, 'decoded': src.length};
+      }
+
       // Try exact match first
       var match = _resourcePerformanceData!.firstWhere(
         (r) => r['name'] == src,
@@ -3341,13 +3348,18 @@ Technical details: $e''';
       );
 
       if (match.isEmpty) {
-        // Try matching by suffix if exact URL fails
+        // Try matching by suffix if exact URL fails (handles relative vs absolute, or query params)
         try {
-          final srcName = src.split('/').last;
-          if (srcName.length > 3) {
-            match = _resourcePerformanceData!.firstWhere(
-                (r) => r['name'].toString().endsWith(srcName),
-                orElse: () => {});
+          final uri = Uri.parse(src);
+          final path = uri.path;
+          if (path.isNotEmpty) {
+            final fileName = path.split('/').last;
+            if (fileName.length > 3) {
+              match = _resourcePerformanceData!.firstWhere((r) {
+                final rName = r['name'].toString();
+                return rName.endsWith(fileName) || rName.contains(fileName);
+              }, orElse: () => {});
+            }
           }
         } catch (e) {
           // ignore
@@ -3846,6 +3858,11 @@ Technical details: $e''';
 
     // Recalculate totals based on new data
     _recalculatePageWeight();
+
+    // Re-enrich metadata so the Media/Services tabs update with the new sizes
+    final baseUrl = _currentFile?.isUrl == true ? _currentFile!.path : '';
+    _enrichMetadataWithSizes(baseUrl);
+    notifyListeners();
   }
 
   Future<int> _fetchResourceSize(String url) async {
