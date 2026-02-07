@@ -69,6 +69,8 @@ class HtmlService with ChangeNotifier {
   Map<String, dynamic>? _lastPageWeight; // Store weights: transfer and decoded
   List<Map<String, dynamic>>?
       _resourcePerformanceData; // Store detailed resource data
+  bool _isExtractingMetadata = false;
+  String _lastBrowserCookies = '';
 
   double _webViewLoadingProgress = 0.0;
   double get webViewLoadingProgress => _webViewLoadingProgress;
@@ -1358,7 +1360,8 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  Future<void> loadFile(HtmlFile file, {bool clearProbe = true}) async {
+  Future<void> loadFile(HtmlFile file,
+      {bool clearProbe = true, bool isPartial = false}) async {
     _isBeautifyEnabled = false; // Reset beautify mode on new file
 
     // Save current file to navigation stack if we are not going back
@@ -1486,7 +1489,7 @@ class HtmlService with ChangeNotifier {
             _currentFile!.name.endsWith('.html') ||
             _currentFile!.name.endsWith('.xml') ||
             _currentFile!.name.endsWith('.xhtml'))) {
-      _extractMetadata();
+      _extractMetadata(isPartial: isPartial);
     } else {
       // If content type changed to something without metadata, clear it
       // But don't clear it just because we are loading - wait for detection
@@ -1968,6 +1971,7 @@ Technical details: $e''';
     _currentlyProbingUrl = url;
     _probeResult = null; // Reset previous results immediately
     _probeError = null;
+    _lastBrowserCookies = ''; // Reset browser cookies on new probe
     notifyListeners();
     _autoSave();
     try {
@@ -2076,9 +2080,10 @@ Technical details: $e''';
       // Cookies
       final setCookie = response.headers['set-cookie'];
       final List<String> cookies =
-          setCookie != null ? setCookie.split(RegExp(r',(?=[^;]+?=)')) : [];
+          setCookie != null ? [setCookie] : []; // Basic handling for now
 
-      final result = {
+      // Construct the result, ONLY from the probe
+      _probeResult = {
         'statusCode': response.statusCode,
         'reasonPhrase': response.reasonPhrase,
         'headers': normalizedHeaders,
@@ -2089,7 +2094,12 @@ Technical details: $e''';
         'ipAddress': ipAddress,
         'security': securityHeaders,
         'cookies': cookies,
+        'analyzedCookies': <Map<String,
+            dynamic>>[], // Will be filled by _updateAnalyzedCookies
       };
+
+      // Update cookies with any browser cookies we might already have
+      _updateAnalyzedCookies();
 
       // Extract redirect location if present
       if (response.isRedirect) {
@@ -2098,15 +2108,15 @@ Technical details: $e''';
           // Resolve relative URLs
           final uri = Uri.parse(targetUrl);
           final redirectUri = uri.resolve(location);
-          result['redirectLocation'] = redirectUri.toString();
+          _probeResult!['redirectLocation'] = redirectUri.toString();
         }
       }
 
       // Only update state if this probe is still relevant
       if (_currentlyProbingUrl == url) {
-        _probeResult = result;
+        // _probeResult is already set above
       }
-      return result;
+      return _probeResult!;
     } catch (e) {
       debugPrint('Error probing URL: $e');
       if (_currentlyProbingUrl == url) {
@@ -3295,8 +3305,10 @@ Technical details: $e''';
   }
 
   /// Extract metadata from the current file content
-  Future<void> _extractMetadata() async {
-    if (_currentFile == null) return;
+  Future<void> _extractMetadata({bool isPartial = false}) async {
+    if (_currentFile == null || _isExtractingMetadata) return;
+
+    _isExtractingMetadata = true;
     final html = _currentFile!.content;
     final baseUrl = _currentFile!.isUrl ? _currentFile!.path : '';
 
@@ -3321,7 +3333,42 @@ Technical details: $e''';
     } catch (e, stack) {
       debugPrint('Error extracting metadata in isolate: $e\n$stack');
       _pageMetadata = null;
+    } finally {
+      _isExtractingMetadata = false;
+      notifyListeners();
     }
+  }
+
+  /// Helper to update analyzed cookies by merging server (probe) and browser (webview) cookies
+  void _updateAnalyzedCookies() {
+    // We need at least one source of cookies to proceed, but we might have empty cookies from both
+    // if so, we still want to show an empty list properly if we have a probe result.
+
+    // If we haven't probed yet, we can't really "merge" into the probe result
+    // But we might want to show browser cookies anyway?
+    // The requirement says "The cookies combine the results of the browser and the separate probe".
+    // If no probe result exists, we can create a dummy one or wait.
+    // Let's create a placeholder probe result if it doesn't exist, so Cookies tab works.
+    _probeResult ??= {
+      'analyzedCookies': <Map<String, dynamic>>[],
+      'cookies': <String>[],
+    };
+
+    final List<String> serverCookies =
+        (_probeResult!['cookies'] as List?)?.cast<String>() ?? [];
+
+    final analyzed =
+        CookieUtils.mergeCookies(serverCookies, _lastBrowserCookies);
+
+    _probeResult!['analyzedCookies'] = analyzed
+        .map((c) => {
+              'name': c.name,
+              'value': c.value,
+              'category': c.category.toString().split('.').last,
+              'provider': c.provider,
+              'source': c.source
+            })
+        .toList();
 
     notifyListeners();
   }
@@ -3510,7 +3557,7 @@ Technical details: $e''';
     return html;
   }
 
-  Future<void> syncWebViewState(String url) async {
+  Future<void> syncWebViewState(String url, {bool isPartial = false}) async {
     if (activeWebViewController == null) return;
 
     // Update URL bar immediately
@@ -3524,14 +3571,17 @@ Technical details: $e''';
       // which is handled by onPageStarted/onUrlChange in BrowserView calling updateWebViewUrl
     }
 
-    // Clear loading flags ALWAYS when sync happens (page finished)
-    if (_isWebViewLoading || _isLoading) {
-      _isWebViewLoading = false;
-      _isLoading = false;
-      notifyListeners();
+    // Clear loading flags ALWAYS when sync happens (page finished), UNLESS it's a partial sync
+    if (!isPartial) {
+      if (_isWebViewLoading || _isLoading) {
+        _isWebViewLoading = false;
+        _isLoading = false;
+        notifyListeners();
+      }
     }
 
     // Trigger probe for the new URL if not already probing it or if it's different from the result
+    // Independent Probe: This ensures we have server-side data for Probe/Security tabs
     if (_currentlyProbingUrl != url && _probeResult?['finalUrl'] != url) {
       probeUrl(url).catchError((e) {
         debugPrint('Error probing synced URL: $e');
@@ -3633,33 +3683,8 @@ Technical details: $e''';
                 weightMap['cookies']?.toString() ?? '';
             debugPrint('DEBUG: Browser cookies found: "$browserCookies"');
 
-            // Merge and Analyze cookies if EITHER Source has data
-            if (_probeResult != null) {
-              final List<String> serverCookies =
-                  (_probeResult!['cookies'] as List?)?.cast<String>() ?? [];
-              debugPrint(
-                  'DEBUG: Server cookies found: ${serverCookies.length}');
-
-              if (browserCookies.isNotEmpty || serverCookies.isNotEmpty) {
-                final analyzed =
-                    CookieUtils.mergeCookies(serverCookies, browserCookies);
-                debugPrint('DEBUG: Merged cookies count: ${analyzed.length}');
-
-                _probeResult!['analyzedCookies'] = analyzed
-                    .map((c) => {
-                          'name': c.name,
-                          'value': c.value,
-                          'category': c.category
-                              .toString()
-                              .split('.')
-                              .last, // 'analytics', 'essential' etc
-                          'provider': c.provider,
-                          'source': c.source
-                        })
-                    .toList();
-                notifyListeners();
-              }
-            }
+            _lastBrowserCookies = browserCookies;
+            _updateAnalyzedCookies();
 
             // Parse detailed resource data
             if (weightMap['list'] != null && weightMap['list'] is List) {
@@ -3811,7 +3836,7 @@ Technical details: $e''';
       );
 
       // Update the app state effectively
-      await loadFile(file, clearProbe: false);
+      await loadFile(file, clearProbe: false, isPartial: isPartial);
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');
     }

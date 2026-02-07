@@ -30,7 +30,7 @@ class _BrowserViewState extends State<BrowserView> {
   late final WebViewController? _controller;
   final String viewID = 'browser-preview-view';
   String? _currentRssUrl;
-  bool _hasSyncedEarly = false;
+  int _syncStage = 0; // 0: none, 1: 30%, 2: 60%, 3: 90%
 
   @override
   void initState() {
@@ -48,15 +48,24 @@ class _BrowserViewState extends State<BrowserView> {
                     Provider.of<HtmlService>(context, listen: false);
                 htmlService.updateWebViewLoadingProgress(progress / 100.0);
 
-                // Early Sync: If we've reached a significant threshold (e.g. 70%),
-                // and haven't synced yet, try to pull the HTML content early.
-                if (progress >= 70 && !_hasSyncedEarly) {
-                  _hasSyncedEarly = true;
-                  _controller?.currentUrl().then((url) {
-                    if (url != null && url != 'about:blank') {
-                      htmlService.syncWebViewState(url);
-                    }
-                  }).ignore();
+                // Multi-Stage Early Sync:
+                // We trigger partial syncs at several thresholds to populate tabs progressively.
+                final url = htmlService.webViewLoadingUrl;
+                if (url != null && url != 'about:blank') {
+                  if (progress >= 30 && progress < 60 && _syncStage < 1) {
+                    _syncStage = 1;
+                    htmlService.syncWebViewState(url, isPartial: true);
+                  } else if (progress >= 60 &&
+                      progress < 90 &&
+                      _syncStage < 2) {
+                    _syncStage = 2;
+                    htmlService.syncWebViewState(url, isPartial: true);
+                  } else if (progress >= 90 &&
+                      progress < 100 &&
+                      _syncStage < 3) {
+                    _syncStage = 3;
+                    htmlService.syncWebViewState(url, isPartial: true);
+                  }
                 }
               }
             },
@@ -65,7 +74,7 @@ class _BrowserViewState extends State<BrowserView> {
                 // Ignore internal or blank URLs for UI updates
                 if (url == 'about:blank' || url.startsWith('data:')) return;
 
-                _hasSyncedEarly = false;
+                _syncStage = 0;
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
                 htmlService.updateWebViewUrl(url);
@@ -92,8 +101,9 @@ class _BrowserViewState extends State<BrowserView> {
                 // Use syncWebViewState to update everything (content, metadata, probe)
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
-                htmlService.syncWebViewState(url);
+                htmlService.syncWebViewState(url, isPartial: false);
                 htmlService.updateWebViewLoadingProgress(1.0);
+                _syncStage = 0;
               }
             },
             onUrlChange: (UrlChange change) {

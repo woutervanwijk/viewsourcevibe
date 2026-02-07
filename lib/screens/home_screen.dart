@@ -165,11 +165,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
         if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
         if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
+        if (showServerTabs) _buildTab(Icons.cookie_outlined, 'Cookies'),
         if (showServerTabs) ...[
           _buildTab(Icons.network_check, 'Probe'),
           _buildTab(Icons.list_alt, 'Headers'),
           _buildTab(Icons.security, 'Security'),
-          _buildTab(Icons.cookie_outlined, 'Cookies'),
         ],
       ];
     }
@@ -181,11 +181,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
       if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
       if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
+      if (showServerTabs) _buildTab(Icons.cookie_outlined, 'Cookies'),
       if (showServerTabs) ...[
         _buildTab(Icons.network_check, 'Probe'),
         _buildTab(Icons.list_alt, 'Headers'),
         _buildTab(Icons.security, 'Security'),
-        _buildTab(Icons.cookie_outlined, 'Cookies'),
       ],
     ];
   }
@@ -244,6 +244,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           KeepAliveWrapper(
               child: _buildScrollableRefreshable(const MediaView(),
                   hasScrollBody: false)),
+        if (showServerTabs)
+          KeepAliveWrapper(
+              child: _buildScrollableRefreshable(const ProbeCookiesView())),
         if (showServerTabs) ...[
           KeepAliveWrapper(
               child: _buildScrollableRefreshable(const ProbeGeneralView())),
@@ -251,8 +254,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: _buildScrollableRefreshable(const ProbeHeadersView())),
           KeepAliveWrapper(
               child: _buildScrollableRefreshable(const ProbeSecurityView())),
-          KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const ProbeCookiesView())),
         ],
       ];
     }
@@ -283,22 +284,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: _buildScrollableRefreshable(const MediaView(),
                 hasScrollBody: false)),
 
-      // 6. Probe: General
+      // 6. Probe: Cookies
+      if (showServerTabs)
+        KeepAliveWrapper(
+            child: _buildScrollableRefreshable(const ProbeCookiesView())),
+
+      // 7. Probe: General
       if (showServerTabs) ...[
         KeepAliveWrapper(
             child: _buildScrollableRefreshable(const ProbeGeneralView())),
 
-        // 7. Probe: Headers
+        // 8. Probe: Headers
         KeepAliveWrapper(
             child: _buildScrollableRefreshable(const ProbeHeadersView())),
 
-        // 8. Probe: Security
+        // 9. Probe: Security
         KeepAliveWrapper(
             child: _buildScrollableRefreshable(const ProbeSecurityView())),
-
-        // 9. Probe: Cookies
-        KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const ProbeCookiesView())),
       ],
     ];
   }
