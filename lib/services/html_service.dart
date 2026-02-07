@@ -233,7 +233,7 @@ class HtmlService with ChangeNotifier {
   bool get isBrowserSupported {
     if (isSvg) return true;
     if (isMedia) return true;
-    if (_isStrictXml) return false;
+    if (_isStrictXml) return true;
     if (_currentFile?.isUrl ?? false) return true;
     return isHtml;
   }
