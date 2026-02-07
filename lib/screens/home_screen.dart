@@ -116,8 +116,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Widget _buildRefreshable(Widget child) {
+  Widget _buildRefreshable(Widget child, String tag) {
     return TabPageWrapper(
+      tag: tag,
       child: RefreshIndicator(
         onRefresh: _handleRefresh,
         child: child,
@@ -125,9 +126,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildScrollableRefreshable(Widget child,
+  Widget _buildScrollableRefreshable(Widget child, String tag,
       {bool hasScrollBody = true}) {
     return TabPageWrapper(
+      tag: tag,
       child: RefreshIndicator(
         onRefresh: _handleRefresh,
         child: CustomScrollView(
@@ -203,13 +205,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               FileViewer(
                 file: currentFile,
               ),
+              'source',
             )
           : _buildScrollableRefreshable(
               const Center(child: Text('No File')),
+              'no-file',
             ),
     );
 
     final browserView = TabPageWrapper(
+      tag: 'browser',
       isBrowserTab: true,
       child: KeepAliveWrapper(
         child: _buildRefreshable(
@@ -223,6 +228,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   },
                 )
               : const Center(child: Text('Not available for this file')),
+          'browser-content',
         ),
       ),
     );
@@ -231,29 +237,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return [
         sourceView,
         if (isHtmlOrXml)
-          KeepAliveWrapper(child: _buildRefreshable(const DomTreeView())),
+          KeepAliveWrapper(
+              child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
         if (showMetadataTabs)
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const MetadataView(),
+              child: _buildScrollableRefreshable(
+                  const MetadataView(), 'metadata',
                   hasScrollBody: false)),
         if (showMetadataTabs)
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const ServicesView(),
+              child: _buildScrollableRefreshable(
+                  const ServicesView(), 'services',
                   hasScrollBody: false)),
         if (showMetadataTabs)
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const MediaView(),
+              child: _buildScrollableRefreshable(const MediaView(), 'media',
                   hasScrollBody: false)),
         if (showServerTabs)
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const ProbeCookiesView())),
+              child: _buildScrollableRefreshable(
+                  const ProbeCookiesView(), 'cookies')),
         if (showServerTabs) ...[
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const ProbeGeneralView())),
+              child: _buildScrollableRefreshable(
+                  const ProbeGeneralView(), 'probe')),
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const ProbeHeadersView())),
+              child: _buildScrollableRefreshable(
+                  const ProbeHeadersView(), 'headers')),
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const ProbeSecurityView())),
+              child: _buildScrollableRefreshable(
+                  const ProbeSecurityView(), 'security')),
         ],
       ];
     }
@@ -264,43 +277,48 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       // 3. DOM Tree (Conditional)
       if (isHtmlOrXml)
-        KeepAliveWrapper(child: _buildRefreshable(const DomTreeView())),
+        KeepAliveWrapper(
+            child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
 
       // 3. Metadata (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const MetadataView(),
+            child: _buildScrollableRefreshable(const MetadataView(), 'metadata',
                 hasScrollBody: false)),
 
       // 4. Services (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const ServicesView(),
+            child: _buildScrollableRefreshable(const ServicesView(), 'services',
                 hasScrollBody: false)),
 
       // 5. Media (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const MediaView(),
+            child: _buildScrollableRefreshable(const MediaView(), 'media',
                 hasScrollBody: false)),
 
       // 6. Probe: Cookies
       if (showServerTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const ProbeCookiesView())),
+            child: _buildScrollableRefreshable(
+                const ProbeCookiesView(), 'cookies')),
 
       // 7. Probe: General
       if (showServerTabs) ...[
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const ProbeGeneralView())),
+            child:
+                _buildScrollableRefreshable(const ProbeGeneralView(), 'probe')),
 
         // 8. Probe: Headers
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const ProbeHeadersView())),
+            child: _buildScrollableRefreshable(
+                const ProbeHeadersView(), 'headers')),
 
         // 9. Probe: Security
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const ProbeSecurityView())),
+            child: _buildScrollableRefreshable(
+                const ProbeSecurityView(), 'security')),
       ],
     ];
   }
@@ -454,8 +472,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 class TabPageWrapper extends StatefulWidget {
   final Widget child;
   final bool isBrowserTab;
-  const TabPageWrapper(
-      {super.key, required this.child, this.isBrowserTab = false});
+  final String tag;
+  const TabPageWrapper({
+    super.key,
+    required this.child,
+    required this.tag,
+    this.isBrowserTab = false,
+  });
 
   @override
   State<TabPageWrapper> createState() => _TabPageWrapperState();
@@ -533,6 +556,7 @@ class _TabPageWrapperState extends State<TabPageWrapper> {
               right: 16,
               bottom: 16,
               child: FloatingActionButton(
+                heroTag: 'scroll-to-top-${widget.tag}',
                 mini: true,
                 onPressed: _scrollToTop,
                 backgroundColor: Theme.of(context).colorScheme.primaryContainer,

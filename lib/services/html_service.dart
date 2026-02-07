@@ -345,10 +345,8 @@ class HtmlService with ChangeNotifier {
     _pendingUrl = url;
     _requestedTabIndex = switchToTab;
     _isLoading = true;
+    _isWebViewLoading = false; // Reset webview loading state on new navigation
 
-    // Clear state
-    _probeResult = null;
-    _probeError = null;
     // Clear state
     _probeResult = null;
     _probeError = null;
@@ -3661,7 +3659,7 @@ Technical details: $e''';
       try {
         final weightRaw = await activeWebViewController!
             .runJavaScriptReturningResult(
-                '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; for(var i=0; i<r.length; i++) { tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: r[i].name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();');
+                '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; var seen=new Set(); for(var i=0; i<r.length; i++) { var name=r[i].name; tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); seen.add(name); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n && !seen.has(n.name)) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else if(!n && !seen.has(document.location.href)) { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();');
 
         String jsonStr = '';
         if (weightRaw is String) {
@@ -3825,6 +3823,11 @@ Technical details: $e''';
       await loadFile(file, clearProbe: false, isPartial: isPartial);
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');
+    } finally {
+      if (!isPartial) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -3871,19 +3874,94 @@ Technical details: $e''';
     // _recalculatePageWeight(); // This method might not exist, let's use the explicit logic
 
     // Recalculate directly to be safe
-    int totalTransferSize = 0;
-    int totalDecodedSize = 0;
-    for (var resource in _resourcePerformanceData!) {
-      totalTransferSize += (resource['transfer'] as num? ?? 0).toInt();
-      totalDecodedSize += (resource['decoded'] as num? ?? 0).toInt();
+    int scriptCount = 0, scriptTx = 0, scriptDec = 0;
+    int cssCount = 0, cssTx = 0, cssDec = 0;
+    int imgCount = 0, imgTx = 0, imgDec = 0;
+    int htmlCount = 0, htmlTx = 0, htmlDec = 0;
+    int otherCount = 0, otherTx = 0, otherDec = 0;
+
+    final url = _currentFile?.path.toLowerCase() ?? '';
+
+    // Use a Map to unique-ify by name if duplicates exist
+    final Map<String, Map<String, dynamic>> uniqueResources = {};
+    for (var r in _resourcePerformanceData!) {
+      final name = r['name'] as String? ?? '';
+      if (name.isNotEmpty) {
+        uniqueResources[name] = r;
+      }
     }
+
+    // Update the list with unique entries
+    _resourcePerformanceData = uniqueResources.values.toList();
+
+    for (var r in _resourcePerformanceData!) {
+      final String name = (r['name'] as String? ?? '').toLowerCase();
+      final int mTx = (r['transfer'] as num? ?? 0).toInt();
+      final int mDec = (r['decoded'] as num? ?? 0).toInt();
+
+      if (name.endsWith('.js') ||
+          name.contains('.js?') ||
+          name.contains('script')) {
+        scriptCount++;
+        scriptTx += mTx;
+        scriptDec += mDec;
+      } else if (name.endsWith('.css') ||
+          name.contains('.css?') ||
+          name.contains('style')) {
+        cssCount++;
+        cssTx += mTx;
+        cssDec += mDec;
+      } else if (name.endsWith('.png') ||
+          name.endsWith('.jpg') ||
+          name.endsWith('.jpeg') ||
+          name.endsWith('.gif') ||
+          name.endsWith('.webp') ||
+          name.endsWith('.svg') ||
+          name.endsWith('.ico') ||
+          name.contains('image')) {
+        imgCount++;
+        imgTx += mTx;
+        imgDec += mDec;
+      } else if (name.endsWith('.html') ||
+          name.endsWith('.htm') ||
+          name.contains('document') ||
+          (!name.contains('.') && name.startsWith('http')) ||
+          name == url) {
+        htmlCount++;
+        htmlTx += mTx;
+        htmlDec += mDec;
+      } else {
+        otherCount++;
+        otherTx += mTx;
+        otherDec += mDec;
+      }
+    }
+
+    // Mathematical consistency: Total = sum of parts
+    final totalTransferSize = scriptTx + cssTx + imgTx + htmlTx + otherTx;
+    final totalDecodedSize = scriptDec + cssDec + imgDec + htmlDec + otherDec;
+
     _lastPageWeight = {
       'transfer': totalTransferSize,
       'decoded': totalDecodedSize,
       'resources': _resourcePerformanceData,
+      'breakdown': {
+        'scripts': {
+          'count': scriptCount,
+          'transfer': scriptTx,
+          'decoded': scriptDec
+        },
+        'css': {'count': cssCount, 'transfer': cssTx, 'decoded': cssDec},
+        'images': {'count': imgCount, 'transfer': imgTx, 'decoded': imgDec},
+        'html': {'count': htmlCount, 'transfer': htmlTx, 'decoded': htmlDec},
+        'other': {
+          'count': otherCount,
+          'transfer': otherTx,
+          'decoded': otherDec
+        },
+      }
     };
 
-    // Also update the breakdown if needed, but for now let's just fix the crash
     // Update the parent metadata object if it exists
     if (_pageMetadata != null) {
       _pageMetadata!['pageWeight'] = _lastPageWeight;

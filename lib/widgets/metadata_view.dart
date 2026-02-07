@@ -141,8 +141,6 @@ class MetadataView extends StatelessWidget {
                           color: Colors.grey[600],
                         ),
                   ),
-                  const SizedBox(height: 12),
-                  _buildPageWeightSection(context, metadata['pageWeight']),
                 ],
               ),
             ),
@@ -172,6 +170,9 @@ class MetadataView extends StatelessWidget {
             ),
           ),
         ],
+        const SizedBox(height: 24),
+        _buildSectionTitle(context, 'Page Weight'),
+        _buildPageWeightSection(context, metadata['pageWeight']),
         const SizedBox(height: 24),
         _buildSectionTitle(context, 'Basic Information'),
         _buildMapSection(context, {
@@ -422,81 +423,75 @@ class MetadataView extends StatelessWidget {
   Widget _buildPageWeightSection(
       BuildContext context, Map<String, dynamic>? weight) {
     if (weight == null) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Theme.of(context)
-              .colorScheme
-              .surfaceContainerHighest
-              .withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+      return Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(
-          children: [
-            Icon(Icons.info_outline,
-                size: 20, color: Theme.of(context).colorScheme.secondary),
-            const SizedBox(height: 8),
-            Text(
-              'Page size not available because the browser is not loaded.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontStyle: FontStyle.italic,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Icon(Icons.info_outline,
+                  size: 24, color: Theme.of(context).colorScheme.secondary),
+              const SizedBox(height: 8),
+              Text(
+                'Page size not available because the browser is not loaded.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
 
     final breakdown = weight['breakdown'] as Map<String, dynamic>?;
 
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest
-            .withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Total Page Size',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+          ListTile(
+            title: Text(
+              'Total Page Size',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              Text(
-                FormatUtils.formatBytes(weight['decoded'] as int? ?? 0),
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace',
-                ),
+            ),
+            subtitle: Text(
+              'Transferred: ${FormatUtils.formatBytes(weight['transfer'] as int? ?? 0)}',
+              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+            ),
+            trailing: Text(
+              FormatUtils.formatBytes(weight['decoded'] as int? ?? 0),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
               ),
-            ],
+            ),
+            dense: true,
           ),
           if (breakdown != null) ...[
-            const Divider(height: 12, thickness: 0.5),
-            _buildWeightRow(context, 'Scripts', breakdown['scripts']),
-            _buildWeightRow(context, 'CSS', breakdown['css']),
-            _buildWeightRow(context, 'Images', breakdown['images']),
-            _buildWeightRow(context, 'HTML', breakdown['html']),
-            _buildWeightRow(context, 'Other', breakdown['other']),
+            const Divider(height: 1),
+            _buildWeightRow(context, 'External JS', breakdown['scripts']),
+            _buildWeightRow(context, 'CSS Files', breakdown['css']),
+            _buildWeightRow(context, 'Images/Media', breakdown['images']),
+            _buildWeightRow(context, 'HTML/Content', breakdown['html']),
+            _buildWeightRow(context, 'Misc. Resources', breakdown['other']),
           ],
         ],
       ),
@@ -509,21 +504,21 @@ class MetadataView extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            '$label (${data['count']})',
-            style: const TextStyle(fontSize: 12),
-          ),
-          Text(
-            FormatUtils.formatBytes(data['decoded'] as int? ?? 0),
-            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-          ),
-        ],
+    return ListTile(
+      title: Text(
+        '$label (${data['count']})',
+        style: const TextStyle(fontSize: 12),
       ),
+      subtitle: Text(
+        'Transferred: ${FormatUtils.formatBytes(data['transfer'] as int? ?? 0)}',
+        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+      ),
+      trailing: Text(
+        FormatUtils.formatBytes(data['decoded'] as int? ?? 0),
+        style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+      ),
+      dense: true,
+      visualDensity: VisualDensity.compact,
     );
   }
 }
