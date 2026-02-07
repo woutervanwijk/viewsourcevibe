@@ -79,4 +79,22 @@ class FormatUtils {
     }
     return buffer.toString().split('').reversed.join('');
   }
+
+  /// Formats bytes into human readable string (KB, MB, etc)
+  static String formatBytes(int bytes) {
+    if (bytes <= 0) return "0 b";
+    if (bytes < 1024) return "$bytes b";
+
+    const suffixes = ["b", "kb", "mb", "gb", "tb", "pb", "eb", "zb", "yb"];
+    double value = bytes.toDouble();
+    int suffixIndex = 0;
+
+    while (value >= 1024 && suffixIndex < suffixes.length - 1) {
+      value /= 1024;
+      suffixIndex++;
+    }
+
+    // Kilobytes and above show 1 decimal place
+    return "${value.toStringAsFixed(1)} ${suffixes[suffixIndex]}";
+  }
 }

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
+import '../utils/format_utils.dart';
 
 class MediaView extends StatelessWidget {
   const MediaView({super.key});
@@ -111,18 +112,6 @@ class MediaView extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    const suffixes = ['B', 'KB', 'MB', 'GB'];
-    var i = 0;
-    double size = bytes.toDouble();
-    while (size >= 1024 && i < suffixes.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    return '${size.toStringAsFixed(1)}${suffixes[i]}';
   }
 
   Widget _buildSectionTitle(BuildContext context, String title) {
@@ -247,7 +236,8 @@ class MediaView extends StatelessWidget {
                       (image['size']['decoded'] ?? 0) > 0) ...[
                     const SizedBox(height: 4),
                     Text(
-                      _formatBytes(image['size']['decoded']),
+                      FormatUtils.formatBytes(
+                          image['size']['decoded'] as int? ?? 0),
                       style: TextStyle(
                         fontSize: 9,
                         color: Theme.of(context).colorScheme.primary,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:html_unescape/html_unescape.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import '../utils/format_utils.dart';
 
 class MetadataView extends StatelessWidget {
   const MetadataView({super.key});
@@ -81,18 +82,6 @@ class MetadataView extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    const suffixes = ['B', 'KB', 'MB', 'GB'];
-    var i = 0;
-    double size = bytes.toDouble();
-    while (size >= 1024 && i < suffixes.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    return '${size.toStringAsFixed(2)} ${suffixes[i]}';
   }
 
   Widget _buildHeaderSection(
@@ -407,7 +396,7 @@ class MetadataView extends StatelessWidget {
               ),
               subtitle: size != null
                   ? Text(
-                      _formatBytes(size['decoded']),
+                      FormatUtils.formatBytes(size['decoded'] as int? ?? 0),
                       style: TextStyle(
                         fontSize: 10,
                         color: Theme.of(context).colorScheme.primary,
@@ -492,7 +481,7 @@ class MetadataView extends StatelessWidget {
                 ),
               ),
               Text(
-                _formatBytes(weight['decoded']),
+                FormatUtils.formatBytes(weight['decoded'] as int? ?? 0),
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -530,7 +519,7 @@ class MetadataView extends StatelessWidget {
             style: const TextStyle(fontSize: 12),
           ),
           Text(
-            _formatBytes(data['decoded']),
+            FormatUtils.formatBytes(data['decoded'] as int? ?? 0),
             style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
           ),
         ],

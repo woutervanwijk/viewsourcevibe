@@ -650,6 +650,7 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
     'Advertising': <String>[],
     'Cloud, CDN & Infrastructure': <String>[],
     'Social & Widgets': <String>[],
+    'Privacy & Consent Management': <String>[],
   };
 
   final patterns = {
@@ -767,7 +768,7 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
   patterns.forEach((category, items) {
     items.forEach((name, pattern) {
       if (_hasPattern(html, pattern)) {
-        services[category]!.add(name);
+        services.putIfAbsent(category, () => <String>[]).add(name);
       }
     });
   });

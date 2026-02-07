@@ -116,6 +116,25 @@ class _BrowserViewState extends State<BrowserView> {
                     .updateWebViewUrl(change.url!);
               }
             },
+            onNavigationRequest: (NavigationRequest request) {
+              if (request.url == 'about:blank' ||
+                  request.url.startsWith('data:')) {
+                return NavigationDecision.navigate;
+              }
+
+              final htmlService =
+                  Provider.of<HtmlService>(context, listen: false);
+
+              // If it's the URL we are currently loading (set by loadFromUrl), allow it
+              if (request.url == htmlService.webViewLoadingUrl) {
+                return NavigationDecision.navigate;
+              }
+
+              // Otherwise, intercept and run through our robust loadFromUrl flow
+              // This ensures probe, reset, and proper mode (Browser/Fetch) handling
+              htmlService.loadFromUrl(request.url);
+              return NavigationDecision.prevent;
+            },
             onWebResourceError: (WebResourceError error) {
               if (mounted) {
                 // If the main frame failed, stop loading indicator
@@ -220,7 +239,9 @@ class _BrowserViewState extends State<BrowserView> {
       // Use temporary internal RSS rendering if needed
       final html = await RssTemplateService.convertRssToHtml(
           widget.file.content, targetUrl);
-      _controller.loadHtmlString(html, baseUrl: targetUrl);
+      if (html.isNotEmpty) {
+        _controller.loadHtmlString(html, baseUrl: targetUrl);
+      }
       _currentRssUrl = targetUrl;
     } else {
       // If not RSS, or RSS but content is empty, proceed with normal loading
@@ -229,8 +250,12 @@ class _BrowserViewState extends State<BrowserView> {
 
       if (targetUrl.startsWith('http') && !targetUrl.contains('about:blank')) {
         await _controller.loadRequest(Uri.parse(targetUrl));
-      } else {
+      } else if (widget.file.content.isNotEmpty) {
         await _controller.loadHtmlString(widget.file.content,
+            baseUrl: widget.file.path);
+      } else {
+        // Safe fallback for empty content to avoid assertion crash
+        await _controller.loadHtmlString('<html><body></body></html>',
             baseUrl: widget.file.path);
       }
     }

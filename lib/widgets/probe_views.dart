@@ -70,16 +70,97 @@ class ProbeGeneralView extends ProbeViewBase {
   const ProbeGeneralView({super.key});
 
   @override
+  @override
   Widget buildContent(BuildContext context, HtmlService htmlService,
       Map<String, dynamic> result) {
+    // Check if we have browser probe results
+    final browserResult = htmlService.browserProbeResult;
+    final hasBrowserProbe = browserResult != null && browserResult.isNotEmpty;
+
     return ListView(
       primary: false,
       padding: const EdgeInsets.all(16),
       children: [
+        if (hasBrowserProbe) ...[
+          // Section Header for CURL Probe
+          Text(
+            'Curl Probe (Server-Side)',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+        ],
         _buildStatusCard(context, htmlService, result),
         const SizedBox(height: 16),
         _buildNetworkInfoCard(context, result),
+        if (hasBrowserProbe) ...[
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 16),
+
+          // Section Header for Browser Probe
+          Text(
+            'Browser Probe (WebView-Side)',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.secondary,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+
+          _buildBrowserProbeCard(context, browserResult),
+        ],
       ],
+    );
+  }
+
+  Widget _buildBrowserProbeCard(
+      BuildContext context, Map<String, dynamic> result) {
+    final pageWeight = result['pageWeight'] as Map<String, dynamic>? ?? {};
+    final totalTx = pageWeight['totalTransfer'] as int? ?? 0;
+    final totalDec = pageWeight['totalDecoded'] as int? ?? 0;
+    final mainDocTx = pageWeight['mainDocumentTransfer'] as int? ?? 0;
+    final mainDocDec = pageWeight['mainDocumentDecoded'] as int? ?? 0;
+    final resourceCount = result['resourceCount'] as int? ?? 0;
+    final title = result['title'] as String? ?? 'N/A';
+    final url = result['url'] as String? ?? 'N/A';
+    final statusCode = result['serverStatusCode'];
+
+    return Card(
+      elevation: 0,
+      color: Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.3),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDetailRow('Title', title),
+            _buildDetailRow('Effective URL', url),
+            if (statusCode != null)
+              _buildDetailRow('HTTP Status', statusCode.toString()),
+            const SizedBox(height: 8),
+            const Divider(),
+            const SizedBox(height: 8),
+            _buildDetailRow(
+                'Document Size (Tx)', FormatUtils.formatBytes(mainDocTx)),
+            _buildDetailRow(
+                'Document Size (Dec)', FormatUtils.formatBytes(mainDocDec)),
+            const Divider(),
+            _buildDetailRow('Total Resources', '$resourceCount requests'),
+            _buildDetailRow('Total Transfer', FormatUtils.formatBytes(totalTx)),
+            _buildDetailRow('Total Decoded', FormatUtils.formatBytes(totalDec)),
+          ],
+        ),
+      ),
     );
   }
 

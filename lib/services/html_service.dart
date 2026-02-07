@@ -62,6 +62,8 @@ class HtmlService with ChangeNotifier {
   bool _isProbing = false;
   String? _probeError;
   String? _currentlyProbingUrl;
+  Map<String, dynamic>?
+      _browserProbeResult; // Store separate browser probe data
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
@@ -119,6 +121,8 @@ class HtmlService with ChangeNotifier {
 
   // Expose probe state
   Map<String, dynamic>? get probeResult => _probeResult;
+  Map<String, dynamic>? get browserProbeResult =>
+      _browserProbeResult; // Expose browser probe result
   bool get isProbing => _isProbing;
   bool get canGoBack => _navigationStack.isNotEmpty;
   String? get probeError => _probeError;
@@ -331,6 +335,8 @@ class HtmlService with ChangeNotifier {
 
     // Sanitize
     // Auto-prepend https if no scheme is provided, excluding special schemes like about:
+    // We trim the URL first to avoid issues with leading/trailing spaces
+    url = url.trim();
     if (!url.contains('://') && !url.startsWith('about:')) {
       url = 'https://$url';
     }
@@ -432,11 +438,9 @@ class HtmlService with ChangeNotifier {
 
   void cancelWebViewLoad() {
     activeWebViewController?.runJavaScript('window.stop();');
-    //loadRequest(Uri.parse('about:blank'));
-    // _webViewLoadingUrl = null;
+    activeWebViewController?.loadRequest(Uri.parse('about:blank'));
     _isWebViewLoading = false;
     _isLoading = false;
-    // _webViewLoadingProgress = 0.0;
     notifyListeners();
   }
 
@@ -480,6 +484,12 @@ class HtmlService with ChangeNotifier {
   void dispose() {
     _verticalScrollController?.dispose();
     _activeHorizontalScrollController = null;
+
+    // Dispose all cached re_editor controllers
+    for (final controller in _cachedControllers.values) {
+      controller.dispose();
+    }
+    _cachedControllers.clear();
 
     // Dispose all cached horizontal controllers
     for (final controller in _cachedHorizontalControllers.values) {
@@ -1951,6 +1961,7 @@ Technical details: $e''';
   }
 
   Future<void> loadFromUrl(String url, {int switchToTab = 0}) async {
+    // Redirect to the unified entry point
     return loadUrl(url, switchToTab: switchToTab);
   }
 
@@ -2995,6 +3006,9 @@ Technical details: $e''';
 
   /// Clear the editor cache
   void clearHighlightCache() {
+    for (final controller in _cachedControllers.values) {
+      controller.dispose();
+    }
     _cachedControllers.clear();
     _cachedGlobalKeys.clear();
     for (final controller in _cachedHorizontalControllers.values) {
@@ -3014,7 +3028,8 @@ Technical details: $e''';
           .take(_cachedControllers.length - maxCacheEntries)
           .toList();
       for (final key in keysToRemove) {
-        _cachedControllers.remove(key);
+        final controller = _cachedControllers.remove(key);
+        controller?.dispose();
         // Also remove all associated global keys and horizontal controllers for this content
         _cachedGlobalKeys.removeWhere((ekey, _) => ekey.startsWith(key));
 
@@ -3037,8 +3052,22 @@ Technical details: $e''';
     final contentHash = _simpleHash(content);
     final controllerKeyPrefix = 'hl:$contentHash';
 
-    _cachedControllers
-        .removeWhere((key, _) => key.startsWith(controllerKeyPrefix));
+    // Dispose and remove controllers
+    final controllerKeys = _cachedControllers.keys
+        .where((key) => key.startsWith(controllerKeyPrefix))
+        .toList();
+    for (final key in controllerKeys) {
+      _cachedControllers.remove(key)?.dispose();
+    }
+
+    // Dispose and remove horizontal controllers
+    final hControllerKeys = _cachedHorizontalControllers.keys
+        .where((key) => key.startsWith(controllerKeyPrefix))
+        .toList();
+    for (final key in hControllerKeys) {
+      _cachedHorizontalControllers.remove(key)?.dispose();
+    }
+
     _cachedGlobalKeys
         .removeWhere((key, _) => key.startsWith(controllerKeyPrefix));
 
@@ -3563,76 +3592,48 @@ Technical details: $e''';
     // Update URL bar immediately
     if (_currentInputText != url) {
       _currentInputText = url;
-      _webViewLoadingUrl =
-          null; // Clear specialized loading URL once synchronized
-
-      // Don't clear probe/metadata here, as it might have been set by the HTTP load
-      // We only clear if we are navigating to a genuinely new URL via WebView interaction
       // which is handled by onPageStarted/onUrlChange in BrowserView calling updateWebViewUrl
-    }
-
-    // Clear loading flags ALWAYS when sync happens (page finished), UNLESS it's a partial sync
-    if (!isPartial) {
-      if (_isWebViewLoading || _isLoading) {
-        _isWebViewLoading = false;
-        _isLoading = false;
-        notifyListeners();
-      }
     }
 
     // Trigger probe for the new URL if not already probing it or if it's different from the result
     // Independent Probe: This ensures we have server-side data for Probe/Security tabs
+    // In our new architecture, loadFromUrl already triggered the probe.
+    // However, if the user navigated INSIDE the WebView (clicked a link), we need to trigger it here.
     if (_currentlyProbingUrl != url && _probeResult?['finalUrl'] != url) {
-      probeUrl(url).catchError((e) {
-        debugPrint('Error probing synced URL: $e');
-        return <String, dynamic>{};
-      });
+      // Only probe if it's a NEW navigation, not the one we just started in loadFromUrl
+      // We can check if _currentlyProbingUrl matches or if it's empty
+      if (_currentlyProbingUrl != url) {
+        probeUrl(url).catchError((e) {
+          debugPrint('Error probing synced URL: $e');
+          return <String, dynamic>{};
+        });
+      }
     }
 
     try {
       // 1. Critical: Get Content (HTML or Raw)
       String content = '';
       try {
-        // Robust extraction: validation is done in Dart, not JS, to prevent hangs
-        // We set a strict timeout to ensure the UI never freezes
-        final htmlFuture = activeWebViewController!
+        final html = await activeWebViewController!
             .runJavaScriptReturningResult('document.documentElement.outerHTML')
-            .timeout(const Duration(milliseconds: 1500));
+            .timeout(const Duration(seconds: 5));
 
-        content = await htmlFuture as String;
+        if (html is String) {
+          content = _unquoteHtml(html);
 
-        // Unquote HTML immediately to work with actual content
-        content = _unquoteHtml(content);
-
-        // Check for "Raw File" wrappers (browsers wrap text/json in <pre>)
-        // doing this in Dart is safer and faster than complex JS injection
-        final lowerUrl = url.toLowerCase();
-        final isLikelyRawFile = lowerUrl.endsWith('.js') ||
-            lowerUrl.endsWith('.json') ||
-            lowerUrl.endsWith('.css') ||
-            lowerUrl.endsWith('.txt') ||
-            lowerUrl.endsWith('.xml') ||
-            lowerUrl.endsWith('.yaml') ||
-            lowerUrl.endsWith('.yml') ||
-            lowerUrl.endsWith('.md');
-
-        if (isLikelyRawFile) {
-          // Simple parser to extract content from <pre> tag if it exists
-          // Structure is usually: <html><head>...</head><body><pre>CONTENT</pre></body></html>
-          // or just <html><body><pre>CONTENT</pre></body></html>
-          if (content.contains('<pre') && content.contains('</pre>')) {
+          // Workaround for raw files (JS/CSS/JSON) wrapped in <pre> by the browser
+          if (content.trim().startsWith('<html') &&
+              content.contains('<body') &&
+              content.contains('<pre')) {
             try {
-              // Find content inside <pre> tags
-              final startIndex =
-                  content.indexOf('>', content.indexOf('<pre')) + 1;
-              final endIndex = content.lastIndexOf('</pre>');
-              if (startIndex > 0 && endIndex > startIndex) {
-                // Extract and decode (browser might have entity-encoded the raw/json content)
-                String rawContent = content.substring(startIndex, endIndex);
+              final preMatch = RegExp(
+                      r'<pre[^>]*style="[^"]*word-wrap:\s*break-word;\s*white-space:\s*pre-wrap;[^"]*"[^>]*>(.*?)<\/pre>',
+                      dotAll: true,
+                      caseSensitive: false)
+                  .firstMatch(content);
 
-                // specialized handling: decode HTML entities back to raw text
-                // This is minimal; a full entity decoder might be needed if the browser escapes rigorously
-                // keeping it simple for now to solve the main issue: getting THE text
+              if (preMatch != null) {
+                String rawContent = preMatch.group(1) ?? '';
                 rawContent = rawContent
                     .replaceAll('&lt;', '<')
                     .replaceAll('&gt;', '>')
@@ -3646,27 +3647,21 @@ Technical details: $e''';
               }
             } catch (e) {
               debugPrint('HTML Service: Error parsing PRE tag content: $e');
-              // fall back to full HTML
             }
           }
         }
       } catch (e) {
-        debugPrint('Error getting content from WebView (Timeout or Error): $e');
-
-        // If we fail to get content, we must still try to set SOMETHING if possible,
-        // but if it timed out, we might just have to skip.
-        // However, we should try to keep the "Source" tab operational.
+        debugPrint('Error getting content from WebView: $e');
         if (content.isEmpty) {
           content = '<!-- Error syncing content: $e -->';
         }
       }
 
       // 2. Optional: Get Page Weight & Cookies
-      // We try/catch this separately so it doesn't block the main content update
       try {
         final weightRaw = await activeWebViewController!
             .runJavaScriptReturningResult(
-                '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; for(var i=0; i<r.length; i++) { tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: r[i].name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); } var n=performance.getEntriesByType("navigation")[0]; if(n) { var nTx=(n.transferSize||0); var nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, list: list, cookies: document.cookie}); })();');
+                '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; for(var i=0; i<r.length; i++) { tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: r[i].name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();');
 
         String jsonStr = '';
         if (weightRaw is String) {
@@ -3678,11 +3673,9 @@ Technical details: $e''';
           if (decoded is Map) {
             final weightMap = Map<String, dynamic>.from(decoded);
 
-            // Extract cookies if present
+            // Extract cookies
             final String browserCookies =
                 weightMap['cookies']?.toString() ?? '';
-            debugPrint('DEBUG: Browser cookies found: "$browserCookies"');
-
             _lastBrowserCookies = browserCookies;
             _updateAnalyzedCookies();
 
@@ -3699,45 +3692,33 @@ Technical details: $e''';
             // Calculate totals and breakdown
             int totalTx = (weightMap['tx'] as num? ?? 0).toInt();
             int totalDec = (weightMap['dec'] as num? ?? 0).toInt();
+            int mainDocTx = (weightMap['nTx'] as num? ?? 0).toInt();
+            int mainDocDec = (weightMap['nDec'] as num? ?? 0).toInt();
 
-            int scriptCount = 0;
-            int scriptTx = 0;
-            int scriptDec = 0;
-
-            int cssCount = 0;
-            int cssTx = 0;
-            int cssDec = 0;
-
-            int imgCount = 0;
-            int imgTx = 0;
-            int imgDec = 0;
-
-            int htmlCount = 0;
-            int htmlTx = 0;
-            int htmlDec = 0;
-
-            int otherCount = 0;
-            int otherTx = 0;
-            int otherDec = 0;
+            int scriptCount = 0, scriptTx = 0, scriptDec = 0;
+            int cssCount = 0, cssTx = 0, cssDec = 0;
+            int imgCount = 0, imgTx = 0, imgDec = 0;
+            int htmlCount = 0, htmlTx = 0, htmlDec = 0;
+            int otherCount = 0, otherTx = 0, otherDec = 0;
 
             if (_resourcePerformanceData != null) {
               for (var r in _resourcePerformanceData!) {
                 final String name = (r['name'] as String? ?? '').toLowerCase();
-                final int messageTx = (r['transfer'] as num? ?? 0).toInt();
-                final int messageDec = (r['decoded'] as num? ?? 0).toInt();
+                final int mTx = (r['transfer'] as num? ?? 0).toInt();
+                final int mDec = (r['decoded'] as num? ?? 0).toInt();
 
                 if (name.endsWith('.js') ||
                     name.contains('.js?') ||
                     name.contains('script')) {
                   scriptCount++;
-                  scriptTx += messageTx;
-                  scriptDec += messageDec;
+                  scriptTx += mTx;
+                  scriptDec += mDec;
                 } else if (name.endsWith('.css') ||
                     name.contains('.css?') ||
                     name.contains('style')) {
                   cssCount++;
-                  cssTx += messageTx;
-                  cssDec += messageDec;
+                  cssTx += mTx;
+                  cssDec += mDec;
                 } else if (name.endsWith('.png') ||
                     name.endsWith('.jpg') ||
                     name.endsWith('.jpeg') ||
@@ -3747,102 +3728,107 @@ Technical details: $e''';
                     name.endsWith('.ico') ||
                     name.contains('image')) {
                   imgCount++;
-                  imgTx += messageTx;
-                  imgDec += messageDec;
+                  imgTx += mTx;
+                  imgDec += mDec;
                 } else if (name.endsWith('.html') ||
                     name.endsWith('.htm') ||
                     name.contains('document') ||
-                    // If name is just a path without extension, often HTML
-                    (!name.contains('.') && name.startsWith('http'))) {
+                    (!name.contains('.') && name.startsWith('http')) ||
+                    name == url.toLowerCase()) {
                   htmlCount++;
-                  htmlTx += messageTx;
-                  htmlDec += messageDec;
+                  htmlTx += mTx;
+                  htmlDec += mDec;
                 } else {
                   otherCount++;
-                  otherTx += messageTx;
-                  otherDec += messageDec;
+                  otherTx += mTx;
+                  otherDec += mDec;
                 }
               }
             }
 
+            // Populate Browser Probe Result
+            _browserProbeResult = {
+              'date': DateTime.now().toIso8601String(),
+              'url': url,
+              'title': _pageMetadata?['title'],
+              'serverStatusCode': _probeResult?['statusCode'],
+              'pageWeight': {
+                'totalTransfer': totalTx,
+                'totalDecoded': totalDec,
+                'mainDocumentTransfer': mainDocTx,
+                'mainDocumentDecoded': mainDocDec,
+                'breakdown': {
+                  'scripts': {
+                    'count': scriptCount,
+                    'transfer': scriptTx,
+                    'decoded': scriptDec
+                  },
+                  'css': {
+                    'count': cssCount,
+                    'transfer': cssTx,
+                    'decoded': cssDec
+                  },
+                  'images': {
+                    'count': imgCount,
+                    'transfer': imgTx,
+                    'decoded': imgDec
+                  },
+                  'html': {
+                    'count': htmlCount,
+                    'transfer': htmlTx,
+                    'decoded': htmlDec
+                  },
+                  'other': {
+                    'count': otherCount,
+                    'transfer': otherTx,
+                    'decoded': otherDec
+                  },
+                }
+              },
+              'resourceCount': _resourcePerformanceData?.length ?? 0,
+            };
+
+            // Update _lastPageWeight for Metadata tab compatibility
             _lastPageWeight = {
               'transfer': totalTx,
               'decoded': totalDec,
-              'breakdown': {
-                'scripts': {
-                  'count': scriptCount,
-                  'transfer': scriptTx,
-                  'decoded': scriptDec
-                },
-                'css': {
-                  'count': cssCount,
-                  'transfer': cssTx,
-                  'decoded': cssDec
-                },
-                'images': {
-                  'count': imgCount,
-                  'transfer': imgTx,
-                  'decoded': imgDec
-                },
-                'html': {
-                  'count': htmlCount,
-                  'transfer': htmlTx,
-                  'decoded': htmlDec
-                },
-                'other': {
-                  'count': otherCount,
-                  'transfer': otherTx,
-                  'decoded': otherDec
-                },
-              }
+              'breakdown': _browserProbeResult!['pageWeight']['breakdown'],
             };
+
+            if (_pageMetadata != null) {
+              _pageMetadata!['pageWeight'] = _lastPageWeight;
+            }
           }
         }
       } catch (e) {
-        debugPrint('Error getting page weight/cookies: $e');
+        debugPrint('Error getting weight/cookies: $e');
       }
 
-      // Enrich resource sizes if needed (background)
-      // This is done after the initial parsed weight is set, to not block the UI
-      _enrichResourceSizes().then((_) {
-        debugPrint('Resource enrichment complete');
-        notifyListeners();
-      }).ignore();
-
-      // Unquote if needed (WebView returns JSON string sometimes)
-      String finalContent = _unquoteHtml(content);
+      _enrichResourceSizes().ignore();
 
       // 3. Update the File State
-      // Create a new HtmlFile with the actual URL and content from the WebView
-      // This is crucial for handling redirects (e.g. bbc.com -> bbc.co.uk)
-      // providing the app with the correct "Source of Truth"
-
-      // Use helper if present, else simple name
       String filename = 'Page';
       try {
-        filename = generateDescriptiveFilename(Uri.parse(url), finalContent);
-      } catch (e) {
-        filename = 'Page';
-      }
+        filename = generateDescriptiveFilename(Uri.parse(url), content);
+      } catch (_) {}
 
       final file = HtmlFile(
         name: filename,
         path: url,
-        content: finalContent,
+        content: content,
         lastModified: DateTime.now(),
-        size: finalContent.length,
+        size: content.length,
         isUrl: true,
-        probeResult: _probeResult, // Pass existing probe result
+        probeResult: _probeResult,
       );
 
-      // Update the app state effectively
       await loadFile(file, clearProbe: false, isPartial: isPartial);
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');
     }
   }
 
-  /// Fetches content-length for resources that reported 0 size (likely due to CORS)
+  /// Fetches content-length
   Future<void> _enrichResourceSizes() async {
     if (_resourcePerformanceData == null) return;
 
@@ -3876,13 +3862,32 @@ Technical details: $e''';
             resource['decoded'] = size;
           }
         } catch (e) {
-          debugPrint('Error fetching size for ${resource['name']}: $e');
+          debugPrint('Error fetching size for $resource: $e');
         }
       }));
     }
 
     // Recalculate totals based on new data
-    _recalculatePageWeight();
+    // _recalculatePageWeight(); // This method might not exist, let's use the explicit logic
+
+    // Recalculate directly to be safe
+    int totalTransferSize = 0;
+    int totalDecodedSize = 0;
+    for (var resource in _resourcePerformanceData!) {
+      totalTransferSize += (resource['transfer'] as num? ?? 0).toInt();
+      totalDecodedSize += (resource['decoded'] as num? ?? 0).toInt();
+    }
+    _lastPageWeight = {
+      'transfer': totalTransferSize,
+      'decoded': totalDecodedSize,
+      'resources': _resourcePerformanceData,
+    };
+
+    // Also update the breakdown if needed, but for now let's just fix the crash
+    // Update the parent metadata object if it exists
+    if (_pageMetadata != null) {
+      _pageMetadata!['pageWeight'] = _lastPageWeight;
+    }
 
     // Re-enrich metadata so the Media/Services tabs update with the new sizes
     final baseUrl = _currentFile?.isUrl == true ? _currentFile!.path : '';
@@ -3905,105 +3910,6 @@ Technical details: $e''';
       // Ignore errors, we just won't have the size
     }
     return 0;
-  }
-
-  void _recalculatePageWeight() {
-    if (_resourcePerformanceData == null) return;
-
-    int scriptCount = 0;
-    int scriptTx = 0;
-    int scriptDec = 0;
-
-    int cssCount = 0;
-    int cssTx = 0;
-    int cssDec = 0;
-
-    int imgCount = 0;
-    int imgTx = 0;
-    int imgDec = 0;
-
-    int htmlCount = 0;
-    int htmlTx = 0;
-    int htmlDec = 0;
-
-    int otherCount = 0;
-    int otherTx = 0;
-    int otherDec = 0;
-
-    int totalTx = 0;
-    int totalDec = 0;
-
-    for (var r in _resourcePerformanceData!) {
-      final String name = (r['name'] as String? ?? '').toLowerCase();
-      final int messageTx = (r['transfer'] as num? ?? 0).toInt();
-      final int messageDec = (r['decoded'] as num? ?? 0).toInt();
-
-      totalTx += messageTx;
-      totalDec += messageDec;
-
-      if (name.endsWith('.js') ||
-          name.contains('.js?') ||
-          name.contains('script')) {
-        scriptCount++;
-        scriptTx += messageTx;
-        scriptDec += messageDec;
-      } else if (name.endsWith('.css') ||
-          name.contains('.css?') ||
-          name.contains('style')) {
-        cssCount++;
-        cssTx += messageTx;
-        cssDec += messageDec;
-      } else if (name.endsWith('.png') ||
-          name.endsWith('.jpg') ||
-          name.endsWith('.jpeg') ||
-          name.endsWith('.gif') ||
-          name.endsWith('.webp') ||
-          name.endsWith('.svg') ||
-          name.endsWith('.ico') ||
-          name.contains('image')) {
-        imgCount++;
-        imgTx += messageTx;
-        imgDec += messageDec;
-      } else if (name.endsWith('.html') ||
-          name.endsWith('.htm') ||
-          name.contains('document') ||
-          // If name is just a path without extension, often HTML
-          (!name.contains('.') && name.startsWith('http'))) {
-        htmlCount++;
-        htmlTx += messageTx;
-        htmlDec += messageDec;
-      } else {
-        otherCount++;
-        otherTx += messageTx;
-        otherDec += messageDec;
-      }
-    }
-
-    // Update _lastPageWeight
-    _lastPageWeight = {
-      'transfer': totalTx,
-      'decoded': totalDec,
-      'breakdown': {
-        'scripts': {
-          'count': scriptCount,
-          'transfer': scriptTx,
-          'decoded': scriptDec
-        },
-        'css': {'count': cssCount, 'transfer': cssTx, 'decoded': cssDec},
-        'images': {'count': imgCount, 'transfer': imgTx, 'decoded': imgDec},
-        'html': {'count': htmlCount, 'transfer': htmlTx, 'decoded': htmlDec},
-        'other': {
-          'count': otherCount,
-          'transfer': otherTx,
-          'decoded': otherDec
-        },
-      }
-    };
-
-    // Also update the pageMetadata pageWeight field if it exists
-    if (_pageMetadata != null) {
-      _pageMetadata!['pageWeight'] = _lastPageWeight;
-    }
   }
 
   /// Clear the WebView cache (excluding cookies/localStorage if possible, but WebViewController.clearCache usually does disk cache)

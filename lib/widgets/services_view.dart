@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import '../utils/format_utils.dart';
 
 class ServicesView extends StatelessWidget {
   const ServicesView({super.key});
@@ -86,18 +87,6 @@ class ServicesView extends StatelessWidget {
     );
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    const suffixes = ['B', 'KB', 'MB', 'GB'];
-    var i = 0;
-    double size = bytes.toDouble();
-    while (size >= 1024 && i < suffixes.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    return '${size.toStringAsFixed(1)}${suffixes[i]}';
-  }
-
   Widget _buildResourceSection(
       BuildContext context, String title, List<dynamic>? links, IconData icon) {
     if (links == null || links.isEmpty) return const SizedBox.shrink();
@@ -160,7 +149,7 @@ class ServicesView extends StatelessWidget {
               ),
               subtitle: size != null
                   ? Text(
-                      _formatBytes(size['decoded']),
+                      FormatUtils.formatBytes(size['decoded'] as int? ?? 0),
                       style: TextStyle(
                         fontSize: 10,
                         color: Theme.of(context).colorScheme.primary,

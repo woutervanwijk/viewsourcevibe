@@ -200,6 +200,7 @@ class _UrlInputState extends State<UrlInput> {
                                         icon: const Icon(Icons.clear, size: 20),
                                         onPressed: () {
                                           _urlController.clear();
+                                          htmlService.cancelWebViewLoad();
                                         },
                                       )
                                     : null),
@@ -213,7 +214,7 @@ class _UrlInputState extends State<UrlInput> {
                             // Don't call onFieldSubmitted(); this prevents automatically selecting
                             // the first suggestion in the list. We want "Enter" to strictly load
                             // what the user typed.
-                            _loadUrl(switchToTab: 0);
+                            _loadUrl(switchToTab: htmlService.activeTabIndex);
                           },
                           onTapOutside: (event) {
                             FocusScope.of(context).unfocus();
