@@ -538,20 +538,40 @@ class _TabPageWrapperState extends State<TabPageWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    final htmlService = Provider.of<HtmlService>(context);
-
-    // If it's the browser tab, the FAB visibility depends on the internal WebView scroll
-    bool effectiveShowFab = _showFab;
-    if (widget.isBrowserTab) {
-      effectiveShowFab = htmlService.webViewScrollY > 200;
-    }
-
     return PrimaryScrollController(
       controller: _controller,
       child: Stack(
         children: [
           widget.child,
-          if (effectiveShowFab)
+          if (widget.isBrowserTab)
+            // For Browser Tab, listen to the ValueNotifier from HtmlService
+            // This prevents the entire HomeScreen from rebuilding on every scroll pixel
+            ValueListenableBuilder<double>(
+              valueListenable: Provider.of<HtmlService>(context, listen: false)
+                  .webViewScrollNotifier,
+              builder: (context, scrollY, _) {
+                if (scrollY > 200) {
+                  return Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: FloatingActionButton(
+                      heroTag: 'scroll-to-top-${widget.tag}',
+                      mini: true,
+                      onPressed: _scrollToTop,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primaryContainer,
+                      foregroundColor:
+                          Theme.of(context).colorScheme.onPrimaryContainer,
+                      child: const Icon(Icons.arrow_upward),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            )
+          else
+          // For other tabs, use local state
+          if (_showFab)
             Positioned(
               right: 16,
               bottom: 16,

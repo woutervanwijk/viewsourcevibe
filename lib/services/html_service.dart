@@ -85,13 +85,15 @@ class HtmlService with ChangeNotifier {
   bool _isBeautifyEnabled = false;
   bool get isBeautifyEnabled => _isBeautifyEnabled;
   final Map<String, String> _beautifiedCache = {};
+  final ValueNotifier<double> webViewScrollNotifier = ValueNotifier(0.0);
   double _webViewScrollY = 0.0;
   double get webViewScrollY => _webViewScrollY;
 
   set webViewScrollY(double value) {
     if (_webViewScrollY != value) {
       _webViewScrollY = value;
-      notifyListeners();
+      webViewScrollNotifier.value = value;
+      // Do NOT notifyListeners() here - it causes full app rebuild on every scroll frame
     }
   }
 
@@ -333,6 +335,12 @@ class HtmlService with ChangeNotifier {
       {int switchToTab = 0, bool forceWebView = false}) async {
     if (url.isEmpty) return;
 
+    // Force stop any previous loading to ensure a clean slate
+    // and prevent old requests from interfering or playing media in the background
+    if (activeWebViewController != null) {
+      activeWebViewController!.runJavaScript('window.stop();');
+    }
+
     // Sanitize
     // Auto-prepend https if no scheme is provided, excluding special schemes like about:
     // We trim the URL first to avoid issues with leading/trailing spaces
@@ -435,10 +443,15 @@ class HtmlService with ChangeNotifier {
   }
 
   void cancelWebViewLoad() {
+    // 1. Force stop in JS (if possible)
     activeWebViewController?.runJavaScript('window.stop();');
+    // 2. Navigate away to about:blank to kill any pending network requests
     activeWebViewController?.loadRequest(Uri.parse('about:blank'));
+    // 3. Reset internal state immediately
+    _webViewLoadingUrl = null;
     _isWebViewLoading = false;
     _isLoading = false;
+    _webViewLoadingProgress = 0.0; // Reset progress bar
     notifyListeners();
   }
 
