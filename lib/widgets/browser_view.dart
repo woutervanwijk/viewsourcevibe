@@ -122,6 +122,13 @@ class _BrowserViewState extends State<BrowserView> {
                 return NavigationDecision.navigate;
               }
 
+              // Only intercept navigation for the main frame.
+              // Subframes (iframes) should generally be allowed to load their content
+              // without triggering a full app navigation/URL update.
+              if (!request.isMainFrame) {
+                return NavigationDecision.navigate;
+              }
+
               final htmlService =
                   Provider.of<HtmlService>(context, listen: false);
 

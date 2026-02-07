@@ -58,7 +58,6 @@ class HtmlService with ChangeNotifier {
 
   // Probe state
   Map<String, dynamic>? _probeResult;
-  http.Client? _httpClient;
   bool _isProbing = false;
   String? _probeError;
   String? _currentlyProbingUrl;
@@ -167,10 +166,17 @@ class HtmlService with ChangeNotifier {
         url.contains('.htm') ||
         url.contains('.xhtml') ||
         (url.startsWith('http') &&
-            !url.contains('.') &&
+            // Exclude known non-HTML extensions to be safe, but default to true for generic URLs (like domains)
             !url.endsWith('.rss') &&
             !url.endsWith('.xml') &&
-            !url.endsWith('.json'));
+            !url.endsWith('.json') &&
+            !url.endsWith('.pdf') &&
+            !url.endsWith('.zip') &&
+            !url.endsWith('.png') &&
+            !url.endsWith('.jpg') &&
+            !url.endsWith('.jpeg') &&
+            !url.endsWith('.gif') &&
+            !url.endsWith('.svg'));
   }
 
   bool get isSvg {
@@ -1979,6 +1985,7 @@ Technical details: $e''';
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
 
   /// Probe a URL to get status code and headers without downloading the full content
+  /// Probe a URL to get status code and headers without downloading the full content
   Future<Map<String, dynamic>> probeUrl(String url) async {
     if (_currentlyProbingUrl == url && _isProbing) {
       return _probeResult ?? {};
@@ -2007,7 +2014,13 @@ Technical details: $e''';
       }
 
       final uri = Uri.parse(targetUrl);
-      final client = _createClient();
+
+      // Use HttpClient directly to get certificate info
+      final client = HttpClient();
+      client.badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+      client.connectionTimeout = const Duration(seconds: 10);
+
       final stopwatch = Stopwatch()..start();
       String? ipAddress;
 
@@ -2023,35 +2036,39 @@ Technical details: $e''';
       }
 
       // Headers to mimic a browser/curl
-      final headers = {
-        'User-Agent': 'curl/7.88.1',
-        'Accept': '*/*',
-      };
+      final userAgent = 'curl/7.88.1';
 
-      // Try HEAD request first (most efficient)
-      final request = http.Request('HEAD', uri)..followRedirects = false;
-      headers.forEach((key, value) => request.headers[key] = value);
+      HttpClientRequest request;
+      HttpClientResponse response;
 
-      http.StreamedResponse streamedResponse;
       try {
-        streamedResponse =
-            await client.send(request).timeout(const Duration(seconds: 10));
+        // Try HEAD request first (most efficient)
+        request = await client.openUrl('HEAD', uri);
+        request.headers.set('User-Agent', userAgent);
+        request.headers.set('Accept', '*/*');
+        request.followRedirects = false;
+        response = await request.close();
       } catch (e) {
-        // If HEAD fails (some servers block it), try GET with range header
-        // or just close stream immediately
         debugPrint('HEAD request failed, trying GET: $e');
-        final getRequest = http.Request('GET', uri)..followRedirects = false;
-        headers.forEach((key, value) => getRequest.headers[key] = value);
-        // Try to get just the first byte
-        getRequest.headers['Range'] = 'bytes=0-0';
-
-        streamedResponse =
-            await client.send(getRequest).timeout(const Duration(seconds: 10));
+        // Fallback to GET with range
+        request = await client.openUrl('GET', uri);
+        request.headers.set('User-Agent', userAgent);
+        request.headers.set('Accept', '*/*');
+        request.headers.set('Range', 'bytes=0-0');
+        request.followRedirects = false;
+        response = await request.close();
       }
 
-      final response = await http.Response.fromStream(streamedResponse);
+      // Capture certificate info
+      Map<String, dynamic>? certInfo;
+      if (response.certificate != null) {
+        certInfo = _extractCertificateInfo(response.certificate!);
+      }
+
       stopwatch.stop();
-      client.close();
+
+      // Drain response to ensure socket is closed properly, but we don't need body
+      await response.drain();
 
       int? contentLength = response.contentLength;
 
@@ -2059,18 +2076,16 @@ Technical details: $e''';
       debugPrint('Initial ContentLength: $contentLength');
 
       // Check Content-Length header fallback
-      if ((contentLength == null || contentLength == 0) &&
-          response.headers.containsKey('content-length')) {
-        contentLength = int.tryParse(response.headers['content-length']!);
+      if ((contentLength <= 0) &&
+          response.headers.value('content-length') != null) {
+        contentLength = int.tryParse(response.headers.value('content-length')!);
         debugPrint('Parsed ContentLength from header: $contentLength');
       }
 
       // Check Content-Range header (for 206 Partial Content)
-      // Format: bytes 0-0/12345
-      if (response.headers.containsKey('content-range')) {
-        final contentRange = response.headers['content-range']!;
+      if (response.headers.value('content-range') != null) {
+        final contentRange = response.headers.value('content-range')!;
         debugPrint('Parsing Content-Range: $contentRange');
-        // Extract the total size (after the slash)
         final parts = contentRange.split('/');
         if (parts.length == 2 && parts[1] != '*') {
           final totalSize = int.tryParse(parts[1]);
@@ -2084,11 +2099,11 @@ Technical details: $e''';
 
       // Standardize on lowercase keys for consistent lookup
       final normalizedHeaders = <String, String>{};
-      response.headers.forEach((key, value) {
-        normalizedHeaders[key.toLowerCase()] = value;
+      response.headers.forEach((key, values) {
+        normalizedHeaders[key.toLowerCase()] = values.join(', ');
       });
 
-      // Security Headers Check (using normalized lowercase keys)
+      // Security Headers Check
       final securityHeaders = {
         'Strict-Transport-Security':
             normalizedHeaders['strict-transport-security'],
@@ -2100,9 +2115,9 @@ Technical details: $e''';
       };
 
       // Cookies
-      final setCookie = response.headers['set-cookie'];
+      final setCookie = response.headers.value('set-cookie');
       final List<String> cookies =
-          setCookie != null ? [setCookie] : []; // Basic handling for now
+          setCookie != null ? [setCookie] : []; // Basic handling
 
       // Construct the result, ONLY from the probe
       _probeResult = {
@@ -2116,6 +2131,7 @@ Technical details: $e''';
         'ipAddress': ipAddress,
         'security': securityHeaders,
         'cookies': cookies,
+        'certificate': certInfo, // Now populated!
         'analyzedCookies': <Map<String,
             dynamic>>[], // Will be filled by _updateAnalyzedCookies
       };
@@ -3459,6 +3475,53 @@ Technical details: $e''';
       return null;
     }
 
+    // Merge External lists into main lists so they are unified for display
+    if (_pageMetadata!['externalCssLinks'] != null &&
+        (_pageMetadata!['externalCssLinks'] as List).isNotEmpty) {
+      if (_pageMetadata!['cssLinks'] == null) {
+        _pageMetadata!['cssLinks'] = [];
+      }
+      final List<dynamic> local = _pageMetadata!['cssLinks'];
+      final List<dynamic> external = _pageMetadata!['externalCssLinks'];
+      // merge unique
+      for (var ext in external) {
+        if (!local.contains(ext)) {
+          local.add(ext);
+        }
+      }
+      _pageMetadata!.remove('externalCssLinks'); // clean up
+    }
+
+    if (_pageMetadata!['externalJsLinks'] != null &&
+        (_pageMetadata!['externalJsLinks'] as List).isNotEmpty) {
+      if (_pageMetadata!['jsLinks'] == null) {
+        _pageMetadata!['jsLinks'] = [];
+      }
+      final List<dynamic> local = _pageMetadata!['jsLinks'];
+      final List<dynamic> external = _pageMetadata!['externalJsLinks'];
+      for (var ext in external) {
+        if (!local.contains(ext)) {
+          local.add(ext);
+        }
+      }
+      _pageMetadata!.remove('externalJsLinks');
+    }
+
+    if (_pageMetadata!['externalIframeLinks'] != null &&
+        (_pageMetadata!['externalIframeLinks'] as List).isNotEmpty) {
+      if (_pageMetadata!['iframeLinks'] == null) {
+        _pageMetadata!['iframeLinks'] = [];
+      }
+      final List<dynamic> local = _pageMetadata!['iframeLinks'];
+      final List<dynamic> external = _pageMetadata!['externalIframeLinks'];
+      for (var ext in external) {
+        if (!local.contains(ext)) {
+          local.add(ext);
+        }
+      }
+      _pageMetadata!.remove('externalIframeLinks');
+    }
+
     // Enrich Images
     if (_pageMetadata!['media'] != null &&
         _pageMetadata!['media']['images'] != null) {
@@ -3513,6 +3576,23 @@ Technical details: $e''';
           } else {
             // Convert String to Map to store size
             links[i] = {'src': src, 'size': size};
+          }
+        }
+      }
+    }
+
+    // Enrich Videos
+    if (_pageMetadata!['media'] != null &&
+        _pageMetadata!['media']['videos'] != null) {
+      final List<dynamic> videos = _pageMetadata!['media']['videos'];
+      for (int i = 0; i < videos.length; i++) {
+        if (videos[i] is Map) {
+          final Map<String, dynamic> safeVid =
+              Map<String, dynamic>.from(videos[i]);
+          final size = findSize(safeVid['src']);
+          if (size != null) {
+            safeVid['size'] = size;
+            videos[i] = safeVid;
           }
         }
       }
@@ -3988,19 +4068,62 @@ Technical details: $e''';
 
   Future<int> _fetchResourceSize(String url) async {
     try {
-      final client = _httpClient ??= http.Client();
-      final response =
-          await client.head(Uri.parse(url)).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
+      final client = http.Client();
+      final uri = Uri.parse(url);
+      final headers = {
+        'User-Agent':
+            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36'
+      };
+
+      // 1. Try HEAD request first
+      try {
+        final response = await client
+            .head(uri, headers: headers)
+            .timeout(const Duration(seconds: 5));
+        if (response.statusCode == 200) {
+          final contentLength = response.headers['content-length'];
+          if (contentLength != null) {
+            return int.tryParse(contentLength) ?? 0;
+          }
+        }
+      } catch (e) {
+        // Fallback to GET if HEAD fails
+      }
+
+      // 2. Fallback to GET range request (just first byte)
+      // This often works when servers block HEAD or don't return content-length for HEAD
+      final response = await client.get(uri, headers: {
+        ...headers,
+        'Range': 'bytes=0-0'
+      }).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200 || response.statusCode == 206) {
+        // comprehensive check for length
         final contentLength = response.headers['content-length'];
+        final contentRange = response.headers['content-range'];
+
+        if (contentRange != null) {
+          // Format: bytes 0-0/12345
+          final parts = contentRange.split('/');
+          if (parts.length == 2) {
+            return int.tryParse(parts[1]) ?? 0;
+          }
+        }
+
         if (contentLength != null) {
-          return int.tryParse(contentLength) ?? 0;
+          final len = int.tryParse(contentLength) ?? 0;
+          // If status is 200, this is the full size.
+          // If status is 206, proper servers return the partial length (1),
+          // so we rely on Content-Range for the total if available.
+          if (response.statusCode == 200) return len;
+          // If 206 and no content-range (rare), we can't know the full size
         }
       }
+
+      return 0;
     } catch (_) {
-      // Ignore errors, we just won't have the size
+      return 0;
     }
-    return 0;
   }
 
   /// Clear the WebView cache (excluding cookies/localStorage if possible, but WebViewController.clearCache usually does disk cache)
