@@ -139,7 +139,8 @@ class _BrowserViewState extends State<BrowserView> {
 
               // Otherwise, intercept and run through our robust loadFromUrl flow
               // This ensures probe, reset, and proper mode (Browser/Fetch) handling
-              htmlService.loadFromUrl(request.url);
+              htmlService.loadFromUrl(request.url,
+                  switchToTab: htmlService.activeTabIndex);
               return NavigationDecision.prevent;
             },
             onWebResourceError: (WebResourceError error) {

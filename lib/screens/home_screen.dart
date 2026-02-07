@@ -199,19 +199,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final isBrowserSupported = htmlService.isBrowserSupported;
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
 
-    final sourceView = KeepAliveWrapper(
-      child: currentFile != null
-          ? _buildRefreshable(
-              FileViewer(
-                file: currentFile,
-              ),
-              'source',
-            )
-          : _buildScrollableRefreshable(
-              const Center(child: Text('No File')),
-              'no-file',
+    final sourceView = currentFile != null
+        ? _buildRefreshable(
+            FileViewer(
+              file: currentFile,
             ),
-    );
+            'source',
+          )
+        : _buildScrollableRefreshable(
+            const Center(child: Text('No File')),
+            'no-file',
+          );
 
     final browserView = TabPageWrapper(
       tag: 'browser',

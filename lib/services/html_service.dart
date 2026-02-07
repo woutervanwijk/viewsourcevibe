@@ -98,6 +98,10 @@ class HtmlService with ChangeNotifier {
 
   wf.WebViewController? activeWebViewController;
 
+  Timer? _autoSaveTimer;
+  final List<CodeLineEditingController> _disposalQueue = [];
+  Timer? _disposalTimer;
+
   // Track the currently active find controller
   CodeFindController? _activeFindController;
 
@@ -318,6 +322,7 @@ class HtmlService with ChangeNotifier {
       final currentBrowserUrl = await activeWebViewController!.currentUrl();
       if (currentBrowserUrl != _currentFile!.path) {
         debugPrint('Triggering browser reload for: ${_currentFile!.path}');
+        _webViewLoadingUrl = _currentFile!.path; // Set to avoid interception
         await activeWebViewController!
             .loadRequest(Uri.parse(_currentFile!.path));
       }
@@ -338,7 +343,7 @@ class HtmlService with ChangeNotifier {
 
   /// Unified entry point for loading a URL
   Future<void> loadUrl(String url,
-      {int switchToTab = 0, bool forceWebView = false}) async {
+      {int? switchToTab, bool forceWebView = false}) async {
     if (url.isEmpty) return;
 
     // Force stop any previous loading to ensure a clean slate
@@ -357,7 +362,9 @@ class HtmlService with ChangeNotifier {
 
     _currentInputText = url;
     _pendingUrl = url;
-    _requestedTabIndex = switchToTab;
+    if (switchToTab != null) {
+      _requestedTabIndex = switchToTab;
+    }
     _isLoading = true;
     _isWebViewLoading = false; // Reset webview loading state on new navigation
 
@@ -499,6 +506,14 @@ class HtmlService with ChangeNotifier {
 
   @override
   void dispose() {
+    _autoSaveTimer?.cancel();
+    _disposalTimer?.cancel();
+    // Final immediate disposal
+    for (final controller in _disposalQueue) {
+      controller.dispose();
+    }
+    _disposalQueue.clear();
+
     _verticalScrollController?.dispose();
     _activeHorizontalScrollController = null;
 
@@ -578,11 +593,14 @@ class HtmlService with ChangeNotifier {
     _urlHistoryService = service;
   }
 
-  /// Auto-save the current state if a service is available
+  /// Auto-save the current state if a service is available (debounced)
   void _autoSave() {
-    if (_appStateService != null) {
-      saveCurrentState(_appStateService!);
-    }
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (_appStateService != null) {
+        saveCurrentState(_appStateService!);
+      }
+    });
   }
 
   /// Restore horizontal scroll position
@@ -627,7 +645,7 @@ class HtmlService with ChangeNotifier {
         pendingUrl: _pendingUrl,
         inputText: _currentInputText,
       );
-      debugPrint('💾 Saved current app state');
+      // Log removed to reduce noise as AppStateService already logs success
     } catch (e) {
       debugPrint('❌ Error saving app state: $e');
     }
@@ -1571,16 +1589,7 @@ class HtmlService with ChangeNotifier {
     _isBeautifyToggling = true;
 
     try {
-      // Unfocus the editor to prevent 'CodeCursorBlinkController' crash on dispose
-      // This stops the cursor blinking timer before the widget is swaped/disposed
-      FocusManager.instance.primaryFocus?.unfocus();
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Clear the editor cache to force fresh controllers/keys
-      // This prevents reusing a controller that might have been disposed or has attached blink timers
-      _cachedControllers.clear();
-      _cachedGlobalKeys.clear();
-      _cachedHorizontalControllers.clear();
+      await _prepareForEditorReset();
 
       _isBeautifyEnabled = !_isBeautifyEnabled;
       notifyListeners();
@@ -1616,6 +1625,7 @@ class HtmlService with ChangeNotifier {
   }
 
   Future<void> clearFile({bool clearProbe = true}) async {
+    await _prepareForEditorReset();
     await scrollToZero();
     _currentFile = null;
     _originalFile = null; // Also clear the original file
@@ -1625,7 +1635,7 @@ class HtmlService with ChangeNotifier {
       _probeError = null; // Clear probe errors
     }
     _pageMetadata = null; // Clear page metadata
-    clearHighlightCache(); // Clear syntax highlighting cache
+    // clearHighlightCache() is now called within _prepareForEditorReset()
     _beautifiedCache.clear(); // Clear beautify cache
     notifyListeners();
     _autoSave();
@@ -1977,7 +1987,7 @@ Technical details: $e''';
     }
   }
 
-  Future<void> loadFromUrl(String url, {int switchToTab = 0}) async {
+  Future<void> loadFromUrl(String url, {int? switchToTab}) async {
     // Redirect to the unified entry point
     return loadUrl(url, switchToTab: switchToTab);
   }
@@ -3034,7 +3044,7 @@ Technical details: $e''';
   /// Clear the editor cache
   void clearHighlightCache() {
     for (final controller in _cachedControllers.values) {
-      controller.dispose();
+      _queueForDisposal(controller);
     }
     _cachedControllers.clear();
     _cachedGlobalKeys.clear();
@@ -3043,7 +3053,36 @@ Technical details: $e''';
     }
     _cachedHorizontalControllers.clear();
     _activeHorizontalScrollController = null;
-    debugPrint('🧹 Cleared editor cache');
+    debugPrint('🧹 Queued editor cache for lazy disposal');
+  }
+
+  /// Queue a controller for disposal after a delay to ensure it's unmounted
+  void _queueForDisposal(CodeLineEditingController controller) {
+    _disposalQueue.add(controller);
+    _disposalTimer?.cancel();
+    _disposalTimer = Timer(const Duration(seconds: 2), () {
+      for (final c in _disposalQueue) {
+        try {
+          c.dispose();
+        } catch (e) {
+          debugPrint('Error disposing queued controller: $e');
+        }
+      }
+      final count = _disposalQueue.length;
+      _disposalQueue.clear();
+      debugPrint('♻️ Lazy disposed $count controllers');
+    });
+  }
+
+  /// Prepare the editor for a reset by unfocusing and waiting for blinkers to stop
+  Future<void> _prepareForEditorReset() async {
+    // Unfocus the editor to prevent 'CodeCursorBlinkController' crash on dispose
+    // This stops the cursor blinking timer before the widget is swapped/disposed
+    FocusManager.instance.primaryFocus?.unfocus();
+    // Wait for the blinker to stop its current cycle - increased to 250ms for safety
+    await Future.delayed(const Duration(milliseconds: 250));
+    // Clear the editor cache to force fresh controllers/keys
+    clearHighlightCache();
   }
 
   /// Check and enforce cache size limits
@@ -3051,12 +3090,17 @@ Technical details: $e''';
     const maxCacheEntries = 10;
 
     if (_cachedControllers.length > maxCacheEntries) {
+      // Unfocus to prevent blinker crash before disposing evicted controllers
+      FocusManager.instance.primaryFocus?.unfocus();
+
       final keysToRemove = _cachedControllers.keys
           .take(_cachedControllers.length - maxCacheEntries)
           .toList();
       for (final key in keysToRemove) {
         final controller = _cachedControllers.remove(key);
-        controller?.dispose();
+        if (controller != null) {
+          _queueForDisposal(controller);
+        }
         // Also remove all associated global keys and horizontal controllers for this content
         _cachedGlobalKeys.removeWhere((ekey, _) => ekey.startsWith(key));
 
