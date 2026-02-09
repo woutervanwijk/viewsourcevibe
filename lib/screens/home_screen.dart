@@ -48,9 +48,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     htmlService.setActiveTabIndex(_tabController.index);
 
-    // If switching to Browser tab, trigger reload if needed
+    // Lazy loading logic based on active tab
     if (_tabController.index == htmlService.browserTabIndex) {
+      // Switching to Browser tab - trigger WebView load if needed
       htmlService.triggerBrowserReload().ignore();
+    } else if (_tabController.index == htmlService.sourceTabIndex) {
+      // Switching to Source tab - trigger source load if needed (browser-first mode)
+      // This is handled in HtmlService.setActiveTabIndex()
     }
 
     setState(() {

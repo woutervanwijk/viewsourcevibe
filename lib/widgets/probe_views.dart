@@ -73,8 +73,8 @@ class ProbeGeneralView extends ProbeViewBase {
   @override
   Widget buildContent(BuildContext context, HtmlService htmlService,
       Map<String, dynamic> result) {
-    // Check if we have browser probe results
-    final browserResult = htmlService.browserProbeResult;
+    // Check if we have WebView data results
+    final browserResult = htmlService.webViewData;
     final hasBrowserProbe = browserResult != null && browserResult.isNotEmpty;
 
     return ListView(

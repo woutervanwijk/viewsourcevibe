@@ -56,15 +56,33 @@ class HtmlService with ChangeNotifier {
   final List<HtmlFile> _navigationStack = [];
   bool _isNavigatingBack = false;
 
-  // Probe state
+  // ============================================================================
+  // SINGLE SOURCE OF TRUTH - Centralized State Management
+  // ============================================================================
+
+  /// Main URL - the single source of truth for the current URL being loaded
+  String? _mainUrl;
+  String? get mainUrl => _mainUrl;
+
+  /// Probe data - results from HTTP HEAD/GET probe (headers, security, server cookies)
+  Map<String, dynamic>? _probeData;
+  Map<String, dynamic>? get probeData => _probeData;
+
+  /// WebView data - results extracted from WebView (HTML, metadata, browser cookies, performance)
+  Map<String, dynamic>? _webViewData;
+  Map<String, dynamic>? get webViewData => _webViewData;
+
+  // ============================================================================
+  // LEGACY STATE (to be migrated/removed)
+  // ============================================================================
+
+  // Probe state (legacy - will be replaced by _probeData)
   Map<String, dynamic>? _probeResult;
   bool _isProbing = false;
   String? _probeError;
   String? _currentlyProbingUrl;
-  Map<String, dynamic>?
-      _browserProbeResult; // Store separate browser probe data
 
-  // Metadata state
+  // Metadata state (legacy - will be moved to _webViewData)
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
   Map<String, dynamic>? _lastPageWeight; // Store weights: transfer and decoded
@@ -120,10 +138,8 @@ class HtmlService with ChangeNotifier {
       _activeHorizontalScrollController;
   GlobalKey? get codeEditorKey => _codeEditorKey;
 
-  // Expose probe state
+  // Expose probe state (legacy)
   Map<String, dynamic>? get probeResult => _probeResult;
-  Map<String, dynamic>? get browserProbeResult =>
-      _browserProbeResult; // Expose browser probe result
   bool get isProbing => _isProbing;
   bool get canGoBack => _navigationStack.isNotEmpty;
   String? get probeError => _probeError;
@@ -3837,8 +3853,8 @@ Technical details: $e''';
               }
             }
 
-            // Populate Browser Probe Result
-            _browserProbeResult = {
+            // Populate WebView Data
+            _webViewData = {
               'date': DateTime.now().toIso8601String(),
               'url': url,
               'title': _pageMetadata?['title'],
@@ -3883,7 +3899,7 @@ Technical details: $e''';
             _lastPageWeight = {
               'transfer': totalTx,
               'decoded': totalDec,
-              'breakdown': _browserProbeResult!['pageWeight']['breakdown'],
+              'breakdown': _webViewData!['pageWeight']['breakdown'],
             };
 
             if (_pageMetadata != null) {

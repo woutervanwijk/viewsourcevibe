@@ -132,14 +132,15 @@ class _BrowserViewState extends State<BrowserView> {
               final htmlService =
                   Provider.of<HtmlService>(context, listen: false);
 
-              // If it's the URL we are currently loading (set by loadFromUrl), allow it
-              if (request.url == htmlService.webViewLoadingUrl) {
+              // If it's the URL we are currently loading (set by loadUrl), allow it
+              if (request.url == htmlService.webViewLoadingUrl ||
+                  request.url == htmlService.mainUrl) {
                 return NavigationDecision.navigate;
               }
 
-              // Otherwise, intercept and run through our robust loadFromUrl flow
-              // This ensures probe, reset, and proper mode (Browser/Fetch) handling
-              htmlService.loadFromUrl(request.url);
+              // Otherwise, intercept and run through our robust loadUrl flow
+              // This ensures state reset, probe, and proper mode handling
+              htmlService.loadUrl(request.url);
               return NavigationDecision.prevent;
             },
             onWebResourceError: (WebResourceError error) {
