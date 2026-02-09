@@ -207,7 +207,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             'source',
           )
         : _buildScrollableRefreshable(
-            const Center(child: Text('No File')),
+            Center(
+                child: htmlService.isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text('No File')),
             'no-file',
           );
 
@@ -216,8 +219,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       isBrowserTab: true,
       child: KeepAliveWrapper(
         child: _buildRefreshable(
-          currentFile != null &&
-                  (currentFile.isUrl || isHtmlOrXml || useBrowserByDefault)
+          (currentFile != null &&
+                      (currentFile.isUrl ||
+                          isHtmlOrXml ||
+                          useBrowserByDefault)) ||
+                  htmlService.isWebViewLoading
               ? BrowserView(
                   file: currentFile,
                   gestureRecognizers: {
@@ -225,7 +231,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         () => VerticalDragGestureRecognizer()),
                   },
                 )
-              : const Center(child: Text('Not available for this file')),
+              : (htmlService.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : const Center(child: Text('Not available for this file'))),
           'browser-content',
         ),
       ),
@@ -424,7 +432,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const Divider(height: 1),
               Expanded(
-                child: htmlService.currentFile == null
+                child: (htmlService.currentFile == null &&
+                        !htmlService.isLoading)
                     ? Padding(
                         padding: const EdgeInsets.all(8),
                         child: Center(

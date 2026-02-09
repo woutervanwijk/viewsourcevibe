@@ -13,12 +13,12 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
 
 class BrowserView extends StatefulWidget {
-  final HtmlFile file;
+  final HtmlFile? file;
   final Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers;
 
   const BrowserView({
     super.key,
-    required this.file,
+    this.file,
     this.gestureRecognizers,
   });
 
@@ -176,8 +176,9 @@ class _BrowserViewState extends State<BrowserView> {
             htmlService.webViewScrollY = scrollChange.y;
           });
 
-          // Only load if we are on the browser tab
-          if (htmlService.activeTabIndex == htmlService.browserTabIndex) {
+          // Only load if we are on the browser tab or if we are forced to load
+          if (htmlService.activeTabIndex == htmlService.browserTabIndex ||
+              htmlService.isWebViewLoading) {
             _loadContent();
           }
         }
@@ -189,12 +190,12 @@ class _BrowserViewState extends State<BrowserView> {
   }
 
   String _getEffectiveUrl() {
-    if (widget.file.isUrl) {
-      return widget.file.path;
+    if (widget.file?.isUrl ?? false) {
+      return widget.file!.path;
     }
     // For local files, we might need to data-uri them if they are HTML
     return Uri.dataFromString(
-      widget.file.content,
+      widget.file?.content ?? '',
       mimeType: 'text/html',
       encoding: utf8,
     ).toString();
@@ -204,8 +205,8 @@ class _BrowserViewState extends State<BrowserView> {
   void didUpdateWidget(BrowserView oldWidget) {
     super.didUpdateWidget(oldWidget);
     // If the file changed (e.g. from local to URL or different content), reload.
-    if (oldWidget.file.path != widget.file.path ||
-        oldWidget.file.content != widget.file.content) {
+    if (oldWidget.file?.path != widget.file?.path ||
+        oldWidget.file?.content != widget.file?.content) {
       _loadContentIfVisible();
     }
   }
@@ -221,12 +222,17 @@ class _BrowserViewState extends State<BrowserView> {
     if (_controller == null) return;
 
     final htmlService = Provider.of<HtmlService>(context, listen: false);
-    String targetUrl = widget.file.path;
+    String targetUrl = widget.file?.path ??
+        htmlService.webViewLoadingUrl ??
+        htmlService.currentInputText ??
+        '';
 
     // If there's a specialized loading URL (e.g. forceWebView path), use it.
     if (htmlService.webViewLoadingUrl != null) {
       targetUrl = htmlService.webViewLoadingUrl!;
-    } else if (_currentRssUrl != null && targetUrl == _currentRssUrl) {
+    } else if (_currentRssUrl != null &&
+        targetUrl == _currentRssUrl &&
+        targetUrl.isNotEmpty) {
       // Already handled RSS
       return;
     }
@@ -241,12 +247,12 @@ class _BrowserViewState extends State<BrowserView> {
     // Check if it's an RSS/Atom/XML feed
     // We use the file content if available, otherwise just load the URL
     final isRssOrXml = await RssTemplateService.isRssFeed(
-        widget.file.name, widget.file.content);
+        widget.file?.name ?? '', widget.file?.content ?? '');
 
-    if (isRssOrXml && widget.file.content.isNotEmpty) {
+    if (isRssOrXml && (widget.file?.content.isNotEmpty ?? false)) {
       // Use temporary internal RSS rendering if needed
       final html = await RssTemplateService.convertRssToHtml(
-          widget.file.content, targetUrl);
+          widget.file!.content, targetUrl);
       if (html.isNotEmpty) {
         _controller.loadHtmlString(html, baseUrl: targetUrl);
       }
@@ -258,13 +264,13 @@ class _BrowserViewState extends State<BrowserView> {
 
       if (targetUrl.startsWith('http') && !targetUrl.contains('about:blank')) {
         await _controller.loadRequest(Uri.parse(targetUrl));
-      } else if (widget.file.content.isNotEmpty) {
-        await _controller.loadHtmlString(widget.file.content,
-            baseUrl: widget.file.path);
+      } else if (widget.file?.content.isNotEmpty ?? false) {
+        await _controller.loadHtmlString(widget.file!.content,
+            baseUrl: widget.file!.path);
       } else {
         // Safe fallback for empty content to avoid assertion crash
         await _controller.loadHtmlString('<html><body></body></html>',
-            baseUrl: widget.file.path);
+            baseUrl: targetUrl);
       }
     }
   }

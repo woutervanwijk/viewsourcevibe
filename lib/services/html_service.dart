@@ -236,7 +236,17 @@ class HtmlService with ChangeNotifier {
 
   /// Server-dependent tabs (Probe, Headers, Security, Cookies) only for URLs
   /// We hide these for strict XML to keep the interface focused
-  bool get showServerTabs => (_currentFile?.isUrl ?? false) && !_isStrictXml;
+  bool get showServerTabs {
+    if ((_currentFile?.isUrl ?? false) && !_isStrictXml) return true;
+    // Show during loading of a URL
+    if (_isLoading &&
+        _currentInputText != null &&
+        (_currentInputText!.startsWith('http') ||
+            _currentInputText!.contains('://'))) {
+      return true;
+    }
+    return false;
+  }
 
   /// Browser tab is supported for URLs, HTML, SVG, and common media formats.
   /// We hide it for strict XML as it doesn't provide a useful visual render.
@@ -245,7 +255,15 @@ class HtmlService with ChangeNotifier {
     if (isMedia) return true;
     if (_isStrictXml) return true;
     if (_currentFile?.isUrl ?? false) return true;
-    return isHtml;
+    if (isHtml) return true;
+    // Show during loading of a URL
+    if (_isLoading &&
+        _currentInputText != null &&
+        (_currentInputText!.startsWith('http') ||
+            _currentInputText!.contains('://'))) {
+      return true;
+    }
+    return false;
   }
 
   bool get isMedia {
@@ -341,16 +359,41 @@ class HtmlService with ChangeNotifier {
     _currentInputText = '';
   }
 
+  /// Reset all loading and result state before a new URL load
+  void _resetLoadState({String? newUrl, bool notify = true}) {
+    _probeResult = null;
+    _browserProbeResult = null;
+    _probeError = null;
+    _pageMetadata = null;
+    _lastPageWeight = null;
+    _resourcePerformanceData = null;
+    _webViewLoadingProgress = 0.0;
+    _isProbing = false;
+    _currentlyProbingUrl = null;
+    _lastBrowserCookies = '';
+    _beautifiedCache.clear();
+    _isBeautifyEnabled = false;
+
+    // These are crucial for the "Loading" state in tabs
+    _currentFile = null;
+    _originalFile = null;
+
+    if (newUrl != null) {
+      _currentInputText = newUrl;
+      _pendingUrl = newUrl;
+    }
+
+    _isLoading = true;
+    _isWebViewLoading = false;
+    _webViewLoadingUrl = null;
+
+    if (notify) notifyListeners();
+  }
+
   /// Unified entry point for loading a URL
   Future<void> loadUrl(String url,
       {int? switchToTab, bool forceWebView = false}) async {
     if (url.isEmpty) return;
-
-    // Force stop any previous loading to ensure a clean slate
-    // and prevent old requests from interfering or playing media in the background
-    if (activeWebViewController != null) {
-      activeWebViewController!.runJavaScript('window.stop();');
-    }
 
     // Sanitize
     // Auto-prepend https if no scheme is provided, excluding special schemes like about:
@@ -360,74 +403,57 @@ class HtmlService with ChangeNotifier {
       url = 'https://$url';
     }
 
-    _currentInputText = url;
-    _pendingUrl = url;
+    // 1. Clean state and update main URL
+    // We don't notify yet because we want to set the correct loading path first
+    // to avoid unmounting the WebView if it's already relevant.
+    _resetLoadState(newUrl: url, notify: false);
+
+    // 2. Clear requested tab switch if provided
     if (switchToTab != null) {
       _requestedTabIndex = switchToTab;
     }
-    _isLoading = true;
-    _isWebViewLoading = false; // Reset webview loading state on new navigation
 
-    // Clear state
-    _probeResult = null;
-    _probeError = null;
-    _pageMetadata = null;
-    _lastPageWeight = null;
-    _resourcePerformanceData = null;
-    _webViewLoadingProgress = 0.0;
-
-    notifyListeners();
-
-    // Clear beautify cache on new load
-    _beautifiedCache.clear();
-    _isBeautifyEnabled = false;
-
-    // Start background probe ALWAYS
-    probeUrl(url).ignore();
-
-    // Browser Lazy Loading Logic
+    // 3. Force stop any previous loading and reset WebView to about:blank
     if (activeWebViewController != null) {
-      if (_activeTabIndex == browserTabIndex) {
-        // If Browser is active, load immediately (don't wait for source)
-        // This satisfies "don't wait for the tab to activate... do it directly"
-        activeWebViewController!.loadRequest(Uri.parse(url)).ignore();
-      } else {
-        // If Browser is inactive, clear to about:blank to stop background activity
-        // This satisfies "triggered... browser doesnt immediately load... goes to about:blank"
-        activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
-      }
+      activeWebViewController!.runJavaScript('window.stop();').ignore();
+      activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
     }
 
+    // 4. Trigger background probe ALWAYS
+    probeUrl(url).ignore();
+
+    // 5. Primary Load Path branching
     // Browser-First Mode: If enabled, force WebView (Browser) loading logic
-    // This skips the standard file download and focuses the browser tab
     bool shouldUseBrowserLogic = forceWebView || _useBrowserByDefault;
 
     if (shouldUseBrowserLogic) {
-      // WebView path
+      // Browser-First Flow:
+      // - Browser loads immediately
+      // - Source tab is DELAYED (stays null/loading)
       _webViewLoadingUrl = url;
       _isWebViewLoading = true;
-      _requestedTabIndex = browserTabIndex; // Dynamic index
-      notifyListeners();
-      // BrowserView will pick up _webViewLoadingUrl change
 
-      // If we are strictly browser-first (not just "forceWebView" override),
-      // we might want to minimally update file state to valid "URL" state
-      if (_useBrowserByDefault && !forceWebView) {
-        // Create a synthetic file object so the UI is happy
-        _currentFile = HtmlFile(
-          name: 'Browser',
-          path: url,
-          content: '', // Empty content, browser handles it
-          lastModified: DateTime.now(),
-          size: 0,
-          isUrl: true,
-        );
-        _originalFile = _currentFile;
-        notifyListeners();
+      // If Browser isn't selected, request switch (unless already switching somewhere else)
+      if (_activeTabIndex != browserTabIndex && switchToTab == null) {
+        _requestedTabIndex = browserTabIndex;
       }
+
+      notifyListeners();
+
+      // Actually trigger the load in the browser
+      if (activeWebViewController != null) {
+        activeWebViewController!.loadRequest(Uri.parse(url)).ignore();
+      }
+
+      // We don't fetch HTML here. Source will be lazy loaded when tab is clicked.
     } else {
-      // Standard path (Source First)
-      // Only run this if we are NOT using browser by default
+      // Source-First Flow:
+      // - HTML is fetched immediately
+      // - Browser tab stays at about:blank (DELAYED)
+
+      // Notify we started loading
+      notifyListeners();
+
       try {
         final file = await _loadFromUrlInternal(url);
         _pendingUrl = null;
@@ -4204,25 +4230,16 @@ Technical details: $e''';
 
   void updateWebViewUrl(String url) {
     if (_currentInputText != url) {
-      _currentInputText = url;
-      _webViewLoadingUrl =
-          null; // Clear specialized loading URL once synchronized
+      _resetLoadState(newUrl: url);
 
-      // Clear previous probe results immediately when a new navigation starts in WebView
-      _probeResult = null;
-      _probeError = null;
-      _pageMetadata = null;
+      // Ensure the WebView remains mounted in HomeScreen during its discovery phase
+      _isWebViewLoading = true;
+      _webViewLoadingUrl = url; // Set this so BrowserView knows it's the target
 
       notifyListeners();
 
       // Trigger probe for the new URL to update Headers, Security, etc.
-      // We don't await this to keep the UI responsive during WebView interaction
-      if (!url.startsWith('about:')) {
-        probeUrl(url).catchError((e) {
-          debugPrint('Error probing updated webview URL: $e');
-          return <String, dynamic>{};
-        });
-      }
+      probeUrl(url).ignore();
     }
   }
 
