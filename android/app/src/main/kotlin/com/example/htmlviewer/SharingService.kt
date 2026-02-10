@@ -14,14 +14,40 @@ import io.flutter.plugin.common.MethodChannel.Result
 import java.io.File
 import java.io.FileWriter
 
-class SharingService : FlutterPlugin, MethodCallHandler {
+import android.app.Activity
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+
+class SharingService : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
+    private var activity: Activity? = null
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "info.wouter.sourceview.sharing")
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
+    }
+
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        channel.setMethodCallHandler(null)
+    }
+
+    // ActivityAware implementation
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activity = binding.activity
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activity = binding.activity
+    }
+
+    override fun onDetachedFromActivity() {
+        activity = null
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -31,6 +57,16 @@ class SharingService : FlutterPlugin, MethodCallHandler {
             "shareFile" -> shareFile(call, result)
             "shareUrl" -> shareUrl(call, result)
             else -> result.notImplemented()
+        }
+    }
+
+    private fun startShareActivity(intent: Intent) {
+        val currentActivity = activity
+        if (currentActivity != null) {
+            currentActivity.startActivity(intent)
+        } else {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
         }
     }
 
@@ -49,10 +85,9 @@ class SharingService : FlutterPlugin, MethodCallHandler {
         }
         
         val shareIntent = Intent.createChooser(intent, "Share URL")
-        shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         
         try {
-            context.startActivity(shareIntent)
+            startShareActivity(shareIntent)
             result.success(true)
         } catch (e: Exception) {
             result.error("SHARE_FAILED", "Failed to share URL: ${e.message}", null)
@@ -74,10 +109,9 @@ class SharingService : FlutterPlugin, MethodCallHandler {
         }
         
         val shareIntent = Intent.createChooser(intent, "Share Text")
-        shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         
         try {
-            context.startActivity(shareIntent)
+            startShareActivity(shareIntent)
             result.success(true)
         } catch (e: Exception) {
             result.error("SHARE_FAILED", "Failed to share text: ${e.message}", null)
@@ -127,9 +161,8 @@ class SharingService : FlutterPlugin, MethodCallHandler {
             }
             
             val shareIntent = Intent.createChooser(intent, "Share HTML")
-            shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             
-            context.startActivity(shareIntent)
+            startShareActivity(shareIntent)
             result.success(true)
         } catch (e: Exception) {
             result.error("SHARE_FAILED", "Failed to share HTML: ${e.message}", null)
@@ -176,20 +209,15 @@ class SharingService : FlutterPlugin, MethodCallHandler {
         }
         
         val shareIntent = Intent.createChooser(intent, "Share File")
-        shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         
         try {
-            context.startActivity(shareIntent)
+            startShareActivity(shareIntent)
             result.success(true)
         } catch (e: Exception) {
             result.error("SHARE_FAILED", "Failed to share file: ${e.message}", null)
         }
     }
 
-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel.setMethodCallHandler(null)
-    }
-    
     companion object {
         fun registerWith(flutterEngine: FlutterEngine) {
             flutterEngine.plugins.add(SharingService())
