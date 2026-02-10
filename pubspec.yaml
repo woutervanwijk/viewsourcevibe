@@ -40,7 +40,7 @@ dependencies:
   # Code editor
   re_editor: ^0.8.0
   re_highlight: ^0.0.3
-  webview_flutter: ^4.13.1
+  flutter_inappwebview: ^6.1.5
 
   # File type detection
   mime_type: ^1.0.0

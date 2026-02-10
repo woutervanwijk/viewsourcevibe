@@ -529,7 +529,7 @@ class _TabPageWrapperState extends State<TabPageWrapper> {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     if (htmlService.activeWebViewController != null) {
       // WebView scroll to top (internal content)
-      htmlService.activeWebViewController?.scrollTo(0, 0);
+      htmlService.activeWebViewController?.scrollTo(x: 0, y: 0);
     }
 
     // 3. Fallback: also try PrimaryScrollController if it's different

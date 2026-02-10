@@ -23,7 +23,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:view_source_vibe/utils/cookie_utils.dart';
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:async';
 import 'dart:convert';
 import 'package:view_source_vibe/widgets/contextmenu.dart';
@@ -32,7 +32,7 @@ import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
-import 'package:webview_flutter/webview_flutter.dart' as wf;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:xml/xml.dart' as xml;
 
 class HtmlService with ChangeNotifier {
@@ -114,7 +114,7 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  wf.WebViewController? activeWebViewController;
+  InAppWebViewController? activeWebViewController;
 
   // Track the currently active find controller
   CodeFindController? _activeFindController;
@@ -331,11 +331,11 @@ class HtmlService with ChangeNotifier {
     if (activeWebViewController != null &&
         _currentFile != null &&
         _currentFile!.isUrl) {
-      final currentBrowserUrl = await activeWebViewController!.currentUrl();
-      if (currentBrowserUrl != _currentFile!.path) {
+      final currentBrowserUrl = await activeWebViewController!.getUrl();
+      if (currentBrowserUrl?.toString() != _currentFile!.path) {
         debugPrint('Triggering browser reload for: ${_currentFile!.path}');
         await activeWebViewController!
-            .loadRequest(Uri.parse(_currentFile!.path));
+            .loadUrl(urlRequest: URLRequest(url: WebUri(_currentFile!.path)));
       }
     }
   }
@@ -360,7 +360,7 @@ class HtmlService with ChangeNotifier {
     // Force stop any previous loading to ensure a clean slate
     // and prevent old requests from interfering or playing media in the background
     if (activeWebViewController != null) {
-      activeWebViewController!.runJavaScript('window.stop();');
+      activeWebViewController!.stopLoading();
     }
 
     // Sanitize
@@ -399,11 +399,15 @@ class HtmlService with ChangeNotifier {
       if (_activeTabIndex == browserTabIndex) {
         // If Browser is active, load immediately (don't wait for source)
         // This satisfies "don't wait for the tab to activate... do it directly"
-        activeWebViewController!.loadRequest(Uri.parse(url)).ignore();
+        activeWebViewController!
+            .loadUrl(urlRequest: URLRequest(url: WebUri(url)))
+            .ignore();
       } else {
         // If Browser is inactive, clear to about:blank to stop background activity
         // This satisfies "triggered... browser doesnt immediately load... goes to about:blank"
-        activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
+        activeWebViewController!
+            .loadUrl(urlRequest: URLRequest(url: WebUri('about:blank')))
+            .ignore();
       }
     }
 
@@ -466,9 +470,10 @@ class HtmlService with ChangeNotifier {
 
   void cancelWebViewLoad() {
     // 1. Force stop in JS (if possible)
-    activeWebViewController?.runJavaScript('window.stop();');
+    activeWebViewController?.stopLoading();
     // 2. Navigate away to about:blank to kill any pending network requests
-    activeWebViewController?.loadRequest(Uri.parse('about:blank'));
+    activeWebViewController?.loadUrl(
+        urlRequest: URLRequest(url: WebUri('about:blank')));
     // 3. Reset internal state immediately
     _webViewLoadingUrl = null;
     _isWebViewLoading = false;
@@ -760,9 +765,9 @@ class HtmlService with ChangeNotifier {
       }
 
       // Use HttpClient to manually handle redirects and capture certificate
-      final hClient = HttpClient();
+      final hClient = io.HttpClient();
       hClient.badCertificateCallback =
-          (X509Certificate cert, String host, int port) => true;
+          (io.X509Certificate cert, String host, int port) => true;
       final hRequest = await hClient.openUrl('GET', uri);
       hRequest.followRedirects = false;
 
@@ -801,7 +806,8 @@ class HtmlService with ChangeNotifier {
       debugPrint('Error handling redirects: $e');
 
       // If this is a DNS lookup failure or connection error, fall back to original URL
-      if (e is SocketException || e.toString().contains('Failed host lookup')) {
+      if (e is io.SocketException ||
+          e.toString().contains('Failed host lookup')) {
         debugPrint(
             'DNS/Connection error detected, falling back to original URL');
         return originalUri?.toString() ?? uri.toString();
@@ -1795,7 +1801,7 @@ class HtmlService with ChangeNotifier {
 
       // Resolve IP (part of probing)
       try {
-        final addresses = await InternetAddress.lookup(uri.host)
+        final addresses = await io.InternetAddress.lookup(uri.host)
             .timeout(const Duration(seconds: 2));
         if (addresses.isNotEmpty) {
           ipAddress = addresses.first.address;
@@ -1823,7 +1829,7 @@ class HtmlService with ChangeNotifier {
       }
 
       // Use HttpClient for the final request
-      final hClient = HttpClient();
+      final hClient = io.HttpClient();
       final hRequest = await hClient.openUrl('GET', Uri.parse(finalUrl));
 
       headers.forEach((key, value) {
@@ -1943,7 +1949,7 @@ class HtmlService with ChangeNotifier {
         errorMessage = 'Request timed out';
       } else if (e is FormatException) {
         errorMessage = 'Invalid URL format';
-      } else if (e is SocketException) {
+      } else if (e is io.SocketException) {
         errorMessage = 'Network error: ${e.message}';
       } else {
         errorMessage = e.toString();
@@ -2032,9 +2038,9 @@ Technical details: $e''';
       final uri = Uri.parse(targetUrl);
 
       // Use HttpClient directly to get certificate info
-      final client = HttpClient();
+      final client = io.HttpClient();
       client.badCertificateCallback =
-          (X509Certificate cert, String host, int port) => true;
+          (io.X509Certificate cert, String host, int port) => true;
       client.connectionTimeout = const Duration(seconds: 10);
 
       final stopwatch = Stopwatch()..start();
@@ -2042,7 +2048,7 @@ Technical details: $e''';
 
       // Resolve IP
       try {
-        final addresses = await InternetAddress.lookup(uri.host)
+        final addresses = await io.InternetAddress.lookup(uri.host)
             .timeout(const Duration(seconds: 2));
         if (addresses.isNotEmpty) {
           ipAddress = addresses.first.address;
@@ -2054,8 +2060,8 @@ Technical details: $e''';
       // Headers to mimic a browser/curl
       final userAgent = 'curl/7.88.1';
 
-      HttpClientRequest request;
-      HttpClientResponse response;
+      io.HttpClientRequest request;
+      io.HttpClientResponse response;
 
       try {
         // Try HEAD request first (most efficient)
@@ -3615,7 +3621,7 @@ Technical details: $e''';
     }
   }
 
-  Map<String, dynamic> _extractCertificateInfo(X509Certificate cert) {
+  Map<String, dynamic> _extractCertificateInfo(io.X509Certificate cert) {
     try {
       return {
         'subject': cert.subject,
@@ -3722,7 +3728,7 @@ Technical details: $e''';
       String content = '';
       try {
         final html = await activeWebViewController!
-            .runJavaScriptReturningResult('document.documentElement.outerHTML')
+            .evaluateJavascript(source: 'document.documentElement.outerHTML')
             .timeout(const Duration(seconds: 5));
 
         if (html is String) {
@@ -3766,8 +3772,8 @@ Technical details: $e''';
 
       // 2. Optional: Get Page Weight & Cookies
       try {
-        final weightRaw = await activeWebViewController!
-            .runJavaScriptReturningResult(
+        final weightRaw = await activeWebViewController!.evaluateJavascript(
+            source:
                 '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; var seen=new Set(); for(var i=0; i<r.length; i++) { var name=r[i].name; tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); seen.add(name); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n && !seen.has(n.name)) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else if(!n && !seen.has(document.location.href)) { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();');
 
         String jsonStr = '';
@@ -4145,7 +4151,7 @@ Technical details: $e''';
   /// Clear the WebView cache (excluding cookies/localStorage if possible, but WebViewController.clearCache usually does disk cache)
   Future<void> clearBrowserCache() async {
     if (activeWebViewController != null) {
-      await activeWebViewController!.clearCache();
+      await InAppWebViewController.clearAllCache();
       debugPrint('Browser cache cleared');
     }
   }
@@ -4153,11 +4159,12 @@ Technical details: $e''';
   /// Clear all browser data: Cache, Local Storage, and Cookies
   Future<void> clearBrowserStorage() async {
     if (activeWebViewController != null) {
-      await activeWebViewController!.clearCache();
-      await activeWebViewController!.clearLocalStorage();
+      await InAppWebViewController.clearAllCache();
+      // Clear local storage using webStorage API
+      await activeWebViewController!.webStorage.localStorage.clear();
     }
-    // Clear cookies using the static/singleton CookieManager
-    await wf.WebViewCookieManager().clearCookies();
+    // Clear cookies using InAppWebView's CookieManager
+    await CookieManager.instance().deleteAllCookies();
 
     // Reset probe results as they might contain now-invalid cookie data
     _probeResult = null;
@@ -4168,9 +4175,9 @@ Technical details: $e''';
   }
 
   http.Client _createClient() {
-    final ioc = HttpClient();
+    final ioc = io.HttpClient();
     ioc.badCertificateCallback =
-        (X509Certificate cert, String host, int port) => true;
+        (io.X509Certificate cert, String host, int port) => true;
     return IOClient(ioc);
   }
 
@@ -4202,27 +4209,27 @@ Technical details: $e''';
     if (activeWebViewController == null) return;
 
     try {
-      final url = await activeWebViewController!.currentUrl();
-      final html = await activeWebViewController!.runJavaScriptReturningResult(
-          'document.documentElement.outerHTML') as String;
+      final url = await activeWebViewController!.getUrl();
+      final html = await activeWebViewController!.evaluateJavascript(
+          source: 'document.documentElement.outerHTML') as String;
 
       // Unquote if needed (standard JS result processing)
       String finalHtml = _unquoteHtml(html);
 
       if (url != null) {
         final processedFilename =
-            await detectFileTypeAndGenerateFilename(url, finalHtml);
+            await detectFileTypeAndGenerateFilename(url.toString(), finalHtml);
 
         final htmlFile = HtmlFile(
             name: processedFilename,
-            path: url,
+            path: url.toString(),
             content: finalHtml,
             lastModified: DateTime.now(),
             size: finalHtml.length,
             isUrl: true);
 
         _currentFile = htmlFile;
-        _currentInputText = url;
+        _currentInputText = url.toString();
         _requestedTabIndex =
             0; // Switch to Source tab to show extracted content
 
