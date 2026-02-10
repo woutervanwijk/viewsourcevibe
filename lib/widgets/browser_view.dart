@@ -105,7 +105,19 @@ class _BrowserViewState extends State<BrowserView> {
                 htmlService.updateWebViewLoadingProgress(1.0);
               }
             },
-            onUrlChange: (UrlChange change) {
+            onUrlChange: (UrlChange change) async {
+              debugPrint('urlChange ${change.url}');
+              final htmlService =
+                  Provider.of<HtmlService>(context, listen: false);
+              if (change.url == null ||
+                  change.url == 'about:blank' ||
+                  change.url!.startsWith('data:') ||
+                  change.url == await _controller?.currentUrl()) {
+                return;
+              }
+
+              htmlService.loadFromUrl(change.url as String,
+                  switchToTab: htmlService.activeTabIndex);
               // if (mounted && change.url != null) {
               //   if (change.url == 'about:blank' ||
               //       change.url!.startsWith('data:')) {
@@ -138,9 +150,9 @@ class _BrowserViewState extends State<BrowserView> {
               debugPrint('onnav req ${request.url}');
               // Otherwise, intercept and run through our robust loadFromUrl flow
               // This ensures probe, reset, and proper mode (Browser/Fetch) handling
-              htmlService.loadFromUrl(request.url,
-                  switchToTab: htmlService.activeTabIndex);
-              return NavigationDecision.prevent;
+              // htmlService.loadFromUrl(request.url,
+              //     switchToTab: htmlService.activeTabIndex);
+              return NavigationDecision.navigate;
             },
             onWebResourceError: (WebResourceError error) {
               if (mounted) {
