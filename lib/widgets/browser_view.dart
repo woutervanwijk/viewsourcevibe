@@ -296,7 +296,9 @@ class _BrowserViewState extends State<BrowserView> {
         await _controller.loadRequest(Uri.parse(targetUrl));
       } else if (widget.file?.content.isNotEmpty ?? false) {
         await _controller.loadHtmlString(widget.file!.content,
-            baseUrl: widget.file!.path);
+            baseUrl: widget.file!.path.isNotEmpty
+                ? Uri.file(widget.file!.path).toString()
+                : null);
       } else {
         // Safe fallback for empty content to avoid assertion crash
         await _controller.loadHtmlString('<html><body></body></html>',
