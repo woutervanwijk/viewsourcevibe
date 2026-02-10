@@ -93,7 +93,7 @@ class _UrlInputState extends State<UrlInput> {
       builder: (context, htmlService, child) {
         // Update URL display when file changes
         debugPrint(
-            'url ${htmlService.currentFile?.path} ${htmlService.currentFile?.extension}');
+            'url input change ${htmlService.currentFile?.path} ${htmlService.currentFile?.extension}');
         if (htmlService.currentInputText != null) {
           final currentText = htmlService.currentInputText!;
 

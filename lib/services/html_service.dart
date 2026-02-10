@@ -1545,7 +1545,7 @@ class HtmlService with ChangeNotifier {
 
     // For local files, show the name in the URL bar instead of the full path
     _currentInputText = file.isUrl ? file.path : file.name;
-    notifyListeners();
+    // Don't notify here - we'll notify once at the end after metadata extraction
     _autoSave();
     await scrollToZero();
 
@@ -1556,6 +1556,7 @@ class HtmlService with ChangeNotifier {
             _currentFile!.name.endsWith('.html') ||
             _currentFile!.name.endsWith('.xml') ||
             _currentFile!.name.endsWith('.xhtml'))) {
+      // Metadata extraction will call notifyListeners when done
       _extractMetadata(isPartial: isPartial);
     } else {
       // If content type changed to something without metadata, clear it
@@ -1563,8 +1564,9 @@ class HtmlService with ChangeNotifier {
       if (_pageMetadata != null &&
           !(selectedContentType == 'html' || selectedContentType == 'xml')) {
         _pageMetadata = null;
-        notifyListeners();
       }
+      // Notify once at the end if we're not extracting metadata
+      notifyListeners();
     }
 
     // Note: State saving is handled by the AppLifecycleObserver
@@ -2034,6 +2036,7 @@ Technical details: $e''';
     _probeResult = null; // Reset previous results immediately
     _probeError = null;
     _lastBrowserCookies = ''; // Reset browser cookies on new probe
+    debugPrint('probe url $url');
     notifyListeners();
     _autoSave();
     try {
@@ -3481,7 +3484,7 @@ Technical details: $e''';
             })
         .toList();
 
-    notifyListeners();
+    // Don't notify here - caller will notify
   }
 
   /// Matches extracted metadata links with performance resource data to find sizes
@@ -3734,7 +3737,7 @@ Technical details: $e''';
 
   Future<void> syncWebViewState(String url, {bool isPartial = false}) async {
     if (activeWebViewController == null) return;
-
+    debugPrint('syncwv $url - $_currentInputText');
     // Update URL bar immediately
     if (_currentInputText != url) {
       _currentInputText = url;

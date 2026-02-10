@@ -30,7 +30,7 @@ class _BrowserViewState extends State<BrowserView> {
   late final WebViewController? _controller;
   final String viewID = 'browser-preview-view';
   String? _currentRssUrl;
-  int _syncStage = 0; // 0: none, 1: 30%, 2: 60%, 3: 90%
+// 0: none, 1: 30%, 2: 60%, 3: 90%
 
   @override
   void initState() {
@@ -81,18 +81,19 @@ class _BrowserViewState extends State<BrowserView> {
               //   htmlService.updateWebViewLoadingProgress(0.0);
               // }
             },
-            onPageFinished: (String url) {
+            onPageFinished: (String url) async {
               if (mounted) {
                 // Ignore internal or blank URLs for UI updates
                 if (url == 'about:blank' || url.startsWith('data:')) return;
-
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                if (await _controller?.currentUrl() != url) return;
                 // If we are viewing the RSS template, block sync to preserve XML source.
                 if (_currentRssUrl != null && url == _currentRssUrl) {
                   debugPrint('page finished rss $url');
                   // If the app model has drifted (e.g. we came back from an article),
                   // restore the original XML content.
-                  final htmlService =
-                      Provider.of<HtmlService>(context, listen: false);
+
                   if (htmlService.currentFile?.path != url) {
                     htmlService.loadFromUrl(url);
                   }
@@ -100,11 +101,8 @@ class _BrowserViewState extends State<BrowserView> {
                 }
                 debugPrint('page finished $url');
                 // Use syncWebViewState to update everything (content, metadata, probe)
-                final htmlService =
-                    Provider.of<HtmlService>(context, listen: false);
                 htmlService.syncWebViewState(url, isPartial: false);
                 htmlService.updateWebViewLoadingProgress(1.0);
-                _syncStage = 0;
               }
             },
             onUrlChange: (UrlChange change) {
@@ -208,7 +206,26 @@ class _BrowserViewState extends State<BrowserView> {
     // If the file changed (e.g. from local to URL or different content), reload.
     if (oldWidget.file?.path != widget.file?.path ||
         oldWidget.file?.content != widget.file?.content) {
-      _loadContentIfVisible();
+      // CRITICAL FIX: Don't reload if WebView is already showing this URL
+      // This prevents loops when syncWebViewState updates the file after navigation
+      if (_controller != null && widget.file?.path != null) {
+        _controller.currentUrl().then((currentUrlString) {
+          final url = currentUrlString ?? '';
+
+          // Skip reload if WebView is already on this URL
+          if (url == widget.file!.path) {
+            debugPrint(
+                'didUpdateWidget: Skipping reload, WebView already on $url');
+            return;
+          }
+
+          debugPrint(
+              'didUpdateWidget: Reloading from $url to ${widget.file!.path}');
+          _loadContentIfVisible();
+        });
+      } else {
+        _loadContentIfVisible();
+      }
     }
   }
 
