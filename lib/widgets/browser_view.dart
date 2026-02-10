@@ -43,43 +43,43 @@ class _BrowserViewState extends State<BrowserView> {
         ..setNavigationDelegate(
           NavigationDelegate(
             onProgress: (int progress) {
-              if (mounted) {
-                final htmlService =
-                    Provider.of<HtmlService>(context, listen: false);
-                htmlService.updateWebViewLoadingProgress(progress / 100.0);
+              // if (mounted) {
+              //   final htmlService =
+              //       Provider.of<HtmlService>(context, listen: false);
+              //   htmlService.updateWebViewLoadingProgress(progress / 100.0);
 
-                // Multi-Stage Early Sync:
-                // We trigger partial syncs at several thresholds to populate tabs progressively.
-                final url = htmlService.webViewLoadingUrl;
-                if (url != null && url != 'about:blank') {
-                  if (progress >= 30 && progress < 60 && _syncStage < 1) {
-                    _syncStage = 1;
-                    htmlService.syncWebViewState(url, isPartial: true);
-                  } else if (progress >= 60 &&
-                      progress < 90 &&
-                      _syncStage < 2) {
-                    _syncStage = 2;
-                    htmlService.syncWebViewState(url, isPartial: true);
-                  } else if (progress >= 90 &&
-                      progress < 100 &&
-                      _syncStage < 3) {
-                    _syncStage = 3;
-                    htmlService.syncWebViewState(url, isPartial: true);
-                  }
-                }
-              }
+              //   // Multi-Stage Early Sync:
+              //   // We trigger partial syncs at several thresholds to populate tabs progressively.
+              //   final url = htmlService.webViewLoadingUrl;
+              //   if (url != null && url != 'about:blank') {
+              //     if (progress >= 30 && progress < 60 && _syncStage < 1) {
+              //       _syncStage = 1;
+              //       htmlService.syncWebViewState(url, isPartial: true);
+              //     } else if (progress >= 60 &&
+              //         progress < 90 &&
+              //         _syncStage < 2) {
+              //       _syncStage = 2;
+              //       htmlService.syncWebViewState(url, isPartial: true);
+              //     } else if (progress >= 90 &&
+              //         progress < 100 &&
+              //         _syncStage < 3) {
+              //       _syncStage = 3;
+              //       htmlService.syncWebViewState(url, isPartial: true);
+              //     }
+              //   }
+              // }
             },
             onPageStarted: (String url) {
-              if (mounted) {
-                // Ignore internal or blank URLs for UI updates
-                if (url == 'about:blank' || url.startsWith('data:')) return;
+              // if (mounted) {
+              //   // Ignore internal or blank URLs for UI updates
+              //   if (url == 'about:blank' || url.startsWith('data:')) return;
 
-                _syncStage = 0;
-                final htmlService =
-                    Provider.of<HtmlService>(context, listen: false);
-                htmlService.updateWebViewUrl(url);
-                htmlService.updateWebViewLoadingProgress(0.0);
-              }
+              //   _syncStage = 0;
+              //   final htmlService =
+              //       Provider.of<HtmlService>(context, listen: false);
+              //   htmlService.updateWebViewUrl(url);
+              //   htmlService.updateWebViewLoadingProgress(0.0);
+              // }
             },
             onPageFinished: (String url) {
               if (mounted) {
@@ -88,6 +88,7 @@ class _BrowserViewState extends State<BrowserView> {
 
                 // If we are viewing the RSS template, block sync to preserve XML source.
                 if (_currentRssUrl != null && url == _currentRssUrl) {
+                  debugPrint('page finished rss $url');
                   // If the app model has drifted (e.g. we came back from an article),
                   // restore the original XML content.
                   final htmlService =
@@ -97,7 +98,7 @@ class _BrowserViewState extends State<BrowserView> {
                   }
                   return;
                 }
-
+                debugPrint('page finished $url');
                 // Use syncWebViewState to update everything (content, metadata, probe)
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
@@ -107,14 +108,14 @@ class _BrowserViewState extends State<BrowserView> {
               }
             },
             onUrlChange: (UrlChange change) {
-              if (mounted && change.url != null) {
-                if (change.url == 'about:blank' ||
-                    change.url!.startsWith('data:')) {
-                  return;
-                }
-                Provider.of<HtmlService>(context, listen: false)
-                    .updateWebViewUrl(change.url!);
-              }
+              // if (mounted && change.url != null) {
+              //   if (change.url == 'about:blank' ||
+              //       change.url!.startsWith('data:')) {
+              //     return;
+              //   }
+              //   Provider.of<HtmlService>(context, listen: false)
+              //       .updateWebViewUrl(change.url!);
+              // }
             },
             onNavigationRequest: (NavigationRequest request) {
               if (request.url == 'about:blank' ||
@@ -136,7 +137,7 @@ class _BrowserViewState extends State<BrowserView> {
               if (request.url == htmlService.webViewLoadingUrl) {
                 return NavigationDecision.navigate;
               }
-
+              debugPrint('onnav req ${request.url}');
               // Otherwise, intercept and run through our robust loadFromUrl flow
               // This ensures probe, reset, and proper mode (Browser/Fetch) handling
               htmlService.loadFromUrl(request.url,

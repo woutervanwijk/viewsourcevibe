@@ -414,10 +414,9 @@ class HtmlService with ChangeNotifier {
     }
 
     // 3. Force stop any previous loading and reset WebView to about:blank
-    if (activeWebViewController != null) {
-      activeWebViewController!.runJavaScript('window.stop();').ignore();
-      activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
-    }
+    // if (activeWebViewController != null) {
+    //   activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
+    // }
 
     // 4. Trigger background probe ALWAYS
     probeUrl(url).ignore();
@@ -482,10 +481,8 @@ class HtmlService with ChangeNotifier {
   }
 
   void cancelWebViewLoad() {
-    // 1. Force stop in JS (if possible)
-    activeWebViewController?.runJavaScript('window.stop();');
     // 2. Navigate away to about:blank to kill any pending network requests
-    activeWebViewController?.loadRequest(Uri.parse('about:blank'));
+    // activeWebViewController?.loadRequest(Uri.parse('about:blank'));
     // 3. Reset internal state immediately
     _webViewLoadingUrl = null;
     _isWebViewLoading = false;
@@ -1457,7 +1454,6 @@ class HtmlService with ChangeNotifier {
       if (contentType != null && contentType is String) {
         final detectedLanguage = getLanguageForMimeType(contentType);
         if (detectedLanguage != null) {
-          debugPrint('Detected language from content-type: $detectedLanguage');
           selectedContentType = detectedLanguage;
         }
       }
@@ -1475,13 +1471,14 @@ class HtmlService with ChangeNotifier {
     // Performance warning for large files
     final fileSizeMB = file.size / (1024 * 1024);
     if (file.size > 1 * 1024 * 1024) {
-      // 1MB warning threshold
-      debugPrint(
-          '📄 Loading large file: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
       if (file.size > 7 * 1024 * 1024) {
         // 7MB severe warning
         debugPrint(
             '⚠️  Very large file loading: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
+      } else {
+        // 1MB warning threshold
+        debugPrint(
+            '📄 Loading large file: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
       }
     }
 
@@ -1536,7 +1533,6 @@ class HtmlService with ChangeNotifier {
         );
 
         if (correctFilename != file.name) {
-          debugPrint('Fixing filename: ${file.name} -> $correctFilename');
           // Create new file with corrected name
           file = file.copyWith(name: correctFilename);
           _currentFile = file;
@@ -1838,6 +1834,7 @@ class HtmlService with ChangeNotifier {
 
       // Update the input text immediately
       if (finalUrl != url) {
+        debugPrint('update text html $finalUrl');
         _currentInputText = finalUrl;
         notifyListeners();
       }
@@ -2108,27 +2105,20 @@ Technical details: $e''';
 
       int? contentLength = response.contentLength;
 
-      debugPrint('Probe Headers: ${response.headers}');
-      debugPrint('Initial ContentLength: $contentLength');
-
       // Check Content-Length header fallback
       if ((contentLength <= 0) &&
           response.headers.value('content-length') != null) {
         contentLength = int.tryParse(response.headers.value('content-length')!);
-        debugPrint('Parsed ContentLength from header: $contentLength');
       }
 
       // Check Content-Range header (for 206 Partial Content)
       if (response.headers.value('content-range') != null) {
         final contentRange = response.headers.value('content-range')!;
-        debugPrint('Parsing Content-Range: $contentRange');
         final parts = contentRange.split('/');
         if (parts.length == 2 && parts[1] != '*') {
           final totalSize = int.tryParse(parts[1]);
           if (totalSize != null) {
             contentLength = totalSize;
-            debugPrint(
-                'Parsed Total Length from Content-Range: $contentLength');
           }
         }
       }
@@ -2758,12 +2748,6 @@ Technical details: $e''';
 
     // Warn about potential performance issues with large files
     if (contentSize > 1 * 1024 * 1024) {
-      // 1MB warning threshold
-      debugPrint(
-          '🚨 Large file detected: ${contentSizeMB.toStringAsFixed(2)} MB');
-      debugPrint('   Syntax highlighting may impact performance');
-      debugPrint('   File extension: $extension');
-
       if (contentSize > 7 * 1024 * 1024) {
         // 7MB severe warning
         debugPrint(
@@ -2785,6 +2769,11 @@ Technical details: $e''';
         } catch (e) {
           debugPrint('Could not show large file warning: $e');
         }
+      } else {
+        // 1MB warning threshold
+        debugPrint(
+            '🚨 Large file detected: ${contentSizeMB.toStringAsFixed(2)} MB');
+        debugPrint('   Syntax highlighting may impact performance');
       }
     }
 
@@ -3439,8 +3428,6 @@ Technical details: $e''';
     final baseUrl = _currentFile!.isUrl ? _currentFile!.path : '';
 
     try {
-      debugPrint(
-          'Metadata: Starting extraction for ${baseUrl.substring(0, (baseUrl.length > 50 ? 50 : baseUrl.length))}... content length: ${html.length}');
       final rawMetadata = await extractMetadataInIsolate(html, baseUrl);
       _pageMetadata = Map<String, dynamic>.from(rawMetadata);
       debugPrint(
@@ -3452,8 +3439,6 @@ Technical details: $e''';
 
       // Correlate resource sizes with metadata
       if (_pageMetadata != null && _resourcePerformanceData != null) {
-        debugPrint(
-            'Metadata: Enriching with performance data (${_resourcePerformanceData!.length} entries)');
         _enrichMetadataWithSizes(baseUrl);
       }
     } catch (e, stack) {
@@ -4005,9 +3990,6 @@ Technical details: $e''';
         .toList();
 
     if (resourcesToUpdate.isEmpty) return;
-
-    debugPrint(
-        'enrichResourceSizes: Found ${resourcesToUpdate.length} resources with 0 size to check.');
 
     // Limit concurrency to avoid choking the network
     const int batchSize = 5;
