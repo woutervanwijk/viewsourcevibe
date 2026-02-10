@@ -85,7 +85,7 @@ class FormatUtils {
     if (bytes <= 0) return "0 b";
     if (bytes < 1024) return "$bytes b";
 
-    const suffixes = ["b", "kb", "mb", "gb", "tb", "pb", "eb", "zb", "yb"];
+    const suffixes = ["B", "KB", "MB", "GB", "TB"];
     double value = bytes.toDouble();
     int suffixIndex = 0;
 
