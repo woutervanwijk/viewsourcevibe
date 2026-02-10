@@ -214,7 +214,7 @@ class _UrlInputState extends State<UrlInput> {
                             // Don't call onFieldSubmitted(); this prevents automatically selecting
                             // the first suggestion in the list. We want "Enter" to strictly load
                             // what the user typed.
-                            _loadUrl(switchToTab: htmlService.activeTabIndex);
+                            _loadUrl(switchToTab: 0);
                           },
                           onTapOutside: (event) {
                             FocusScope.of(context).unfocus();
