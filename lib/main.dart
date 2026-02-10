@@ -69,7 +69,7 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
           size: content.length,
           isUrl: false,
         );
-        await htmlService.loadFile(htmlFile);
+        await htmlService.loadFile(htmlFile, switchToTab: 0);
       } catch (e) {
         debugPrint('Error loading text from deep link: $e');
       }
@@ -105,7 +105,7 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
             size: await file.length(),
             isUrl: false,
           );
-          await htmlService.loadFile(htmlFile);
+          await htmlService.loadFile(htmlFile, switchToTab: 0);
         } else {
           debugPrint('File does not exist: $normalizedFilePath');
         }
@@ -211,7 +211,7 @@ Try these solutions:
         size: errorContent.length,
         isUrl: false,
       );
-      await htmlService.loadFile(htmlFile);
+      await htmlService.loadFile(htmlFile, switchToTab: 0);
     } catch (e) {
       debugPrint('Error loading content URI: $e');
     }
@@ -363,7 +363,7 @@ void main() async {
                     size: await file.length(),
                     isUrl: false,
                   );
-                  await htmlService.loadFile(htmlFile);
+                  await htmlService.loadFile(htmlFile, switchToTab: 0);
                 } else {
                   debugPrint(
                       '❌ Restored file no longer exists: ${savedState.filePath}');

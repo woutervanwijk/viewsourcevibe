@@ -94,7 +94,7 @@ class Toolbar extends StatelessWidget {
 
         if (context.mounted) {
           await Provider.of<HtmlService>(context, listen: false)
-              .loadFile(htmlFile);
+              .loadFile(htmlFile, switchToTab: 0);
         }
       }
     } catch (e) {
@@ -220,8 +220,18 @@ class Toolbar extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.arrow_back, size: 24),
               tooltip: 'Back',
-              onPressed:
-                  htmlService.canGoBack ? () => htmlService.goBack() : null,
+              onPressed: () {
+                if (htmlService.canGoBack) {
+                  htmlService.goBack();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No previous page in history'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
             ),
             IconButton(
               icon: const Icon(Icons.folder_open),

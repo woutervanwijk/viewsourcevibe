@@ -34,6 +34,7 @@ import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
 import 'package:webview_flutter/webview_flutter.dart' as wf;
 import 'package:xml/xml.dart' as xml;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HtmlService with ChangeNotifier {
   HtmlFile? _currentFile;
@@ -403,6 +404,13 @@ class HtmlService with ChangeNotifier {
       url = 'https://$url';
     }
 
+    // 0. Save current page to navigation stack before resetting state
+    // We must do this BEFORE calling _resetLoadState because it clears _currentFile
+    // Also check if we are navigating to a different page to avoid duplicates on reload
+    if (_currentFile == null || _currentFile!.path != url) {
+      _pushToNavigationStack();
+    }
+
     // 1. Clean state and update main URL
     // We don't notify yet because we want to set the correct loading path first
     // to avoid unmounting the WebView if it's already relevant.
@@ -435,6 +443,26 @@ class HtmlService with ChangeNotifier {
       // If Browser isn't selected, request switch (unless already switching somewhere else)
       if (_activeTabIndex != browserTabIndex && switchToTab == null) {
         _requestedTabIndex = browserTabIndex;
+      }
+
+      // Add to history immediately for Browser-First Flow
+      // This ensures history is updated even when HTML isn't fetched yet
+      if (url.isNotEmpty &&
+          !url.startsWith('shared://') &&
+          !url.startsWith('content://') &&
+          !url.startsWith('about:')) {
+        _urlHistoryService?.addUrl(url);
+
+        // Create a placeholder HtmlFile for the current URL in Browser-First Flow
+        // This ensures _currentFile is set even when HTML isn't fetched yet
+        _currentFile = HtmlFile(
+          name: url,
+          path: url,
+          content: '',
+          lastModified: DateTime.now(),
+          size: 0,
+          isUrl: true,
+        );
       }
 
       notifyListeners();
@@ -614,6 +642,56 @@ class HtmlService with ChangeNotifier {
 
   void setUrlHistoryService(UrlHistoryService service) {
     _urlHistoryService = service;
+    // Load navigation stack from persistent storage
+    _loadNavigationStack();
+  }
+
+  /// Load navigation stack from SharedPreferences
+  Future<void> _loadNavigationStack() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<String>? savedUrls = prefs.getStringList('navigation_stack');
+
+      if (savedUrls != null && savedUrls.isNotEmpty) {
+        // Convert URLs back to HtmlFile objects
+        _navigationStack.clear();
+        for (final url in savedUrls) {
+          // Create minimal HtmlFile objects for navigation
+          // Content will be fetched when user navigates back
+          final file = HtmlFile(
+            name: url,
+            path: url,
+            content: '',
+            lastModified: DateTime.now(),
+            size: 0,
+            isUrl: true,
+          );
+          _navigationStack.add(file);
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading navigation stack: $e');
+    }
+  }
+
+  /// Save navigation stack to SharedPreferences
+  Future<void> _saveNavigationStack() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Save only the URLs from the navigation stack
+      final urls = _navigationStack
+          .where((file) => file.isUrl && file.path.isNotEmpty)
+          .map((file) => file.path)
+          .toList();
+
+      // Limit to 50 items to avoid excessive storage
+      final limitedUrls = urls.length > 50 ? urls.sublist(0, 50) : urls;
+
+      await prefs.setStringList('navigation_stack', limitedUrls);
+    } catch (e) {
+      debugPrint('Error saving navigation stack: $e');
+    }
   }
 
   /// Auto-save the current state if a service is available (debounced)
@@ -1423,13 +1501,16 @@ class HtmlService with ChangeNotifier {
         if (_navigationStack.isEmpty ||
             _navigationStack.last.path != fileToStack.path) {
           _navigationStack.add(fileToStack);
+          _saveNavigationStack(); // Persist navigation stack
         }
       }
     }
   }
 
   Future<void> loadFile(HtmlFile file,
-      {bool clearProbe = true, bool isPartial = false}) async {
+      {bool clearProbe = true,
+      bool isPartial = false,
+      int? switchToTab}) async {
     _isBeautifyEnabled = false; // Reset beautify mode on new file
 
     // Save current file to navigation stack if we are not going back
@@ -1463,6 +1544,11 @@ class HtmlService with ChangeNotifier {
     if (_shouldAddToHistory(file)) {
       // For local files, only add the name to history for a cleaner display
       _urlHistoryService?.addUrl(file.isUrl ? file.path : file.name);
+    }
+
+    // Set requested tab switch if provided
+    if (switchToTab != null) {
+      _requestedTabIndex = switchToTab;
     }
 
     // Switch back to editor if this is a local file
@@ -1658,7 +1744,9 @@ class HtmlService with ChangeNotifier {
       _probeResult = null; // Clear probe results
       _probeError = null; // Clear probe errors
     }
-    _pageMetadata = null; // Clear page metadata
+    // Always clear page metadata when loading a new file, even if preserving probe
+    // This ensures metadata tabs are cleaned when navigating back
+    _pageMetadata = null;
     // clearHighlightCache() is now called within _prepareForEditorReset()
     _beautifiedCache.clear(); // Clear beautify cache
     notifyListeners();
@@ -1771,13 +1859,22 @@ class HtmlService with ChangeNotifier {
     if (_navigationStack.isEmpty) return;
 
     final previousFile = _navigationStack.removeLast();
+    _saveNavigationStack(); // Persist navigation stack after removal
     _isNavigatingBack = true;
     try {
       // Use the public setter to trigger notifyListeners() immediately
       // This ensures the UrlInput widget's text controller updates instantly
       currentInputText =
           previousFile.isUrl ? previousFile.path : previousFile.name;
-      await loadFile(previousFile, clearProbe: false);
+      await loadFile(previousFile, clearProbe: false, switchToTab: 0);
+
+      // Explicitly trigger WebView load if it's a URL
+      // This ensures the browser actually navigates back, as loadFile only updates internal state
+      if (previousFile.isUrl && activeWebViewController != null) {
+        // We use loadRequest instead of goBack() on controller because
+        // we manage our own history stack which might differ from WebView's internal stack
+        activeWebViewController!.loadRequest(Uri.parse(previousFile.path));
+      }
     } finally {
       _isNavigatingBack = false;
     }
