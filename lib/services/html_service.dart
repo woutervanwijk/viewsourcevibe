@@ -447,22 +447,22 @@ class HtmlService with ChangeNotifier {
 
       // Add to history immediately for Browser-First Flow
       // This ensures history is updated even when HTML isn't fetched yet
-      if (url.isNotEmpty &&
-          !url.startsWith('shared://') &&
-          !url.startsWith('content://') &&
-          !url.startsWith('about:')) {
+      // We use a temporary HtmlFile to check if it should be added
+      final tempFile = HtmlFile(
+        name: url,
+        path: url,
+        content: '',
+        lastModified: DateTime.now(),
+        size: 0,
+        isUrl: true,
+      );
+
+      if (url.isNotEmpty && _shouldAddToHistory(tempFile)) {
         _urlHistoryService?.addUrl(url);
 
         // Create a placeholder HtmlFile for the current URL in Browser-First Flow
         // This ensures _currentFile is set even when HTML isn't fetched yet
-        _currentFile = HtmlFile(
-          name: url,
-          path: url,
-          content: '',
-          lastModified: DateTime.now(),
-          size: 0,
-          isUrl: true,
-        );
+        _currentFile = tempFile;
       }
 
       notifyListeners();
@@ -1469,16 +1469,31 @@ class HtmlService with ChangeNotifier {
 
   /// internal helper to check if file is valid for history
   bool _shouldAddToHistory(HtmlFile file) {
-    if (!file.isUrl) return false;
-    if (file.path.isEmpty) return false;
-    // Don't add shared text content to history
-    if (file.path.startsWith('shared://')) return false;
-    // Don't add content URIs (shared files) to history
-    if (file.path.startsWith('content://')) return false;
-    // Don't add error pages
-    if (file.name == 'Content File Error' || file.name == 'Error') return false;
+    // Exclude explicit shared content (unless it's a URL in disguise which is handled by isUrl=true usually)
+    // Shared URLs usually come in as isUrl=true.
+    // Shared text/files come in as isUrl=false.
 
-    return true;
+    // Explicit exclusions
+    if (file.isShared && !file.isUrl) return false;
+    if (file.path.startsWith('shared://')) return false;
+    if (file.path.startsWith('content://')) return false;
+    if (file.path.startsWith('sandboxed://')) return false;
+    if (file.path.startsWith('about:')) return false;
+
+    // Check for error pages
+    if (file.name == 'Content File Error' ||
+        file.name == 'Error' ||
+        file.isError) {
+      return false;
+    }
+
+    // Allow if it is a URL
+    if (file.isUrl) return true;
+
+    // Allow if it has a valid path (local file)
+    if (file.path.isNotEmpty) return true;
+
+    return false;
   }
 
   /// Push the current file to the navigation stack
@@ -2241,46 +2256,50 @@ Technical details: $e''';
       };
 
       // Cookies
-      final setCookie = response.headers.value('set-cookie');
+      // Cookies - use response.cookies to handle multiple Set-Cookie headers correctly
+      // This avoids "More than one value for header set-cookie" exception
       final List<String> cookies =
-          setCookie != null ? [setCookie] : []; // Basic handling
-
-      // Construct the result, ONLY from the probe
-      _probeResult = {
-        'statusCode': response.statusCode,
-        'reasonPhrase': response.reasonPhrase,
-        'headers': normalizedHeaders,
-        'isRedirect': response.isRedirect,
-        'contentLength': contentLength,
-        'finalUrl': url,
-        'responseTime': stopwatch.elapsedMilliseconds,
-        'ipAddress': ipAddress,
-        'security': securityHeaders,
-        'cookies': cookies,
-        'certificate': certInfo, // Now populated!
-        'analyzedCookies': <Map<String,
-            dynamic>>[], // Will be filled by _updateAnalyzedCookies
-      };
-
-      // Update cookies with any browser cookies we might already have
-      _updateAnalyzedCookies();
-
-      // Extract redirect location if present
-      if (response.isRedirect) {
-        final location = normalizedHeaders['location'];
-        if (location != null && location.isNotEmpty) {
-          // Resolve relative URLs
-          final uri = Uri.parse(targetUrl);
-          final redirectUri = uri.resolve(location);
-          _probeResult!['redirectLocation'] = redirectUri.toString();
-        }
-      }
+          response.cookies.map((c) => c.toString()).toList();
 
       // Only update state if this probe is still relevant
       if (_currentlyProbingUrl == url) {
-        // _probeResult is already set above
+        // Construct the result, ONLY from the probe
+        _probeResult = {
+          'statusCode': response.statusCode,
+          'reasonPhrase': response.reasonPhrase,
+          'headers': normalizedHeaders,
+          'isRedirect': response.isRedirect,
+          'contentLength': contentLength,
+          'finalUrl': url,
+          'responseTime': stopwatch.elapsedMilliseconds,
+          'ipAddress': ipAddress,
+          'security': securityHeaders,
+          'cookies': cookies,
+          'certificate': certInfo, // Now populated!
+          'analyzedCookies': <Map<String,
+              dynamic>>[], // Will be filled by _updateAnalyzedCookies
+        };
+
+        // Update cookies with any browser cookies we might already have
+        _updateAnalyzedCookies();
+
+        // Extract redirect location if present
+        if (response.isRedirect) {
+          final location = normalizedHeaders['location'];
+          if (location != null && location.isNotEmpty) {
+            // Resolve relative URLs
+            final uri = Uri.parse(targetUrl);
+            final redirectUri = uri.resolve(location);
+            _probeResult!['redirectLocation'] = redirectUri.toString();
+          }
+        }
+
+        return _probeResult!;
+      } else {
+        debugPrint(
+            'Discarding stale probe result for $url (current: $_currentlyProbingUrl)');
+        return {};
       }
-      return _probeResult!;
     } catch (e) {
       debugPrint('Error probing URL: $e');
       if (_currentlyProbingUrl == url) {

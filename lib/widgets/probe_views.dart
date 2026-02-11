@@ -171,8 +171,10 @@ class ProbeGeneralView extends ProbeViewBase {
     final isRedirect = result['isRedirect'] == true;
 
     Color statusColor = Colors.green;
-    if (status >= 300 && status < 400) statusColor = Colors.orange;
-    if (status >= 400) statusColor = Colors.red;
+    if (status != null) {
+      if (status >= 300 && status < 400) statusColor = Colors.orange;
+      if (status >= 400) statusColor = Colors.red;
+    }
 
     return Card(
       elevation: 0,

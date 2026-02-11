@@ -356,6 +356,7 @@ class UnifiedSharingService {
           lastModified: DateTime.now(),
           size: text.length,
           isUrl: false,
+          isShared: true,
         );
 
         await htmlService.loadFile(htmlFile);
@@ -372,6 +373,7 @@ class UnifiedSharingService {
         lastModified: DateTime.now(),
         size: text.length,
         isUrl: false,
+        isShared: true,
       );
 
       await htmlService.loadFile(htmlFile);
@@ -454,6 +456,7 @@ class UnifiedSharingService {
         lastModified: DateTime.now(),
         size: bytes.length,
         isUrl: false,
+        isShared: true,
       );
 
       await htmlService.loadFile(htmlFile);
@@ -576,6 +579,8 @@ Try these solutions:
         lastModified: DateTime.now(),
         size: errorContent.length,
         isUrl: false,
+        isShared: true,
+        isError: true,
       );
 
       await htmlService.loadFile(htmlFile);
@@ -723,6 +728,8 @@ If you're the app developer, please update the native iOS Share Extension code.'
             lastModified: DateTime.now(),
             size: errorContent.length,
             isUrl: false,
+            isShared: true,
+            isError: true,
           );
 
           await htmlService.loadFile(htmlFile);
@@ -748,6 +755,7 @@ If you're the app developer, please update the native iOS Share Extension code.'
         lastModified: await file.lastModified(),
         size: fileSize,
         isUrl: false,
+        isShared: true,
       );
 
       await htmlService.loadFile(htmlFile);

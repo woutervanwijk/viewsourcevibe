@@ -7,6 +7,7 @@ class HtmlFile {
   final bool isUrl;
   final bool isError;
   final Map<String, dynamic>? probeResult;
+  final bool isShared;
 
   HtmlFile({
     required this.name,
@@ -17,10 +18,11 @@ class HtmlFile {
     this.isUrl = false,
     this.probeResult,
     this.isError = false,
+    this.isShared = false,
   });
 
   factory HtmlFile.fromContent(String name, String content,
-      {bool isUrl = false, bool isError = false}) {
+      {bool isUrl = false, bool isError = false, bool isShared = false}) {
     return HtmlFile(
       name: name,
       path: '',
@@ -29,6 +31,7 @@ class HtmlFile {
       size: content.length,
       isUrl: isUrl,
       isError: isError,
+      isShared: isShared,
     );
   }
 
@@ -120,6 +123,7 @@ class HtmlFile {
     bool? isUrl,
     Map<String, dynamic>? probeResult,
     bool? isError,
+    bool? isShared,
   }) {
     return HtmlFile(
       name: name ?? this.name,
@@ -130,6 +134,7 @@ class HtmlFile {
       isUrl: isUrl ?? this.isUrl,
       probeResult: probeResult ?? this.probeResult,
       isError: isError ?? this.isError,
+      isShared: isShared ?? this.isShared,
     );
   }
 }
