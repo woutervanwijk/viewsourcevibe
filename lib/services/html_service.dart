@@ -1753,6 +1753,9 @@ class HtmlService with ChangeNotifier {
     await _prepareForEditorReset();
     await scrollToZero();
     _currentFile = null;
+    _webViewLoadingUrl =
+        null; // Clear any pending webview load url to prevent it from overriding local file
+    _isWebViewLoading = false; // Reset webview loading state
     _originalFile = null; // Also clear the original file
     selectedContentType = null; // Reset content type selection
     if (clearProbe) {

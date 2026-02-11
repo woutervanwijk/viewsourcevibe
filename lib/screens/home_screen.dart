@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _lastShowMetadataTabs = false;
   bool _lastShowServerTabs = false;
   bool _lastIsBrowserSupported = true;
+  bool _lastShouldShowBrowser = true;
 
   @override
   void initState() {
@@ -63,11 +64,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final showMetadataTabs = htmlService.showMetadataTabs;
     final showServerTabs = htmlService.showServerTabs;
     final isBrowserSupported = htmlService.isBrowserSupported;
+    final shouldShowBrowser = (htmlService.currentFile?.isUrl ?? false) ||
+        htmlService.isWebViewLoading;
 
     if (isHtmlOrXml == _lastIsHtmlOrXml &&
         showMetadataTabs == _lastShowMetadataTabs &&
         showServerTabs == _lastShowServerTabs &&
         isBrowserSupported == _lastIsBrowserSupported &&
+        shouldShowBrowser == _lastShouldShowBrowser &&
         !force) {
       return;
     }
@@ -76,12 +80,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final oldLength = _tabController.length;
 
     // Calculate exact length: 1 (Editor)
-    // + (1 if isBrowserSupported for Browser)
+    // + (1 if isBrowserSupported AND shouldShowBrowser for Browser)
     // + (1 if isHtmlOrXml for DOM Tree)
     // + (3 if showMetadataTabs for Metadata/Services/Media)
     // + (4 if showServerTabs for Probe/Headers/Security/Cookies)
     int newLength = 1; // Editor
-    if (isBrowserSupported) newLength += 1;
+    if (isBrowserSupported && shouldShowBrowser) newLength += 1;
     if (isHtmlOrXml) newLength += 1;
     if (showMetadataTabs) newLength += 3;
     if (showServerTabs) newLength += 4;
@@ -99,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _lastShowMetadataTabs = showMetadataTabs;
       _lastShowServerTabs = showServerTabs;
       _lastIsBrowserSupported = isBrowserSupported;
+      _lastShouldShowBrowser = shouldShowBrowser;
     }
   }
 
@@ -156,6 +161,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final showServerTabs = htmlService.showServerTabs;
     final isBrowserSupported = htmlService.isBrowserSupported;
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
+    final shouldShowBrowser = (htmlService.currentFile?.isUrl ?? false) ||
+        htmlService.isWebViewLoading;
 
     final sourceTab = _buildTab(Icons.code, 'Source');
     final browserTab = _buildTab(Icons.language, 'Browser');
@@ -177,8 +184,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     return [
-      if (useBrowserByDefault) browserTab else sourceTab,
-      if (useBrowserByDefault) sourceTab else browserTab,
+      if (shouldShowBrowser && useBrowserByDefault) browserTab,
+      sourceTab,
+      if (shouldShowBrowser && !useBrowserByDefault) browserTab,
       if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
       if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
       if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
@@ -198,6 +206,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final showServerTabs = htmlService.showServerTabs;
     final isBrowserSupported = htmlService.isBrowserSupported;
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
+    final shouldShowBrowser =
+        (currentFile?.isUrl ?? false) || htmlService.isWebViewLoading;
 
     final sourceView = currentFile != null
         ? _buildRefreshable(
@@ -278,8 +288,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     return [
-      if (useBrowserByDefault) browserView else sourceView,
-      if (useBrowserByDefault) sourceView else browserView,
+      if (shouldShowBrowser && useBrowserByDefault) browserView,
+      sourceView,
+      if (shouldShowBrowser && !useBrowserByDefault) browserView,
 
       // 3. DOM Tree (Conditional)
       if (isHtmlOrXml)
