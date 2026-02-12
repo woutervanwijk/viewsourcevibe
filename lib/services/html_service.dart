@@ -91,12 +91,22 @@ class HtmlService with ChangeNotifier {
   final Map<String, String> _beautifiedCache = {};
   final ValueNotifier<double> webViewScrollNotifier = ValueNotifier(0.0);
   double _webViewScrollY = 0.0;
+  DateTime? _lastScrollUpdate;
   double get webViewScrollY => _webViewScrollY;
 
   set webViewScrollY(double value) {
     if (_webViewScrollY != value) {
       _webViewScrollY = value;
-      webViewScrollNotifier.value = value;
+
+      // Throttle updates to avoid excessive rebuilds (100ms)
+      // Always update if it's 0 (top) or the first update to ensure "Scroll to Top" button behaves correctly
+      final now = DateTime.now();
+      if (value == 0 ||
+          _lastScrollUpdate == null ||
+          now.difference(_lastScrollUpdate!).inMilliseconds > 100) {
+        _lastScrollUpdate = now;
+        webViewScrollNotifier.value = value;
+      }
       // Do NOT notifyListeners() here - it causes full app rebuild on every scroll frame
     }
   }
