@@ -346,10 +346,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     // Update TabController synchronously if content type changed
     // This MUST happen before building the TabBar to avoid length mismatch
+    final shouldShowBrowser = (htmlService.currentFile?.isUrl ?? false) ||
+        htmlService.isWebViewLoading;
+
     if (htmlService.isHtmlOrXml != _lastIsHtmlOrXml ||
         htmlService.showMetadataTabs != _lastShowMetadataTabs ||
         htmlService.showServerTabs != _lastShowServerTabs ||
-        htmlService.isBrowserSupported != _lastIsBrowserSupported) {
+        htmlService.isBrowserSupported != _lastIsBrowserSupported ||
+        shouldShowBrowser != _lastShouldShowBrowser) {
       _updateTabs(htmlService);
     }
 
