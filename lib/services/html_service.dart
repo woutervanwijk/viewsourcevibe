@@ -82,6 +82,10 @@ class HtmlService with ChangeNotifier {
   bool get isWebViewLoading => _isWebViewLoading;
   String? _webViewLoadingUrl;
   String? get webViewLoadingUrl => _webViewLoadingUrl;
+
+  // Track last file update to detect rapid redirects
+  DateTime? _lastCurrentFileUpdate;
+
   bool _isBeautifyEnabled = false;
   bool get isBeautifyEnabled => _isBeautifyEnabled;
   final Map<String, String> _beautifiedCache = {};
@@ -407,7 +411,12 @@ class HtmlService with ChangeNotifier {
     // 0. Save current page to navigation stack before resetting state
     // We must do this BEFORE calling _resetLoadState because it clears _currentFile
     // Also check if we are navigating to a different page to avoid duplicates on reload
-    if (_currentFile == null || _currentFile!.path != url) {
+    // AND check for Rapid Redirects: If current file was loaded < 1s ago, assume redirect and replace it
+    final bool isRedirect = _lastCurrentFileUpdate != null &&
+        DateTime.now().difference(_lastCurrentFileUpdate!).inMilliseconds <
+            1000;
+
+    if ((_currentFile == null || _currentFile!.path != url) && !isRedirect) {
       _pushToNavigationStack();
     }
 
@@ -1566,6 +1575,7 @@ class HtmlService with ChangeNotifier {
 
     await clearFile(clearProbe: clearProbe);
     _currentFile = file;
+    _lastCurrentFileUpdate = DateTime.now();
     _originalFile = file; // Store original file for "Automatic" option
 
     // Restore probe result if available
