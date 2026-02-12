@@ -1600,7 +1600,9 @@ class HtmlService with ChangeNotifier {
     }
 
     // Switch back to editor if this is a local file
-    if (!file.isUrl) {}
+    if (!file.isUrl && switchToTab == null) {
+      _requestedTabIndex = sourceTabIndex;
+    }
 
     // Performance warning for large files
     final fileSizeMB = file.size / (1024 * 1024);
