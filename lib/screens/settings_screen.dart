@@ -146,7 +146,7 @@ class SettingsScreen extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: ListTile(
-                    title: const Text('Clear Search History'),
+                    title: const Text('Clear History'),
                     subtitle: const Text('Remove all saved URLs from history'),
                     trailing: const Icon(Icons.delete_outline),
                     onTap: () => _confirmClearHistory(context),
@@ -438,7 +438,7 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear Search History'),
+        title: const Text('Clear History'),
         content: const Text(
             'Are you sure you want to clear your entire search history? This action cannot be undone.'),
         actions: [

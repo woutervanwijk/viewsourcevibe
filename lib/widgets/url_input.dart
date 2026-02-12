@@ -64,8 +64,17 @@ class _UrlInputState extends State<UrlInput> {
     setState(() => _errorMessage = '');
 
     try {
-      await Provider.of<HtmlService>(context, listen: false)
-          .loadFromUrl(url, switchToTab: switchToTab ?? 0);
+      final htmlService = Provider.of<HtmlService>(context, listen: false);
+
+      // Check if we are incorrectly reloading a local file by its name
+      // This prevents "index.html" -> "https://index.html" conversion in loadUrl
+      if (htmlService.currentFile != null &&
+          !htmlService.currentFile!.isUrl &&
+          url == htmlService.currentFile!.name) {
+        await htmlService.reloadCurrentFile();
+      } else {
+        await htmlService.loadFromUrl(url, switchToTab: switchToTab ?? 0);
+      }
 
       // Clear the input after successful load
       // _urlController.clear();

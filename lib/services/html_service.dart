@@ -497,6 +497,32 @@ class HtmlService with ChangeNotifier {
     }
   }
 
+  Future<void> reloadCurrentFile() async {
+    if (_currentFile == null) return;
+
+    if (_currentFile!.isUrl) {
+      return loadUrl(_currentFile!.path);
+    } else {
+      // Local file reload
+      if (_currentFile!.path.isNotEmpty) {
+        try {
+          final file = File(_currentFile!.path);
+          if (await file.exists()) {
+            final content = await file.readAsString();
+            final newFile = _currentFile!.copyWith(
+              content: content,
+              lastModified: await file.lastModified(),
+              size: await file.length(),
+            );
+            await loadFile(newFile, clearProbe: true);
+          }
+        } catch (e) {
+          debugPrint('Error reloading local file: $e');
+        }
+      }
+    }
+  }
+
   void triggerWebViewLoad(String url) {
     loadUrl(url, switchToTab: 1, forceWebView: true);
   }
@@ -1469,6 +1495,13 @@ class HtmlService with ChangeNotifier {
 
   /// internal helper to check if file is valid for history
   bool _shouldAddToHistory(HtmlFile file) {
+    if (!file.isUrl || file.isError) return false;
+
+    // Strict check: Only allow http and https URLs
+    if (!file.path.startsWith('http://') && !file.path.startsWith('https://')) {
+      return false;
+    }
+
     // Exclude explicit shared content (unless it's a URL in disguise which is handled by isUrl=true usually)
     // Shared URLs usually come in as isUrl=true.
     // Shared text/files come in as isUrl=false.

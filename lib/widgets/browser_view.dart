@@ -106,6 +106,7 @@ class _BrowserViewState extends State<BrowserView> {
               }
             },
             onUrlChange: (UrlChange change) async {
+              if (!mounted) return;
               debugPrint('urlChange ${change.url}');
               final htmlService =
                   Provider.of<HtmlService>(context, listen: false);
@@ -118,16 +119,9 @@ class _BrowserViewState extends State<BrowserView> {
 
               htmlService.loadFromUrl(change.url as String,
                   switchToTab: htmlService.activeTabIndex);
-              // if (mounted && change.url != null) {
-              //   if (change.url == 'about:blank' ||
-              //       change.url!.startsWith('data:')) {
-              //     return;
-              //   }
-              //   Provider.of<HtmlService>(context, listen: false)
-              //       .updateWebViewUrl(change.url!);
-              // }
             },
             onNavigationRequest: (NavigationRequest request) {
+              if (!mounted) return NavigationDecision.prevent;
               if (request.url == 'about:blank' ||
                   request.url.startsWith('data:')) {
                 return NavigationDecision.navigate;
