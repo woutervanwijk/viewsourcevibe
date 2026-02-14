@@ -381,7 +381,6 @@ class _UrlInputState extends State<UrlInput> {
 
 class _AutocompleteOptions extends StatefulWidget {
   const _AutocompleteOptions({
-    super.key,
     required this.displayStringForOption,
     required this.onSelected,
     required this.onOptionTap,
@@ -475,7 +474,7 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
                     ? Theme.of(context)
                         .colorScheme
                         .primaryContainer
-                        .withOpacity(0.3)
+                        .withValues(alpha: 0.3)
                     : null,
                 child: ListTile(
                   title: Text(displayName,
