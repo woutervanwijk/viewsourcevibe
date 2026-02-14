@@ -212,11 +212,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         (currentFile?.isUrl ?? false) || htmlService.isWebViewLoading;
 
     final sourceView = currentFile != null
-        ? _buildRefreshable(
-            FileViewer(
-              file: currentFile,
+        ? KeepAliveWrapper(
+            child: _buildRefreshable(
+              FileViewer(
+                file: currentFile,
+              ),
+              'source',
             ),
-            'source',
           )
         : _buildScrollableRefreshable(
             Center(
