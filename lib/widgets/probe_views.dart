@@ -234,7 +234,7 @@ class ProbeGeneralView extends ProbeViewBase {
             if (result['headers']?['content-type'] != null)
               _buildDetailRow(
                   'Content-Type', result['headers']['content-type']),
-            _buildDetailRow('Final URL', result['finalUrl']),
+            _buildDetailRow('Final URL', result['finalUrl'] ?? 'N/A'),
             if (isRedirect && result['redirectLocation'] != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -647,11 +647,11 @@ class ProbeCookiesView extends ProbeViewBase {
         itemCount: analyzedCookies.length,
         itemBuilder: (context, index) {
           final cookie = analyzedCookies[index] as Map<String, dynamic>;
-          final name = cookie['name'] as String;
-          final value = cookie['value'] as String;
-          final category = cookie['category'] as String;
+          final name = cookie['name'] as String? ?? 'Unknown';
+          final value = cookie['value'] as String? ?? '';
+          final category = cookie['category'] as String? ?? 'unknown';
           final provider = cookie['provider'] as String?;
-          final source = cookie['source'] as String;
+          final source = cookie['source'] as String? ?? 'Unknown';
 
           Color badgeColor;
           switch (category) {

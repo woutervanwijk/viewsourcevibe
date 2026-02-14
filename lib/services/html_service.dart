@@ -428,7 +428,8 @@ class HtmlService with ChangeNotifier {
         DateTime.now().difference(_lastCurrentFileUpdate!).inMilliseconds <
             1000;
 
-    if ((_currentFile == null || _currentFile!.path != url) && !isRedirect) {
+    if ((_currentFile == null || !(_areUrlsEqual(_currentFile!.path, url))) &&
+        !isRedirect) {
       _pushToNavigationStack();
     }
 
@@ -1550,6 +1551,41 @@ class HtmlService with ChangeNotifier {
     return false;
   }
 
+  /// Helper to check if two URLs are effectively the same
+  /// ignoring trailing slashes, fragments, and minor scheme differences
+  bool _areUrlsEqual(String url1, String url2) {
+    if (url1 == url2) return true;
+
+    try {
+      final uri1 = Uri.parse(url1);
+      final uri2 = Uri.parse(url2);
+
+      // Compare hosts (case-insensitive)
+      if (uri1.host.toLowerCase() != uri2.host.toLowerCase()) return false;
+
+      // Compare paths (ignoring trailing slashes)
+      String path1 = uri1.path;
+      String path2 = uri2.path;
+      if (path1.endsWith('/') && path1.length > 1) {
+        path1 = path1.substring(0, path1.length - 1);
+      }
+      if (path2.endsWith('/') && path2.length > 1) {
+        path2 = path2.substring(0, path2.length - 1);
+      }
+      if (path1 != path2) return false;
+
+      // Compare query parameters
+      // We don't compare fragments as they usually don't trigger a full reload
+      // But for some SPAs they might. For now, let's treat them as equal if query/path match.
+      if (uri1.query != uri2.query) return false;
+
+      return true;
+    } catch (e) {
+      // If parsing fails, fall back to simple string comparison
+      return url1 == url2;
+    }
+  }
+
   /// Push the current file to the navigation stack
   void _pushToNavigationStack() {
     if (!_isNavigatingBack && _currentFile != null) {
@@ -1568,7 +1604,7 @@ class HtmlService with ChangeNotifier {
 
         // Prevent duplicates in back stack (don't push if same as top)
         if (_navigationStack.isEmpty ||
-            _navigationStack.last.path != fileToStack.path) {
+            !_areUrlsEqual(_navigationStack.last.path, fileToStack.path)) {
           _navigationStack.add(fileToStack);
           _saveNavigationStack(); // Persist navigation stack
         }
@@ -1941,7 +1977,27 @@ class HtmlService with ChangeNotifier {
       // This ensures the UrlInput widget's text controller updates instantly
       currentInputText =
           previousFile.isUrl ? previousFile.path : previousFile.name;
-      await loadFile(previousFile, clearProbe: false, switchToTab: 0);
+
+      // CRITICAL FIX: If the previous file has empty content (e.g. from Browser-First access),
+      // we must fetch the content now to ensure the Source Code view works.
+      if (previousFile.isUrl &&
+          previousFile.content.isEmpty &&
+          !previousFile.isError) {
+        debugPrint(
+            'Back navigation: Previous file content is empty, refetching...');
+        notifyListeners(); // Update UI to show loading/url change
+        try {
+          final fetchedFile = await _loadFromUrlInternal(previousFile.path);
+          // Preserve the name if it was set to something specific, but content is more important
+          await loadFile(fetchedFile, clearProbe: false, switchToTab: 0);
+        } catch (e) {
+          debugPrint('Error refetching content on back navigation: $e');
+          // Fallback to loading the empty file so we at least are on the right URL
+          await loadFile(previousFile, clearProbe: false, switchToTab: 0);
+        }
+      } else {
+        await loadFile(previousFile, clearProbe: false, switchToTab: 0);
+      }
 
       // Explicitly trigger WebView load if it's a URL
       // This ensures the browser actually navigates back, as loadFile only updates internal state
@@ -3943,9 +3999,16 @@ Technical details: $e''';
       // 1. Critical: Get Content (HTML or Raw)
       String content = '';
       try {
-        final html = await activeWebViewController!
-            .runJavaScriptReturningResult('document.documentElement.outerHTML')
-            .timeout(const Duration(seconds: 5));
+        final html =
+            await activeWebViewController!.runJavaScriptReturningResult('''
+              (function() {
+                var contentType = document.contentType;
+                if (contentType && (contentType.includes('xml') || contentType.includes('rss'))) {
+                  return new XMLSerializer().serializeToString(document);
+                }
+                return document.documentElement.outerHTML;
+              })();
+            ''').timeout(const Duration(seconds: 5));
 
         if (html is String) {
           content = _unquoteHtml(html);

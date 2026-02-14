@@ -216,11 +216,15 @@ class _BrowserViewState extends State<BrowserView> {
       // CRITICAL FIX: Don't reload if WebView is already showing this URL
       // This prevents loops when syncWebViewState updates the file after navigation
       if (_controller != null && widget.file?.path != null) {
-        _controller.currentUrl().then((currentUrlString) {
+        _controller.currentUrl().then((currentUrlString) async {
           final url = currentUrlString ?? '';
 
-          // Skip reload if WebView is already on this URL
-          if (url == widget.file!.path) {
+          // Skip reload if WebView is already on this URL, UNLESS it's an RSS feed
+          // (which needs custom rendering even if URL matches)
+          final isRss = await RssTemplateService.isRssFeed(
+              widget.file?.name ?? '', widget.file?.content ?? '');
+
+          if (url == widget.file!.path && !isRss) {
             debugPrint(
                 'didUpdateWidget: Skipping reload, WebView already on $url');
             return;
