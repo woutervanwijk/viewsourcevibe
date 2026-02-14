@@ -118,7 +118,8 @@ class _BrowserViewState extends State<BrowserView> {
               }
 
               htmlService.loadFromUrl(change.url as String,
-                  switchToTab: htmlService.activeTabIndex);
+                  switchToTab: htmlService.activeTabIndex,
+                  skipWebViewLoad: true);
             },
             onNavigationRequest: (NavigationRequest request) {
               if (!mounted) return NavigationDecision.prevent;

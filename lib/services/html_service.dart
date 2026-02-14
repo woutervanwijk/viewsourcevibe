@@ -407,7 +407,9 @@ class HtmlService with ChangeNotifier {
 
   /// Unified entry point for loading a URL
   Future<void> loadUrl(String url,
-      {int? switchToTab, bool forceWebView = false}) async {
+      {int? switchToTab,
+      bool forceWebView = false,
+      bool skipWebViewLoad = false}) async {
     if (url.isEmpty) return;
 
     // Sanitize
@@ -487,7 +489,7 @@ class HtmlService with ChangeNotifier {
       notifyListeners();
 
       // Actually trigger the load in the browser
-      if (activeWebViewController != null) {
+      if (activeWebViewController != null && !skipWebViewLoad) {
         activeWebViewController!.loadRequest(Uri.parse(url)).ignore();
       }
 
@@ -2182,9 +2184,11 @@ Technical details: $e''';
     }
   }
 
-  Future<void> loadFromUrl(String url, {int? switchToTab}) async {
+  Future<void> loadFromUrl(String url,
+      {int? switchToTab, bool skipWebViewLoad = false}) async {
     // Redirect to the unified entry point
-    return loadUrl(url, switchToTab: switchToTab);
+    return loadUrl(url,
+        switchToTab: switchToTab, skipWebViewLoad: skipWebViewLoad);
   }
 
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
