@@ -146,7 +146,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: child,
               )
             else
-              SliverToBoxAdapter(
+              SliverFillRemaining(
+                hasScrollBody: false,
                 child: child,
               ),
           ],
