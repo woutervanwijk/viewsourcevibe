@@ -6,14 +6,16 @@ import 'package:xml/xml.dart' as xml;
 
 /// Extract metadata from the file content
 Future<Map<String, dynamic>> extractMetadataInIsolate(
-    String html, String baseUrl) async {
-  return await compute(
-      _extractMetadataInternal, {'html': html, 'baseUrl': baseUrl});
+    String html, String baseUrl,
+    {Map<String, String>? headers}) async {
+  return await compute(_extractMetadataInternal,
+      {'html': html, 'baseUrl': baseUrl, 'headers': headers});
 }
 
-Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
-  final html = args['html']!;
-  final baseUrl = args['baseUrl']!;
+Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
+  final html = args['html'] as String;
+  final baseUrl = args['baseUrl'] as String;
+  final headers = args['headers'] as Map<String, String>?;
 
   final Map<String, dynamic> metadata = {
     'openGraph': <String, dynamic>{},
@@ -65,8 +67,8 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, String> args) {
       metadata['icons']['icon'] ??
       metadata['icons']['shortcut icon'];
 
-  // Detect CMS and Frameworks (regex on full HTML still useful for quick checks)
-  _detectTechnologies(html, metadata);
+  // Detect CMS and Frameworks (regex on full HTML + Headers)
+  _detectTechnologies(html, metadata, headers);
 
   // Detect Services (Trackers, Fonts, etc.)
   _detectServices(html, metadata);
@@ -478,42 +480,83 @@ void _extractJsonLdInfo(String html, Map<String, dynamic> metadata) {
   }
 }
 
-/// Guess CMS and Frameworks based on patterns in the HTML
-void _detectTechnologies(String html, Map<String, dynamic> metadata) {
+/// Guess CMS and Frameworks based on patterns in the HTML and Headers
+void _detectTechnologies(
+    String html, Map<String, dynamic> metadata, Map<String, String>? headers) {
   final Map<String, String> tech = {};
 
+  // 1. Header-based Detection (Backend, Server, Caching)
+  if (headers != null) {
+    final server = headers['server'];
+    final xPoweredBy = headers['x-powered-by'];
+    final via = headers['via'];
+    // Check Cookies only via Set-Cookie header if strictly needed,
+    // but usually 'cookies' list is better if available (not passed here yet).
+    // We can check Set-Cookie in headers if present as a single string or fallback.
+
+    if (server != null) {
+      if (server.contains('nginx')) tech['Web Server'] = 'Nginx';
+      if (server.contains('Apache')) tech['Web Server'] = 'Apache';
+      if (server.contains('Cloudflare')) tech['CDN'] = 'Cloudflare';
+      if (server.contains('Netlify')) tech['CDN'] = 'Netlify';
+      if (server.contains('Vercel')) tech['Platform'] = 'Vercel';
+      if (server.contains('GSE')) tech['Web Server'] = 'Google Servlet Engine';
+      if (server.contains('AmazonS3')) tech['Storage'] = 'Amazon S3';
+    }
+
+    if (xPoweredBy != null) {
+      if (xPoweredBy.contains('PHP')) tech['Backend'] = 'PHP';
+      if (xPoweredBy.contains('ASP.NET')) tech['Backend'] = 'ASP.NET';
+      if (xPoweredBy.contains('Express')) tech['Backend'] = 'Express';
+      if (xPoweredBy.contains('Next.js')) tech['Framework'] = 'Next.js';
+    }
+
+    if (via != null) {
+      if (via.contains('varnish')) tech['Cache'] = 'Varnish';
+    }
+  }
+
+  // 2. HTML-based Detection (Generator Meta Tag)
   final generator = metadata['otherMeta']['generator']?.toLowerCase() ?? '';
   if (generator.contains('wordpress')) {
     tech['CMS'] = 'WordPress';
+    _extractVersion(generator, 'WordPress', tech);
   } else if (generator.contains('joomla')) {
     tech['CMS'] = 'Joomla';
+    _extractVersion(generator, 'Joomla', tech);
   } else if (generator.contains('drupal')) {
     tech['CMS'] = 'Drupal';
+    _extractVersion(generator, 'Drupal', tech);
   } else if (generator.contains('prestashop')) {
     tech['CMS'] = 'PrestaShop';
   } else if (generator.contains('ghost')) {
     tech['CMS'] = 'Ghost';
+    _extractVersion(generator, 'Ghost', tech);
   } else if (generator.contains('hugo')) {
     tech['Static Site'] = 'Hugo';
+    _extractVersion(generator, 'Hugo', tech);
   } else if (generator.contains('webflow')) {
     tech['CMS'] = 'Webflow';
   } else if (generator.contains('wix')) {
     tech['CMS'] = 'Wix';
   } else if (generator.contains('shopify')) {
     tech['CMS'] = 'Shopify';
-  } else if (generator.contains('prestashop')) {
-    tech['CMS'] = 'PrestaShop';
   } else if (generator.contains('bitrix')) {
     tech['CMS'] = '1C-Bitrix';
   } else if (generator.contains('docusaurus')) {
     tech['Static Site'] = 'Docusaurus';
   } else if (generator.contains('gatsby')) {
     tech['Static Site'] = 'Gatsby';
+    _extractVersion(generator, 'Gatsby', tech);
   } else if (generator.contains('astro')) {
     tech['Static Site'] = 'Astro';
+    _extractVersion(generator, 'Astro', tech);
+  } else if (generator.contains('jekyll')) {
+    tech['Static Site'] = 'Jekyll';
+    _extractVersion(generator, 'Jekyll', tech);
   }
 
-  // Path and Pattern-based CMS detection
+  // 3. Path and Pattern-based CMS detection
   if (tech['CMS'] == null && tech['Static Site'] == null) {
     if (html.contains('wp-content') || html.contains('wp-includes')) {
       tech['CMS'] = 'WordPress';
@@ -525,7 +568,6 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
       tech['CMS'] = 'Drupal';
     } else if (html.contains('/modules/') &&
         (html.contains('prestashop') || html.contains('/themes/'))) {
-      // PrestaShop often has themes/[theme]/assets/ or modules/[module]
       if (html.contains('var prestashop =') ||
           html.contains('id_product_attribute')) {
         tech['CMS'] = 'PrestaShop';
@@ -546,10 +588,12 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     } else if (html.contains('adobe-experience-manager') ||
         html.contains('aem')) {
       tech['CMS'] = 'Adobe Experience Manager';
+    } else if (html.contains('strapi')) {
+      tech['CMS'] = 'Strapi';
     }
   }
 
-  // Plugin & Extension Detection
+  // 4. Plugin & Extension Detection
   final List<String> plugins = [];
   if (tech['CMS'] == 'WordPress') {
     if (html.contains('woocommerce') ||
@@ -595,14 +639,16 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['Plugins'] = plugins.join(', ');
   }
 
-  // Frameworks & Libraries
+  // 5. Frameworks & Libraries (Expanded)
   if (_hasPattern(html, r'''_next/static|__NEXT_DATA__''')) {
     tech['Framework'] = 'Next.js';
   } else if (_hasPattern(html, r'''__NUXT__''')) {
     tech['Framework'] = 'Nuxt.js';
   } else if (_hasPattern(html, r'''_sveltekit''')) {
     tech['Framework'] = 'SvelteKit';
-  } else if (_hasPattern(html, r'''data-reactroot''')) {
+  } else if (_hasPattern(html, r'''window\.__remixContext|__remixManifest''')) {
+    tech['Framework'] = 'Remix';
+  } else if (_hasPattern(html, r'''data-reactroot|_reactListening''')) {
     tech['Library'] = 'React';
   } else if (_hasPattern(html, r'''data-v-|v-if=|v-for=''')) {
     tech['Library'] = 'Vue.js';
@@ -614,9 +660,13 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['Library'] = 'Alpine.js';
   } else if (html.contains('hx-get=') || html.contains('hx-post=')) {
     tech['Library'] = 'HTMX';
+  } else if (html.contains('solid-js')) {
+    tech['Library'] = 'SolidJS';
+  } else if (html.contains('lit-html') || html.contains('lit-element')) {
+    tech['Library'] = 'Lit';
   }
 
-  // CSS Frameworks
+  // 6. CSS Frameworks
   if (_hasPattern(html,
       r'''bootstrap(?:\.min)?\.css|class=["'][^"']*?\b(?:col-|btn-|navbar-)''')) {
     tech['CSS Framework'] = 'Bootstrap';
@@ -635,9 +685,22 @@ void _detectTechnologies(String html, Map<String, dynamic> metadata) {
     tech['CSS Framework'] = 'Foundation';
   } else if (html.contains('mdc-')) {
     tech['CSS Framework'] = 'Material Components';
+  } else if (html.contains('chakra-ui')) {
+    tech['CSS Framework'] = 'Chakra UI';
   }
 
   metadata['detectedTech'] = tech;
+}
+
+void _extractVersion(
+    String generatorString, String techName, Map<String, String> tech) {
+  // Try to extract version number from generator string e.g. "WordPress 6.4.2"
+  final regex = RegExp('$techName\\s+([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)',
+      caseSensitive: false);
+  final match = regex.firstMatch(generatorString);
+  if (match != null) {
+    tech['$techName Version'] = match.group(1)!;
+  }
 }
 
 /// Detect commonly used services (Trackers, Fonts, Ads, Cloud)

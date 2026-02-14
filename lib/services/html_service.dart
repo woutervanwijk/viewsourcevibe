@@ -3603,9 +3603,11 @@ Technical details: $e''';
     _isExtractingMetadata = true;
     final html = _currentFile!.content;
     final baseUrl = _currentFile!.isUrl ? _currentFile!.path : '';
+    final headers = _probeResult?['headers'] as Map<String, dynamic>?;
 
     try {
-      final rawMetadata = await extractMetadataInIsolate(html, baseUrl);
+      final rawMetadata = await extractMetadataInIsolate(html, baseUrl,
+          headers: headers?.cast<String, String>());
       _pageMetadata = Map<String, dynamic>.from(rawMetadata);
       debugPrint(
           'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS, ${_pageMetadata?['media']?['images']?.length} Images');
