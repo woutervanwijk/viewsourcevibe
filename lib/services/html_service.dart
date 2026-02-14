@@ -32,7 +32,8 @@ import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
-import 'package:webview_flutter/webview_flutter.dart' as wf;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart'
+    hide X509Certificate;
 import 'package:xml/xml.dart' as xml;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -111,7 +112,7 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  wf.WebViewController? activeWebViewController;
+  InAppWebViewController? activeWebViewController;
 
   Timer? _autoSaveTimer;
   final List<CodeLineEditingController> _disposalQueue = [];
@@ -352,12 +353,12 @@ class HtmlService with ChangeNotifier {
     if (activeWebViewController != null &&
         _currentFile != null &&
         _currentFile!.isUrl) {
-      final currentBrowserUrl = await activeWebViewController!.currentUrl();
-      if (currentBrowserUrl != _currentFile!.path) {
+      final currentBrowserUrl = await activeWebViewController!.getUrl();
+      if (currentBrowserUrl.toString() != _currentFile!.path) {
         debugPrint('Triggering browser reload for: ${_currentFile!.path}');
         _webViewLoadingUrl = _currentFile!.path; // Set to avoid interception
         await activeWebViewController!
-            .loadRequest(Uri.parse(_currentFile!.path));
+            .loadUrl(urlRequest: URLRequest(url: WebUri(_currentFile!.path)));
       }
     }
   }
@@ -491,7 +492,8 @@ class HtmlService with ChangeNotifier {
 
       // Actually trigger the load in the browser
       if (activeWebViewController != null && !skipWebViewLoad) {
-        activeWebViewController!.loadRequest(Uri.parse(url)).ignore();
+        activeWebViewController!
+            .loadUrl(urlRequest: URLRequest(url: WebUri(url)));
       }
 
       // We don't fetch HTML here. Source will be lazy loaded when tab is clicked.
@@ -2009,7 +2011,8 @@ class HtmlService with ChangeNotifier {
         // we manage our own history stack which might differ from WebView's internal stack
         debugPrint('Back navigation: Loading req: ${previousFile.path}');
 
-        activeWebViewController!.loadRequest(Uri.parse(previousFile.path));
+        activeWebViewController!
+            .loadUrl(urlRequest: URLRequest(url: WebUri(previousFile.path)));
       }
     } finally {
       _isNavigatingBack = false;
@@ -4005,7 +4008,7 @@ Technical details: $e''';
       String content = '';
       try {
         final html =
-            await activeWebViewController!.runJavaScriptReturningResult('''
+            await activeWebViewController!.evaluateJavascript(source: '''
               (function() {
                 var contentType = document.contentType;
                 if (contentType && (contentType.includes('xml') || contentType.includes('rss'))) {
@@ -4013,7 +4016,7 @@ Technical details: $e''';
                 }
                 return document.documentElement.outerHTML;
               })();
-            ''').timeout(const Duration(seconds: 5));
+            ''');
 
         if (html is String) {
           content = _unquoteHtml(html);
@@ -4056,8 +4059,8 @@ Technical details: $e''';
 
       // 2. Optional: Get Page Weight & Cookies
       try {
-        final weightRaw = await activeWebViewController!
-            .runJavaScriptReturningResult(
+        final weightRaw = await activeWebViewController!.evaluateJavascript(
+            source:
                 '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; var seen=new Set(); for(var i=0; i<r.length; i++) { var name=r[i].name; tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); seen.add(name); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n && !seen.has(n.name)) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else if(!n && !seen.has(document.location.href)) { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();');
 
         String jsonStr = '';
@@ -4432,7 +4435,7 @@ Technical details: $e''';
   /// Clear the WebView cache (excluding cookies/localStorage if possible, but WebViewController.clearCache usually does disk cache)
   Future<void> clearBrowserCache() async {
     if (activeWebViewController != null) {
-      await activeWebViewController!.clearCache();
+      await InAppWebViewController.clearAllCache();
       debugPrint('Browser cache cleared');
     }
   }
@@ -4440,11 +4443,12 @@ Technical details: $e''';
   /// Clear all browser data: Cache, Local Storage, and Cookies
   Future<void> clearBrowserStorage() async {
     if (activeWebViewController != null) {
-      await activeWebViewController!.clearCache();
-      await activeWebViewController!.clearLocalStorage();
+      await InAppWebViewController.clearAllCache();
+      await activeWebViewController!
+          .evaluateJavascript(source: "localStorage.clear();");
     }
     // Clear cookies using the static/singleton CookieManager
-    await wf.WebViewCookieManager().clearCookies();
+    await CookieManager.instance().deleteAllCookies();
 
     // Reset probe results as they might contain now-invalid cookie data
     _probeResult = null;
@@ -4480,9 +4484,10 @@ Technical details: $e''';
     if (activeWebViewController == null) return;
 
     try {
-      final url = await activeWebViewController!.currentUrl();
-      final html = await activeWebViewController!.runJavaScriptReturningResult(
-          'document.documentElement.outerHTML') as String;
+      final webUri = await activeWebViewController!.getUrl();
+      final url = webUri?.toString();
+      final html = await activeWebViewController!.evaluateJavascript(
+          source: 'document.documentElement.outerHTML') as String;
 
       // Unquote if needed (standard JS result processing)
       String finalHtml = _unquoteHtml(html);

@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -132,15 +130,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildScrollableRefreshable(Widget child, String tag,
-      {bool hasScrollBody = true}) {
+      {bool hasScrollBody = true, bool useSliverToBoxAdapter = false}) {
     return TabPageWrapper(
       tag: tag,
       child: RefreshIndicator(
         onRefresh: _handleRefresh,
         child: CustomScrollView(
+          shrinkWrap: false,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            if (hasScrollBody)
+            if (useSliverToBoxAdapter)
+              SliverToBoxAdapter(child: child)
+            else if (hasScrollBody)
               SliverFillRemaining(
                 hasScrollBody: true,
                 child: child,
@@ -237,10 +238,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   htmlService.isWebViewLoading
               ? BrowserView(
                   file: currentFile,
-                  gestureRecognizers: {
-                    Factory<VerticalDragGestureRecognizer>(
-                        () => VerticalDragGestureRecognizer()),
-                  },
                 )
               : (htmlService.isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -269,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (showMetadataTabs)
           KeepAliveWrapper(
               child: _buildScrollableRefreshable(const MediaView(), 'media',
-                  hasScrollBody: false)),
+                  hasScrollBody: false, useSliverToBoxAdapter: true)),
         if (showServerTabs)
           KeepAliveWrapper(
               child: _buildScrollableRefreshable(
@@ -314,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (showMetadataTabs)
         KeepAliveWrapper(
             child: _buildScrollableRefreshable(const MediaView(), 'media',
-                hasScrollBody: false)),
+                hasScrollBody: false, useSliverToBoxAdapter: true)),
 
       // 6. Probe: Cookies
       if (showServerTabs)
@@ -548,7 +545,7 @@ class _TabPageWrapperState extends State<TabPageWrapper> {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     if (htmlService.activeWebViewController != null) {
       // WebView scroll to top (internal content)
-      htmlService.activeWebViewController?.scrollTo(0, 0);
+      htmlService.activeWebViewController?.scrollTo(x: 0, y: 0);
     }
 
     // 3. Fallback: also try PrimaryScrollController if it's different
