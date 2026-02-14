@@ -220,18 +220,8 @@ class Toolbar extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.arrow_back, size: 24),
               tooltip: 'Back',
-              onPressed: () {
-                if (htmlService.canGoBack) {
-                  htmlService.goBack();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('No previous page in history'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-              },
+              onPressed:
+                  htmlService.canGoBack ? () => htmlService.goBack() : null,
             ),
             IconButton(
               icon: const Icon(Icons.folder_open),

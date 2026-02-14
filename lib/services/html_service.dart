@@ -1619,7 +1619,10 @@ class HtmlService with ChangeNotifier {
     _isBeautifyEnabled = false; // Reset beautify mode on new file
 
     // Save current file to navigation stack if we are not going back
-    _pushToNavigationStack();
+    // AND if we are actually navigating to a NEW file (url/path check)
+    if (_currentFile != null && !_areUrlsEqual(_currentFile!.path, file.path)) {
+      _pushToNavigationStack();
+    }
 
     await clearFile(clearProbe: clearProbe);
     _currentFile = file;
@@ -1977,7 +1980,7 @@ class HtmlService with ChangeNotifier {
       // This ensures the UrlInput widget's text controller updates instantly
       currentInputText =
           previousFile.isUrl ? previousFile.path : previousFile.name;
-
+      debugPrint('Back navigation: Loading previous file: $currentInputText');
       // CRITICAL FIX: If the previous file has empty content (e.g. from Browser-First access),
       // we must fetch the content now to ensure the Source Code view works.
       if (previousFile.isUrl &&
@@ -2004,6 +2007,8 @@ class HtmlService with ChangeNotifier {
       if (previousFile.isUrl && activeWebViewController != null) {
         // We use loadRequest instead of goBack() on controller because
         // we manage our own history stack which might differ from WebView's internal stack
+        debugPrint('Back navigation: Loading req: ${previousFile.path}');
+
         activeWebViewController!.loadRequest(Uri.parse(previousFile.path));
       }
     } finally {

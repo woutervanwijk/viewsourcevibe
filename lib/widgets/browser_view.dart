@@ -38,139 +38,144 @@ class _BrowserViewState extends State<BrowserView> {
 
     if (!kIsWeb) {
       _controller = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(Colors.white)
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onProgress: (int progress) {
-              // if (mounted) {
-              //   final htmlService =
-              //       Provider.of<HtmlService>(context, listen: false);
-              //   htmlService.updateWebViewLoadingProgress(progress / 100.0);
+        ..setJavaScriptMode(JavaScriptMode.unrestricted);
 
-              //   // Multi-Stage Early Sync:
-              //   // We trigger partial syncs at several thresholds to populate tabs progressively.
-              //   final url = htmlService.webViewLoadingUrl;
-              //   if (url != null && url != 'about:blank') {
-              //     if (progress >= 30 && progress < 60 && _syncStage < 1) {
-              //       _syncStage = 1;
-              //       htmlService.syncWebViewState(url, isPartial: true);
-              //     } else if (progress >= 60 &&
-              //         progress < 90 &&
-              //         _syncStage < 2) {
-              //       _syncStage = 2;
-              //       htmlService.syncWebViewState(url, isPartial: true);
-              //     } else if (progress >= 90 &&
-              //         progress < 100 &&
-              //         _syncStage < 3) {
-              //       _syncStage = 3;
-              //       htmlService.syncWebViewState(url, isPartial: true);
-              //     }
-              //   }
-              // }
-            },
-            onPageStarted: (String url) {
-              // if (mounted) {
-              //   // Ignore internal or blank URLs for UI updates
-              //   if (url == 'about:blank' || url.startsWith('data:')) return;
+      try {
+        _controller!.setBackgroundColor(Colors.white);
+      } catch (e) {
+        debugPrint('Error setting background color: $e');
+      }
 
-              //   _syncStage = 0;
-              //   final htmlService =
-              //       Provider.of<HtmlService>(context, listen: false);
-              //   htmlService.updateWebViewUrl(url);
-              //   htmlService.updateWebViewLoadingProgress(0.0);
-              // }
-            },
-            onPageFinished: (String url) async {
-              if (mounted) {
-                // Ignore internal or blank URLs for UI updates
-                if (url == 'about:blank' || url.startsWith('data:')) return;
-                final htmlService =
-                    Provider.of<HtmlService>(context, listen: false);
-                if (await _controller?.currentUrl() != url) return;
-                // If we are viewing the RSS template, block sync to preserve XML source.
-                if (_currentRssUrl != null && url == _currentRssUrl) {
-                  debugPrint('page finished rss $url');
-                  // If the app model has drifted (e.g. we came back from an article),
-                  // restore the original XML content.
+      _controller!.setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (int progress) {
+            // if (mounted) {
+            //   final htmlService =
+            //       Provider.of<HtmlService>(context, listen: false);
+            //   htmlService.updateWebViewLoadingProgress(progress / 100.0);
 
-                  if (htmlService.currentFile?.path != url) {
-                    htmlService.loadFromUrl(url);
-                  }
-                  return;
-                }
-                debugPrint('page finished $url');
-                // Use syncWebViewState to update everything (content, metadata, probe)
-                htmlService.syncWebViewState(url, isPartial: false);
-                htmlService.updateWebViewLoadingProgress(1.0);
-              }
-            },
-            onUrlChange: (UrlChange change) async {
-              if (!mounted) return;
-              debugPrint('urlChange ${change.url}');
+            //   // Multi-Stage Early Sync:
+            //   // We trigger partial syncs at several thresholds to populate tabs progressively.
+            //   final url = htmlService.webViewLoadingUrl;
+            //   if (url != null && url != 'about:blank') {
+            //     if (progress >= 30 && progress < 60 && _syncStage < 1) {
+            //       _syncStage = 1;
+            //       htmlService.syncWebViewState(url, isPartial: true);
+            //     } else if (progress >= 60 &&
+            //         progress < 90 &&
+            //         _syncStage < 2) {
+            //       _syncStage = 2;
+            //       htmlService.syncWebViewState(url, isPartial: true);
+            //     } else if (progress >= 90 &&
+            //         progress < 100 &&
+            //         _syncStage < 3) {
+            //       _syncStage = 3;
+            //       htmlService.syncWebViewState(url, isPartial: true);
+            //     }
+            //   }
+            // }
+          },
+          onPageStarted: (String url) {
+            // if (mounted) {
+            //   // Ignore internal or blank URLs for UI updates
+            //   if (url == 'about:blank' || url.startsWith('data:')) return;
+
+            //   _syncStage = 0;
+            //   final htmlService =
+            //       Provider.of<HtmlService>(context, listen: false);
+            //   htmlService.updateWebViewUrl(url);
+            //   htmlService.updateWebViewLoadingProgress(0.0);
+            // }
+          },
+          onPageFinished: (String url) async {
+            if (mounted) {
+              // Ignore internal or blank URLs for UI updates
+              if (url == 'about:blank' || url.startsWith('data:')) return;
               final htmlService =
                   Provider.of<HtmlService>(context, listen: false);
-              if (change.url == null ||
-                  change.url == 'about:blank' ||
-                  change.url!.startsWith('data:') ||
-                  change.url == await _controller?.currentUrl()) {
+              if (await _controller?.currentUrl() != url) return;
+              // If we are viewing the RSS template, block sync to preserve XML source.
+              if (_currentRssUrl != null && url == _currentRssUrl) {
+                debugPrint('page finished rss $url');
+                // If the app model has drifted (e.g. we came back from an article),
+                // restore the original XML content.
+
+                if (htmlService.currentFile?.path != url) {
+                  htmlService.loadFromUrl(url);
+                }
                 return;
               }
+              debugPrint('page finished $url');
+              // Use syncWebViewState to update everything (content, metadata, probe)
+              htmlService.syncWebViewState(url, isPartial: false);
+              htmlService.updateWebViewLoadingProgress(1.0);
+            }
+          },
+          onUrlChange: (UrlChange change) async {
+            if (!mounted) return;
+            debugPrint('urlChange ${change.url}');
+            final htmlService =
+                Provider.of<HtmlService>(context, listen: false);
+            if (change.url == null ||
+                change.url == 'about:blank' ||
+                change.url!.startsWith('data:') ||
+                change.url == await _controller?.currentUrl()) {
+              return;
+            }
 
-              htmlService.loadFromUrl(change.url as String,
-                  switchToTab: htmlService.activeTabIndex,
-                  skipWebViewLoad: true);
-            },
-            onNavigationRequest: (NavigationRequest request) {
-              if (!mounted) return NavigationDecision.prevent;
-              if (request.url == 'about:blank' ||
-                  request.url.startsWith('data:')) {
-                return NavigationDecision.navigate;
-              }
-
-              // Only intercept navigation for the main frame.
-              // Subframes (iframes) should generally be allowed to load their content
-              // without triggering a full app navigation/URL update.
-              if (!request.isMainFrame) {
-                return NavigationDecision.navigate;
-              }
-
-              final htmlService =
-                  Provider.of<HtmlService>(context, listen: false);
-
-              // If it's the URL we are currently loading (set by loadFromUrl), allow it
-              if (request.url == htmlService.webViewLoadingUrl) {
-                return NavigationDecision.navigate;
-              }
-              debugPrint('onnav req ${request.url}');
-              // Otherwise, intercept and run through our robust loadFromUrl flow
-              // This ensures probe, reset, and proper mode (Browser/Fetch) handling
-              // htmlService.loadFromUrl(request.url,
-              //     switchToTab: htmlService.activeTabIndex);
+            htmlService.loadFromUrl(change.url as String,
+                switchToTab: htmlService.activeTabIndex, skipWebViewLoad: true);
+          },
+          onNavigationRequest: (NavigationRequest request) {
+            if (!mounted) return NavigationDecision.prevent;
+            if (request.url == 'about:blank' ||
+                request.url.startsWith('data:')) {
               return NavigationDecision.navigate;
-            },
-            onWebResourceError: (WebResourceError error) {
-              if (mounted) {
-                // If the main frame failed, stop loading indicator
-                // We could check error.isForMainFrame if available, or just stop assuming generic error
-                // On Android, SSL errors return -202 or generic codes.
-                if (error.errorCode == -202 ||
-                    error.description.contains('SSL')) {
-                  // Specific handling for SSL
-                  final htmlService =
-                      Provider.of<HtmlService>(context, listen: false);
-                  htmlService.handleWebViewError(
-                      'SSL Handshake Failed: ${error.description}. The system WebView enforces strict security.');
-                } else if (error.errorCode != -999) {
-                  // -999 is typically "cancelled" (e.g. valid reload)
-                  final htmlService =
-                      Provider.of<HtmlService>(context, listen: false);
-                  htmlService.handleWebViewError(error.description);
-                }
+            }
+
+            // Only intercept navigation for the main frame.
+            // Subframes (iframes) should generally be allowed to load their content
+            // without triggering a full app navigation/URL update.
+            if (!request.isMainFrame) {
+              return NavigationDecision.navigate;
+            }
+
+            final htmlService =
+                Provider.of<HtmlService>(context, listen: false);
+
+            // If it's the URL we are currently loading (set by loadFromUrl), allow it
+            if (request.url == htmlService.webViewLoadingUrl) {
+              return NavigationDecision.navigate;
+            }
+            debugPrint('onnav req ${request.url}');
+            // Otherwise, intercept and run through our robust loadFromUrl flow
+            // This ensures probe, reset, and proper mode (Browser/Fetch) handling
+            // htmlService.loadFromUrl(request.url,
+            //     switchToTab: htmlService.activeTabIndex);
+            return NavigationDecision.navigate;
+          },
+          onWebResourceError: (WebResourceError error) {
+            if (mounted) {
+              // If the main frame failed, stop loading indicator
+              // We could check error.isForMainFrame if available, or just stop assuming generic error
+              // On Android, SSL errors return -202 or generic codes.
+              if (error.errorCode == -202 ||
+                  error.description.contains('SSL')) {
+                // Specific handling for SSL
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.handleWebViewError(
+                    'SSL Handshake Failed: ${error.description}. The system WebView enforces strict security.');
+              } else if (error.errorCode != -999) {
+                // -999 is typically "cancelled" (e.g. valid reload)
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.handleWebViewError(error.description);
               }
-            },
-          ),
-        );
+            }
+          },
+        ),
+      );
 
       // Register controller with HtmlService
       WidgetsBinding.instance.addPostFrameCallback((_) {
