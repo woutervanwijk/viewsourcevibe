@@ -401,6 +401,7 @@ class FileViewer extends StatelessWidget {
               // that reaches the top boundary.
               if (Theme.of(context).platform == TargetPlatform.iOS &&
                   notification is ScrollUpdateNotification &&
+                  notification.metrics.axis == Axis.vertical &&
                   notification.dragDetails == null &&
                   notification.metrics.pixels >= -50 &&
                   notification.metrics.pixels <= 10) {
