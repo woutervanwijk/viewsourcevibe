@@ -87,8 +87,23 @@ class _BrowserViewState extends State<BrowserView> {
     final currentUrlUri = await _controller!.getUrl();
     final currentUrl = currentUrlUri.toString();
 
-    final isRssOrXml = await RssTemplateService.isRssFeed(
+    var isRssOrXml = await RssTemplateService.isRssFeed(
         widget.file?.name ?? '', widget.file?.content ?? '');
+
+    // Robust check: if content inspection failed, check headers from probe
+    if (!isRssOrXml && widget.file?.probeResult != null) {
+      final headers = widget.file!.probeResult!['headers'];
+      if (headers is Map) {
+        final contentType =
+            headers['content-type']?.toString().toLowerCase() ?? '';
+        if (contentType.contains('application/rss+xml') ||
+            contentType.contains('application/atom+xml')) {
+          debugPrint(
+              'BrowserView: Detected RSS/Atom via Content-Type header: $contentType');
+          isRssOrXml = true;
+        }
+      }
+    }
 
     if (isRssOrXml && (widget.file?.content.isNotEmpty ?? false)) {
       final html = await RssTemplateService.convertRssToHtml(
