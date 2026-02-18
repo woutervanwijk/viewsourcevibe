@@ -80,11 +80,12 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/icon.webp"
   min_sdk_android: 21
-  web:
-    generate: true
-    image_path: "assets/icon.webp"
-    background_color: "#FFFFFF"
-    theme_color: "#FFFFFF"
+  remove_alpha_ios: true
+  # web:
+  #   generate: true
+  #   image_path: "assets/icon.webp"
+  #   background_color: "#FFFFFF"
+  #   theme_color: "#FFFFFF"
   windows:
     generate: true
     image_path: "assets/icon.webp"
