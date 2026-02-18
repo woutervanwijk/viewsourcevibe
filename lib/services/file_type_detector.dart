@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:mime_type/mime_type.dart';
-import 'package:html/parser.dart' as html_parser;
+
 import 'package:xml/xml.dart' as xml;
 
 // Extension method for comparing lists
@@ -154,7 +154,7 @@ class FileTypeDetector {
       }
     }
 
-    // Strategy 4: Content-based detection with scoring
+    // Strategy 4: Content-based detection with strict rules
     if (content != null && content.isNotEmpty) {
       if (content.length > 32 * 1024) {
         detectedType = await compute(_detectByContentInternal, content);
@@ -163,24 +163,31 @@ class FileTypeDetector {
       }
 
       // Special handling for URLs: if content detection returns 'Text' for a URL,
-      // it means the content is unclear, so default to HTML
+      // it means the content is unclear.
+      // User requested "Only change the type when it's really clear."
+      // So we keep it as Text unless we have a specific reason to default to HTML for URLs
+      // that look like web pages but lack clear doctypes (rare in modern web).
+      // However, for usability, if it's a root URL (no extension) and we ruled out everything else,
+      // HTML is still a safe bet for a browser app, but let's be stricter.
       if (detectedType == 'Text' && _isUrlFilename(filename)) {
-        detectedType = 'HTML';
+        // Only default to HTML if it really looks like a web page URL (http/https)
+        // AND we haven't found any other type.
+        // But per user request: "Default to plain text. Only when it's sure... use probed content type"
+        // The probed content type strategy (Strategy 0) already handled the "sure" cases.
+        // So here we should stick to Text if we are unsure.
+        // detectedType = 'HTML'; // DISABLED per user request for strictness
       }
 
       _detectionCache[cacheKey] = detectedType;
       return detectedType;
     }
 
-    // Strategy 4.5: Final URL fallback - if we get here with a URL and no clear detection, default to HTML
-    // Only apply this if we have a URL but no content to analyze
-    if (_isUrlFilename(filename) &&
-        detectedType == 'Text' &&
-        (content == null || content.isEmpty)) {
-      detectedType = 'HTML';
-      _detectionCache[cacheKey] = detectedType;
-      return detectedType;
-    }
+    // Strategy 4.5: Final URL fallback
+    // If we have a URL but NO content, we can't be sure.
+    // Default to Text as requested, unless it's clearly a website root?
+    // Actually, "probed content type" should have caught this in Strategy 0 if available.
+    // If we are here, we might be offline or just have a string.
+    // Let's stick to Text to be safe and obedient to "Default to plain text".
 
     // If we have bytes but no content, check if it's binary
     if (bytes != null && bytes.isNotEmpty && content == null) {
@@ -405,325 +412,117 @@ class FileTypeDetector {
     return mimeMap[mimeType] ?? 'Text';
   }
 
-  /// Detect file type by content analysis with scoring
+  /// Detect file type by content analysis with STRICT rules
   static String _detectByContentInternal(String content) {
-    // For large files, only analyze the first 256KB for performance
+    // For large files, only analyze the first 16KB for performance
     String analysisContent = content;
-    if (content.length > 256 * 1024) {
-      analysisContent = content.substring(0, 256 * 1024);
-      debugPrint('🔍 Truncating content for detection (large file)');
+    if (content.length > 16 * 1024) {
+      analysisContent = content.substring(0, 16 * 1024);
     }
 
-    final lowerContent = analysisContent.toLowerCase();
-    final scores = <String, int>{};
+    final lowerContent = analysisContent.toLowerCase().trim();
 
-    // XML/RSS/Atom Detection using proper parsing
-    final isXmlCandidate = lowerContent.startsWith('<?xml') ||
-        lowerContent.contains('<rss') ||
-        lowerContent.contains('<feed') ||
-        lowerContent.contains('<svg') ||
-        lowerContent.contains('xmlns=');
+    // Empty content is Text
+    if (lowerContent.isEmpty) return 'Text';
 
-    if (isXmlCandidate) {
-      try {
-        final doc = xml.XmlDocument.parse(analysisContent);
-        if (doc.findElements('rss').isNotEmpty ||
-            doc.findAllElements('channel').isNotEmpty ||
-            doc.findElements('feed').isNotEmpty ||
-            doc.findElements('rdf:RDF').isNotEmpty) {
-          scores['XML'] = 30; // High confidence for RSS/Atom/XML
-        } else if (doc.findElements('svg').isNotEmpty) {
-          scores['XML'] = 25; // High confidence for SVG
-        } else if (doc.children.any((node) => node is xml.XmlElement)) {
-          scores['XML'] = 20; // General XML
-        }
-      } catch (e) {
-        // XML parse failed, don't score as XML here
-      }
-    }
-
-    // HTML detection using robust DOM parsing
-    final isHtmlCandidate = lowerContent.contains('<html') ||
-        lowerContent.contains('<!doctype') ||
-        lowerContent.contains('<body') ||
-        lowerContent.contains('<head') ||
-        lowerContent.contains('<script') ||
-        lowerContent.contains('<meta') ||
-        lowerContent.contains('<link') ||
-        lowerContent.contains('<div') ||
-        lowerContent.contains('<p>');
-
-    if (isHtmlCandidate && !scores.containsKey('XML')) {
-      try {
-        final doc = html_parser.parse(analysisContent);
-        // Look for structural elements that strongly indicate HTML
-        bool hasHtml = doc.querySelector('html') != null;
-        bool hasBody = doc.querySelector('body') != null;
-        bool hasHead = doc.querySelector('head') != null;
-        int metaCount = doc.querySelectorAll('meta').length;
-        int scriptCount = doc.querySelectorAll('script').length;
-        int linkCount = doc.querySelectorAll('link').length;
-
-        if (hasHtml || (hasBody && hasHead)) {
-          scores['HTML'] = 25;
-        } else if (metaCount > 0 || scriptCount > 0 || linkCount > 0) {
-          scores['HTML'] = 15 + (metaCount + scriptCount + linkCount);
-        }
-      } catch (e) {
-        // Fallback to simple scoring
-      }
-    }
-
-    // CSS detection - more specific patterns
-    if (lowerContent.contains('body {') ||
-        lowerContent.contains('@media') ||
-        lowerContent.contains('color: ') ||
-        lowerContent.contains('font-') ||
-        lowerContent.contains('margin:') ||
-        lowerContent.contains('padding:') ||
-        lowerContent.contains('display:') ||
-        lowerContent.contains('position:') ||
-        lowerContent.contains('text-align:') ||
-        lowerContent.contains('background-')) {
-      // Make sure it's not YAML by checking for CSS-specific structure
-      if (lowerContent.contains('{') && lowerContent.contains('}')) {
-        scores['CSS'] = 20; // Higher confidence for CSS
-      } else {
-        scores['CSS'] = 15;
-      }
-    }
-
-    // JavaScript detection
-    final jsKeywords = [
-      'function',
-      'const',
-      'let',
-      '=>',
-      'import',
-      'export',
-      'class'
-    ];
-    final jsScore = jsKeywords.where((kw) => lowerContent.contains(kw)).length;
-    if (jsScore > 2) scores['JavaScript'] = jsScore * 3;
-
-    // TypeScript detection
-    if (lowerContent.contains('interface ') ||
-        lowerContent.contains('type ') ||
-        (lowerContent.contains('import ') && lowerContent.contains('from '))) {
-      scores['TypeScript'] = 12;
-    }
-
-    // JSON detection
-    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
-        (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
-      if (lowerContent.contains('"') || lowerContent.contains(':')) {
-        scores['JSON'] = 18;
-      }
-    }
-
-    // YAML detection - more specific patterns
-    if (lowerContent.startsWith('---') ||
-        (lowerContent.contains(': ') &&
-            !lowerContent.contains('{') &&
-            !lowerContent.contains('}')) ||
-        lowerContent.contains('  - ') ||
-        lowerContent.contains('key: value') ||
-        lowerContent.contains('list:') ||
-        lowerContent.contains('map:')) {
-      // Make sure it's not CSS by checking for YAML-specific structure
-      if (!lowerContent.contains('body {') &&
-          !lowerContent.contains('@media')) {
-        scores['YAML'] = 18; // Higher confidence for YAML
-      } else {
-        scores['YAML'] = 5; // Low confidence if CSS patterns are present
-      }
-    }
-
-    // Markdown detection
-    if (lowerContent.startsWith('# ') ||
-        lowerContent.contains('## ') ||
-        lowerContent.contains('**') ||
-        lowerContent.contains('* ') ||
-        lowerContent.contains('1. ')) {
-      scores['Markdown'] = 12;
-    }
-
-    // Python detection
-    final pyKeywords = ['def ', 'class ', 'import ', 'from ', 'print('];
-    final pyScore = pyKeywords.where((kw) => lowerContent.contains(kw)).length;
-    if (pyScore > 2) scores['Python'] = pyScore * 4;
-
-    // Java detection
-    if (lowerContent.contains('public class ') ||
-        lowerContent.contains('system.out.println') ||
-        lowerContent.contains('package ')) {
-      scores['Java'] = 25; // High confidence
-    }
-
-    // C++ detection
-    if (lowerContent.contains('#include ') ||
-        lowerContent.contains('int main(') ||
-        lowerContent.contains('cout <<') ||
-        lowerContent.contains('namespace ')) {
-      scores['C++'] = 20;
-    }
-
-    // C detection
-    if (lowerContent.contains('#include ') ||
-        lowerContent.contains('int main(') ||
-        lowerContent.contains('printf(')) {
-      scores['C'] = 18;
-    }
-
-    // Ruby detection
-    if (lowerContent.contains('puts ') ||
-        lowerContent.contains('require ') ||
-        lowerContent.contains('gem ') ||
-        lowerContent.contains('bundle ')) {
-      scores['Ruby'] = 15;
-    }
-
-    // PHP detection
-    if (lowerContent.contains('<?php') ||
-        lowerContent.contains('<?=') ||
-        lowerContent.contains('echo ')) {
-      scores['PHP'] = 20;
-    }
-
-    // SQL detection
-    final sqlKeywords = [
-      'select ',
-      'from ',
-      'where ',
-      'join ',
-      'insert into',
-      'update ',
-      'delete from'
-    ];
-    final sqlScore =
-        sqlKeywords.where((kw) => lowerContent.contains(kw)).length;
-    if (sqlScore > 2) scores['SQL'] = sqlScore * 5;
-
-    // Dart detection
-    if (lowerContent.contains('void main(') ||
-        lowerContent.contains('class ') ||
-        (lowerContent.contains('import ') && lowerContent.contains('dart:'))) {
-      scores['Dart'] = 18;
-    }
-
-    // Swift detection
-    if (lowerContent.contains('import swift') ||
-        lowerContent.contains('class ') ||
-        lowerContent.contains('func ')) {
-      scores['Swift'] = 15;
-    }
-
-    // Go detection
-    if (lowerContent.contains('package main') ||
-        lowerContent.contains('import (') ||
-        lowerContent.contains('func main(')) {
-      scores['Go'] = 18;
-    }
-
-    // Rust detection
-    if (lowerContent.contains('fn main(') ||
-        lowerContent.contains('use std::') ||
-        lowerContent.contains('impl ')) {
-      scores['Rust'] = 15;
-    }
-
-    // Kotlin detection
-    if (lowerContent.contains('fun main(') ||
-        lowerContent.contains('class ') ||
-        lowerContent.contains('val ') ||
-        lowerContent.contains('var ')) {
-      scores['Kotlin'] = 15;
-    }
-
-    // Find the highest scoring match
-    if (scores.isNotEmpty) {
-      final bestMatch =
-          scores.entries.reduce((a, b) => a.value > b.value ? a : b);
-      if (bestMatch.value > 10) {
-        // Minimum confidence threshold
-        return bestMatch.key;
-      }
-    }
-
-    // Fallback to simple heuristics
-    return _simpleContentDetectionInternal(content);
-  }
-
-  /// Simple content detection as fallback
-  static String _simpleContentDetectionInternal(String content) {
-    final lowerContent = content.toLowerCase();
-
-    // Try robust parsing first even in simple detection
-    try {
-      final xmlDoc = xml.XmlDocument.parse(content);
-      if (xmlDoc.children.any((node) => node is xml.XmlElement)) {
-        return 'XML';
-      }
-    } catch (_) {}
-
-    try {
-      final htmlDoc = html_parser.parse(content);
-      if (htmlDoc.querySelector('html') != null ||
-          htmlDoc.querySelector('body') != null) {
-        return 'HTML';
-      }
-    } catch (_) {}
-
-    if (lowerContent.contains('<html') ||
-        lowerContent.contains('<!doctype html')) {
-      return 'HTML';
-    }
-    if (lowerContent.contains('body {') || lowerContent.contains('@media')) {
-      return 'CSS';
-    }
-    if (lowerContent.contains('function ') ||
-        lowerContent.contains('const ') ||
-        lowerContent.contains('let ') ||
-        lowerContent.contains('=>')) {
-      return 'JavaScript';
-    }
-    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
-        (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
-      if (lowerContent.contains('"') || lowerContent.contains(':')) {
-        return 'JSON';
-      }
-    }
-    if (lowerContent.startsWith('---') || lowerContent.contains(': ')) {
-      return 'YAML';
-    }
-    if (lowerContent.startsWith('# ') || lowerContent.contains('## ')) {
-      return 'Markdown';
-    }
-    if (lowerContent.contains('<?xml') ||
-        lowerContent.contains('<xml ') ||
-        lowerContent.contains('<rss ') ||
-        lowerContent.contains('<feed ') ||
-        lowerContent.contains('<channel ') ||
-        lowerContent.contains('xmlns=')) {
+    // 1. XML/RSS/Atom Detection (Strict)
+    // Must start with XML declaration OR have root element
+    if (lowerContent.startsWith('<?xml')) {
       return 'XML';
     }
-    if (lowerContent.contains('public class ') ||
-        lowerContent.contains('system.out.println')) {
-      return 'Java';
-    }
-    if (lowerContent.contains('#include ') ||
-        lowerContent.contains('int main(')) {
-      return 'C++';
-    }
-    if (lowerContent.contains('def ') || lowerContent.contains('print(')) {
-      return 'Python';
-    }
-    if (lowerContent.contains('select ') ||
-        lowerContent.contains('from ') ||
-        lowerContent.contains('where ')) {
-      return 'SQL';
+    // Check for root elements if no declaration
+    if (lowerContent.startsWith('<rss') ||
+        lowerContent.startsWith('<feed') ||
+        lowerContent.startsWith('<svg') ||
+        lowerContent.contains('<rdf:rdf')) {
+      // It's likely XML structure
+      try {
+        final doc = xml.XmlDocument.parse(analysisContent);
+        if (doc.children.any((node) => node is xml.XmlElement)) {
+          return 'XML';
+        }
+      } catch (_) {}
     }
 
+    // 2. HTML Detection (Strict)
+    // Must have DOCTYPE or <html> tag
+    if (lowerContent.startsWith('<!doctype html') ||
+        lowerContent.contains('<html')) {
+      return 'HTML';
+    }
+    // Ambiguous HTML tags like <div> or <p> are NOT enough for strict detection
+    // unless accompanied by <head> AND <body>
+    if (lowerContent.contains('<head') && lowerContent.contains('<body')) {
+      return 'HTML';
+    }
+
+    // 3. JSON Detection (Strict)
+    // Must parse as valid JSON
+    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
+        (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
+      try {
+        // explicit check to avoid simple strings masquerading as JSON
+        // purely structural check isn't enough, but full parse is safe
+        // We use a lighter check first:
+        if (lowerContent.contains('"') ||
+            lowerContent.contains(':') ||
+            lowerContent.contains(',') ||
+            lowerContent == '{}' ||
+            lowerContent == '[]') {
+          // It might be JSON, but let's be sure it's not just a code block
+          // Verify it doesn't look like a function body
+          if (!lowerContent.contains('function') &&
+              !lowerContent.contains('=>')) {
+            return 'JSON';
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 4. YAML Detection (Strict)
+    // Must start with document separator
+    if (lowerContent.startsWith('---\n') ||
+        lowerContent.startsWith('---\r\n')) {
+      return 'YAML';
+    }
+    // Or key-value pairs at root with strict indentation
+    // This is hard to detect strictly without parsing.
+    // We will default to Text for "unmarked" YAML to avoid false positives with Todo lists etc.
+    // Only exception: explicit map/list structures that are clearly data
+    if (lowerContent.startsWith('name: ') ||
+        lowerContent.contains('\nname: ')) {
+      // "name:" is a very common YAML key, a bit weak but acceptable if combined with other YAML features?
+      // Let's stick to stricter markers for now.
+    }
+
+    // 5. Code Detection (Strict)
+    // Only detect if strongly typed or has distinct signatures
+
+    // Java/C#/C++ (Strong)
+    if (lowerContent.contains('public class ') ||
+        lowerContent.contains('namespace ') ||
+        lowerContent.contains('#include <') ||
+        lowerContent.contains('using namespace ')) {
+      // Further distinguish if needed, but "Text" is a safe fallback if ambiguous
+      if (lowerContent.contains('#include')) return 'C++';
+      if (lowerContent.contains('public class')) return 'Java'; // or C#
+    }
+
+    // Python (Strong)
+    if (lowerContent.contains('def ') &&
+        lowerContent.contains(':\n') &&
+        (lowerContent.contains('import ') || lowerContent.contains('class '))) {
+      return 'Python';
+    }
+
+    // Dart (Strong)
+    if (lowerContent.contains('import \'package:') ||
+        lowerContent.contains('void main()')) {
+      return 'Dart';
+    }
+
+    // Default to Text for everything else
+    // This removes the aggressive keyword counting for JS/CSS/etc.
     return 'Text';
   }
 

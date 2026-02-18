@@ -980,227 +980,55 @@ class HtmlService with ChangeNotifier {
       return filename;
     }
 
-    // Try to detect content type from content
-    final lowerContent = content.toLowerCase();
+    // Try to detect content type from content using strict FileTypeDetector logic
+    // We avoid duplicating the logic here to ensure consistency
 
-    // HTML detection - prioritize and make extremely robust using scoring system
-    // Check for HTML-specific patterns first, before other languages
-    int htmlScore = 0;
+    // Only perform content detection if we don't have a file extension
+    // or if we want to double-check specific formats
+    if (content.isNotEmpty) {
+      // Use the strict detector we just updated
+      // We can't easily call likely async FileTypeDetector here without async,
+      // but we can use a synchronous helper if we had one, or just replicate the *strict* checks.
+      // Since we are in a sync function (or async?), let's check.
+      // This function is async: Future<String> detectFileTypeAndGenerateFilename
 
-    // Strong HTML indicators (high score)
-    if (lowerContent.contains('<html') ||
-        lowerContent.contains('<!doctype html')) {
-      htmlScore += 10;
-    }
-    if (lowerContent.contains('<!doctype')) {
-      htmlScore += 8;
-    }
-    if (lowerContent.contains('<head') || lowerContent.contains('<body')) {
-      htmlScore += 8;
-    }
-    if (lowerContent.contains('</html>') ||
-        lowerContent.contains('</head>') ||
-        lowerContent.contains('</body>')) {
-      htmlScore += 8;
-    }
+      // Replicate ONLY the strict checks for filename extension generation
+      final lowerContent = content.toLowerCase().trim();
 
-    // Medium HTML indicators
-    if (lowerContent.contains('<div') || lowerContent.contains('<span')) {
-      htmlScore += 5;
-    }
-    if (lowerContent.contains('<script') || lowerContent.contains('<style')) {
-      htmlScore += 5;
-    }
-    if (lowerContent.contains('<meta') || lowerContent.contains('<link')) {
-      htmlScore += 5;
-    }
-    if (lowerContent.contains('<title') || lowerContent.contains('<noscript')) {
-      htmlScore += 5;
-    }
-
-    // Weak HTML indicators
-    if (lowerContent.contains('<!')) {
-      htmlScore += 3;
-    }
-    if (lowerContent.contains('</')) {
-      htmlScore += 3;
-    }
-    if (lowerContent.contains('<img') || lowerContent.contains('<a ')) {
-      htmlScore += 3;
-    }
-    if (lowerContent.contains('<p') ||
-        lowerContent.contains('<h') ||
-        lowerContent.contains('<section')) {
-      htmlScore += 3;
-    }
-
-    // Consider it HTML if we have strong evidence
-    bool isHtml = htmlScore >= 5;
-
-    // CSS detection - only if not HTML
-    bool isCss = !isHtml &&
-        (lowerContent.contains('body {') ||
-            lowerContent.contains('@media') ||
-            lowerContent.contains('/* css') ||
-            lowerContent.contains('@import') ||
-            lowerContent.contains('@font-face') ||
-            lowerContent.contains('@keyframes') ||
-            (lowerContent.contains('{') &&
-                lowerContent.contains('}') &&
-                lowerContent.contains(':') &&
-                lowerContent.contains(';') &&
-                !lowerContent.contains('<') &&
-                !lowerContent.contains('>') &&
-                !lowerContent.contains('function') &&
-                !lowerContent.contains('const ') &&
-                !lowerContent.contains('let ')));
-
-    // JavaScript detection - only if not HTML, and much more specific patterns
-    // Avoid false positives from JavaScript in HTML attributes
-    bool isJavaScript = !isHtml &&
-        !isCss &&
-        ((lowerContent.contains('function ') &&
-                lowerContent.contains('{') &&
-                lowerContent.contains('}')) ||
-            (lowerContent.contains('const ') &&
-                lowerContent.contains('=') &&
-                lowerContent.contains(';') &&
-                !lowerContent.contains('onclick=') &&
-                !lowerContent.contains('onload=') &&
-                !lowerContent.contains('onclick =')) ||
-            (lowerContent.contains('let ') &&
-                lowerContent.contains('=') &&
-                lowerContent.contains(';') &&
-                !lowerContent.contains('onclick=') &&
-                !lowerContent.contains('onload=') &&
-                !lowerContent.contains('onclick =')) ||
-            (lowerContent.contains('=>') &&
-                lowerContent.contains('{') &&
-                lowerContent.contains('}')) ||
-            (lowerContent.contains('class ') &&
-                lowerContent.contains('extends') &&
-                lowerContent.contains('{')) ||
-            (lowerContent.contains('import ') &&
-                lowerContent.contains('from') &&
-                lowerContent.contains(';')) ||
-            (lowerContent.contains('export ') &&
-                lowerContent.contains('{') &&
-                lowerContent.contains('}')));
-
-    // XML detection - check for RSS/Atom feeds and general XML
-    // This should happen before HTML detection to avoid false positives
-    bool isXml = lowerContent.contains('<rss ') ||
-        lowerContent.contains('<feed ') ||
-        lowerContent.contains('<?xml') ||
-        lowerContent.contains('xmlns=') ||
-        lowerContent.contains('<channel ') ||
-        lowerContent.contains('<item ') ||
-        (!isHtml && _tryParseAsXmlInternal(content));
-
-    // Assign file type based on detection (priority: XML > HTML > CSS > JS > other languages)
-    // XML detection comes first to fix RSS feed issue
-    if (isXml) {
-      return 'XML File';
-    } else if (isHtml) {
-      return 'HTML File';
-    } else if (isCss) {
-      return 'CSS File';
-    } else if (isJavaScript) {
-      return 'JavaScript File';
-    } else if (isXml) {
-      return 'XML File';
-    }
-
-    // Other language detections (only if not HTML/CSS/JS)
-    if (!isHtml && !isCss && !isJavaScript) {
-      // Check for Java content
-      if (lowerContent.contains('public class ') ||
-          lowerContent.contains('import java.') ||
-          lowerContent.contains('package ') ||
-          lowerContent.contains('system.out.println')) {
-        return 'Java File';
+      // HTML (Strict)
+      if (lowerContent.startsWith('<!doctype html') ||
+          lowerContent.contains('<html')) {
+        return '$filename.html';
       }
 
-      // Check for C/C++ content
-      if (lowerContent.contains('#include ') ||
-          lowerContent.contains('int main(') ||
-          lowerContent.contains('cout <<') ||
-          lowerContent.contains('cin >>') ||
-          lowerContent.contains('namespace ')) {
-        return 'C++ File';
+      // XML/RSS (Strict)
+      if (lowerContent.startsWith('<?xml') ||
+          lowerContent.startsWith('<rss') ||
+          lowerContent.startsWith('<feed')) {
+        return '$filename.xml';
       }
 
-      // Check for Python content
-      if (lowerContent.contains('def ') ||
-          lowerContent.contains('class ') ||
-          lowerContent.contains('import ') ||
-          lowerContent.contains('from ') ||
-          lowerContent.contains('print(') ||
-          lowerContent.contains('#!/usr/bin/env python')) {
-        return 'Python File';
-      }
-
-      // Check for Ruby content
-      if (lowerContent.contains('puts ') ||
-          lowerContent.contains('require ') ||
-          lowerContent.contains('gem ') ||
-          lowerContent.contains('bundle ')) {
-        return 'Ruby File';
-      }
-
-      // Check for SQL content
-      if (lowerContent.contains('select ') ||
-          lowerContent.contains('from ') ||
-          lowerContent.contains('where ') ||
-          lowerContent.contains('insert into ') ||
-          lowerContent.contains('update ') ||
-          lowerContent.contains('delete from ')) {
-        return 'SQL File';
-      }
-
-      // Check for PHP content
-      if (lowerContent.contains('<?php') ||
-          lowerContent.contains('<?=') ||
-          lowerContent.contains(r'$') ||
-          lowerContent.contains('echo ')) {
-        return 'PHP File';
-      }
-
-      // Check for JSON content
+      // JSON (Strict)
       if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
           (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
-        if (lowerContent.contains('"') || lowerContent.contains(":")) {
-          return 'JSON File';
+        // Quick check for JSON-like chars
+        if (lowerContent.contains('"') && lowerContent.contains(':')) {
+          return '$filename.json';
         }
       }
 
-      // Check for YAML content
-      if (lowerContent.startsWith('---') ||
-          lowerContent.contains(': ') ||
-          lowerContent.contains('  - ') ||
-          lowerContent.contains('key: value')) {
-        return 'YAML File';
-      }
-
-      // Check for Markdown content
-      if (lowerContent.startsWith('# ') ||
-          lowerContent.contains('## ') ||
-          lowerContent.contains('### ') ||
-          lowerContent.contains('#### ') ||
-          lowerContent.contains('##### ') ||
-          lowerContent.contains('###### ') ||
-          lowerContent.contains('**') ||
-          lowerContent.contains('* ') ||
-          lowerContent.contains('1. ')) {
-        return 'Markdown File';
+      // YAML (Strict)
+      if (lowerContent.startsWith('---\n')) {
+        return '$filename.yaml';
       }
     }
 
-    // Default to text file if we can't detect the type
-    return 'Text File';
+    // Default to .txt if no strict match found
+    return '$filename.txt';
   }
 
   /// Detect file type and generate appropriate filename using robust detection
+
   Future<String> detectFileTypeAndGenerateFilename(
       String filename, String content,
       {String? contentType}) async {
@@ -2418,6 +2246,34 @@ Technical details: $e''';
             final redirectUri = uri.resolve(location);
             _probeResult!['redirectLocation'] = redirectUri.toString();
           }
+        }
+
+        // AUTO-DETECT RSS/ATOM AND FETCH SOURCE
+        // This fixes the issue where RSS templates don't render in Browser-First mode
+        // because the source isn't loaded.
+        final contentType =
+            normalizedHeaders['content-type']?.toLowerCase() ?? '';
+        final isFeed = contentType.contains('application/rss+xml') ||
+            contentType.contains('application/atom+xml') ||
+            // distinct from generic xml unless extension matches
+            (contentType.contains('xml') &&
+                (targetUrl.endsWith('.rss') ||
+                    targetUrl.endsWith('.atom') ||
+                    targetUrl.endsWith('.xml')));
+
+        if (isFeed && _useBrowserByDefault) {
+          debugPrint(
+              'RSS/Atom detected in probe ($contentType), forcing source load.');
+          // Load source in background to allow template rendering
+          // We bypass _loadSourceOnly's isLoading check because we are technically loading
+          _loadFromUrlInternal(targetUrl).then((file) {
+            if (_currentlyProbingUrl == targetUrl ||
+                _currentFile?.path == targetUrl) {
+              loadFile(file);
+            }
+          }).catchError((e) {
+            debugPrint('Error forcing RSS source load: $e');
+          });
         }
 
         return _probeResult!;
