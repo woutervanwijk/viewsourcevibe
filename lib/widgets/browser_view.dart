@@ -136,12 +136,19 @@ class _BrowserViewState extends State<BrowserView> {
   Widget build(BuildContext context) {
     return InAppWebView(
       gestureRecognizers: widget.gestureRecognizers,
+      onWebContentProcessDidTerminate: (controller) {
+        controller.reload();
+        setState(() {});
+      },
       initialSettings: InAppWebViewSettings(
         isInspectable: kDebugMode,
-        mediaPlaybackRequiresUserGesture: false,
-        allowsInlineMediaPlayback: true,
-        iframeAllow: "camera; microphone",
-        iframeAllowFullscreen: true,
+        preferredContentMode: UserPreferredContentMode.RECOMMENDED,
+        mediaPlaybackRequiresUserGesture: true,
+        allowFileAccess: false,
+        allowFileAccessFromFileURLs: false,
+        allowContentAccess: false,
+        allowsInlineMediaPlayback: false,
+        iframeAllowFullscreen: false,
       ),
       onWebViewCreated: (controller) {
         _controller = controller;

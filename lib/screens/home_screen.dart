@@ -275,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (showMetadataTabs)
           KeepAliveWrapper(
               child: _buildScrollableRefreshable(const MediaView(), 'media',
-                  hasScrollBody: false)),
+                  useSliverToBoxAdapter: true)),
         if (showServerTabs)
           KeepAliveWrapper(
               child: _buildScrollableRefreshable(
@@ -320,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (showMetadataTabs)
         KeepAliveWrapper(
             child: _buildScrollableRefreshable(const MediaView(), 'media',
-                hasScrollBody: false)),
+                useSliverToBoxAdapter: true)),
 
       // 6. Probe: Cookies
       if (showServerTabs)

@@ -37,7 +37,7 @@ class CodeBeautifier {
   }
 
   static String _beautifyHtml(String html) {
-    var result = '';
+    final buffer = StringBuffer();
     var indent = 0;
     final tokens = RegExp(r'(<[^>]+>|[^<]+)').allMatches(html);
 
@@ -45,7 +45,7 @@ class CodeBeautifier {
       final value = token.group(0)!;
       if (value.startsWith('</')) {
         indent--;
-        result += '\n${'  ' * indent}$value';
+        buffer.write('\n${'  ' * indent}$value');
       } else if (value.startsWith('<') &&
           !value.endsWith('/>') &&
           !value.startsWith('<!') &&
@@ -56,22 +56,22 @@ class CodeBeautifier {
         final selfClosing =
             {'br', 'hr', 'img', 'input', 'link', 'meta'}.contains(tagName);
 
-        result += '\n${'  ' * indent}$value';
+        buffer.write('\n${'  ' * indent}$value');
         if (!selfClosing) indent++;
       } else if (value.startsWith('<')) {
-        result += '\n${'  ' * indent}$value';
+        buffer.write('\n${'  ' * indent}$value');
       } else {
         final text = value.trim();
         if (text.isNotEmpty) {
-          result += '\n${'  ' * indent}$text';
+          buffer.write('\n${'  ' * indent}$text');
         }
       }
     }
-    return result.trim();
+    return buffer.toString().trim();
   }
 
   static String _beautifyCss(String css) {
-    var result = '';
+    final buffer = StringBuffer();
     var indent = 0;
     // Remove existing newlines and extra spaces to normalize
     final normalized = css.replaceAll(RegExp(r'\s+'), ' ');
@@ -79,23 +79,26 @@ class CodeBeautifier {
     for (var i = 0; i < normalized.length; i++) {
       final char = normalized[i];
       if (char == '{') {
-        result += ' {\n${'  ' * (indent + 1)}';
+        buffer.write(' {\n${'  ' * (indent + 1)}');
         indent++;
       } else if (char == '}') {
         indent--;
-        result = '${result.trimRight()}\n${'  ' * indent}}\n${'  ' * indent}';
+        // Trim trailing whitespace from buffer before closing brace
+        final current = buffer.toString().trimRight();
+        buffer.clear();
+        buffer.write('$current\n${'  ' * indent}}\n${'  ' * indent}');
       } else if (char == ';') {
-        result += ';\n${'  ' * indent}';
+        buffer.write(';\n${'  ' * indent}');
       } else {
-        result += char;
+        buffer.write(char);
       }
     }
-    return result.trim();
+    return buffer.toString().trim();
   }
 
   static String _beautifyJs(String js) {
     // Very basic JS beautifier focused on braces and semicolons
-    var result = '';
+    final buffer = StringBuffer();
     var indent = 0;
     var inString = false;
     var quoteChar = '';
@@ -115,29 +118,31 @@ class CodeBeautifier {
       }
 
       if (inString) {
-        result += char;
+        buffer.write(char);
         continue;
       }
 
       if (char == '{') {
-        result += ' {\n${'  ' * (indent + 1)}';
+        buffer.write(' {\n${'  ' * (indent + 1)}');
         indent++;
       } else if (char == '}') {
         indent--;
-        result = '${result.trimRight()}\n${'  ' * indent}}';
+        final current = buffer.toString().trimRight();
+        buffer.clear();
+        buffer.write('$current\n${'  ' * indent}}');
         // Add newline if next char isn't a semicolon or something similar
         if (i + 1 < js.length &&
             js[i + 1] != ';' &&
             js[i + 1] != ',' &&
             js[i + 1] != ')') {
-          result += '\n${'  ' * indent}';
+          buffer.write('\n${'  ' * indent}');
         }
       } else if (char == ';') {
-        result += ';\n${'  ' * indent}';
+        buffer.write(';\n${'  ' * indent}');
       } else {
-        result += char;
+        buffer.write(char);
       }
     }
-    return result.trim();
+    return buffer.toString().trim();
   }
 }

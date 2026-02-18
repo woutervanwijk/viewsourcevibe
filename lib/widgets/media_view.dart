@@ -72,15 +72,21 @@ class MediaView extends StatelessWidget {
     );
 
     if (images.isEmpty && videos.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.perm_media_outlined,
-                size: 64, color: Theme.of(context).colorScheme.outlineVariant),
-            const SizedBox(height: 16),
-            const Text('No Images or Videos found'),
-          ],
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height * 0.6,
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.perm_media_outlined,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.outlineVariant),
+              const SizedBox(height: 16),
+              const Text('No Images or Videos found'),
+            ],
+          ),
         ),
       );
     }

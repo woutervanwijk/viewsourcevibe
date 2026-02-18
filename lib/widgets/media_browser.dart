@@ -45,14 +45,21 @@ class _MediaBrowserState extends State<MediaBrowser> {
 
     // Zoomable image viewer for all platforms
     if (isImage && widget.file.isUrl) {
-      return Container(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        child: InteractiveViewer(
-          minScale: 0.1,
-          maxScale: 5.0,
-          child: Center(
-            child: CustomPaint(
-              painter: const CheckerboardPainter(),
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          // Full-tab checkerboard background
+          CustomPaint(
+            painter: CheckerboardPainter(
+              color1: isDark ? Colors.grey[800]! : const Color(0xFFE0E0E0),
+              color2: isDark ? Colors.grey[900]! : const Color(0xFFFFFFFF),
+            ),
+          ),
+          InteractiveViewer(
+            minScale: 0.1,
+            maxScale: 5.0,
+            child: Center(
               child: extension == 'svg'
                   ? SvgPicture.network(
                       widget.file.path,
@@ -79,7 +86,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                     ),
             ),
           ),
-        ),
+        ],
       );
     }
 
