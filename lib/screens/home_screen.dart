@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -240,6 +242,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   htmlService.isWebViewLoading
               ? BrowserView(
                   file: currentFile,
+                  gestureRecognizers: {
+                    Factory<VerticalDragGestureRecognizer>(
+                      () => VerticalDragGestureRecognizer(),
+                    ),
+                  },
                 )
               : (htmlService.isLoading
                   ? const Center(child: CircularProgressIndicator())
