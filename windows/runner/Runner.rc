@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "info.wouter" "\0"
-            VALUE "FileDescription", "view_source_vibe" "\0"
+            VALUE "FileDescription", "View Source Vibe" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "view_source_vibe" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 info.wouter. All rights reserved." "\0"
             VALUE "OriginalFilename", "view_source_vibe.exe" "\0"
-            VALUE "ProductName", "view_source_vibe" "\0"
+            VALUE "ProductName", "View Source Vibe" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
