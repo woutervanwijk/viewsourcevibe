@@ -80,17 +80,37 @@ class FormatUtils {
     return buffer.toString().split('').reversed.join('');
   }
 
-  /// Formats a size map with both decoded (full) size and transfer (download) size.
-  /// Shows: "1.2 MB (↓ 400 KB)" when transfer size differs from decoded size.
-  /// Shows: "1.2 MB" when only decoded size is available or sizes are equal.
+  /// Formats bytes as KB (always in KB, never auto-scales to MB/GB).
+  /// e.g. 1234567 bytes → "1,205 KB"
+  static String formatBytesAsKb(int bytes) {
+    if (bytes <= 0) return '0 KB';
+    final kb = (bytes / 1024).ceil();
+    // Format with thousands separator
+    return '${_formatWithCommas(kb)} KB';
+  }
+
+  static String _formatWithCommas(int n) {
+    final s = n.toString();
+    final buffer = StringBuffer();
+    final chars = s.split('').reversed.toList();
+    for (int i = 0; i < chars.length; i++) {
+      if (i > 0 && i % 3 == 0) buffer.write(',');
+      buffer.write(chars[i]);
+    }
+    return buffer.toString().split('').reversed.join('');
+  }
+
+  /// Formats a size map: decoded size in KB first, then transfer size in brackets.
+  /// Shows: "1,205 KB (↓ 400 KB)" when transfer size differs from decoded size.
+  /// Shows: "1,205 KB" when only decoded size is available or sizes are equal.
   static String formatBytesWithTransfer(Map<String, dynamic>? sizeMap) {
     if (sizeMap == null) return '';
     final decoded = sizeMap['decoded'] as int? ?? 0;
     final transfer = sizeMap['transfer'] as int? ?? 0;
 
-    final decodedStr = formatBytes(decoded);
+    final decodedStr = formatBytesAsKb(decoded);
     if (transfer > 0 && transfer != decoded) {
-      return '$decodedStr (↓ ${formatBytes(transfer)})';
+      return '$decodedStr (↓ ${formatBytesAsKb(transfer)})';
     }
     return decodedStr;
   }

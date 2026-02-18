@@ -35,7 +35,7 @@ class AboutScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Cross-Platform Source Code Viewer',
+                      'Source Code Viewer & Page analyzer',
                       style: TextStyle(
                         fontSize: 16,
                         color: Theme.of(context).colorScheme.secondary,

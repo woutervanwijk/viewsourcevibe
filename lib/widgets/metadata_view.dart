@@ -471,12 +471,11 @@ class MetadataView extends StatelessWidget {
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
-            subtitle: Text(
-              'Transferred: ${FormatUtils.formatBytes(weight['transfer'] as int? ?? 0)}',
-              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-            ),
             trailing: Text(
-              FormatUtils.formatBytes(weight['decoded'] as int? ?? 0),
+              FormatUtils.formatBytesWithTransfer({
+                'decoded': weight['decoded'] as int? ?? 0,
+                'transfer': weight['transfer'] as int? ?? 0,
+              }),
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -509,12 +508,11 @@ class MetadataView extends StatelessWidget {
         '$label (${data['count']})',
         style: const TextStyle(fontSize: 12),
       ),
-      subtitle: Text(
-        'Transferred: ${FormatUtils.formatBytes(data['transfer'] as int? ?? 0)}',
-        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-      ),
       trailing: Text(
-        FormatUtils.formatBytes(data['decoded'] as int? ?? 0),
+        FormatUtils.formatBytesWithTransfer({
+          'decoded': data['decoded'] as int? ?? 0,
+          'transfer': data['transfer'] as int? ?? 0,
+        }),
         style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
       ),
       dense: true,

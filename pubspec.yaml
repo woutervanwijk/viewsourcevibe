@@ -1,5 +1,5 @@
 name: view_source_vibe
-description: A cross-platform source code viewer app (HTML, CSS, JavaScript, Markdown, Yaml, etc)
+description: A cross-platform source code viewer & page analyzer app
 version: 1.0.0+1
 
 environment:

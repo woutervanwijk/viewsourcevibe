@@ -24,7 +24,7 @@ This is what Vibe wrote itself:
 
 ![View Source Vibe Logo](assets/icon.png)
 
-**Cross-Platform Source Code Viewer & Inspector**
+**Cross-Platform Source Code Viewer & Page analyzer**
 
 View Source Vibe is a powerful tool to view source code, inspect web pages, and analyze web technologies. Built with Flutter, it offers a desktop-class inspection experience on your mobile device.
 

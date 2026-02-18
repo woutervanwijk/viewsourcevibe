@@ -151,13 +151,19 @@ class ProbeGeneralView extends ProbeViewBase {
             const Divider(),
             const SizedBox(height: 8),
             _buildDetailRow(
-                'Document Size (Tx)', FormatUtils.formatBytes(mainDocTx)),
-            _buildDetailRow(
-                'Document Size (Dec)', FormatUtils.formatBytes(mainDocDec)),
+                'Document Size',
+                mainDocDec > 0
+                    ? FormatUtils.formatBytesWithTransfer(
+                        {'decoded': mainDocDec, 'transfer': mainDocTx})
+                    : 'N/A'),
             const Divider(),
             _buildDetailRow('Total Resources', '$resourceCount requests'),
-            _buildDetailRow('Total Transfer', FormatUtils.formatBytes(totalTx)),
-            _buildDetailRow('Total Decoded', FormatUtils.formatBytes(totalDec)),
+            _buildDetailRow(
+                'Total Size',
+                totalDec > 0
+                    ? FormatUtils.formatBytesWithTransfer(
+                        {'decoded': totalDec, 'transfer': totalTx})
+                    : 'N/A'),
           ],
         ),
       ),
