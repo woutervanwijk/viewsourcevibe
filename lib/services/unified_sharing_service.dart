@@ -152,7 +152,49 @@ class UnifiedSharingService {
 
       // Route to the appropriate processing method
       if (type == 'url' && content != null) {
-        await _processSharedUrl(context, htmlService, content);
+        // ALWAYS ask the user what to do with the URL
+        final dialogContext = context.mounted
+            ? context
+            : (MyApp.navigatorKey.currentState?.context ?? context);
+
+        final choice = await _showShareChoiceDialog(dialogContext, content);
+
+        if (choice == 'url') {
+          // Check if original context is still valid
+          if (context.mounted) {
+            await _processSharedUrl(context, htmlService, content);
+          } else {
+            // Fallback to navigator key context if available
+            final navContext = MyApp.navigatorKey.currentContext;
+            if (navContext != null && navContext.mounted) {
+              await _processSharedUrl(navContext, htmlService, content);
+            }
+          }
+        } else if (choice == 'text') {
+          // Treat as text content
+          if (context.mounted) {
+            await _processSharedText(
+              context,
+              htmlService,
+              content,
+              fileName: fileName,
+              path: filePath ?? 'shared://url',
+              type: 'url',
+            );
+          } else {
+            final navContext = MyApp.navigatorKey.currentContext;
+            if (navContext != null && navContext.mounted) {
+              await _processSharedText(
+                navContext,
+                htmlService,
+                content,
+                fileName: fileName,
+                path: filePath ?? 'shared://url',
+                type: 'url',
+              );
+            }
+          }
+        }
       } else if (content != null) {
         // Handle content provided directly (either as text or as a read file)
         debugPrint(
@@ -162,19 +204,8 @@ class UnifiedSharingService {
           final trimmedContent = content.trim();
           String? urlToLoad;
           // Detect if it's a URL (either the whole string or containing one)
-          if (isUrl(trimmedContent)) {
-            // It's a clean URL, open it immediately without asking
-            if (context.mounted) {
-              await _processSharedUrl(context, htmlService, trimmedContent);
-            } else {
-              final navContext = MyApp.navigatorKey.currentContext;
-              if (navContext != null && navContext.mounted) {
-                await _processSharedUrl(
-                    navContext, htmlService, trimmedContent);
-              }
-            }
-            return;
-          } else if (isPotentialUrl(trimmedContent)) {
+          // We removed the isUrl check to always force the dialog for URLs
+          if (isPotentialUrl(trimmedContent)) {
             final uri = Uri.tryParse(trimmedContent);
             if (uri != null &&
                 (uri.scheme == 'http' || uri.scheme == 'https')) {
