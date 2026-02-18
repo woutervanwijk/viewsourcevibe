@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -10,10 +11,12 @@ import 'dart:io';
 
 class BrowserView extends StatefulWidget {
   final HtmlFile? file;
+  final Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers;
 
   const BrowserView({
     super.key,
     this.file,
+    this.gestureRecognizers,
   });
 
   @override
@@ -117,6 +120,7 @@ class _BrowserViewState extends State<BrowserView> {
   @override
   Widget build(BuildContext context) {
     return InAppWebView(
+      gestureRecognizers: widget.gestureRecognizers,
       initialSettings: InAppWebViewSettings(
         isInspectable: kDebugMode,
         mediaPlaybackRequiresUserGesture: false,
