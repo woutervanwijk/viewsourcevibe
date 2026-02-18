@@ -3551,8 +3551,9 @@ Technical details: $e''';
       }
 
       // Correlate resource sizes with metadata
-      if (_pageMetadata != null && _resourcePerformanceData != null) {
+      if (_pageMetadata != null) {
         _enrichMetadataWithSizes(baseUrl);
+        _fetchMissingMetadataSizesAsync().ignore();
       }
     } catch (e, stack) {
       debugPrint('Error extracting metadata in isolate: $e\n$stack');
@@ -3599,7 +3600,7 @@ Technical details: $e''';
 
   /// Matches extracted metadata links with performance resource data to find sizes
   void _enrichMetadataWithSizes(String baseUrl) {
-    if (_resourcePerformanceData == null || _pageMetadata == null) return;
+    if (_pageMetadata == null) return;
 
     // Helper to find size
     Map<String, int>? findSize(String? src) {
@@ -3611,6 +3612,8 @@ Technical details: $e''';
         // Approximate byte size: length * 3/4 for base64, but length is fine for diagnostic use
         return {'transfer': src.length, 'decoded': src.length};
       }
+
+      if (_resourcePerformanceData == null) return null;
 
       // Try exact match first
       var match = _resourcePerformanceData!.firstWhere(
@@ -3763,6 +3766,148 @@ Technical details: $e''';
             videos[i] = safeVid;
           }
         }
+      }
+    }
+
+    _sortMetadataLists();
+  }
+
+  void _sortMetadataLists() {
+    if (_pageMetadata == null) return;
+
+    int getSize(dynamic item) {
+      if (item is Map &&
+          item.containsKey('size') &&
+          item['size'] is Map &&
+          item['size'].containsKey('decoded')) {
+        return (item['size']['decoded'] as int?) ?? 0;
+      }
+      return 0;
+    }
+
+    // Sort CSS
+    if (_pageMetadata!['cssLinks'] != null) {
+      (_pageMetadata!['cssLinks'] as List).sort((a, b) {
+        return getSize(b).compareTo(getSize(a));
+      });
+    }
+
+    // Sort JS
+    if (_pageMetadata!['jsLinks'] != null) {
+      (_pageMetadata!['jsLinks'] as List).sort((a, b) {
+        return getSize(b).compareTo(getSize(a));
+      });
+    }
+
+    // Sort Images
+    if (_pageMetadata!['media'] != null &&
+        _pageMetadata!['media']['images'] != null) {
+      (_pageMetadata!['media']['images'] as List).sort((a, b) {
+        return getSize(b).compareTo(getSize(a));
+      });
+    }
+  }
+
+  Future<void> _fetchMissingMetadataSizesAsync() async {
+    if (_pageMetadata == null) return;
+
+    final List<Map> itemsToFetch = [];
+
+    // JS Links
+    if (_pageMetadata!['jsLinks'] != null) {
+      final List list = _pageMetadata!['jsLinks'];
+      for (int i = 0; i < list.length; i++) {
+        var item = list[i];
+        if (item is String && !item.startsWith('data:')) {
+          // Create a placeholder map so we can fetch and update
+          final map = {'src': item};
+          list[i] = map; // Replace string with map
+          itemsToFetch.add(map);
+        } else if (item is Map) {
+          final size = item['size'];
+          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
+            final url = item['src'] as String?;
+            if (url != null && !url.startsWith('data:')) {
+              itemsToFetch.add(item);
+            }
+          }
+        }
+      }
+    }
+
+    // CSS Links
+    if (_pageMetadata!['cssLinks'] != null) {
+      final List list = _pageMetadata!['cssLinks'];
+      for (int i = 0; i < list.length; i++) {
+        var item = list[i];
+        if (item is String && !item.startsWith('data:')) {
+          final map = {'href': item};
+          list[i] = map;
+          itemsToFetch.add(map);
+        } else if (item is Map) {
+          final size = item['size'];
+          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
+            final url = item['href'] as String?;
+            if (url != null && !url.startsWith('data:')) {
+              itemsToFetch.add(item);
+            }
+          }
+        }
+      }
+    }
+
+    // Images
+    if (_pageMetadata!['media'] != null &&
+        _pageMetadata!['media']['images'] != null) {
+      final List list = _pageMetadata!['media']['images'];
+      for (var item in list) {
+        if (item is Map) {
+          final size = item['size'];
+          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
+            final url = item['src'] as String?;
+            if (url != null && !url.startsWith('data:')) {
+              itemsToFetch.add(item);
+            }
+          }
+        }
+      }
+    }
+
+    if (itemsToFetch.isEmpty) return;
+
+    // Fetch in batches (HEAD requests should be fast, but limit concurrency)
+    const int batchSize = 5;
+    bool hasUpdates = false;
+
+    for (var i = 0; i < itemsToFetch.length; i += batchSize) {
+      if (_currentFile == null) break; // Stop if navigation happened
+
+      final end = (i + batchSize < itemsToFetch.length)
+          ? i + batchSize
+          : itemsToFetch.length;
+      final batch = itemsToFetch.sublist(i, end);
+
+      await Future.wait(batch.map((item) async {
+        String? url;
+        if (item['src'] is String) {
+          url = item['src'];
+        } else if (item['href'] is String) {
+          url = item['href'];
+        }
+
+        if (url != null) {
+          final size = await _fetchResourceSize(url);
+          if (size > 0) {
+            item['size'] = {'transfer': size, 'decoded': size};
+            hasUpdates = true;
+          }
+        }
+      }));
+
+      // Update UI progressively
+      if (hasUpdates) {
+        _sortMetadataLists();
+        notifyListeners();
       }
     }
   }
