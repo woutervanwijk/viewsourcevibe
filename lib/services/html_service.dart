@@ -1916,10 +1916,15 @@ class HtmlService with ChangeNotifier {
       final hResponse =
           await hRequest.close().timeout(const Duration(seconds: 30));
 
-      // Capture certificate info
+      // Capture certificate info — must be read before body drain destroys the socket
       Map<String, dynamic>? certInfo;
-      if (hResponse.certificate != null) {
-        certInfo = _extractCertificateInfo(hResponse.certificate!);
+      try {
+        if (hResponse.certificate != null) {
+          certInfo = _extractCertificateInfo(hResponse.certificate!);
+        }
+      } catch (e) {
+        debugPrint(
+            'Could not read SSL certificate (socket already closed): $e');
       }
 
       // Read body
@@ -2161,10 +2166,15 @@ Technical details: $e''';
         response = await request.close();
       }
 
-      // Capture certificate info
+      // Capture certificate info — must be read before drain() destroys the socket
       Map<String, dynamic>? certInfo;
-      if (response.certificate != null) {
-        certInfo = _extractCertificateInfo(response.certificate!);
+      try {
+        if (response.certificate != null) {
+          certInfo = _extractCertificateInfo(response.certificate!);
+        }
+      } catch (e) {
+        debugPrint(
+            'Could not read SSL certificate (socket already closed): $e');
       }
 
       stopwatch.stop();

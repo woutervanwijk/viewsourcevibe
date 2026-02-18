@@ -395,9 +395,9 @@ class MetadataView extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              subtitle: size != null
+              subtitle: size != null && (size['decoded'] as int? ?? 0) > 0
                   ? Text(
-                      FormatUtils.formatBytes(size['decoded'] as int? ?? 0),
+                      FormatUtils.formatBytesWithTransfer(size),
                       style: TextStyle(
                         fontSize: 10,
                         color: Theme.of(context).colorScheme.primary,

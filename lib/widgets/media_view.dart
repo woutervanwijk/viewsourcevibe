@@ -334,8 +334,8 @@ class MediaView extends StatelessWidget {
                       (image['size']['decoded'] ?? 0) > 0) ...[
                     const SizedBox(height: 4),
                     Text(
-                      FormatUtils.formatBytes(
-                          image['size']['decoded'] as int? ?? 0),
+                      FormatUtils.formatBytesWithTransfer(
+                          Map<String, dynamic>.from(image['size'] as Map)),
                       style: TextStyle(
                         fontSize: 9,
                         color: Theme.of(context).colorScheme.primary,

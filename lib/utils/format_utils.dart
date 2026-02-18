@@ -80,6 +80,21 @@ class FormatUtils {
     return buffer.toString().split('').reversed.join('');
   }
 
+  /// Formats a size map with both decoded (full) size and transfer (download) size.
+  /// Shows: "1.2 MB (↓ 400 KB)" when transfer size differs from decoded size.
+  /// Shows: "1.2 MB" when only decoded size is available or sizes are equal.
+  static String formatBytesWithTransfer(Map<String, dynamic>? sizeMap) {
+    if (sizeMap == null) return '';
+    final decoded = sizeMap['decoded'] as int? ?? 0;
+    final transfer = sizeMap['transfer'] as int? ?? 0;
+
+    final decodedStr = formatBytes(decoded);
+    if (transfer > 0 && transfer != decoded) {
+      return '$decodedStr (↓ ${formatBytes(transfer)})';
+    }
+    return decodedStr;
+  }
+
   /// Formats bytes into human readable string (KB, MB, etc)
   static String formatBytes(int bytes) {
     if (bytes <= 0) return "0 b";

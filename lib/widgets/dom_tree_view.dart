@@ -89,7 +89,9 @@ class _DomTreeViewState extends State<DomTreeView> {
 
         // Also expand head and body elements by default for better visibility
         for (var child in root.children) {
-          if (child.label == 'head' || child.label == 'body') {
+          if (child.label == 'head' ||
+              child.label == 'body' ||
+              child.label == 'channel') {
             _treeController.expand(child);
           }
         }
