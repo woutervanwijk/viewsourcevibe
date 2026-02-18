@@ -68,7 +68,7 @@ class AboutScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'View Source Vibe is a powerful tool to view source code, inspect web pages, and analyze web technologies. Built with Flutter, it offers a desktop-class inspection experience on your mobile device.',
+                        'View Source Vibe is a powerful tool to view source code, browse andinspect web pages, and analyze web technologies. Built with Flutter, it offers a desktop-class inspection experience on your mobile device.',
                         style: TextStyle(fontSize: 16),
                       ),
                       const SizedBox(height: 12),
