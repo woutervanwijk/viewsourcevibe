@@ -13,6 +13,13 @@ class UnifiedSharingService {
   static const MethodChannel _sharedContentChannel =
       MethodChannel('info.wouter.sourceviewer/shared_content');
 
+  // Debounce tracking
+  static String? _lastContentFingerprint;
+  static int _lastContentTimestamp = 0;
+
+  /// True while a share choice dialog is visible — blocks AppLinks from loading URLs simultaneously
+  static bool isShowingShareDialog = false;
+
   /// Share text content using native platform sharing
   static Future<void> shareText(String text) async {
     try {
@@ -140,6 +147,23 @@ class UnifiedSharingService {
       final filePath = sharedData['filePath'] as String?;
       final fileBytes = sharedData['fileBytes'] as List<int>?;
 
+      // Debounce: Check for duplicate content
+      // Create a unique fingerprint for this content
+      final contentFingerprint =
+          '${type}_${content ?? ""}_${fileName ?? ""}_${filePath ?? ""}';
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      // If same content received within 1 second, ignore it
+      if (contentFingerprint == _lastContentFingerprint &&
+          now - _lastContentTimestamp < 1000) {
+        debugPrint(
+            'UnifiedSharingService: Ignoring duplicate shared content event');
+        return;
+      }
+
+      _lastContentFingerprint = contentFingerprint;
+      _lastContentTimestamp = now;
+
       final error = sharedData['error'] as String?;
 
       debugPrint(
@@ -157,7 +181,9 @@ class UnifiedSharingService {
             ? context
             : (MyApp.navigatorKey.currentState?.context ?? context);
 
+        isShowingShareDialog = true;
         final choice = await _showShareChoiceDialog(dialogContext, content);
+        isShowingShareDialog = false;
 
         if (choice == 'url') {
           // Check if original context is still valid
@@ -231,8 +257,10 @@ class UnifiedSharingService {
                   ? context
                   : (MyApp.navigatorKey.currentState?.context ?? context);
 
+              isShowingShareDialog = true;
               final choice =
                   await _showShareChoiceDialog(dialogContext, urlToLoad);
+              isShowingShareDialog = false;
 
               if (choice == 'url') {
                 // Check if original context is still valid
@@ -249,6 +277,7 @@ class UnifiedSharingService {
               }
               // If they chose 'text' or cancelled, fall through to text processing
             } catch (e) {
+              isShowingShareDialog = false;
               debugPrint(
                   'UnifiedSharingService: Error showing choice dialog: $e');
               // Fallback to showing text if dialog fails

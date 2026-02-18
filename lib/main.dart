@@ -41,6 +41,11 @@ Future<void> setupUrlHandling(HtmlService htmlService) async {
 
 /// Handles deep links from URL schemes
 Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
+  // Don't handle deep links while a share dialog is showing — prevents double loading
+  if (UnifiedSharingService.isShowingShareDialog) {
+    debugPrint('Skipping deep link while share dialog is visible: $uri');
+    return;
+  }
   debugPrint('Handling deep link: $uri');
 
   // Handle viewsourcevibe://open?url=... scheme

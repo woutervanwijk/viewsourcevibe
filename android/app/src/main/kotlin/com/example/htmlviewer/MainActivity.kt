@@ -99,7 +99,7 @@ class MainActivity : FlutterActivity() {
         println("MainActivity: extractSharedData - action: $action, type: $type, data: $data")
 
         if (Intent.ACTION_SEND == action) {
-            if ("text/plain" == type) {
+            if (type?.startsWith("text/plain") == true) {
                 val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return null
                 return mapOf(
                     "type" to "text",
@@ -135,8 +135,8 @@ class MainActivity : FlutterActivity() {
                         "uri" to streamUri.toString(),
                         "content" to fileContent
                     )
-                } else if ("text/html" == type) {
-                    // Fallback for text/html without stream - treat as text
+                } else {
+                    // Fallback for any type (including text/html, */*, or null) that has EXTRA_TEXT
                      val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
                      if (sharedText != null) {
                          return mapOf(
@@ -169,12 +169,10 @@ class MainActivity : FlutterActivity() {
                         "uri" to dataString
                     )
                 } 
-                // HTTP/HTTPS URL
+                // HTTP/HTTPS URL - Let the system handling (AppLinks) take care of this
+                // We don't want to double-handle it here which causes the "double load" issue
                 else if (dataString.startsWith("http://") || dataString.startsWith("https://")) {
-                    return mapOf(
-                        "type" to "url",
-                        "content" to dataString
-                    )
+                    return null
                 }
                 // File URI or other
                 else {
