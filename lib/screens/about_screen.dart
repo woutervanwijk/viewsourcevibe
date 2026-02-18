@@ -35,7 +35,7 @@ class AboutScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Source Code Viewer & Page analyzer',
+                      'Source Code Viewer & Page Analyzer',
                       style: TextStyle(
                         fontSize: 16,
                         color: Theme.of(context).colorScheme.secondary,
@@ -160,7 +160,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        '© 2025 Wouter van Wijk & Mistral Vibe',
+                        '© 2025 Wouter van Wijk & Mistral Vibe & Gemini & Claude',
                         style: TextStyle(
                             fontSize: 16, fontStyle: FontStyle.italic),
                       ),

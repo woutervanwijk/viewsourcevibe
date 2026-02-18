@@ -77,7 +77,7 @@ flutter run
 
 ## 📝 License
 
-© 2025 Wouter van Wijk & Mistral Vibe
+© 2025 Wouter van Wijk & Mistral Vibe & Gemini & Claude
 Released under the MIT License.
 
 *View Source Vibe - Your pocket web inspector.* 🚀
