@@ -1,5 +1,6 @@
 import 'package:xml/xml.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:html_unescape/html_unescape.dart';
 
@@ -443,6 +444,17 @@ class RssTemplateService {
 
   static String _generateHtml(String title, String description, String link,
       String? image, List<Map<String, String>> items, String type) {
+    final htmlEscape = const HtmlEscape(HtmlEscapeMode.element);
+
+    // Safety:
+    // - Title, Description, Type: Escaped because they are raw text
+    // - Link: Injected into href attribute, should be safe URI or sanitized
+    // - Image: Injected into src attribute, should be safe URI or sanitized (we trust _resolveUrl generally returns valid URLs)
+
+    final safeTitle = htmlEscape.convert(title);
+    final safeDescription = htmlEscape.convert(description);
+    final safeType = htmlEscape.convert(type);
+
     final buffer = StringBuffer();
 
     buffer.writeln('''<!DOCTYPE html>
@@ -450,7 +462,7 @@ class RssTemplateService {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>$title</title>
+    <title>$safeTitle</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -575,9 +587,9 @@ class RssTemplateService {
 <body>
     <div class="header">
         ${image != null ? '<img src="$image" class="feed-logo" onError="this.style.display=\'none\'" />' : ''}
-        <h1><a href="$link">$title</a></h1>
-        <p class="feed-desc">$description</p>
-        <div class="feed-meta">$type Feed</div>
+        <h1><a href="$link">$safeTitle</a></h1>
+        <p class="feed-desc">$safeDescription</p>
+        <div class="feed-meta">$safeType Feed</div>
     </div>
     
     <div class="items">
@@ -585,19 +597,33 @@ class RssTemplateService {
 
     for (var item in items) {
       final hasImage = item['image']?.isNotEmpty ?? false;
+      final itemTitle = htmlEscape.convert(item['title'] ?? '');
+      final itemDate = htmlEscape.convert(item['date'] ?? '');
+      final itemAuthor = htmlEscape.convert(item['author'] ?? '');
+
+      // Sanitized description - _stripHtml already cleans it somewhat,
+      // but to be fully safe against leftovers we should escape it unless we trust _stripHtml's stripping.
+      // _stripHtml removes all tags. But let's escape it to be safe
+      // so that &lt;script&gt; renders as text, not potentially executing if stripping failed.
+      final itemDesc =
+          htmlEscape.convert(_stripHtml(item['description']!, limit: 300));
+
+      // Assuming links are roughly valid URLs. If they contain javascript:, that's bad.
+      // But general sanitization of href is separate.
+      final itemLink = item['link'] ?? '#';
 
       buffer.write('''
         <article class="item-card">
             ${hasImage ? '<img src="${item['image']}" class="item-image" loading="lazy" />' : ''}
-            <h2 class="item-title"><a href="${item['link']}">${item['title']}</a></h2>
+            <h2 class="item-title"><a href="$itemLink">$itemTitle</a></h2>
             <div class="item-meta">
-                ${item['date']!.isNotEmpty ? '<span>📅 ${item['date']}</span>' : ''}
-                ${item['author']!.isNotEmpty ? '<span>✍️ ${item['author']}</span>' : ''}
+                ${itemDate.isNotEmpty ? '<span>📅 $itemDate</span>' : ''}
+                ${itemAuthor.isNotEmpty ? '<span>✍️ $itemAuthor</span>' : ''}
             </div>
             <div class="item-desc">
-                ${_stripHtml(item['description']!, limit: 300)}...
+                $itemDesc...
             </div>
-            <a href="${item['link']}" class="read-more">Read Article →</a>
+            <a href="$itemLink" class="read-more">Read Article →</a>
         </article>
         ''');
     }

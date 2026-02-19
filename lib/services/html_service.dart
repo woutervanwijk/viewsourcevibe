@@ -941,10 +941,17 @@ class HtmlService with ChangeNotifier {
         final redirectUri = uri.resolve(locationHeader);
 
         // Recursively follow the redirect to get the final URL
-        return await _getFinalUrlAfterRedirects(
-            redirectUri, http.Client(), headers,
-            originalUri: originalUri ?? uri, // Preserve the original URI
-            redirectDepth: redirectDepth + 1);
+        // Security: Ensure we don't get redirected to non-http/https schemes (like file://)
+        if (redirectUri.scheme == 'http' || redirectUri.scheme == 'https') {
+          return await _getFinalUrlAfterRedirects(
+              redirectUri, http.Client(), headers,
+              originalUri: originalUri ?? uri, // Preserve the original URI
+              redirectDepth: redirectDepth + 1);
+        } else {
+          debugPrint(
+              'Blocked redirect to unsafe scheme: ${redirectUri.scheme}');
+          return originalUri?.toString() ?? uri.toString();
+        }
       }
 
       // If not a redirect, return the current URL

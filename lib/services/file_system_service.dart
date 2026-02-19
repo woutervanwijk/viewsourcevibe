@@ -8,9 +8,9 @@ import 'package:path/path.dart' as path;
 class FileSystemService {
   /// Singleton instance
   static final FileSystemService _instance = FileSystemService._internal();
-  
+
   factory FileSystemService() => _instance;
-  
+
   FileSystemService._internal();
 
   /// Application directories
@@ -25,22 +25,21 @@ class FileSystemService {
       // Get all application directories
       _appDocumentsDirectory = await getApplicationDocumentsDirectory();
       _appCacheDirectory = await getTemporaryDirectory();
-      
+
       if (Platform.isIOS || Platform.isMacOS) {
         _appSupportDirectory = await getApplicationSupportDirectory();
       }
-      
+
       _tempDirectory = await getTemporaryDirectory();
-      
+
       debugPrint('📁 File System Service Initialized');
       debugPrint('   Documents: ${_appDocumentsDirectory?.path}');
       debugPrint('   Cache: ${_appCacheDirectory?.path}');
       debugPrint('   Support: ${_appSupportDirectory?.path}');
       debugPrint('   Temp: ${_tempDirectory?.path}');
-      
+
       // Create necessary directories
       await _ensureDirectoriesExist();
-      
     } catch (e) {
       debugPrint('❌ Error initializing FileSystemService: $e');
       rethrow;
@@ -51,25 +50,26 @@ class FileSystemService {
   Future<void> _ensureDirectoriesExist() async {
     try {
       // Create app-specific directories
-      final dataDir = Directory(path.join(_appDocumentsDirectory!.path, 'data'));
+      final dataDir =
+          Directory(path.join(_appDocumentsDirectory!.path, 'data'));
       final cacheDir = Directory(path.join(_appCacheDirectory!.path, 'cache'));
-      final downloadsDir = Directory(path.join(_appDocumentsDirectory!.path, 'downloads'));
-      
+      final downloadsDir =
+          Directory(path.join(_appDocumentsDirectory!.path, 'downloads'));
+
       if (!await dataDir.exists()) {
         await dataDir.create(recursive: true);
         debugPrint('📂 Created data directory: ${dataDir.path}');
       }
-      
+
       if (!await cacheDir.exists()) {
         await cacheDir.create(recursive: true);
         debugPrint('📂 Created cache directory: ${cacheDir.path}');
       }
-      
+
       if (!await downloadsDir.exists()) {
         await downloadsDir.create(recursive: true);
         debugPrint('📂 Created downloads directory: ${downloadsDir.path}');
       }
-      
     } catch (e) {
       debugPrint('⚠️  Warning: Could not create all directories: $e');
     }
@@ -114,11 +114,11 @@ class FileSystemService {
   Future<Directory> getDataDirectory() async {
     final docsDir = await getDocumentsDirectory();
     final dataDir = Directory(path.join(docsDir.path, 'data'));
-    
+
     if (!await dataDir.exists()) {
       await dataDir.create(recursive: true);
     }
-    
+
     return dataDir;
   }
 
@@ -126,11 +126,11 @@ class FileSystemService {
   Future<Directory> getDownloadsDirectory() async {
     final docsDir = await getDocumentsDirectory();
     final downloadsDir = Directory(path.join(docsDir.path, 'downloads'));
-    
+
     if (!await downloadsDir.exists()) {
       await downloadsDir.create(recursive: true);
     }
-    
+
     return downloadsDir;
   }
 
@@ -138,11 +138,11 @@ class FileSystemService {
   Future<Directory> getAppCacheDirectory() async {
     final cacheDir = await getCacheDirectory();
     final appCacheDir = Directory(path.join(cacheDir.path, 'cache'));
-    
+
     if (!await appCacheDir.exists()) {
       await appCacheDir.create(recursive: true);
     }
-    
+
     return appCacheDir;
   }
 
@@ -153,19 +153,25 @@ class FileSystemService {
     String subDirectory = '',
   }) async {
     final dataDir = await getDataDirectory();
-    
+
+    // Security: Sanitize filename and subdirectory
+    final safeFilename = path.basename(filename);
+    if (subDirectory.contains('..')) {
+      throw Exception('Invalid subdirectory: Path traversal detected');
+    }
+
     // Create subdirectory if specified
     final targetDir = subDirectory.isNotEmpty
         ? Directory(path.join(dataDir.path, subDirectory))
         : dataDir;
-    
+
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
     }
-    
-    final file = File(path.join(targetDir.path, filename));
+
+    final file = File(path.join(targetDir.path, safeFilename));
     await file.writeAsString(content);
-    
+
     debugPrint('💾 Saved file to data directory: ${file.path}');
     return file;
   }
@@ -177,20 +183,27 @@ class FileSystemService {
     String subDirectory = '',
   }) async {
     final dataDir = await getDataDirectory();
-    
+
+    // Security: Sanitize filename and subdirectory
+    final safeFilename = path.basename(filename);
+    if (subDirectory.contains('..')) {
+      throw Exception('Invalid subdirectory: Path traversal detected');
+    }
+
     // Create subdirectory if specified
     final targetDir = subDirectory.isNotEmpty
         ? Directory(path.join(dataDir.path, subDirectory))
         : dataDir;
-    
+
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
     }
-    
-    final file = File(path.join(targetDir.path, filename));
+
+    final file = File(path.join(targetDir.path, safeFilename));
     await file.writeAsBytes(bytes);
-    
-    debugPrint('💾 Saved binary file to data directory: ${file.path} (${bytes.length} bytes)');
+
+    debugPrint(
+        '💾 Saved binary file to data directory: ${file.path} (${bytes.length} bytes)');
     return file;
   }
 
@@ -201,19 +214,25 @@ class FileSystemService {
     String subDirectory = '',
   }) async {
     final downloadsDir = await getDownloadsDirectory();
-    
+
+    // Security: Sanitize filename and subdirectory
+    final safeFilename = path.basename(filename);
+    if (subDirectory.contains('..')) {
+      throw Exception('Invalid subdirectory: Path traversal detected');
+    }
+
     // Create subdirectory if specified
     final targetDir = subDirectory.isNotEmpty
         ? Directory(path.join(downloadsDir.path, subDirectory))
         : downloadsDir;
-    
+
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
     }
-    
-    final file = File(path.join(targetDir.path, filename));
+
+    final file = File(path.join(targetDir.path, safeFilename));
     await file.writeAsString(content);
-    
+
     debugPrint('📥 Saved file to downloads directory: ${file.path}');
     return file;
   }
@@ -225,20 +244,27 @@ class FileSystemService {
     String subDirectory = '',
   }) async {
     final downloadsDir = await getDownloadsDirectory();
-    
+
+    // Security: Sanitize filename and subdirectory
+    final safeFilename = path.basename(filename);
+    if (subDirectory.contains('..')) {
+      throw Exception('Invalid subdirectory: Path traversal detected');
+    }
+
     // Create subdirectory if specified
     final targetDir = subDirectory.isNotEmpty
         ? Directory(path.join(downloadsDir.path, subDirectory))
         : downloadsDir;
-    
+
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
     }
-    
-    final file = File(path.join(targetDir.path, filename));
+
+    final file = File(path.join(targetDir.path, safeFilename));
     await file.writeAsBytes(bytes);
-    
-    debugPrint('📥 Saved binary file to downloads directory: ${file.path} (${bytes.length} bytes)');
+
+    debugPrint(
+        '📥 Saved binary file to downloads directory: ${file.path} (${bytes.length} bytes)');
     return file;
   }
 
@@ -248,9 +274,13 @@ class FileSystemService {
     required String content,
   }) async {
     final tempDir = await getTempDirectory();
-    final file = File(path.join(tempDir.path, filename));
+
+    // Security: Sanitize filename
+    final safeFilename = path.basename(filename);
+
+    final file = File(path.join(tempDir.path, safeFilename));
     await file.writeAsString(content);
-    
+
     debugPrint('⏳ Saved temporary file: ${file.path}');
     return file;
   }
@@ -261,10 +291,15 @@ class FileSystemService {
     required List<int> bytes,
   }) async {
     final tempDir = await getTempDirectory();
-    final file = File(path.join(tempDir.path, filename));
+
+    // Security: Sanitize filename
+    final safeFilename = path.basename(filename);
+
+    final file = File(path.join(tempDir.path, safeFilename));
     await file.writeAsBytes(bytes);
-    
-    debugPrint('⏳ Saved temporary binary file: ${file.path} (${bytes.length} bytes)');
+
+    debugPrint(
+        '⏳ Saved temporary binary file: ${file.path} (${bytes.length} bytes)');
     return file;
   }
 
@@ -322,7 +357,7 @@ class FileSystemService {
   Future<void> clearAppCache() async {
     try {
       final cacheDir = await getAppCacheDirectory();
-      
+
       if (await cacheDir.exists()) {
         await cacheDir.delete(recursive: true);
         await cacheDir.create(recursive: true);
@@ -339,7 +374,7 @@ class FileSystemService {
     try {
       final file = File(filePath);
       final stat = await file.stat();
-      
+
       return {
         'path': filePath,
         'exists': await file.exists(),
@@ -362,7 +397,7 @@ class FileSystemService {
   /// Get file type based on extension
   Future<String> _getFileType(String filePath) async {
     final extension = path.extension(filePath).toLowerCase();
-    
+
     // Common file type mappings
     const fileTypes = {
       '.html': 'HTML',
@@ -395,7 +430,7 @@ class FileSystemService {
       '.gif': 'Image',
       '.svg': 'Image',
     };
-    
+
     return fileTypes[extension] ?? 'Unknown';
   }
 
@@ -408,12 +443,14 @@ class FileSystemService {
     try {
       final dir = Directory(directoryPath);
       final files = <Map<String, dynamic>>[];
-      
+
       if (await dir.exists()) {
         await for (final entity in dir.list(recursive: recursive)) {
           if (entity is File) {
             // Filter by extension if specified
-            if (extensions.isEmpty || extensions.contains(path.extension(entity.path).toLowerCase())) {
+            if (extensions.isEmpty ||
+                extensions
+                    .contains(path.extension(entity.path).toLowerCase())) {
               final stat = await entity.stat();
               files.add({
                 'name': path.basename(entity.path),
@@ -426,7 +463,7 @@ class FileSystemService {
           }
         }
       }
-      
+
       return files;
     } catch (e) {
       debugPrint('❌ Error listing files: $directoryPath - $e');
@@ -439,14 +476,14 @@ class FileSystemService {
     try {
       final docsDir = await getDocumentsDirectory();
       final cacheDir = await getCacheDirectory();
-      
+
       final docsStat = await docsDir.stat();
       final cacheStat = await cacheDir.stat();
-      
+
       // Calculate used space (approximate)
       final docsUsed = await _calculateDirectorySize(docsDir);
       final cacheUsed = await _calculateDirectorySize(cacheDir);
-      
+
       return {
         'documents': {
           'path': docsDir.path,
@@ -469,19 +506,20 @@ class FileSystemService {
   Future<int> _calculateDirectorySize(Directory directory) async {
     try {
       if (!await directory.exists()) return 0;
-      
+
       int totalSize = 0;
-      
+
       await for (final entity in directory.list(recursive: true)) {
         if (entity is File) {
           final stat = await entity.stat();
           totalSize += stat.size;
         }
       }
-      
+
       return totalSize;
     } catch (e) {
-      debugPrint('⚠️  Warning: Could not calculate directory size: ${directory.path} - $e');
+      debugPrint(
+          '⚠️  Warning: Could not calculate directory size: ${directory.path} - $e');
       return 0;
     }
   }
@@ -491,12 +529,14 @@ class FileSystemService {
     try {
       // Check if we have access to documents directory
       final docsDir = await getDocumentsDirectory();
-      final docsAccess = await docsDir.exists() && await _canWriteToDirectory(docsDir);
-      
+      final docsAccess =
+          await docsDir.exists() && await _canWriteToDirectory(docsDir);
+
       // Check if we have access to cache directory
       final cacheDir = await getCacheDirectory();
-      final cacheAccess = await cacheDir.exists() && await _canWriteToDirectory(cacheDir);
-      
+      final cacheAccess =
+          await cacheDir.exists() && await _canWriteToDirectory(cacheDir);
+
       return {
         'documents': docsAccess,
         'cache': cacheAccess,
@@ -515,7 +555,8 @@ class FileSystemService {
   /// Check if we can write to a directory
   Future<bool> _canWriteToDirectory(Directory directory) async {
     try {
-      final testFile = File(path.join(directory.path, '.write_test_${DateTime.now().millisecondsSinceEpoch}'));
+      final testFile = File(path.join(directory.path,
+          '.write_test_${DateTime.now().millisecondsSinceEpoch}'));
       await testFile.writeAsString('test');
       await testFile.delete();
       return true;
@@ -529,7 +570,7 @@ class FileSystemService {
     const kb = 1024;
     const mb = kb * 1024;
     const gb = mb * 1024;
-    
+
     if (bytes >= gb) {
       return '${(bytes / gb).toStringAsFixed(2)} GB';
     } else if (bytes >= mb) {
@@ -546,25 +587,27 @@ class FileSystemService {
     final extension = path.extension(baseFilename);
     final nameWithoutExt = path.basenameWithoutExtension(baseFilename);
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    
+
     return '${nameWithoutExt}_$timestamp$extension';
   }
 
   /// Clean up old temporary files
-  Future<void> cleanupTempFiles({Duration olderThan = const Duration(days: 7)}) async {
+  Future<void> cleanupTempFiles(
+      {Duration olderThan = const Duration(days: 7)}) async {
     try {
       final tempDir = await getTempDirectory();
       final now = DateTime.now();
-      
+
       await for (final entity in tempDir.list()) {
         if (entity is File) {
           final stat = await entity.stat();
           final age = now.difference(stat.modified);
-          
+
           if (age > olderThan) {
             try {
               await entity.delete();
-              debugPrint('🧹 Cleaned up old temp file: ${entity.path} (${age.inDays} days old)');
+              debugPrint(
+                  '🧹 Cleaned up old temp file: ${entity.path} (${age.inDays} days old)');
             } catch (e) {
               debugPrint('⚠️  Could not delete temp file: ${entity.path} - $e');
             }

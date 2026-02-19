@@ -74,7 +74,19 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
   _detectServices(html, metadata);
 
   // Extract info from JSON-LD
-  _extractJsonLdInfo(html, metadata);
+  // We need a doc for this. If we used XML parser, we might not have a html.Document.
+  // But JSON-LD is usually in HTML.
+  if (!isXml) {
+    // Re-use the doc from earlier if possible, but we need to declare it outside
+    // To avoid massive refactor, let's just parse it if we haven't or...
+    // Actually, let's change how we call it.
+    // The doc was created in lines 55 or 59.
+    // But they are local variables in if/else blocks.
+
+    // Let's refactor the flow slightly to expose doc?
+    // Or just re-parse? Re-parsing is expensive.
+    // Better: Move _extractJsonLdInfo call INTO _extractFromHtml.
+  }
 
   return metadata;
 }
@@ -368,6 +380,8 @@ void _extractFromHtml(
       });
     }
   }
+  // Extract info from JSON-LD
+  _extractJsonLdInfo(doc, metadata);
 }
 
 String _normalizeUrl(String url) {
@@ -423,60 +437,79 @@ void _extractFromXml(
 }
 
 /// Extract info from JSON-LD script tags
-void _extractJsonLdInfo(String html, Map<String, dynamic> metadata) {
-  final jsonLdTags = RegExp(
-          r'''<script[^>]+type=["']application/ld\+json["'][^>]*>([\s\S]*?)</script>''',
-          caseSensitive: false)
-      .allMatches(html);
+void _extractJsonLdInfo(dom.Document doc, Map<String, dynamic> metadata) {
+  final jsonLdScripts =
+      doc.querySelectorAll('script[type="application/ld+json"]');
 
-  for (final match in jsonLdTags) {
+  for (final script in jsonLdScripts) {
     try {
-      final jsonStr = match.group(1)?.trim() ?? '';
+      final jsonStr = script.text.trim();
       if (jsonStr.isEmpty) continue;
 
-      // Basic regex-based extraction to avoid full JSON parsing issues in simple regex parser
-      final authorMatch = RegExp(
-              r'"author"\s*:\s*(?:{\s*"name"\s*:\s*"([^"]+)"|"[^"]+")',
-              caseSensitive: false)
-          .firstMatch(jsonStr);
-      if (authorMatch != null) {
-        final author = authorMatch.group(1) ??
-            authorMatch.group(0)!.split(':').last.replaceAll('"', '').trim();
-        if (author.isNotEmpty && metadata['article']['Author'] == null) {
-          metadata['article']['Author'] = author;
-        }
-      }
+      // Parse JSON directly instead of regex
+      // This is safer and more robust than regex on raw string
+      final dynamic jsonData = jsonDecode(jsonStr);
 
-      final datePublishedMatch =
-          RegExp(r'"datePublished"\s*:\s*"([^"]+)"', caseSensitive: false)
-              .firstMatch(jsonStr);
-      if (datePublishedMatch != null &&
-          metadata['article']['Published'] == null) {
-        metadata['article']['Published'] = datePublishedMatch.group(1);
-      }
-
-      final dateModifiedMatch =
-          RegExp(r'"dateModified"\s*:\s*"([^"]+)"', caseSensitive: false)
-              .firstMatch(jsonStr);
-      if (dateModifiedMatch != null &&
-          metadata['article']['Modified'] == null) {
-        metadata['article']['Modified'] = dateModifiedMatch.group(1);
-      }
-
-      final publisherMatch = RegExp(
-              r'"publisher"\s*:\s*(?:{\s*"name"\s*:\s*"([^"]+)"|"[^"]+")',
-              caseSensitive: false)
-          .firstMatch(jsonStr);
-      if (publisherMatch != null) {
-        final publisher = publisherMatch.group(1) ??
-            publisherMatch.group(0)!.split(':').last.replaceAll('"', '').trim();
-        if (publisher.isNotEmpty) {
-          metadata['article']['Publisher'] = publisher;
+      if (jsonData is Map<String, dynamic>) {
+        _processJsonLdObject(jsonData, metadata);
+      } else if (jsonData is List) {
+        for (final item in jsonData) {
+          if (item is Map<String, dynamic>) {
+            _processJsonLdObject(item, metadata);
+          }
         }
       }
     } catch (e) {
       debugPrint('Error parsing JSON-LD: $e');
     }
+  }
+}
+
+void _processJsonLdObject(
+    Map<String, dynamic> json, Map<String, dynamic> metadata) {
+  try {
+    // Author
+    if (metadata['article']['Author'] == null) {
+      final author = json['author'];
+      if (author is Map) {
+        metadata['article']['Author'] = author['name'];
+      } else if (author is String) {
+        metadata['article']['Author'] = author;
+      } else if (author is List && author.isNotEmpty) {
+        final firstAuthor = author.first;
+        if (firstAuthor is Map) {
+          metadata['article']['Author'] = firstAuthor['name'];
+        } else if (firstAuthor is String) {
+          metadata['article']['Author'] = firstAuthor;
+        }
+      }
+    }
+
+    // Date Published
+    if (metadata['article']['Published'] == null) {
+      if (json['datePublished'] is String) {
+        metadata['article']['Published'] = json['datePublished'];
+      }
+    }
+
+    // Date Modified
+    if (metadata['article']['Modified'] == null) {
+      if (json['dateModified'] is String) {
+        metadata['article']['Modified'] = json['dateModified'];
+      }
+    }
+
+    // Publisher
+    if (metadata['article']['Publisher'] == null) {
+      final publisher = json['publisher'];
+      if (publisher is Map) {
+        metadata['article']['Publisher'] = publisher['name'];
+      } else if (publisher is String) {
+        metadata['article']['Publisher'] = publisher;
+      }
+    }
+  } catch (e) {
+    debugPrint('Error processing JSON-LD object: $e');
   }
 }
 

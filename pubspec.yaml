@@ -67,6 +67,8 @@ dev_dependencies:
   mockito: ^5.4.0
   build_runner: ^2.4.6
   flutter_launcher_icons: ^0.14.4
+  path_provider_platform_interface: ^2.1.1
+  plugin_platform_interface: ^2.1.7
 
 flutter:
   uses-material-design: true
