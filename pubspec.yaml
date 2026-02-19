@@ -72,7 +72,6 @@ flutter:
   uses-material-design: true
   
   assets:
-    - assets/
     - assets/icon.webp
 
 flutter_launcher_icons:

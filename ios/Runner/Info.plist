@@ -83,6 +83,12 @@
       </dict>
   </array>
 
+  <key>LSSupportsOpeningDocumentsInPlace</key>
+  <true/>
+
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>View Source Vibe needs access to your photo library to let you select images and media files to view their source.</string>
+
   <key>LSHandlesURLsInBackground</key>
   <true/>
 

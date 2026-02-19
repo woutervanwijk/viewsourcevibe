@@ -48,3 +48,8 @@ app.*.map.json
 /android/build
 *.lock
 android/.kotlin/sessions/
+
+# Android signing secrets — never commit these
+android/key.properties
+*.jks
+*.keystore
