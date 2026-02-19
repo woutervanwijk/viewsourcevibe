@@ -149,6 +149,7 @@ class _BrowserViewState extends State<BrowserView> {
         allowContentAccess: false,
         allowsInlineMediaPlayback: true,
         iframeAllowFullscreen: false,
+        useHybridComposition: _shouldUseHybridComposition(),
       ),
       onWebViewCreated: (controller) {
         _controller = controller;
@@ -211,5 +212,36 @@ class _BrowserViewState extends State<BrowserView> {
         return NavigationActionPolicy.ALLOW;
       },
     );
+  }
+
+  bool _shouldUseHybridComposition() {
+    if (!Platform.isAndroid) return true;
+
+    try {
+      final osVersion = Platform.operatingSystemVersion.toLowerCase();
+
+      // Prioritize API level check if present (e.g., "API 29")
+      // Android 10 is API level 29
+      final apiMatch = RegExp(r'api\s+(\d+)').firstMatch(osVersion);
+      if (apiMatch != null) {
+        final apiLevel = int.parse(apiMatch.group(1)!);
+        return apiLevel >= 29;
+      }
+
+      // Fallback to version number (e.g., "Android 10", "11 (REL)")
+      final versionMatch =
+          RegExp(r'(?:android\s+)?(\d+)').firstMatch(osVersion);
+      if (versionMatch != null) {
+        final version = int.parse(versionMatch.group(1)!);
+        // If the number is clearly a version (1-15), check it.
+        // If it's larger and we haven't hit the API check yet, it's ambiguous,
+        // but most modern Android strings include "Android X" or "API Y".
+        return version >= 10;
+      }
+    } catch (e) {
+      debugPrint('BrowserView: Error parsing Android version: $e');
+    }
+
+    return true; // Default to true if parsing fails
   }
 }
