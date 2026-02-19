@@ -401,7 +401,8 @@ class DomTreeTile extends StatelessWidget {
                   style: TextStyle(
                     color: _getTagColor(context, node.label),
                     fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace',
+                    fontFamily: 'Courier',
+                    fontFamilyFallback: ['Courier New', 'SF Mono', 'monospace'],
                     fontSize: 13,
                   ),
                 ),
@@ -415,7 +416,12 @@ class DomTreeTile extends StatelessWidget {
                         attrString,
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.secondary,
-                          fontFamily: 'monospace',
+                          fontFamily: 'Courier',
+                          fontFamilyFallback: [
+                            'Courier New',
+                            'SF Mono',
+                            'monospace'
+                          ],
                           fontSize: 11,
                         ),
                       ),
@@ -428,7 +434,8 @@ class DomTreeTile extends StatelessWidget {
                   style: TextStyle(
                     color: _getTagColor(context, node.label),
                     fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace',
+                    fontFamily: 'Courier',
+                    fontFamilyFallback: ['Courier New', 'SF Mono', 'monospace'],
                     fontSize: 13,
                   ),
                 ),
@@ -439,7 +446,12 @@ class DomTreeTile extends StatelessWidget {
                     node.label,
                     style: const TextStyle(
                       fontSize: 12,
-                      fontFamily: 'monospace',
+                      fontFamily: 'Courier',
+                      fontFamilyFallback: [
+                        'Courier New',
+                        'SF Mono',
+                        'monospace'
+                      ],
                       color: Colors.grey,
                     ),
                   ),
