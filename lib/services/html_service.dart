@@ -1045,11 +1045,18 @@ class HtmlService with ChangeNotifier {
           filename == '/' ||
           filename == 'index' ||
           !filename.contains('.') && !filename.contains('/')) {
-        // Use simple descriptive names without extensions
-        if (filename.contains('rss') || filename.contains('feed')) {
-          return 'RSS Page.xml';
+        // If the content-type says it's a media file, don't force .html —
+        // fall through to the switch below to get the correct extension.
+        final detectedLower = detectedType.toLowerCase();
+        if (detectedLower != 'image' &&
+            detectedLower != 'video' &&
+            detectedLower != 'audio') {
+          // Use simple descriptive names without extensions
+          if (filename.contains('rss') || filename.contains('feed')) {
+            return 'RSS Page.xml';
+          }
+          return 'index.html'; // Simple fallback for generated filenames
         }
-        return 'index.html'; // Simple fallback for generated filenames
       }
 
       // If filename already has a proper file extension, use it

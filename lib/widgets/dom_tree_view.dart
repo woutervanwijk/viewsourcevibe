@@ -5,6 +5,7 @@ import 'package:html/dom.dart' as dom;
 import 'package:xml/xml.dart' as xml;
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import 'package:flutter_fancy_tree_view2/flutter_fancy_tree_view2.dart';
 
 class DomTreeNode {
@@ -321,6 +322,13 @@ class DomTreeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = Provider.of<AppSettings>(context);
+    final baseFontSize = settings.fontSize;
+    final tagFontSize =
+        baseFontSize * 0.8; // Slightly smaller than editor for tree view
+    final attrFontSize = tagFontSize * 0.85;
+    final textFontSize = tagFontSize * 0.9;
+
     final node = entry.node;
     final isElement = node.isElement;
     final attributes = node.attributes;
@@ -359,11 +367,11 @@ class DomTreeTile extends StatelessWidget {
               if (entry.hasChildren)
                 Icon(
                   entry.isExpanded ? Icons.arrow_drop_down : Icons.arrow_right,
-                  size: 16,
+                  size: tagFontSize * 1.2,
                   color: Colors.grey,
                 )
               else
-                const SizedBox(width: 16),
+                SizedBox(width: tagFontSize * 1.2),
 
               const SizedBox(width: 4),
 
@@ -373,8 +381,8 @@ class DomTreeTile extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(right: 4.0),
                     child: SizedBox(
-                      width: 16,
-                      height: 16,
+                      width: tagFontSize,
+                      height: tagFontSize,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(2),
                         child: Image.network(
@@ -382,7 +390,7 @@ class DomTreeTile extends StatelessWidget {
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) => Icon(
                               Icons.broken_image,
-                              size: 14,
+                              size: tagFontSize * 0.9,
                               color: Colors.grey[600]),
                         ),
                       ),
@@ -392,7 +400,8 @@ class DomTreeTile extends StatelessWidget {
                   // Standard Tag Icons
                   ..._getTagIcons(node).map((icon) => Padding(
                         padding: const EdgeInsets.only(right: 4.0),
-                        child: Icon(icon, size: 14, color: Colors.grey[600]),
+                        child: Icon(icon,
+                            size: tagFontSize * 0.9, color: Colors.grey[600]),
                       )),
 
                 // Tag Name with Color
@@ -403,7 +412,7 @@ class DomTreeTile extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Courier',
                     fontFamilyFallback: ['Courier New', 'SF Mono', 'monospace'],
-                    fontSize: 13,
+                    fontSize: tagFontSize,
                   ),
                 ),
 
@@ -422,7 +431,7 @@ class DomTreeTile extends StatelessWidget {
                             'SF Mono',
                             'monospace'
                           ],
-                          fontSize: 11,
+                          fontSize: attrFontSize,
                         ),
                       ),
                     ),
@@ -436,7 +445,7 @@ class DomTreeTile extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Courier',
                     fontFamilyFallback: ['Courier New', 'SF Mono', 'monospace'],
-                    fontSize: 13,
+                    fontSize: tagFontSize,
                   ),
                 ),
               ] else ...[
@@ -444,8 +453,8 @@ class DomTreeTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     node.label,
-                    style: const TextStyle(
-                      fontSize: 12,
+                    style: TextStyle(
+                      fontSize: textFontSize,
                       fontFamily: 'Courier',
                       fontFamilyFallback: [
                         'Courier New',
