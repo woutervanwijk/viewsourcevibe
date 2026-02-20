@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
 import 'dart:io';
+import 'dart:collection';
 
 class BrowserView extends StatefulWidget {
   final HtmlFile? file;
@@ -151,6 +152,16 @@ class _BrowserViewState extends State<BrowserView> {
         iframeAllowFullscreen: false,
         useHybridComposition: _shouldUseHybridComposition(),
       ),
+      initialUserScripts: UnmodifiableListView<UserScript>([
+        UserScript(
+          source: '''
+              if (window.performance && performance.setResourceTimingBufferSize) {
+                performance.setResourceTimingBufferSize(10000);
+              }
+            ''',
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+        ),
+      ]),
       onWebViewCreated: (controller) {
         _controller = controller;
         final htmlService = Provider.of<HtmlService>(context, listen: false);

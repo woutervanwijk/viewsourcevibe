@@ -2199,20 +2199,12 @@ Technical details: $e''';
       int? contentLength = response.contentLength;
 
       // Check Content-Length header fallback
-      if ((contentLength <= 0) &&
-          response.headers.value('content-length') != null) {
-        contentLength = int.tryParse(response.headers.value('content-length')!);
-      }
-
-      // Check Content-Range header (for 206 Partial Content)
-      if (response.headers.value('content-range') != null) {
-        final contentRange = response.headers.value('content-range')!;
-        final parts = contentRange.split('/');
-        if (parts.length == 2 && parts[1] != '*') {
-          final totalSize = int.tryParse(parts[1]);
-          if (totalSize != null) {
-            contentLength = totalSize;
-          }
+      if (contentLength <= 0) {
+        final lengthHeader = response.headers.value('content-length');
+        if (lengthHeader != null) {
+          contentLength = int.tryParse(lengthHeader) ?? 0;
+        } else {
+          contentLength = 0;
         }
       }
 
@@ -4408,53 +4400,58 @@ Technical details: $e''';
 
       // 1. Try HEAD request first
       try {
-        final response = await client
+        final headResponse = await client
             .head(uri, headers: headers)
             .timeout(const Duration(seconds: 5));
-        if (response.statusCode == 200) {
-          final contentLength = response.headers['content-length'];
+        if (headResponse.statusCode >= 200 && headResponse.statusCode < 400) {
+          final contentLength = headResponse.headers['content-length'];
           if (contentLength != null) {
-            return int.tryParse(contentLength) ?? 0;
+            final size = int.tryParse(contentLength);
+            if (size != null && size > 0) return size;
           }
         }
       } catch (e) {
-        // Fallback to GET if HEAD fails
+        // Fallback to Streamed GET if HEAD fails or times out
       }
 
-      // 2. Fallback to GET range request (just first byte)
-      // This often works when servers block HEAD or don't return content-length for HEAD
-      final response = await client.get(uri, headers: {
-        ...headers,
-        'Range': 'bytes=0-0'
-      }).timeout(const Duration(seconds: 5));
+      // 2. Fallback to Streamed GET request
+      try {
+        final request = http.Request('GET', uri);
+        request.headers.addAll(headers);
+        request.headers['Range'] = 'bytes=0-0';
 
-      if (response.statusCode == 200 || response.statusCode == 206) {
-        // comprehensive check for length
-        final contentLength = response.headers['content-length'];
-        final contentRange = response.headers['content-range'];
+        final streamedResponse =
+            await client.send(request).timeout(const Duration(seconds: 5));
 
-        if (contentRange != null) {
-          // Format: bytes 0-0/12345
-          final parts = contentRange.split('/');
-          if (parts.length == 2) {
-            return int.tryParse(parts[1]) ?? 0;
+        final contentLengthStr = streamedResponse.headers['content-length'];
+        final contentRangeStr = streamedResponse.headers['content-range'];
+
+        // Immediately drain the body so we don't hold the connection
+        streamedResponse.stream.listen((_) {}).cancel();
+        client.close();
+
+        if (streamedResponse.statusCode >= 200 &&
+            streamedResponse.statusCode < 400) {
+          if (contentRangeStr != null) {
+            final parts = contentRangeStr.split('/');
+            if (parts.length == 2) {
+              final size = int.tryParse(parts[1]);
+              if (size != null && size > 0) return size;
+            }
+          }
+
+          if (contentLengthStr != null) {
+            final size = int.tryParse(contentLengthStr);
+            if (size != null && size > 0) return size;
           }
         }
-
-        if (contentLength != null) {
-          final len = int.tryParse(contentLength) ?? 0;
-          // If status is 200, this is the full size.
-          // If status is 206, proper servers return the partial length (1),
-          // so we rely on Content-Range for the total if available.
-          if (response.statusCode == 200) return len;
-          // If 206 and no content-range (rare), we can't know the full size
-        }
+      } catch (e) {
+        client.close();
       }
-
-      return 0;
-    } catch (_) {
-      return 0;
+    } catch (e) {
+      debugPrint('Error getting resource size for \$url: \$e');
     }
+    return 0;
   }
 
   /// Clear the WebView cache (excluding cookies/localStorage if possible, but WebViewController.clearCache usually does disk cache)
