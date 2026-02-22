@@ -2106,6 +2106,7 @@ Technical details: $e''';
 
   /// Probe a URL to get status code and headers without downloading the full content
   /// Probe a URL to get status code and headers without downloading the full content
+  /// Probe a URL to get status code and headers without downloading the full content
   Future<Map<String, dynamic>> probeUrl(String url) async {
     if (_currentlyProbingUrl == url && _isProbing) {
       return _probeResult ?? {};
@@ -2124,9 +2125,11 @@ Technical details: $e''';
     debugPrint('probe url $url');
     notifyListeners();
     _autoSave();
+
+    HttpClient? client;
     try {
       // Validate and sanitize URL
-      String targetUrl = url;
+      String targetUrl = url.trim();
       // Auto-prepend https if no scheme is provided, excluding special schemes like about:
       if (!targetUrl.contains('://') &&
           !targetUrl.startsWith('about:') &&
@@ -2137,7 +2140,7 @@ Technical details: $e''';
       final uri = Uri.parse(targetUrl);
 
       // Use HttpClient directly to get certificate info
-      final client = HttpClient();
+      client = HttpClient();
       client.badCertificateCallback =
           (X509Certificate cert, String host, int port) => true;
       client.connectionTimeout = const Duration(seconds: 10);
@@ -2146,18 +2149,20 @@ Technical details: $e''';
       String? ipAddress;
 
       // Resolve IP
-      try {
-        final addresses = await InternetAddress.lookup(uri.host)
-            .timeout(const Duration(seconds: 2));
-        if (addresses.isNotEmpty) {
-          ipAddress = addresses.first.address;
+      if (uri.host.isNotEmpty) {
+        try {
+          final addresses = await InternetAddress.lookup(uri.host)
+              .timeout(const Duration(seconds: 2));
+          if (addresses.isNotEmpty) {
+            ipAddress = addresses.first.address;
+          }
+        } catch (e) {
+          debugPrint('DNS Lookup failed for ${uri.host}: $e');
         }
-      } catch (e) {
-        debugPrint('DNS Lookup failed: $e');
       }
 
       // Headers to mimic a browser/curl
-      final userAgent = 'curl/7.88.1';
+      const userAgent = 'curl/7.88.1';
 
       HttpClientRequest request;
       HttpClientResponse response;
@@ -2168,7 +2173,7 @@ Technical details: $e''';
         request.headers.set('User-Agent', userAgent);
         request.headers.set('Accept', '*/*');
         request.followRedirects = false;
-        response = await request.close();
+        response = await request.close().timeout(const Duration(seconds: 15));
       } catch (e) {
         debugPrint('HEAD request failed, trying GET: $e');
         // Fallback to GET with range
@@ -2177,24 +2182,30 @@ Technical details: $e''';
         request.headers.set('Accept', '*/*');
         request.headers.set('Range', 'bytes=0-0');
         request.followRedirects = false;
-        response = await request.close();
+        response = await request.close().timeout(const Duration(seconds: 15));
       }
 
-      // Capture certificate info — must be read before drain() destroys the socket
+      // Capture certificate info — must be read before response is fully drained/closed
       Map<String, dynamic>? certInfo;
       try {
         if (response.certificate != null) {
           certInfo = _extractCertificateInfo(response.certificate!);
         }
       } catch (e) {
-        debugPrint(
-            'Could not read SSL certificate (socket already closed): $e');
+        debugPrint('Could not read SSL certificate: $e');
       }
 
       stopwatch.stop();
 
-      // Drain response to ensure socket is closed properly, but we don't need body
-      await response.drain();
+      // Drain response to ensure socket is closed properly, but we don't need body.
+      // We add a timeout here because if the server ignores the Range header
+      // and starts sending a massive file, drain() could hang.
+      try {
+        await response.drain().timeout(const Duration(seconds: 2));
+      } catch (e) {
+        debugPrint('Response drain timed out or failed: $e');
+        // We continue anyway since we have the headers we need
+      }
 
       int? contentLength = response.contentLength;
 
@@ -2225,9 +2236,7 @@ Technical details: $e''';
         'Permissions-Policy': normalizedHeaders['permissions-policy'],
       };
 
-      // Cookies
       // Cookies - use response.cookies to handle multiple Set-Cookie headers correctly
-      // This avoids "More than one value for header set-cookie" exception
       final List<String> cookies =
           response.cookies.map((c) => c.toString()).toList();
 
@@ -2245,9 +2254,8 @@ Technical details: $e''';
           'ipAddress': ipAddress,
           'security': securityHeaders,
           'cookies': cookies,
-          'certificate': certInfo, // Now populated!
-          'analyzedCookies': <Map<String,
-              dynamic>>[], // Will be filled by _updateAnalyzedCookies
+          'certificate': certInfo,
+          'analyzedCookies': <Map<String, dynamic>>[],
         };
 
         // Update cookies with any browser cookies we might already have
@@ -2258,20 +2266,16 @@ Technical details: $e''';
           final location = normalizedHeaders['location'];
           if (location != null && location.isNotEmpty) {
             // Resolve relative URLs
-            final uri = Uri.parse(targetUrl);
             final redirectUri = uri.resolve(location);
             _probeResult!['redirectLocation'] = redirectUri.toString();
           }
         }
 
         // AUTO-DETECT RSS/ATOM AND FETCH SOURCE
-        // This fixes the issue where RSS templates don't render in Browser-First mode
-        // because the source isn't loaded.
         final contentType =
             normalizedHeaders['content-type']?.toLowerCase() ?? '';
         final isFeed = contentType.contains('application/rss+xml') ||
             contentType.contains('application/atom+xml') ||
-            // distinct from generic xml unless extension matches
             (contentType.contains('xml') &&
                 (targetUrl.endsWith('.rss') ||
                     targetUrl.endsWith('.atom') ||
@@ -2280,8 +2284,6 @@ Technical details: $e''';
         if (isFeed && _useBrowserByDefault) {
           debugPrint(
               'RSS/Atom detected in probe ($contentType), forcing source load.');
-          // Load source in background to allow template rendering
-          // We bypass _loadSourceOnly's isLoading check because we are technically loading
           _loadFromUrlInternal(targetUrl).then((file) {
             if (_currentlyProbingUrl == targetUrl ||
                 _currentFile?.path == targetUrl) {
@@ -2299,12 +2301,19 @@ Technical details: $e''';
         return {};
       }
     } catch (e) {
-      debugPrint('Error probing URL: $e');
+      debugPrint('Error probing URL $url: $e');
       if (_currentlyProbingUrl == url) {
         _probeError = e.toString();
       }
-      rethrow;
+      return {}; // Return empty instead of rethrowing to avoid unhandled async exceptions
     } finally {
+      // Ensure client is closed to free up resources
+      try {
+        client?.close(force: true);
+      } catch (e) {
+        debugPrint('Error closing HttpClient: $e');
+      }
+
       // Only reset flags if we are still the active probe
       if (_currentlyProbingUrl == url) {
         _isProbing = false;
