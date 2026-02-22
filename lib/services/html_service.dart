@@ -2114,11 +2114,21 @@ Technical details: $e''';
       return {};
     }
 
+    final String? existingFinalUrl = _probeResult?['finalUrl'];
+    final bool isEquivalent =
+        existingFinalUrl != null && _areUrlsEqual(existingFinalUrl, url);
+
     _isProbing = true;
     _currentlyProbingUrl = url;
-    _probeResult = null; // Reset previous results immediately
+
+    // Phase 2: Preserve previous results if the URL is equivalent
+    // This prevents UI flickering (N/A) during re-probes of the same site
+    if (!isEquivalent) {
+      _probeResult = null;
+      _lastBrowserCookies = ''; // Reset browser cookies on new probe
+    }
+
     _probeError = null;
-    _lastBrowserCookies = ''; // Reset browser cookies on new probe
     debugPrint('probe url $url');
     notifyListeners();
     _autoSave();
@@ -2291,10 +2301,11 @@ Technical details: $e''';
           });
         }
 
+        debugPrint('Probe successful for $url');
         return _probeResult!;
       } else {
         debugPrint(
-            'Discarding stale probe result for $url (current: $_currentlyProbingUrl)');
+            'Discarding stale probe result for $url (current active probe/sync: $_currentlyProbingUrl)');
         return {};
       }
     } catch (e) {
@@ -3583,10 +3594,9 @@ Technical details: $e''';
 
     // If we haven't probed yet, we can't really "merge" into the probe result
     // But we might want to show browser cookies anyway?
-    // The requirement says "The cookies combine the results of the browser and the separate probe".
-    // If no probe result exists, we can create a dummy one or wait.
-    // Let's create a placeholder probe result if it doesn't exist, so Cookies tab works.
+    // We create a minimal placeholder ONLY if we don't have one, ensuring it doesn't look like an error
     _probeResult ??= {
+      'finalUrl': _currentFile?.path ?? _currentInputText ?? 'unknown',
       'analyzedCookies': <Map<String, dynamic>>[],
       'cookies': <String>[],
     };
@@ -4015,15 +4025,22 @@ Technical details: $e''';
     // Independent Probe: This ensures we have server-side data for Probe/Security tabs
     // In our new architecture, loadFromUrl already triggered the probe.
     // However, if the user navigated INSIDE the WebView (clicked a link), we need to trigger it here.
-    if (_currentlyProbingUrl != url && _probeResult?['finalUrl'] != url) {
-      // Only probe if it's a NEW navigation, not the one we just started in loadFromUrl
-      // We can check if _currentlyProbingUrl matches or if it's empty
-      if (_currentlyProbingUrl != url) {
-        probeUrl(url).catchError((e) {
-          debugPrint('Error probing synced URL: $e');
-          return <String, dynamic>{};
-        });
-      }
+    final String? existingFinalUrl = _probeResult?['finalUrl'];
+    final bool alreadyProbed =
+        existingFinalUrl != null && _areUrlsEqual(existingFinalUrl, url);
+
+    if (_currentlyProbingUrl != url && !alreadyProbed) {
+      // Synchronize _currentlyProbingUrl even if we don't start a new probe
+      // This ensures background probes for PREVIOUS pages are correctly identified as stale
+      _currentlyProbingUrl = url;
+
+      probeUrl(url).catchError((e) {
+        debugPrint('Error probing synced URL: $e');
+        return <String, dynamic>{};
+      });
+    } else {
+      // Ensure stale background probes are discarded by updating the active target
+      _currentlyProbingUrl = url;
     }
 
     try {

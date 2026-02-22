@@ -10,10 +10,13 @@ abstract class ProbeViewBase extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Consumer<HtmlService>(builder: (context, htmlService, child) {
-      if (htmlService.isProbing || htmlService.isLoading) {
+      final result = htmlService.probeResult;
+
+      // Show spinner only if we don't have results yet
+      if ((htmlService.isProbing || htmlService.isLoading) && result == null) {
         return const Center(child: CircularProgressIndicator());
       }
-      if (htmlService.probeError != null) {
+      if (htmlService.probeError != null && result == null) {
         return Center(
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -31,13 +34,25 @@ abstract class ProbeViewBase extends StatelessWidget {
           ),
         );
       }
-      final result = htmlService.probeResult;
+
       if (result == null) {
         return const Center(
             child: Text('Probe a URL to see details',
                 style: TextStyle(color: Colors.grey)));
       }
-      return buildContent(context, htmlService, result);
+
+      return Stack(
+        children: [
+          Positioned.fill(child: buildContent(context, htmlService, result)),
+          if (htmlService.isProbing)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+        ],
+      );
     });
   }
 
