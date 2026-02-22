@@ -251,9 +251,8 @@ class HtmlService with ChangeNotifier {
   bool get isHtmlOrXml => isHtml || isXml;
 
   /// Server-dependent tabs (Probe, Headers, Security, Cookies) only for URLs
-  /// We hide these for strict XML to keep the interface focused
   bool get showServerTabs {
-    if ((_currentFile?.isUrl ?? false) && !_isStrictXml) return true;
+    if (_currentFile?.isUrl ?? false) return true;
     // Show during loading of a URL
     if (_isLoading &&
         _currentInputText != null &&
@@ -2104,8 +2103,6 @@ Technical details: $e''';
 
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
 
-  /// Probe a URL to get status code and headers without downloading the full content
-  /// Probe a URL to get status code and headers without downloading the full content
   /// Probe a URL to get status code and headers without downloading the full content
   Future<Map<String, dynamic>> probeUrl(String url) async {
     if (_currentlyProbingUrl == url && _isProbing) {
