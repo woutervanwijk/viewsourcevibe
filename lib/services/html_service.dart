@@ -429,7 +429,8 @@ class HtmlService with ChangeNotifier {
             1000;
 
     if ((_currentFile == null || !(_areUrlsEqual(_currentFile!.path, url))) &&
-        !isRedirect) {
+        !isRedirect &&
+        !_isNavigatingBack) {
       _pushToNavigationStack();
     }
 
@@ -1819,42 +1820,11 @@ class HtmlService with ChangeNotifier {
     _saveNavigationStack(); // Persist navigation stack after removal
     _isNavigatingBack = true;
     try {
-      // Use the public setter to trigger notifyListeners() immediately
-      // This ensures the UrlInput widget's text controller updates instantly
-      currentInputText =
-          previousFile.isUrl ? previousFile.path : previousFile.name;
-      debugPrint('Back navigation: Loading previous file: $currentInputText');
-      // CRITICAL FIX: If the previous file has empty content (e.g. from Browser-First access),
-      // we must fetch the content now to ensure the Source Code view works.
-      if (previousFile.isUrl &&
-          previousFile.content.isEmpty &&
-          !previousFile.isError) {
-        debugPrint(
-            'Back navigation: Previous file content is empty, refetching...');
-        notifyListeners(); // Update UI to show loading/url change
-        try {
-          final fetchedFile = await _loadFromUrlInternal(previousFile.path);
-          // Preserve the name if it was set to something specific, but content is more important
-          await loadFile(fetchedFile, clearProbe: false, switchToTab: 0);
-        } catch (e) {
-          debugPrint('Error refetching content on back navigation: $e');
-          // Fallback to loading the empty file so we at least are on the right URL
-          await loadFile(previousFile, clearProbe: false, switchToTab: 0);
-        }
-      } else {
-        await loadFile(previousFile, clearProbe: false, switchToTab: 0);
-      }
-
-      // Explicitly trigger WebView load if it's a URL
-      // This ensures the browser actually navigates back, as loadFile only updates internal state
-      if (previousFile.isUrl && activeWebViewController != null) {
-        // We use loadRequest instead of goBack() on controller because
-        // we manage our own history stack which might differ from WebView's internal stack
-        debugPrint('Back navigation: Loading req: ${previousFile.path}');
-
-        activeWebViewController!
-            .loadUrl(urlRequest: URLRequest(url: WebUri(previousFile.path)));
-      }
+      debugPrint(
+          'Back navigation: Loading previous file: ${previousFile.path}');
+      // Use the unified loadUrl entry point.
+      // switchToTab 0 ensures we go to the Source tab (or Browser depending on logic)
+      await loadUrl(previousFile.path, switchToTab: 0);
     } finally {
       _isNavigatingBack = false;
     }

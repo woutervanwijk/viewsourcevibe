@@ -138,7 +138,8 @@ class _BrowserViewState extends State<BrowserView> {
     return InAppWebView(
       gestureRecognizers: widget.gestureRecognizers,
       onWebContentProcessDidTerminate: (controller) {
-        controller.reload();
+        final htmlService = Provider.of<HtmlService>(context, listen: false);
+        htmlService.reloadCurrentFile();
         setState(() {});
       },
       initialSettings: InAppWebViewSettings(
