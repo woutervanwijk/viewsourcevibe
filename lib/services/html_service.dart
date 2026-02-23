@@ -46,7 +46,7 @@ class HtmlService with ChangeNotifier {
   String? _currentInputText;
   bool _isLoading = false;
   String?
-      selectedContentType; // Track the selected content type for syntax highlighting
+  selectedContentType; // Track the selected content type for syntax highlighting
   ScrollController? _verticalScrollController;
   ScrollController? _activeHorizontalScrollController;
   GlobalKey? _codeEditorKey;
@@ -64,14 +64,14 @@ class HtmlService with ChangeNotifier {
   String? _probeError;
   String? _currentlyProbingUrl;
   Map<String, dynamic>?
-      _browserProbeResult; // Store separate browser probe data
+  _browserProbeResult; // Store separate browser probe data
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
   Map<String, dynamic>? _lastPageWeight; // Store weights: transfer and decoded
   List<Map<String, dynamic>>?
-      _resourcePerformanceData; // Store detailed resource data
+  _resourcePerformanceData; // Store detailed resource data
   bool _isExtractingMetadata = false;
   String _lastBrowserCookies = '';
 
@@ -165,14 +165,15 @@ class HtmlService with ChangeNotifier {
   bool get isHtml {
     final contentType =
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-            '';
+        '';
     if (contentType.contains('text/html') ||
         contentType.contains('application/xhtml+xml')) {
       return true;
     }
 
     // Secondary check: selected content type or current file extension
-    final bool looksLikeHtml = selectedContentType == 'html' ||
+    final bool looksLikeHtml =
+        selectedContentType == 'html' ||
         (_currentFile?.name.toLowerCase().endsWith('.html') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.htm') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.xhtml') ?? false);
@@ -202,7 +203,7 @@ class HtmlService with ChangeNotifier {
   bool get isSvg {
     final contentType =
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-            '';
+        '';
     if (contentType.contains('image/svg+xml')) return true;
 
     return selectedContentType == 'svg' ||
@@ -212,7 +213,7 @@ class HtmlService with ChangeNotifier {
   bool get isXml {
     final contentType =
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-            '';
+        '';
     if (contentType.contains('application/xml') ||
         contentType.contains('text/xml')) {
       return true;
@@ -223,7 +224,8 @@ class HtmlService with ChangeNotifier {
     }
 
     // Secondary check: selections or file extensions
-    final bool looksLikeXml = selectedContentType == 'xml' ||
+    final bool looksLikeXml =
+        selectedContentType == 'xml' ||
         isSvg ||
         (_currentFile?.name.toLowerCase().endsWith('.xml') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.rss') ?? false) ||
@@ -284,7 +286,7 @@ class HtmlService with ChangeNotifier {
   bool get isMedia {
     final contentType =
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-            '';
+        '';
     if (contentType.contains('image/') ||
         contentType.contains('video/') ||
         contentType.contains('audio/')) {
@@ -356,8 +358,9 @@ class HtmlService with ChangeNotifier {
       if (currentBrowserUrl.toString() != _currentFile!.path) {
         debugPrint('Triggering browser reload for: ${_currentFile!.path}');
         _webViewLoadingUrl = _currentFile!.path; // Set to avoid interception
-        await activeWebViewController!
-            .loadUrl(urlRequest: URLRequest(url: WebUri(_currentFile!.path)));
+        await activeWebViewController!.loadUrl(
+          urlRequest: URLRequest(url: WebUri(_currentFile!.path)),
+        );
       }
     }
   }
@@ -406,10 +409,13 @@ class HtmlService with ChangeNotifier {
   }
 
   /// Unified entry point for loading a URL
-  Future<void> loadUrl(String url,
-      {int? switchToTab,
-      bool forceWebView = false,
-      bool skipWebViewLoad = false}) async {
+  Future<void> loadUrl(
+    String url, {
+    int? switchToTab,
+    bool forceWebView = false,
+    bool skipWebViewLoad = false,
+    bool forceReload = false,
+  }) async {
     if (url.isEmpty) return;
 
     // Sanitize
@@ -424,7 +430,8 @@ class HtmlService with ChangeNotifier {
     // We must do this BEFORE calling _resetLoadState because it clears _currentFile
     // Also check if we are navigating to a different page to avoid duplicates on reload
     // AND check for Rapid Redirects: If current file was loaded < 1s ago, assume redirect and replace it
-    final bool isRedirect = _lastCurrentFileUpdate != null &&
+    final bool isRedirect =
+        _lastCurrentFileUpdate != null &&
         DateTime.now().difference(_lastCurrentFileUpdate!).inMilliseconds <
             1000;
 
@@ -450,7 +457,7 @@ class HtmlService with ChangeNotifier {
     // }
 
     // 4. Trigger background probe ALWAYS
-    probeUrl(url).ignore();
+    probeUrl(url, forceReload: forceReload).ignore();
 
     // 5. Primary Load Path branching
     // Browser-First Mode: If enabled, force WebView (Browser) loading logic
@@ -492,8 +499,9 @@ class HtmlService with ChangeNotifier {
 
       // Actually trigger the load in the browser
       if (activeWebViewController != null && !skipWebViewLoad) {
-        activeWebViewController!
-            .loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+        activeWebViewController!.loadUrl(
+          urlRequest: URLRequest(url: WebUri(url)),
+        );
       }
 
       // We don't fetch HTML here. Source will be lazy loaded when tab is clicked.
@@ -525,7 +533,7 @@ class HtmlService with ChangeNotifier {
     if (_currentFile == null) return;
 
     if (_currentFile!.isUrl) {
-      return loadUrl(_currentFile!.path);
+      return loadUrl(_currentFile!.path, forceReload: true);
     } else {
       // Local file reload
       if (_currentFile!.path.isNotEmpty) {
@@ -584,8 +592,10 @@ class HtmlService with ChangeNotifier {
 
     final filename = generateDescriptiveFilename(Uri.parse(url), html);
     final processedFilename = await detectFileTypeAndGenerateFilename(
-        filename, html,
-        contentType: 'text/html');
+      filename,
+      html,
+      contentType: 'text/html',
+    );
 
     final file = HtmlFile(
       name: processedFilename,
@@ -826,7 +836,7 @@ class HtmlService with ChangeNotifier {
         'tech',
         'info',
         'me',
-        'tv'
+        'tv',
       };
       if (!commonTlds.contains(domainParts[domainParts.length - 1])) {
         humanDomain = domainParts.sublist(0, domainParts.length - 1).join(' ');
@@ -841,11 +851,13 @@ class HtmlService with ChangeNotifier {
 
     // Extract meaningful path segments
     final pathSegments = uri.pathSegments
-        .where((segment) =>
-            segment.isNotEmpty &&
-            !segment.startsWith('_') &&
-            segment != 'index' &&
-            segment != 'home')
+        .where(
+          (segment) =>
+              segment.isNotEmpty &&
+              !segment.startsWith('_') &&
+              segment != 'index' &&
+              segment != 'home',
+        )
         .toList();
 
     String baseFilename;
@@ -888,7 +900,7 @@ class HtmlService with ChangeNotifier {
       '.sql',
       '.atom',
       '.rss',
-      '.rdf'
+      '.rdf',
     };
 
     if (knownExtensions.any((ext) => baseLower.endsWith(ext))) {
@@ -903,8 +915,12 @@ class HtmlService with ChangeNotifier {
   /// Get the final URL after following all redirects manually
   /// This ensures we get the actual redirected URL, not the original
   Future<String> _getFinalUrlAfterRedirects(
-      Uri uri, http.Client client, Map<String, String> headers,
-      {Uri? originalUri, int redirectDepth = 0}) async {
+    Uri uri,
+    http.Client client,
+    Map<String, String> headers, {
+    Uri? originalUri,
+    int redirectDepth = 0,
+  }) async {
     try {
       // Prevent infinite redirect loops
       if (redirectDepth > 5) {
@@ -924,8 +940,9 @@ class HtmlService with ChangeNotifier {
         hRequest.headers.set(key, value);
       });
 
-      final hResponse =
-          await hRequest.close().timeout(const Duration(seconds: 30));
+      final hResponse = await hRequest.close().timeout(
+        const Duration(seconds: 30),
+      );
 
       // Capture certificate info if available
       if (hResponse.certificate != null) {
@@ -944,12 +961,16 @@ class HtmlService with ChangeNotifier {
         // Security: Ensure we don't get redirected to non-http/https schemes (like file://)
         if (redirectUri.scheme == 'http' || redirectUri.scheme == 'https') {
           return await _getFinalUrlAfterRedirects(
-              redirectUri, http.Client(), headers,
-              originalUri: originalUri ?? uri, // Preserve the original URI
-              redirectDepth: redirectDepth + 1);
+            redirectUri,
+            http.Client(),
+            headers,
+            originalUri: originalUri ?? uri, // Preserve the original URI
+            redirectDepth: redirectDepth + 1,
+          );
         } else {
           debugPrint(
-              'Blocked redirect to unsafe scheme: ${redirectUri.scheme}');
+            'Blocked redirect to unsafe scheme: ${redirectUri.scheme}',
+          );
           return originalUri?.toString() ?? uri.toString();
         }
       }
@@ -963,7 +984,8 @@ class HtmlService with ChangeNotifier {
       // If this is a DNS lookup failure or connection error, fall back to original URL
       if (e is SocketException || e.toString().contains('Failed host lookup')) {
         debugPrint(
-            'DNS/Connection error detected, falling back to original URL');
+          'DNS/Connection error detected, falling back to original URL',
+        );
         return originalUri?.toString() ?? uri.toString();
       }
 
@@ -1037,8 +1059,10 @@ class HtmlService with ChangeNotifier {
   /// Detect file type and generate appropriate filename using robust detection
 
   Future<String> detectFileTypeAndGenerateFilename(
-      String filename, String content,
-      {String? contentType}) async {
+    String filename,
+    String content, {
+    String? contentType,
+  }) async {
     try {
       // Use the robust file type detector
       final detectedType = await fileTypeDetector.detectFileType(
@@ -1069,7 +1093,8 @@ class HtmlService with ChangeNotifier {
       // If filename already has a proper file extension, use it
       // Check for common file extensions to avoid false positives
       final filenameLower = filename.toLowerCase();
-      final hasProperExtension = filenameLower.endsWith('.html') ||
+      final hasProperExtension =
+          filenameLower.endsWith('.html') ||
           filenameLower.endsWith('.htm') ||
           filenameLower.endsWith('.xhtml') ||
           filenameLower.endsWith('.css') ||
@@ -1266,7 +1291,9 @@ class HtmlService with ChangeNotifier {
 
   /// Fallback content detection when robust detection fails
   Future<String> _fallbackContentDetection(
-      String filename, String content) async {
+    String filename,
+    String content,
+  ) async {
     // Handle empty or unclear filenames
     if (filename.isEmpty ||
         filename == '/' ||
@@ -1288,7 +1315,31 @@ class HtmlService with ChangeNotifier {
       detectedType = _fallbackContentDetectionInternal(content);
     }
 
-    return '$filename${detectedType == 'Text' ? '.txt' : detectedType == 'HTML' ? '.html' : detectedType == 'XML' ? '.xml' : detectedType == 'JSON' ? '.json' : detectedType == 'YAML' ? '.yaml' : detectedType == 'Markdown' ? '.md' : detectedType == 'CSS' ? '.css' : detectedType == 'JavaScript' ? '.js' : detectedType == 'Python' ? '.py' : detectedType == 'Java' ? '.java' : detectedType == 'C++' ? '.cpp' : detectedType == 'SQL' ? '.sql' : '.txt'}';
+    return '$filename${detectedType == 'Text'
+        ? '.txt'
+        : detectedType == 'HTML'
+        ? '.html'
+        : detectedType == 'XML'
+        ? '.xml'
+        : detectedType == 'JSON'
+        ? '.json'
+        : detectedType == 'YAML'
+        ? '.yaml'
+        : detectedType == 'Markdown'
+        ? '.md'
+        : detectedType == 'CSS'
+        ? '.css'
+        : detectedType == 'JavaScript'
+        ? '.js'
+        : detectedType == 'Python'
+        ? '.py'
+        : detectedType == 'Java'
+        ? '.java'
+        : detectedType == 'C++'
+        ? '.cpp'
+        : detectedType == 'SQL'
+        ? '.sql'
+        : '.txt'}';
   }
 
   static String _fallbackContentDetectionInternal(String content) {
@@ -1438,13 +1489,14 @@ class HtmlService with ChangeNotifier {
         // Create a copy of the current file with the latest probe result
         // This ensures that when we go back, we have the probe data from when we left
         final fileToStack = HtmlFile(
-            name: _currentFile!.name,
-            path: _currentFile!.path,
-            content: _currentFile!.content,
-            lastModified: _currentFile!.lastModified,
-            size: _currentFile!.size,
-            isUrl: _currentFile!.isUrl,
-            probeResult: _probeResult ?? _currentFile!.probeResult);
+          name: _currentFile!.name,
+          path: _currentFile!.path,
+          content: _currentFile!.content,
+          lastModified: _currentFile!.lastModified,
+          size: _currentFile!.size,
+          isUrl: _currentFile!.isUrl,
+          probeResult: _probeResult ?? _currentFile!.probeResult,
+        );
 
         // Prevent duplicates in back stack (don't push if same as top)
         if (_navigationStack.isEmpty ||
@@ -1456,10 +1508,12 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  Future<void> loadFile(HtmlFile file,
-      {bool clearProbe = true,
-      bool isPartial = false,
-      int? switchToTab}) async {
+  Future<void> loadFile(
+    HtmlFile file, {
+    bool clearProbe = true,
+    bool isPartial = false,
+    int? switchToTab,
+  }) async {
     _isBeautifyEnabled = false; // Reset beautify mode on new file
 
     // Save current file to navigation stack if we are not going back
@@ -1515,11 +1569,13 @@ class HtmlService with ChangeNotifier {
       if (file.size > 7 * 1024 * 1024) {
         // 7MB severe warning
         debugPrint(
-            '⚠️  Very large file loading: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
+          '⚠️  Very large file loading: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)',
+        );
       } else {
         // 1MB warning threshold
         debugPrint(
-            '📄 Loading large file: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)');
+          '📄 Loading large file: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)',
+        );
       }
     }
 
@@ -1547,7 +1603,8 @@ class HtmlService with ChangeNotifier {
         preferLocalDetection = true;
       } else {
         // If probed type is generic, allow local detection to override
-        final isGenericProbe = selectedContentType ==
+        final isGenericProbe =
+            selectedContentType ==
                 'text' || // text/plain often maps to 'text' or similar
             contentType == 'application/octet-stream' ||
             contentType == 'application/x-www-form-urlencoded';
@@ -1561,7 +1618,8 @@ class HtmlService with ChangeNotifier {
         selectedContentType = localContentType;
       } else if (localContentType != selectedContentType) {
         debugPrint(
-            'Ignoring local detection ($localContentType) in favor of probe ($selectedContentType)');
+          'Ignoring local detection ($localContentType) in favor of probe ($selectedContentType)',
+        );
       }
 
       // Ensure filename has correct extension based on detection
@@ -1739,7 +1797,7 @@ class HtmlService with ChangeNotifier {
       'go',
       'rust',
       'sql',
-      'plaintext'
+      'plaintext',
     ];
 
     // Add common types first, then add remaining types
@@ -1821,7 +1879,8 @@ class HtmlService with ChangeNotifier {
     _isNavigatingBack = true;
     try {
       debugPrint(
-          'Back navigation: Loading previous file: ${previousFile.path}');
+        'Back navigation: Loading previous file: ${previousFile.path}',
+      );
       // Use the unified loadUrl entry point.
       // switchToTab 0 ensures we go to the Source tab (or Browser depending on logic)
       await loadUrl(previousFile.path, switchToTab: 0);
@@ -1860,8 +1919,9 @@ class HtmlService with ChangeNotifier {
 
       // Resolve IP (part of probing)
       try {
-        final addresses = await InternetAddress.lookup(uri.host)
-            .timeout(const Duration(seconds: 2));
+        final addresses = await InternetAddress.lookup(
+          uri.host,
+        ).timeout(const Duration(seconds: 2));
         if (addresses.isNotEmpty) {
           ipAddress = addresses.first.address;
         }
@@ -1878,8 +1938,12 @@ class HtmlService with ChangeNotifier {
       };
 
       // Manual redirect handling
-      final finalUrl = await _getFinalUrlAfterRedirects(uri, client, headers,
-          originalUri: uri);
+      final finalUrl = await _getFinalUrlAfterRedirects(
+        uri,
+        client,
+        headers,
+        originalUri: uri,
+      );
 
       // Update the input text immediately
       if (finalUrl != url) {
@@ -1896,8 +1960,9 @@ class HtmlService with ChangeNotifier {
         hRequest.headers.set(key, value);
       });
 
-      final hResponse =
-          await hRequest.close().timeout(const Duration(seconds: 30));
+      final hResponse = await hRequest.close().timeout(
+        const Duration(seconds: 30),
+      );
 
       // Capture certificate info — must be read before body drain destroys the socket
       Map<String, dynamic>? certInfo;
@@ -1907,7 +1972,8 @@ class HtmlService with ChangeNotifier {
         }
       } catch (e) {
         debugPrint(
-            'Could not read SSL certificate (socket already closed): $e');
+          'Could not read SSL certificate (socket already closed): $e',
+        );
       }
 
       // Read body
@@ -1924,8 +1990,9 @@ class HtmlService with ChangeNotifier {
 
       // Construct Probe Result
       final setCookie = respHeaders['set-cookie'];
-      final List<String> cookies =
-          setCookie != null ? setCookie.split(RegExp(r',(?=[^;]+?=)')) : [];
+      final List<String> cookies = setCookie != null
+          ? setCookie.split(RegExp(r',(?=[^;]+?=)'))
+          : [];
 
       final securityHeaders = {
         'Strict-Transport-Security': respHeaders['strict-transport-security'],
@@ -1965,10 +2032,12 @@ class HtmlService with ChangeNotifier {
 
       if (hResponse.statusCode == 200) {
         final finalUri = Uri.parse(finalUrl);
-        final pathFilename =
-            finalUri.pathSegments.isNotEmpty ? finalUri.pathSegments.last : '';
+        final pathFilename = finalUri.pathSegments.isNotEmpty
+            ? finalUri.pathSegments.last
+            : '';
 
-        final filename = pathFilename.isNotEmpty &&
+        final filename =
+            pathFilename.isNotEmpty &&
                 pathFilename.contains('.') &&
                 !pathFilename.startsWith('_') &&
                 pathFilename != 'index' &&
@@ -1978,8 +2047,10 @@ class HtmlService with ChangeNotifier {
 
         final contentType = respHeaders['content-type'];
         final processedFilename = await detectFileTypeAndGenerateFilename(
-            filename, content,
-            contentType: contentType);
+          filename,
+          content,
+          contentType: contentType,
+        );
 
         return HtmlFile(
           name: processedFilename,
@@ -2020,7 +2091,8 @@ class HtmlService with ChangeNotifier {
         errorMessage = e.toString();
       }
 
-      final errorContent = '''Web URL Could Not Be Loaded
+      final errorContent =
+          '''Web URL Could Not Be Loaded
 
 Error: $errorMessage
 
@@ -2064,18 +2136,29 @@ Technical details: $e''';
     }
   }
 
-  Future<void> loadFromUrl(String url,
-      {int? switchToTab, bool skipWebViewLoad = false}) async {
+  Future<void> loadFromUrl(
+    String url, {
+    int? switchToTab,
+    bool skipWebViewLoad = false,
+    bool forceReload = false,
+  }) async {
     // Redirect to the unified entry point
-    return loadUrl(url,
-        switchToTab: switchToTab, skipWebViewLoad: skipWebViewLoad);
+    return loadUrl(
+      url,
+      switchToTab: switchToTab,
+      skipWebViewLoad: skipWebViewLoad,
+      forceReload: forceReload,
+    );
   }
 
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
 
   /// Probe a URL to get status code and headers without downloading the full content
-  Future<Map<String, dynamic>> probeUrl(String url) async {
-    if (_currentlyProbingUrl == url && _isProbing) {
+  Future<Map<String, dynamic>> probeUrl(
+    String url, {
+    bool forceReload = false,
+  }) async {
+    if (!forceReload && _currentlyProbingUrl == url && _isProbing) {
       return _probeResult ?? {};
     }
 
@@ -2093,7 +2176,8 @@ Technical details: $e''';
 
     // Phase 2: Preserve previous results if the URL is equivalent
     // This prevents UI flickering (N/A) during re-probes of the same site
-    if (!isEquivalent) {
+    // HOWEVER, if forceReload is true, we always clear it to handle it as a "new url"
+    if (!isEquivalent || forceReload) {
       _probeResult = null;
       _lastBrowserCookies = ''; // Reset browser cookies on new probe
     }
@@ -2128,8 +2212,9 @@ Technical details: $e''';
       // Resolve IP
       if (uri.host.isNotEmpty) {
         try {
-          final addresses = await InternetAddress.lookup(uri.host)
-              .timeout(const Duration(seconds: 2));
+          final addresses = await InternetAddress.lookup(
+            uri.host,
+          ).timeout(const Duration(seconds: 2));
           if (addresses.isNotEmpty) {
             ipAddress = addresses.first.address;
           }
@@ -2214,8 +2299,9 @@ Technical details: $e''';
       };
 
       // Cookies - use response.cookies to handle multiple Set-Cookie headers correctly
-      final List<String> cookies =
-          response.cookies.map((c) => c.toString()).toList();
+      final List<String> cookies = response.cookies
+          .map((c) => c.toString())
+          .toList();
 
       // Only update state if this probe is still relevant
       if (_currentlyProbingUrl == url) {
@@ -2251,7 +2337,8 @@ Technical details: $e''';
         // AUTO-DETECT RSS/ATOM AND FETCH SOURCE
         final contentType =
             normalizedHeaders['content-type']?.toLowerCase() ?? '';
-        final isFeed = contentType.contains('application/rss+xml') ||
+        final isFeed =
+            contentType.contains('application/rss+xml') ||
             contentType.contains('application/atom+xml') ||
             (contentType.contains('xml') &&
                 (targetUrl.endsWith('.rss') ||
@@ -2260,22 +2347,26 @@ Technical details: $e''';
 
         if (isFeed && _useBrowserByDefault) {
           debugPrint(
-              'RSS/Atom detected in probe ($contentType), forcing source load.');
-          _loadFromUrlInternal(targetUrl).then((file) {
-            if (_currentlyProbingUrl == targetUrl ||
-                _currentFile?.path == targetUrl) {
-              loadFile(file);
-            }
-          }).catchError((e) {
-            debugPrint('Error forcing RSS source load: $e');
-          });
+            'RSS/Atom detected in probe ($contentType), forcing source load.',
+          );
+          _loadFromUrlInternal(targetUrl)
+              .then((file) {
+                if (_currentlyProbingUrl == targetUrl ||
+                    _currentFile?.path == targetUrl) {
+                  loadFile(file);
+                }
+              })
+              .catchError((e) {
+                debugPrint('Error forcing RSS source load: $e');
+              });
         }
 
         debugPrint('Probe successful for $url');
         return _probeResult!;
       } else {
         debugPrint(
-            'Discarding stale probe result for $url (current active probe/sync: $_currentlyProbingUrl)');
+          'Discarding stale probe result for $url (current active probe/sync: $_currentlyProbingUrl)',
+        );
         return {};
       }
     } catch (e) {
@@ -2834,18 +2925,20 @@ Technical details: $e''';
       // Ultimate fallback to plaintext
       return builtinAllLanguages['plaintext']!;
     } catch (e) {
-      return builtinAllLanguages[
-          'plaintext']!; // Fallback to plaintext if any error occurs
+      return builtinAllLanguages['plaintext']!; // Fallback to plaintext if any error occurs
     }
   }
 
   Widget buildHighlightedText(
-      String content, String extension, BuildContext context,
-      {double fontSize = 16.0,
-      String themeName = 'github',
-      bool wrapText = false,
-      bool showLineNumbers = true,
-      ScrollController? customScrollController}) {
+    String content,
+    String extension,
+    BuildContext context, {
+    double fontSize = 16.0,
+    String themeName = 'github',
+    bool wrapText = false,
+    bool showLineNumbers = true,
+    ScrollController? customScrollController,
+  }) {
     // Performance monitoring and warnings for large files
     final contentSize = content.length;
     final contentSizeMB = contentSize / (1024 * 1024);
@@ -2855,7 +2948,8 @@ Technical details: $e''';
       if (contentSize > 7 * 1024 * 1024) {
         // 7MB severe warning
         debugPrint(
-            '⚠️  Very large file: ${contentSizeMB.toStringAsFixed(2)} MB');
+          '⚠️  Very large file: ${contentSizeMB.toStringAsFixed(2)} MB',
+        );
         debugPrint('   Significant performance impact expected');
 
         // Show warning to user if context is available and mounted
@@ -2864,7 +2958,8 @@ Technical details: $e''';
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                    'Large file (${contentSizeMB.toStringAsFixed(1)} MB). Syntax highlighting may be slow.'),
+                  'Large file (${contentSizeMB.toStringAsFixed(1)} MB). Syntax highlighting may be slow.',
+                ),
                 duration: const Duration(seconds: 4),
                 // backgroundColor: Colors.orange,
               ),
@@ -2876,7 +2971,8 @@ Technical details: $e''';
       } else {
         // 1MB warning threshold
         debugPrint(
-            '🚨 Large file detected: ${contentSizeMB.toStringAsFixed(2)} MB');
+          '🚨 Large file detected: ${contentSizeMB.toStringAsFixed(2)} MB',
+        );
         debugPrint('   Syntax highlighting may impact performance');
       }
     }
@@ -2909,7 +3005,8 @@ Technical details: $e''';
         // Take the first part for highlighting, but keep full content for display
         processedContent = content.substring(0, maxHighlightLength);
         debugPrint(
-            '   Processing first ${maxHighlightLength ~/ 1024}KB for highlighting');
+          '   Processing first ${maxHighlightLength ~/ 1024}KB for highlighting',
+        );
       }
     }
 
@@ -2930,13 +3027,15 @@ Technical details: $e''';
     final mode =
         _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
     final codeTheme = CodeHighlightTheme(
-        languages: {languageName: CodeHighlightThemeMode(mode: mode)},
-        theme: _getThemeByName(themeName));
+      languages: {languageName: CodeHighlightThemeMode(mode: mode)},
+      theme: _getThemeByName(themeName),
+    );
 
     // Create the scroll controller for CodeEditor
     final codeScrollController = CodeScrollController(
-        verticalScroller: effectiveVerticalController,
-        horizontalScroller: _activeHorizontalScrollController);
+      verticalScroller: effectiveVerticalController,
+      horizontalScroller: _activeHorizontalScrollController,
+    );
 
     // Create the final widget
     final codeEditor = CodeEditor(
@@ -3258,8 +3357,9 @@ Technical details: $e''';
       _cachedHorizontalControllers.remove(key)?.dispose();
     }
 
-    _cachedGlobalKeys
-        .removeWhere((key, _) => key.startsWith(controllerKeyPrefix));
+    _cachedGlobalKeys.removeWhere(
+      (key, _) => key.startsWith(controllerKeyPrefix),
+    );
 
     debugPrint('🧹 Cleared cache for content hash $contentHash');
   }
@@ -3267,20 +3367,24 @@ Technical details: $e''';
   /// Build the editor widget, returning strictly synchronous Widget if cached,
   /// or a Future if processing is needed.
   FutureOr<Widget> buildEditor(
-      String content, String extension, BuildContext context,
-      {double fontSize = 16.0,
-      String themeName = 'github',
-      bool wrapText = false,
-      bool showLineNumbers = true}) {
+    String content,
+    String extension,
+    BuildContext context, {
+    double fontSize = 16.0,
+    String themeName = 'github',
+    bool wrapText = false,
+    bool showLineNumbers = true,
+  }) {
     // Performance optimization: Use simplified highlighting for very large files
     final contentSize = content.length;
     bool useSimplifiedHighlighting = contentSize > 1 * 1024 * 1024;
 
     // Generate keys
     final controllerKey = _generateControllerCacheKey(
-        content: content,
-        extension: extension,
-        useSimplified: useSimplifiedHighlighting);
+      content: content,
+      extension: extension,
+      useSimplified: useSimplifiedHighlighting,
+    );
 
     final editorKey = controllerKey;
 
@@ -3292,34 +3396,36 @@ Technical details: $e''';
       final globalKey = _cachedGlobalKeys[editorKey] ??= GlobalKey();
 
       // Get or create cached horizontal scroll controller
-      final horizontalController =
-          _cachedHorizontalControllers[editorKey] ??= ScrollController();
+      final horizontalController = _cachedHorizontalControllers[editorKey] ??=
+          ScrollController();
       _activeHorizontalScrollController = horizontalController;
 
       return _buildEditorWidget(
-          context,
-          controller,
-          globalKey,
-          horizontalController,
-          extension,
-          themeName,
-          fontSize,
-          wrapText,
-          showLineNumbers);
+        context,
+        controller,
+        globalKey,
+        horizontalController,
+        extension,
+        themeName,
+        fontSize,
+        wrapText,
+        showLineNumbers,
+      );
     }
 
     // Cache Miss: Perform setup (async)
     return _buildNewEditor(
-        content,
-        extension,
-        context,
-        fontSize,
-        themeName,
-        wrapText,
-        showLineNumbers,
-        useSimplifiedHighlighting,
-        controllerKey,
-        editorKey);
+      content,
+      extension,
+      context,
+      fontSize,
+      themeName,
+      wrapText,
+      showLineNumbers,
+      useSimplifiedHighlighting,
+      controllerKey,
+      editorKey,
+    );
   }
 
   Future<Widget> _buildNewEditor(
@@ -3367,15 +3473,16 @@ Technical details: $e''';
     _activeHorizontalScrollController = horizontalController;
 
     return _buildEditorWidget(
-        context,
-        controller,
-        globalKey,
-        horizontalController,
-        extension,
-        themeName,
-        fontSize,
-        wrapText,
-        showLineNumbers);
+      context,
+      controller,
+      globalKey,
+      horizontalController,
+      extension,
+      themeName,
+      fontSize,
+      wrapText,
+      showLineNumbers,
+    );
   }
 
   Widget _buildEditorWidget(
@@ -3390,8 +3497,9 @@ Technical details: $e''';
     bool showLineNumbers,
   ) {
     // Determine language
-    String languageName =
-        getLanguageForExtension(extension); // Use existing helper method
+    String languageName = getLanguageForExtension(
+      extension,
+    ); // Use existing helper method
 
     // Resolve Scroll Controller
     final effectiveVerticalController = PrimaryScrollController.of(context);
@@ -3402,13 +3510,15 @@ Technical details: $e''';
     final mode =
         _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
     final codeTheme = CodeHighlightTheme(
-        languages: {languageName: CodeHighlightThemeMode(mode: mode)},
-        theme: _getThemeByName(themeName));
+      languages: {languageName: CodeHighlightThemeMode(mode: mode)},
+      theme: _getThemeByName(themeName),
+    );
 
     // Create CodeScrollController linked to CURRENT effective controller
     final codeScrollController = CodeScrollController(
-        verticalScroller: effectiveVerticalController,
-        horizontalScroller: horizontalController);
+      verticalScroller: effectiveVerticalController,
+      horizontalScroller: horizontalController,
+    );
 
     // Return the Editor Widget, using the GlobalKey to preserve state
     return CodeEditor(
@@ -3465,12 +3575,15 @@ Technical details: $e''';
 
   /// Async version of buildHighlightedText to prevent UI blocking
   Future<Widget> buildHighlightedTextAsync(
-      String content, String extension, BuildContext context,
-      {double fontSize = 16.0,
-      String themeName = 'github',
-      bool wrapText = false,
-      bool showLineNumbers = true,
-      ScrollController? customScrollController}) async {
+    String content,
+    String extension,
+    BuildContext context, {
+    double fontSize = 16.0,
+    String themeName = 'github',
+    bool wrapText = false,
+    bool showLineNumbers = true,
+    ScrollController? customScrollController,
+  }) async {
     // Small delay to allow initial UI render (spinner)
     await Future.delayed(Duration.zero);
 
@@ -3479,12 +3592,16 @@ Technical details: $e''';
       return const SizedBox.shrink();
     }
 
-    return buildHighlightedText(content, extension, context,
-        fontSize: fontSize,
-        themeName: themeName,
-        wrapText: wrapText,
-        showLineNumbers: showLineNumbers,
-        customScrollController: customScrollController);
+    return buildHighlightedText(
+      content,
+      extension,
+      context,
+      fontSize: fontSize,
+      themeName: themeName,
+      wrapText: wrapText,
+      showLineNumbers: showLineNumbers,
+      customScrollController: customScrollController,
+    );
   }
 
   /// Toggle the search panel for the current editor
@@ -3533,11 +3650,15 @@ Technical details: $e''';
     final headers = _probeResult?['headers'] as Map<String, dynamic>?;
 
     try {
-      final rawMetadata = await extractMetadataInIsolate(html, baseUrl,
-          headers: headers?.cast<String, String>());
+      final rawMetadata = await extractMetadataInIsolate(
+        html,
+        baseUrl,
+        headers: headers?.cast<String, String>(),
+      );
       _pageMetadata = Map<String, dynamic>.from(rawMetadata);
       debugPrint(
-          'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS, ${_pageMetadata?['media']?['images']?.length} Images');
+        'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS, ${_pageMetadata?['media']?['images']?.length} Images',
+      );
 
       if (_lastPageWeight != null) {
         _pageMetadata!['pageWeight'] = _lastPageWeight;
@@ -3574,17 +3695,21 @@ Technical details: $e''';
     final List<String> serverCookies =
         (_probeResult!['cookies'] as List?)?.cast<String>() ?? [];
 
-    final analyzed =
-        CookieUtils.mergeCookies(serverCookies, _lastBrowserCookies);
+    final analyzed = CookieUtils.mergeCookies(
+      serverCookies,
+      _lastBrowserCookies,
+    );
 
     _probeResult!['analyzedCookies'] = analyzed
-        .map((c) => {
-              'name': c.name,
-              'value': c.value,
-              'category': c.category.toString().split('.').last,
-              'provider': c.provider,
-              'source': c.source
-            })
+        .map(
+          (c) => {
+            'name': c.name,
+            'value': c.value,
+            'category': c.category.toString().split('.').last,
+            'provider': c.provider,
+            'source': c.source,
+          },
+        )
         .toList();
 
     // Don't notify here - caller will notify
@@ -3692,8 +3817,9 @@ Technical details: $e''';
       for (int i = 0; i < images.length; i++) {
         if (images[i] is Map) {
           // Create a mutable copy that is safely Map<String, dynamic>
-          final Map<String, dynamic> safeImg =
-              Map<String, dynamic>.from(images[i]);
+          final Map<String, dynamic> safeImg = Map<String, dynamic>.from(
+            images[i],
+          );
           final size = findSize(safeImg['src']);
           if (size != null) {
             safeImg['size'] = size;
@@ -3706,8 +3832,9 @@ Technical details: $e''';
     // Enrich CSS
     if (_pageMetadata!['cssLinks'] != null) {
       // Ensure list is mutable and dynamic sized
-      _pageMetadata!['cssLinks'] =
-          List<dynamic>.from(_pageMetadata!['cssLinks']);
+      _pageMetadata!['cssLinks'] = List<dynamic>.from(
+        _pageMetadata!['cssLinks'],
+      );
       final List<dynamic> links = _pageMetadata!['cssLinks'];
       for (int i = 0; i < links.length; i++) {
         var css = links[i];
@@ -3750,8 +3877,9 @@ Technical details: $e''';
       final List<dynamic> videos = _pageMetadata!['media']['videos'];
       for (int i = 0; i < videos.length; i++) {
         if (videos[i] is Map) {
-          final Map<String, dynamic> safeVid =
-              Map<String, dynamic>.from(videos[i]);
+          final Map<String, dynamic> safeVid = Map<String, dynamic>.from(
+            videos[i],
+          );
           final size = findSize(safeVid['src']);
           if (size != null) {
             safeVid['size'] = size;
@@ -3879,22 +4007,24 @@ Technical details: $e''';
           : itemsToFetch.length;
       final batch = itemsToFetch.sublist(i, end);
 
-      await Future.wait(batch.map((item) async {
-        String? url;
-        if (item['src'] is String) {
-          url = item['src'];
-        } else if (item['href'] is String) {
-          url = item['href'];
-        }
-
-        if (url != null) {
-          final size = await _fetchResourceSize(url);
-          if (size > 0) {
-            item['size'] = {'transfer': size, 'decoded': size};
-            hasUpdates = true;
+      await Future.wait(
+        batch.map((item) async {
+          String? url;
+          if (item['src'] is String) {
+            url = item['src'];
+          } else if (item['href'] is String) {
+            url = item['href'];
           }
-        }
-      }));
+
+          if (url != null) {
+            final size = await _fetchResourceSize(url);
+            if (size > 0) {
+              item['size'] = {'transfer': size, 'decoded': size};
+              hasUpdates = true;
+            }
+          }
+        }),
+      );
 
       // Update UI progressively
       if (hasUpdates) {
@@ -4017,8 +4147,8 @@ Technical details: $e''';
       // 1. Critical: Get Content (HTML or Raw)
       String content = '';
       try {
-        final html =
-            await activeWebViewController!.evaluateJavascript(source: '''
+        final html = await activeWebViewController!.evaluateJavascript(
+          source: '''
               (function() {
                 var contentType = document.contentType;
                 if (contentType && (contentType.includes('xml') || contentType.includes('rss'))) {
@@ -4026,7 +4156,8 @@ Technical details: $e''';
                 }
                 return document.documentElement.outerHTML;
               })();
-            ''');
+            ''',
+        );
 
         if (html is String) {
           content = _unquoteHtml(html);
@@ -4037,10 +4168,10 @@ Technical details: $e''';
               content.contains('<pre')) {
             try {
               final preMatch = RegExp(
-                      r'<pre[^>]*style="[^"]*word-wrap:\s*break-word;\s*white-space:\s*pre-wrap;[^"]*"[^>]*>(.*?)<\/pre>',
-                      dotAll: true,
-                      caseSensitive: false)
-                  .firstMatch(content);
+                r'<pre[^>]*style="[^"]*word-wrap:\s*break-word;\s*white-space:\s*pre-wrap;[^"]*"[^>]*>(.*?)<\/pre>',
+                dotAll: true,
+                caseSensitive: false,
+              ).firstMatch(content);
 
               if (preMatch != null) {
                 String rawContent = preMatch.group(1) ?? '';
@@ -4053,7 +4184,8 @@ Technical details: $e''';
 
                 content = rawContent;
                 debugPrint(
-                    'HTML Service: Extracted raw content from PRE tag for $url');
+                  'HTML Service: Extracted raw content from PRE tag for $url',
+                );
               }
             } catch (e) {
               debugPrint('HTML Service: Error parsing PRE tag content: $e');
@@ -4070,8 +4202,9 @@ Technical details: $e''';
       // 2. Optional: Get Page Weight & Cookies
       try {
         final weightRaw = await activeWebViewController!.evaluateJavascript(
-            source:
-                '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; var seen=new Set(); for(var i=0; i<r.length; i++) { var name=r[i].name; tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); seen.add(name); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n && !seen.has(n.name)) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else if(!n && !seen.has(document.location.href)) { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();');
+          source:
+              '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; var seen=new Set(); for(var i=0; i<r.length; i++) { var name=r[i].name; tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); seen.add(name); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n && !seen.has(n.name)) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else if(!n && !seen.has(document.location.href)) { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();',
+        );
 
         String jsonStr = '';
         if (weightRaw is String) {
@@ -4092,11 +4225,14 @@ Technical details: $e''';
             // Parse detailed resource data
             if (weightMap['list'] != null && weightMap['list'] is List) {
               _resourcePerformanceData = List<Map<String, dynamic>>.from(
-                  (weightMap['list'] as List).map((e) => {
-                        'name': e['n'],
-                        'transfer': (e['t'] as num? ?? 0).toInt(),
-                        'decoded': (e['d'] as num? ?? 0).toInt(),
-                      }));
+                (weightMap['list'] as List).map(
+                  (e) => {
+                    'name': e['n'],
+                    'transfer': (e['t'] as num? ?? 0).toInt(),
+                    'decoded': (e['d'] as num? ?? 0).toInt(),
+                  },
+                ),
+              );
             }
 
             // Calculate totals and breakdown
@@ -4171,29 +4307,29 @@ Technical details: $e''';
                   'scripts': {
                     'count': scriptCount,
                     'transfer': scriptTx,
-                    'decoded': scriptDec
+                    'decoded': scriptDec,
                   },
                   'css': {
                     'count': cssCount,
                     'transfer': cssTx,
-                    'decoded': cssDec
+                    'decoded': cssDec,
                   },
                   'images': {
                     'count': imgCount,
                     'transfer': imgTx,
-                    'decoded': imgDec
+                    'decoded': imgDec,
                   },
                   'html': {
                     'count': htmlCount,
                     'transfer': htmlTx,
-                    'decoded': htmlDec
+                    'decoded': htmlDec,
                   },
                   'other': {
                     'count': otherCount,
                     'transfer': otherTx,
-                    'decoded': otherDec
+                    'decoded': otherDec,
                   },
-                }
+                },
               },
               'resourceCount': _resourcePerformanceData?.length ?? 0,
             };
@@ -4248,9 +4384,11 @@ Technical details: $e''';
     if (_resourcePerformanceData == null) return;
 
     final resourcesToUpdate = _resourcePerformanceData!
-        .where((r) =>
-            (r['transfer'] as int) == 0 &&
-            (r['name'] as String).startsWith('http'))
+        .where(
+          (r) =>
+              (r['transfer'] as int) == 0 &&
+              (r['name'] as String).startsWith('http'),
+        )
         .toList();
 
     if (resourcesToUpdate.isEmpty) return;
@@ -4263,20 +4401,22 @@ Technical details: $e''';
           : resourcesToUpdate.length;
       final batch = resourcesToUpdate.sublist(i, end);
 
-      await Future.wait(batch.map((resource) async {
-        try {
-          final url = resource['name'] as String;
-          final size = await _fetchResourceSize(url);
-          if (size > 0) {
-            resource['transfer'] = size;
-            // We can't know decoded size without downloading body, so assume transfer ~= decoded
-            // This is better than 0.
-            resource['decoded'] = size;
+      await Future.wait(
+        batch.map((resource) async {
+          try {
+            final url = resource['name'] as String;
+            final size = await _fetchResourceSize(url);
+            if (size > 0) {
+              resource['transfer'] = size;
+              // We can't know decoded size without downloading body, so assume transfer ~= decoded
+              // This is better than 0.
+              resource['decoded'] = size;
+            }
+          } catch (e) {
+            debugPrint('Error fetching size for $resource: $e');
           }
-        } catch (e) {
-          debugPrint('Error fetching size for $resource: $e');
-        }
-      }));
+        }),
+      );
     }
 
     // Recalculate totals based on new data
@@ -4358,7 +4498,7 @@ Technical details: $e''';
         'scripts': {
           'count': scriptCount,
           'transfer': scriptTx,
-          'decoded': scriptDec
+          'decoded': scriptDec,
         },
         'css': {'count': cssCount, 'transfer': cssTx, 'decoded': cssDec},
         'images': {'count': imgCount, 'transfer': imgTx, 'decoded': imgDec},
@@ -4366,9 +4506,9 @@ Technical details: $e''';
         'other': {
           'count': otherCount,
           'transfer': otherTx,
-          'decoded': otherDec
+          'decoded': otherDec,
         },
-      }
+      },
     };
 
     // Update the parent metadata object if it exists
@@ -4388,7 +4528,7 @@ Technical details: $e''';
       final uri = Uri.parse(url);
       final headers = {
         'User-Agent':
-            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36'
+            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
       };
 
       // 1. Try HEAD request first
@@ -4413,8 +4553,9 @@ Technical details: $e''';
         request.headers.addAll(headers);
         request.headers['Range'] = 'bytes=0-0';
 
-        final streamedResponse =
-            await client.send(request).timeout(const Duration(seconds: 5));
+        final streamedResponse = await client
+            .send(request)
+            .timeout(const Duration(seconds: 5));
 
         final contentLengthStr = streamedResponse.headers['content-length'];
         final contentRangeStr = streamedResponse.headers['content-range'];
@@ -4459,8 +4600,9 @@ Technical details: $e''';
   Future<void> clearBrowserStorage() async {
     if (activeWebViewController != null) {
       await InAppWebViewController.clearAllCache();
-      await activeWebViewController!
-          .evaluateJavascript(source: "localStorage.clear();");
+      await activeWebViewController!.evaluateJavascript(
+        source: "localStorage.clear();",
+      );
     }
     // Clear cookies using the static/singleton CookieManager
     await CookieManager.instance().deleteAllCookies();
@@ -4501,23 +4643,29 @@ Technical details: $e''';
     try {
       final webUri = await activeWebViewController!.getUrl();
       final url = webUri?.toString();
-      final html = await activeWebViewController!.evaluateJavascript(
-          source: 'document.documentElement.outerHTML') as String;
+      final html =
+          await activeWebViewController!.evaluateJavascript(
+                source: 'document.documentElement.outerHTML',
+              )
+              as String;
 
       // Unquote if needed (standard JS result processing)
       String finalHtml = _unquoteHtml(html);
 
       if (url != null) {
-        final processedFilename =
-            await detectFileTypeAndGenerateFilename(url, finalHtml);
+        final processedFilename = await detectFileTypeAndGenerateFilename(
+          url,
+          finalHtml,
+        );
 
         final htmlFile = HtmlFile(
-            name: processedFilename,
-            path: url,
-            content: finalHtml,
-            lastModified: DateTime.now(),
-            size: finalHtml.length,
-            isUrl: true);
+          name: processedFilename,
+          path: url,
+          content: finalHtml,
+          lastModified: DateTime.now(),
+          size: finalHtml.length,
+          isUrl: true,
+        );
 
         _currentFile = htmlFile;
         _currentInputText = url;

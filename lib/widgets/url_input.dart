@@ -84,7 +84,11 @@ class _UrlInputState extends State<UrlInput> {
           url == htmlService.currentFile!.name) {
         await htmlService.reloadCurrentFile();
       } else {
-        await htmlService.loadFromUrl(url, switchToTab: switchToTab ?? 0);
+        await htmlService.loadFromUrl(
+          url,
+          switchToTab: switchToTab ?? 0,
+          forceReload: true,
+        );
       }
 
       // Clear the input after successful load
@@ -113,7 +117,8 @@ class _UrlInputState extends State<UrlInput> {
       builder: (context, htmlService, child) {
         // Update URL display when file changes
         debugPrint(
-            'url input change ${htmlService.currentFile?.path} ${htmlService.currentFile?.extension}');
+          'url input change ${htmlService.currentFile?.path} ${htmlService.currentFile?.extension}',
+        );
         if (htmlService.currentInputText != null) {
           final currentText = htmlService.currentInputText!;
 
@@ -139,17 +144,18 @@ class _UrlInputState extends State<UrlInput> {
                       focusNode: _focusNode,
                       optionsBuilder: (TextEditingValue textEditingValue) {
                         final historyService = Provider.of<UrlHistoryService?>(
-                            context,
-                            listen: false);
+                          context,
+                          listen: false,
+                        );
                         final history = historyService?.history ?? [];
 
                         if (textEditingValue.text.isEmpty) {
                           return history;
                         }
                         return history.where((String option) {
-                          return option
-                              .toLowerCase()
-                              .contains(textEditingValue.text.toLowerCase());
+                          return option.toLowerCase().contains(
+                            textEditingValue.text.toLowerCase(),
+                          );
                         });
                       },
                       onSelected: (String selection) {
@@ -157,8 +163,7 @@ class _UrlInputState extends State<UrlInput> {
                         // We don't load here anymore to avoid double loading on Enter.
                         // Loading is handled by onSubmitted (Enter key) or onTap (Click).
                       },
-                      fieldViewBuilder:
-                          (context, controller, focusNode, onFieldSubmitted) {
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                         return KeyboardListener(
                           focusNode: FocusNode(skipTraversal: true),
                           onKeyEvent: (event) {
@@ -179,23 +184,27 @@ class _UrlInputState extends State<UrlInput> {
                             controller: controller,
                             focusNode: focusNode,
                             decoration: InputDecoration(
-                              hintText: htmlService.currentFile != null &&
+                              hintText:
+                                  htmlService.currentFile != null &&
                                       htmlService.currentFile!.isUrl
                                   ? ''
                                   : htmlService.currentFile != null
-                                      ? 'Local file loaded: ${htmlService.currentFile!.name}'
-                                      : '',
+                                  ? 'Local file loaded: ${htmlService.currentFile!.name}'
+                                  : '',
                               prefixIcon: IconButton(
                                 icon: const Icon(Icons.link, size: 20),
                                 tooltip: 'Reload',
                                 onPressed: () {
                                   _loadUrl(
-                                      switchToTab: htmlService.activeTabIndex);
+                                    switchToTab: htmlService.activeTabIndex,
+                                  );
                                 },
                               ),
                               border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(6)),
-                              suffixIcon: (htmlService.isLoading ||
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              suffixIcon:
+                                  (htmlService.isLoading ||
                                       (htmlService.webViewLoadingProgress > 0 &&
                                           htmlService.webViewLoadingProgress <
                                               1.0))
@@ -211,11 +220,12 @@ class _UrlInputState extends State<UrlInput> {
                                             alignment: Alignment.center,
                                             children: [
                                               CircularProgressIndicator(
-                                                value: htmlService
+                                                value:
+                                                    htmlService
                                                             .webViewLoadingProgress >
                                                         0
                                                     ? htmlService
-                                                        .webViewLoadingProgress
+                                                          .webViewLoadingProgress
                                                     : null,
                                                 strokeWidth: 1,
                                               ),
@@ -233,17 +243,21 @@ class _UrlInputState extends State<UrlInput> {
                                       ),
                                     )
                                   : (_urlController.text.isNotEmpty
-                                      ? IconButton(
-                                          icon:
-                                              const Icon(Icons.clear, size: 20),
-                                          onPressed: () {
-                                            _urlController.clear();
-                                            htmlService.cancelWebViewLoad();
-                                          },
-                                        )
-                                      : null),
+                                        ? IconButton(
+                                            icon: const Icon(
+                                              Icons.clear,
+                                              size: 20,
+                                            ),
+                                            onPressed: () {
+                                              _urlController.clear();
+                                              htmlService.cancelWebViewLoad();
+                                            },
+                                          )
+                                        : null),
                               contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 10, horizontal: 12),
+                                vertical: 10,
+                                horizontal: 12,
+                              ),
                               isDense: true,
                             ),
                             keyboardType: TextInputType.url,
@@ -294,8 +308,10 @@ class _UrlInputState extends State<UrlInput> {
                     if (!kIsWeb)
                       TextButton.icon(
                         icon: const Icon(Icons.language, size: 14),
-                        label: const Text('Try in Browser Tab',
-                            style: TextStyle(fontSize: 11)),
+                        label: const Text(
+                          'Try in Browser Tab',
+                          style: TextStyle(fontSize: 11),
+                        ),
                         onPressed: _loadViaWebView,
                         style: TextButton.styleFrom(
                           visualDensity: VisualDensity.compact,
@@ -405,24 +421,26 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
 
               return Container(
                 color: isHighlighted
-                    ? Theme.of(context)
-                        .colorScheme
-                        .primaryContainer
-                        .withValues(alpha: 0.3)
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer.withValues(alpha: 0.3)
                     : null,
                 child: ListTile(
-                  title: Text(displayName,
-                      style: const TextStyle(fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  title: Text(
+                    displayName,
+                    style: const TextStyle(fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   onTap: () {
                     widget.onSelected(option);
                     widget.onOptionTap();
                   },
                   dense: true,
                   leading: Icon(
-                      isUrl ? Icons.history : Icons.insert_drive_file_outlined,
-                      size: 16),
+                    isUrl ? Icons.history : Icons.insert_drive_file_outlined,
+                    size: 16,
+                  ),
                 ),
               );
             },
