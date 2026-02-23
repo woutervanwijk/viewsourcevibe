@@ -291,16 +291,37 @@ void main() async {
     }
   };
 
-  // Setup unified sharing service (will be initialized in MyApp)
-  // UnifiedSharingService.initialize(context);
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => htmlService),
+        ChangeNotifierProvider(create: (_) => appSettings),
+        ChangeNotifierProvider(create: (_) => appStateService),
+        ChangeNotifierProvider(create: (_) => urlHistoryService),
+        Provider<FileSystemService>(create: (_) => fileSystemService),
+      ],
+      child: const MyApp(),
+    ),
+  );
 
+  // Perform non-essential initialization after the app has started
+  // This reduces the time the user spends on the splash screen
+  _performDelayedInitialization(
+      htmlService, appStateService, urlHistoryService);
+}
+
+/// Performs non-essential asynchronous operations after app startup
+Future<void> _performDelayedInitialization(
+    HtmlService htmlService,
+    AppStateService appStateService,
+    UrlHistoryService urlHistoryService) async {
   // Determine if we should restore state or handle a deep link
   // Deep link should always take precedence over session restoration
   Uri? initialUri;
   try {
     final appLinks = AppLinks();
-    initialUri =
-        await appLinks.getInitialAppLink().timeout(const Duration(seconds: 2));
+    // Removed timeout to ensure deep links always work
+    initialUri = await appLinks.getInitialAppLink();
     if (initialUri != null) {
       debugPrint('🚀 App started with deep link: $initialUri');
     }
@@ -400,9 +421,10 @@ void main() async {
             debugPrint('🔍 Restored probe state');
           }
 
-          // Restore scroll positions (must be done after UI is built as it needs clients)
+          // Restore scroll positions
           if (savedState.scrollPosition != null ||
               savedState.horizontalScrollPosition != null) {
+            // Need to wait for next frame since scroll controllers need to be attached
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (savedState.scrollPosition != null) {
                 htmlService.restoreScrollPosition(savedState.scrollPosition);
@@ -425,19 +447,6 @@ void main() async {
     // Still setup URL handling for future links even if no initial link was found
     setupUrlHandling(htmlService);
   }
-
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => htmlService),
-        ChangeNotifierProvider(create: (_) => appSettings),
-        ChangeNotifierProvider(create: (_) => appStateService),
-        ChangeNotifierProvider(create: (_) => urlHistoryService),
-        Provider<FileSystemService>(create: (_) => fileSystemService),
-      ],
-      child: const MyApp(),
-    ),
-  );
 }
 
 class MyApp extends StatelessWidget {
