@@ -230,24 +230,31 @@ class SharedContentHandler {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
-    
-    // Set up shared content handler
-    setupSharedContentHandler()
-    
-    // Register sharing service
-    if let controller = window?.rootViewController as? FlutterViewController {
-      SharingService.register(with: controller.registrar(forPlugin: "SharingService")!)
+    // Legacy support for iOS < 13
+    if #available(iOS 13.0, *) {
+        // Setup will happen in SceneDelegate
+    } else {
+        GeneratedPluginRegistrant.register(with: self)
+        if let controller = window?.rootViewController as? FlutterViewController {
+            setupServices(with: controller)
+        }
     }
-    
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  private func setupSharedContentHandler() {
-    guard let controller = window?.rootViewController as? FlutterViewController else {
-      return
-    }
-    
+  // MARK: - UISceneSession Lifecycle
+  @available(iOS 13.0, *)
+  override func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+      return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+  }
+
+  /// Sets up custom services for the given FlutterViewController
+  func setupServices(with controller: FlutterViewController) {
+      setupSharedContentHandler(with: controller)
+      SharingService.register(with: controller.registrar(forPlugin: "SharingService")!)
+  }
+
+  func setupSharedContentHandler(with controller: FlutterViewController) {
     let channel = FlutterMethodChannel(
       name: "info.wouter.sourceviewer/shared_content",
       binaryMessenger: controller.binaryMessenger
@@ -331,4 +338,31 @@ class SharedContentHandler {
       }
     }
   }
+}
+
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = (scene as? UIWindowScene) else { return }
+        
+        // Create a new UIWindow and link it to the scene
+        let window = UIWindow(windowScene: windowScene)
+        self.window = window
+        
+        // Create the FlutterViewController
+        let controller = FlutterViewController(project: nil, initialRoute: nil, nibName: nil, bundle: nil)
+        window.rootViewController = controller
+        
+        // Setup services and plugins
+        if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+            appDelegate.window = window
+            // IMPORTANT: Register plugins with the controller, not just the engine
+            GeneratedPluginRegistrant.register(with: controller)
+            appDelegate.setupServices(with: controller)
+        }
+        
+        // Finalize window setup
+        window.makeKeyAndVisible()
+    }
 }
