@@ -216,9 +216,19 @@ class _BrowserViewState extends State<BrowserView> {
 
         if (navigationAction.isForMainFrame) {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
-          if (url == htmlService.webViewLoadingUrl) {
+          // If this is the load we just triggered internally, allow it
+          // We use null check because webViewLoadingUrl is cleared once load starts/completes
+          if (htmlService.webViewLoadingUrl != null &&
+              (url == htmlService.webViewLoadingUrl ||
+                  url == '${htmlService.webViewLoadingUrl}/')) {
             return NavigationActionPolicy.ALLOW;
           }
+
+          // Otherwise, intercept and redirect through standard loadUrl flow
+          // This ensures that clicking links or redirects are handled by the app's unified loading logic
+          debugPrint('Intercepting main-frame navigation to: $url');
+          htmlService.loadUrl(url);
+          return NavigationActionPolicy.CANCEL;
         }
 
         return NavigationActionPolicy.ALLOW;
