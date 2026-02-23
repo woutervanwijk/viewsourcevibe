@@ -218,9 +218,14 @@ class _BrowserViewState extends State<BrowserView> {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
           // If this is the load we just triggered internally, allow it
           // We use null check because webViewLoadingUrl is cleared once load starts/completes
-          if (htmlService.webViewLoadingUrl != null &&
-              (url == htmlService.webViewLoadingUrl ||
-                  url == '${htmlService.webViewLoadingUrl}/')) {
+          final isPendingLoad = htmlService.webViewLoadingUrl != null &&
+              htmlService.areUrlsEqual(url, htmlService.webViewLoadingUrl!);
+
+          // Also allow if it's the current file path (e.g. RSS template load with baseUrl)
+          final isCurrentFile = htmlService.currentFile != null &&
+              htmlService.areUrlsEqual(url, htmlService.currentFile!.path);
+
+          if (isPendingLoad || isCurrentFile) {
             return NavigationActionPolicy.ALLOW;
           }
 

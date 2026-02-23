@@ -46,7 +46,7 @@ class HtmlService with ChangeNotifier {
   String? _currentInputText;
   bool _isLoading = false;
   String?
-  selectedContentType; // Track the selected content type for syntax highlighting
+      selectedContentType; // Track the selected content type for syntax highlighting
   ScrollController? _verticalScrollController;
   ScrollController? _activeHorizontalScrollController;
   GlobalKey? _codeEditorKey;
@@ -64,14 +64,14 @@ class HtmlService with ChangeNotifier {
   String? _probeError;
   String? _currentlyProbingUrl;
   Map<String, dynamic>?
-  _browserProbeResult; // Store separate browser probe data
+      _browserProbeResult; // Store separate browser probe data
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
   Map<String, dynamic>? _lastPageWeight; // Store weights: transfer and decoded
   List<Map<String, dynamic>>?
-  _resourcePerformanceData; // Store detailed resource data
+      _resourcePerformanceData; // Store detailed resource data
   bool _isExtractingMetadata = false;
   String _lastBrowserCookies = '';
 
@@ -165,15 +165,14 @@ class HtmlService with ChangeNotifier {
   bool get isHtml {
     final contentType =
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-        '';
+            '';
     if (contentType.contains('text/html') ||
         contentType.contains('application/xhtml+xml')) {
       return true;
     }
 
     // Secondary check: selected content type or current file extension
-    final bool looksLikeHtml =
-        selectedContentType == 'html' ||
+    final bool looksLikeHtml = selectedContentType == 'html' ||
         (_currentFile?.name.toLowerCase().endsWith('.html') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.htm') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.xhtml') ?? false);
@@ -203,7 +202,7 @@ class HtmlService with ChangeNotifier {
   bool get isSvg {
     final contentType =
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-        '';
+            '';
     if (contentType.contains('image/svg+xml')) return true;
 
     return selectedContentType == 'svg' ||
@@ -213,7 +212,7 @@ class HtmlService with ChangeNotifier {
   bool get isXml {
     final contentType =
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-        '';
+            '';
     if (contentType.contains('application/xml') ||
         contentType.contains('text/xml')) {
       return true;
@@ -224,8 +223,7 @@ class HtmlService with ChangeNotifier {
     }
 
     // Secondary check: selections or file extensions
-    final bool looksLikeXml =
-        selectedContentType == 'xml' ||
+    final bool looksLikeXml = selectedContentType == 'xml' ||
         isSvg ||
         (_currentFile?.name.toLowerCase().endsWith('.xml') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.rss') ?? false) ||
@@ -286,7 +284,7 @@ class HtmlService with ChangeNotifier {
   bool get isMedia {
     final contentType =
         _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-        '';
+            '';
     if (contentType.contains('image/') ||
         contentType.contains('video/') ||
         contentType.contains('audio/')) {
@@ -430,12 +428,11 @@ class HtmlService with ChangeNotifier {
     // We must do this BEFORE calling _resetLoadState because it clears _currentFile
     // Also check if we are navigating to a different page to avoid duplicates on reload
     // AND check for Rapid Redirects: If current file was loaded < 1s ago, assume redirect and replace it
-    final bool isRedirect =
-        _lastCurrentFileUpdate != null &&
+    final bool isRedirect = _lastCurrentFileUpdate != null &&
         DateTime.now().difference(_lastCurrentFileUpdate!).inMilliseconds <
             1000;
 
-    if ((_currentFile == null || !(_areUrlsEqual(_currentFile!.path, url))) &&
+    if ((_currentFile == null || !(areUrlsEqual(_currentFile!.path, url))) &&
         !isRedirect &&
         !_isNavigatingBack) {
       _pushToNavigationStack();
@@ -941,8 +938,8 @@ class HtmlService with ChangeNotifier {
       });
 
       final hResponse = await hRequest.close().timeout(
-        const Duration(seconds: 30),
-      );
+            const Duration(seconds: 30),
+          );
 
       // Capture certificate info if available
       if (hResponse.certificate != null) {
@@ -1093,8 +1090,7 @@ class HtmlService with ChangeNotifier {
       // If filename already has a proper file extension, use it
       // Check for common file extensions to avoid false positives
       final filenameLower = filename.toLowerCase();
-      final hasProperExtension =
-          filenameLower.endsWith('.html') ||
+      final hasProperExtension = filenameLower.endsWith('.html') ||
           filenameLower.endsWith('.htm') ||
           filenameLower.endsWith('.xhtml') ||
           filenameLower.endsWith('.css') ||
@@ -1315,31 +1311,7 @@ class HtmlService with ChangeNotifier {
       detectedType = _fallbackContentDetectionInternal(content);
     }
 
-    return '$filename${detectedType == 'Text'
-        ? '.txt'
-        : detectedType == 'HTML'
-        ? '.html'
-        : detectedType == 'XML'
-        ? '.xml'
-        : detectedType == 'JSON'
-        ? '.json'
-        : detectedType == 'YAML'
-        ? '.yaml'
-        : detectedType == 'Markdown'
-        ? '.md'
-        : detectedType == 'CSS'
-        ? '.css'
-        : detectedType == 'JavaScript'
-        ? '.js'
-        : detectedType == 'Python'
-        ? '.py'
-        : detectedType == 'Java'
-        ? '.java'
-        : detectedType == 'C++'
-        ? '.cpp'
-        : detectedType == 'SQL'
-        ? '.sql'
-        : '.txt'}';
+    return '$filename${detectedType == 'Text' ? '.txt' : detectedType == 'HTML' ? '.html' : detectedType == 'XML' ? '.xml' : detectedType == 'JSON' ? '.json' : detectedType == 'YAML' ? '.yaml' : detectedType == 'Markdown' ? '.md' : detectedType == 'CSS' ? '.css' : detectedType == 'JavaScript' ? '.js' : detectedType == 'Python' ? '.py' : detectedType == 'Java' ? '.java' : detectedType == 'C++' ? '.cpp' : detectedType == 'SQL' ? '.sql' : '.txt'}';
   }
 
   static String _fallbackContentDetectionInternal(String content) {
@@ -1448,7 +1420,7 @@ class HtmlService with ChangeNotifier {
 
   /// Helper to check if two URLs are effectively the same
   /// ignoring trailing slashes, fragments, and minor scheme differences
-  bool _areUrlsEqual(String url1, String url2) {
+  bool areUrlsEqual(String url1, String url2) {
     if (url1 == url2) return true;
 
     try {
@@ -1500,7 +1472,7 @@ class HtmlService with ChangeNotifier {
 
         // Prevent duplicates in back stack (don't push if same as top)
         if (_navigationStack.isEmpty ||
-            !_areUrlsEqual(_navigationStack.last.path, fileToStack.path)) {
+            !areUrlsEqual(_navigationStack.last.path, fileToStack.path)) {
           _navigationStack.add(fileToStack);
           _saveNavigationStack(); // Persist navigation stack
         }
@@ -1518,11 +1490,21 @@ class HtmlService with ChangeNotifier {
 
     // Save current file to navigation stack if we are not going back
     // AND if we are actually navigating to a NEW file (url/path check)
-    if (_currentFile != null && !_areUrlsEqual(_currentFile!.path, file.path)) {
+    if (_currentFile != null && !areUrlsEqual(_currentFile!.path, file.path)) {
       _pushToNavigationStack();
     }
 
+    final String? previousLoadingUrl = _webViewLoadingUrl;
     await clearFile(clearProbe: clearProbe);
+
+    // If we were in the middle of a webview load for this exact file/url
+    // preserve the loading state so navigation interception doesn't reset it
+    if (previousLoadingUrl != null &&
+        areUrlsEqual(previousLoadingUrl, file.path)) {
+      _webViewLoadingUrl = previousLoadingUrl;
+      _isWebViewLoading = true;
+    }
+
     _currentFile = file;
     _lastCurrentFileUpdate = DateTime.now();
     _originalFile = file; // Store original file for "Automatic" option
@@ -1603,8 +1585,7 @@ class HtmlService with ChangeNotifier {
         preferLocalDetection = true;
       } else {
         // If probed type is generic, allow local detection to override
-        final isGenericProbe =
-            selectedContentType ==
+        final isGenericProbe = selectedContentType ==
                 'text' || // text/plain often maps to 'text' or similar
             contentType == 'application/octet-stream' ||
             contentType == 'application/x-www-form-urlencoded';
@@ -1961,8 +1942,8 @@ class HtmlService with ChangeNotifier {
       });
 
       final hResponse = await hRequest.close().timeout(
-        const Duration(seconds: 30),
-      );
+            const Duration(seconds: 30),
+          );
 
       // Capture certificate info — must be read before body drain destroys the socket
       Map<String, dynamic>? certInfo;
@@ -1990,9 +1971,8 @@ class HtmlService with ChangeNotifier {
 
       // Construct Probe Result
       final setCookie = respHeaders['set-cookie'];
-      final List<String> cookies = setCookie != null
-          ? setCookie.split(RegExp(r',(?=[^;]+?=)'))
-          : [];
+      final List<String> cookies =
+          setCookie != null ? setCookie.split(RegExp(r',(?=[^;]+?=)')) : [];
 
       final securityHeaders = {
         'Strict-Transport-Security': respHeaders['strict-transport-security'],
@@ -2032,12 +2012,10 @@ class HtmlService with ChangeNotifier {
 
       if (hResponse.statusCode == 200) {
         final finalUri = Uri.parse(finalUrl);
-        final pathFilename = finalUri.pathSegments.isNotEmpty
-            ? finalUri.pathSegments.last
-            : '';
+        final pathFilename =
+            finalUri.pathSegments.isNotEmpty ? finalUri.pathSegments.last : '';
 
-        final filename =
-            pathFilename.isNotEmpty &&
+        final filename = pathFilename.isNotEmpty &&
                 pathFilename.contains('.') &&
                 !pathFilename.startsWith('_') &&
                 pathFilename != 'index' &&
@@ -2091,8 +2069,7 @@ class HtmlService with ChangeNotifier {
         errorMessage = e.toString();
       }
 
-      final errorContent =
-          '''Web URL Could Not Be Loaded
+      final errorContent = '''Web URL Could Not Be Loaded
 
 Error: $errorMessage
 
@@ -2169,7 +2146,7 @@ Technical details: $e''';
 
     final String? existingFinalUrl = _probeResult?['finalUrl'];
     final bool isEquivalent =
-        existingFinalUrl != null && _areUrlsEqual(existingFinalUrl, url);
+        existingFinalUrl != null && areUrlsEqual(existingFinalUrl, url);
 
     _isProbing = true;
     _currentlyProbingUrl = url;
@@ -2299,9 +2276,8 @@ Technical details: $e''';
       };
 
       // Cookies - use response.cookies to handle multiple Set-Cookie headers correctly
-      final List<String> cookies = response.cookies
-          .map((c) => c.toString())
-          .toList();
+      final List<String> cookies =
+          response.cookies.map((c) => c.toString()).toList();
 
       // Only update state if this probe is still relevant
       if (_currentlyProbingUrl == url) {
@@ -2321,6 +2297,13 @@ Technical details: $e''';
           'analyzedCookies': <Map<String, dynamic>>[],
         };
 
+        // Update _currentFile with the probe results immediately
+        // This ensures UI components like BrowserView can see headers/content-type
+        // even before the next sync or full load.
+        if (_currentFile != null && areUrlsEqual(_currentFile!.path, url)) {
+          _currentFile = _currentFile!.copyWith(probeResult: _probeResult);
+        }
+
         // Update cookies with any browser cookies we might already have
         _updateAnalyzedCookies();
 
@@ -2337,8 +2320,7 @@ Technical details: $e''';
         // AUTO-DETECT RSS/ATOM AND FETCH SOURCE
         final contentType =
             normalizedHeaders['content-type']?.toLowerCase() ?? '';
-        final isFeed =
-            contentType.contains('application/rss+xml') ||
+        final isFeed = contentType.contains('application/rss+xml') ||
             contentType.contains('application/atom+xml') ||
             (contentType.contains('xml') &&
                 (targetUrl.endsWith('.rss') ||
@@ -2349,16 +2331,14 @@ Technical details: $e''';
           debugPrint(
             'RSS/Atom detected in probe ($contentType), forcing source load.',
           );
-          _loadFromUrlInternal(targetUrl)
-              .then((file) {
-                if (_currentlyProbingUrl == targetUrl ||
-                    _currentFile?.path == targetUrl) {
-                  loadFile(file);
-                }
-              })
-              .catchError((e) {
-                debugPrint('Error forcing RSS source load: $e');
-              });
+          _loadFromUrlInternal(targetUrl).then((file) {
+            if (_currentlyProbingUrl == targetUrl ||
+                _currentFile?.path == targetUrl) {
+              loadFile(file);
+            }
+          }).catchError((e) {
+            debugPrint('Error forcing RSS source load: $e');
+          });
         }
 
         debugPrint('Probe successful for $url');
@@ -2925,7 +2905,8 @@ Technical details: $e''';
       // Ultimate fallback to plaintext
       return builtinAllLanguages['plaintext']!;
     } catch (e) {
-      return builtinAllLanguages['plaintext']!; // Fallback to plaintext if any error occurs
+      return builtinAllLanguages[
+          'plaintext']!; // Fallback to plaintext if any error occurs
     }
   }
 
@@ -3396,8 +3377,8 @@ Technical details: $e''';
       final globalKey = _cachedGlobalKeys[editorKey] ??= GlobalKey();
 
       // Get or create cached horizontal scroll controller
-      final horizontalController = _cachedHorizontalControllers[editorKey] ??=
-          ScrollController();
+      final horizontalController =
+          _cachedHorizontalControllers[editorKey] ??= ScrollController();
       _activeHorizontalScrollController = horizontalController;
 
       return _buildEditorWidget(
@@ -4127,7 +4108,7 @@ Technical details: $e''';
     // However, if the user navigated INSIDE the WebView (clicked a link), we need to trigger it here.
     final String? existingFinalUrl = _probeResult?['finalUrl'];
     final bool alreadyProbed =
-        existingFinalUrl != null && _areUrlsEqual(existingFinalUrl, url);
+        existingFinalUrl != null && areUrlsEqual(existingFinalUrl, url);
 
     if (_currentlyProbingUrl != url && !alreadyProbed) {
       // Synchronize _currentlyProbingUrl even if we don't start a new probe
@@ -4553,9 +4534,8 @@ Technical details: $e''';
         request.headers.addAll(headers);
         request.headers['Range'] = 'bytes=0-0';
 
-        final streamedResponse = await client
-            .send(request)
-            .timeout(const Duration(seconds: 5));
+        final streamedResponse =
+            await client.send(request).timeout(const Duration(seconds: 5));
 
         final contentLengthStr = streamedResponse.headers['content-length'];
         final contentRangeStr = streamedResponse.headers['content-range'];
@@ -4643,11 +4623,9 @@ Technical details: $e''';
     try {
       final webUri = await activeWebViewController!.getUrl();
       final url = webUri?.toString();
-      final html =
-          await activeWebViewController!.evaluateJavascript(
-                source: 'document.documentElement.outerHTML',
-              )
-              as String;
+      final html = await activeWebViewController!.evaluateJavascript(
+        source: 'document.documentElement.outerHTML',
+      ) as String;
 
       // Unquote if needed (standard JS result processing)
       String finalHtml = _unquoteHtml(html);
