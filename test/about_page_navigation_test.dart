@@ -12,7 +12,7 @@ void main() {
     // Verify the about screen displays correctly
     expect(find.text('About View Source Vibe'), findsOneWidget);
     expect(find.text('Cross-Platform Source Code Viewer'), findsOneWidget);
-    expect(find.text('Version 1.0.0'), findsOneWidget);
+    expect(find.text('Version 1.0.1'), findsOneWidget);
     expect(find.text('© 2025 Wouter van Wijk & Mistral Vibe & Gemini & Claude'),
         findsOneWidget);
 

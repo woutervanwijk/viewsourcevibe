@@ -1,6 +1,6 @@
 name: view_source_vibe
 description: Source code viewer & page analyzer app
-version: 1.0.0+1
+version: 1.0.1+1001
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
