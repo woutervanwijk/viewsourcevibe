@@ -114,17 +114,6 @@ class ProbeGeneralView extends ProbeViewBase {
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 16),
-
-          // Section Header for Browser Probe
-          Text(
-            'Browser Probe (WebView-Side)',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.secondary,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-
           _buildBrowserProbeCard(context, browserResult),
         ],
       ],
