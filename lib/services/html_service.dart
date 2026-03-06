@@ -416,6 +416,11 @@ class HtmlService with ChangeNotifier {
   }) async {
     if (url.isEmpty) return;
 
+    // Block data: and blob: URLs
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+      return;
+    }
+
     // Sanitize
     // Auto-prepend https if no scheme is provided, excluding special schemes like about:
     // We trim the URL first to avoid issues with leading/trailing spaces

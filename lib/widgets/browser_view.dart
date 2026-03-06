@@ -185,7 +185,8 @@ class _BrowserViewState extends State<BrowserView> {
       onLoadStop: (controller, url) async {
         if (mounted && url != null) {
           final urlString = url.toString();
-          if (urlString == 'about:blank' || urlString.startsWith('data:')) {
+          // Block data: and blob: URLs
+          if (urlString.startsWith('data:') || urlString.startsWith('blob:')) {
             return;
           }
 
@@ -210,7 +211,12 @@ class _BrowserViewState extends State<BrowserView> {
         final uri = navigationAction.request.url!;
         final url = uri.toString();
 
-        if (url == 'about:blank' || url.startsWith('data:')) {
+        // Block data: and blob: URLs from loading
+        if (url.startsWith('data:') || url.startsWith('blob:')) {
+          return NavigationActionPolicy.CANCEL;
+        }
+
+        if (url == 'about:blank') {
           return NavigationActionPolicy.ALLOW;
         }
 
