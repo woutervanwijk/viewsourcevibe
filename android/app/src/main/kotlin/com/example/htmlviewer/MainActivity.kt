@@ -26,6 +26,40 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+        
+        // CRITICAL: Forward initial intent to Flutter after engine is ready
+        // This ensures deep links work when app is launched from cold state
+        sharedIntent?.let { intent ->
+            println("MainActivity: configureFlutterEngine - Forwarding stored intent to Flutter")
+            val sharedData = extractSharedData(intent)
+            if (sharedData != null) {
+                try {
+                    val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARED_CONTENT_CHANNEL)
+                    channel.invokeMethod("handleNewSharedContent", sharedData)
+                    println("MainActivity: Successfully sent initial intent to Flutter")
+                    sharedIntent = null // Clear after sending
+                } catch (e: Exception) {
+                    println("MainActivity: Error forwarding initial intent: ${e.message}")
+                }
+            } else if (intent.data != null) {
+                // If extractSharedData returned null but we have data (e.g., http/https URL)
+                // Send it as a URL type
+                val dataString = intent.data.toString()
+                if (dataString.startsWith("http://") || dataString.startsWith("https://")) {
+                    try {
+                        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARED_CONTENT_CHANNEL)
+                        channel.invokeMethod("handleNewSharedContent", mapOf(
+                            "type" to "url",
+                            "content" to dataString
+                        ))
+                        println("MainActivity: Sent HTTP/HTTPS URL to Flutter: $dataString")
+                        sharedIntent = null
+                    } catch (e: Exception) {
+                        println("MainActivity: Error forwarding HTTP URL: ${e.message}")
+                    }
+                }
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +68,14 @@ class MainActivity : FlutterActivity() {
         println("MainActivity: onCreate - intent action: ${intent.action}, data: ${intent.data}, type: ${intent.type}")
         if (intent.data != null) {
             println("MainActivity: onCreate - URL detected: ${intent.data}")
+        }
+        
+        // Forward initial intent to Flutter if it contains a URL
+        // This is critical for deep linking to work on Android
+        if (intent.data != null && (intent.action == Intent.ACTION_VIEW || intent.action == Intent.ACTION_MAIN)) {
+            val dataString = intent.data.toString()
+            println("MainActivity: onCreate - Forwarding initial URL to Flutter: $dataString")
+            // Store the URL to be sent to Flutter once engine is ready
         }
     }
 

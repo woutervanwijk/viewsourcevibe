@@ -19,13 +19,18 @@ Future<void> setupUrlHandling(HtmlService htmlService) async {
     final appLinks = AppLinks();
 
     // Handle initial link when app is launched
+    debugPrint('setupUrlHandling: Checking for initial app link...');
     final initialUri = await appLinks.getInitialAppLink();
+    debugPrint('setupUrlHandling: Initial URI result: $initialUri');
     if (initialUri != null) {
       await _handleDeepLink(initialUri, htmlService);
+    } else {
+      debugPrint('setupUrlHandling: No initial URI found');
     }
 
     // Listen for link changes while app is running
     appLinks.uriLinkStream.listen((Uri? uri) {
+      debugPrint('setupUrlHandling: Received URI from stream: $uri');
       if (uri != null) {
         _handleDeepLink(uri, htmlService);
       }
@@ -321,9 +326,13 @@ Future<void> _performDelayedInitialization(
   try {
     final appLinks = AppLinks();
     // Removed timeout to ensure deep links always work
+    debugPrint(
+        '_performDelayedInitialization: Checking for initial app link...');
     initialUri = await appLinks.getInitialAppLink();
     if (initialUri != null) {
       debugPrint('🚀 App started with deep link: $initialUri');
+    } else {
+      debugPrint('_performDelayedInitialization: No initial URI found');
     }
   } catch (e) {
     debugPrint('⚠️ Error checking initial app link: $e');
