@@ -114,6 +114,14 @@ class ProbeGeneralView extends ProbeViewBase {
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 16),
+          Text(
+            'Browser Probe (Client-Side)',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
           _buildBrowserProbeCard(context, browserResult),
         ],
       ],
@@ -128,7 +136,6 @@ class ProbeGeneralView extends ProbeViewBase {
     final mainDocTx = pageWeight['mainDocumentTransfer'] as int? ?? 0;
     final mainDocDec = pageWeight['mainDocumentDecoded'] as int? ?? 0;
     final resourceCount = result['resourceCount'] as int? ?? 0;
-    final title = result['title'] as String? ?? 'N/A';
     final url = result['url'] as String? ?? 'N/A';
     final statusCode = result['serverStatusCode'];
 
@@ -147,7 +154,6 @@ class ProbeGeneralView extends ProbeViewBase {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDetailRow('Title', title),
             _buildDetailRow('Effective URL', url),
             if (statusCode != null)
               _buildDetailRow('HTTP Status', statusCode.toString()),
