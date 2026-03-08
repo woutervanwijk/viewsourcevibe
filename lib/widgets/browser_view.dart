@@ -229,6 +229,20 @@ class _BrowserViewState extends State<BrowserView> {
       onProgressChanged: (controller, progress) {
         // Handle progress
       },
+      onReceivedError: (controller, request, error) {
+        if (request.isForMainFrame ?? true) {
+          final htmlService = Provider.of<HtmlService>(context, listen: false);
+          htmlService.handleWebViewError(error.description);
+        }
+      },
+      onReceivedHttpError: (controller, request, errorResponse) {
+        if (request.isForMainFrame ?? true) {
+          final htmlService = Provider.of<HtmlService>(context, listen: false);
+          // Http errors mean we got a response like 404, we don't necessarily want to kill the view completely
+          // but we should mark loading as done.
+          htmlService.updateWebViewLoadingProgress(1.0);
+        }
+      },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         final uri = navigationAction.request.url!;
         final url = uri.toString();

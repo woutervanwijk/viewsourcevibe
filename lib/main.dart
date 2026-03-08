@@ -368,8 +368,13 @@ Future<void> _performDelayedInitialization(
           // Priority 1: Restore pending URL if one was loading when app closed
           if (savedState.pendingUrl != null &&
               savedState.pendingUrl!.isNotEmpty) {
-            debugPrint('🌐 Restoring pending URL: ${savedState.pendingUrl}');
-            htmlService.loadFromUrl(savedState.pendingUrl!);
+            try {
+              htmlService.loadFromUrl(savedState.pendingUrl!).catchError((e) {
+                debugPrint('❌ Failed to restore pending URL async: $e');
+              });
+            } catch (e) {
+              debugPrint('❌ Failed to restore pending URL: $e');
+            }
           }
           // Priority 2: Restore previous file/URL
           else if (savedState.filePath != null &&
@@ -378,7 +383,9 @@ Future<void> _performDelayedInitialization(
               // It's a URL
               try {
                 debugPrint('🌐 Restoring URL: ${savedState.filePath}');
-                htmlService.loadFromUrl(savedState.filePath!);
+                htmlService.loadFromUrl(savedState.filePath!).catchError((e) {
+                  debugPrint('❌ Failed to restore URL async: $e');
+                });
               } catch (e) {
                 debugPrint('❌ Failed to restore URL: $e');
               }

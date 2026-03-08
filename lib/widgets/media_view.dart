@@ -358,11 +358,22 @@ class MediaView extends StatelessWidget {
     // However, if the aspect ratio is tight, the text might be pushed off or clipped.
     // We already use Expanded for the image, so it should shrink to fit available space.
     if (isInline && dataBytes != null) {
-      return SvgPicture.memory(
-        dataBytes,
-        fit: BoxFit.contain,
-        placeholderBuilder: (context) =>
-            const Center(child: CircularProgressIndicator()),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+          final h =
+              constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+          return Center(
+            child: SvgPicture.memory(
+              dataBytes,
+              width: w,
+              height: h,
+              fit: BoxFit.contain,
+              placeholderBuilder: (context) =>
+                  const CircularProgressIndicator(),
+            ),
+          );
+        },
       );
     }
 
@@ -371,32 +382,32 @@ class MediaView extends StatelessWidget {
       return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
     }
 
-    return src.toLowerCase().endsWith('.svg')
-        ? SafeNetworkSvg(
-            url: src,
-            fit: BoxFit.contain,
-            placeholderBuilder: (context) =>
-                const Center(child: CircularProgressIndicator()),
-          )
-        : Image.network(
-            src,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => Container(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: const Icon(Icons.broken_image, color: Colors.grey),
-            ),
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Center(
-                child: CircularProgressIndicator(
+    return Center(
+      child: src.toLowerCase().endsWith('.svg')
+          ? SafeNetworkSvg(
+              url: src,
+              fit: BoxFit.contain,
+              placeholderBuilder: (context) =>
+                  const CircularProgressIndicator(),
+            )
+          : Image.network(
+              src,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Container(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: const Icon(Icons.broken_image, color: Colors.grey),
+              ),
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return CircularProgressIndicator(
                   value: loadingProgress.expectedTotalBytes != null
                       ? loadingProgress.cumulativeBytesLoaded /
                           loadingProgress.expectedTotalBytes!
                       : null,
-                ),
-              );
-            },
-          );
+                );
+              },
+            ),
+    );
   }
 }
 
@@ -478,10 +489,22 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
               child: Icon(Icons.broken_image, color: Colors.grey));
         }
 
-        return SvgPicture.memory(
-          snapshot.data!,
-          fit: widget.fit,
-          placeholderBuilder: widget.placeholderBuilder,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final w =
+                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            final h =
+                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            return Center(
+              child: SvgPicture.memory(
+                snapshot.data!,
+                width: w,
+                height: h,
+                fit: widget.fit,
+                placeholderBuilder: widget.placeholderBuilder,
+              ),
+            );
+          },
         );
       },
     );

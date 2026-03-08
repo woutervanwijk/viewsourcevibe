@@ -484,6 +484,17 @@ class HtmlService with ChangeNotifier {
       url = 'https://$url';
     }
 
+    // Validate URL syntax before doing any work
+    if (!url.startsWith('about:')) {
+      final uri = Uri.tryParse(url);
+      if (uri == null ||
+          !uri.hasScheme ||
+          !uri.hasAuthority ||
+          uri.host.isEmpty) {
+        throw Exception('Invalid URL format');
+      }
+    }
+
     // 0. Save current page to navigation stack before resetting state
     // We must do this BEFORE calling _resetLoadState because it clears _currentFile
     // Also check if we are navigating to a different page to avoid duplicates on reload
