@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
-import 'package:re_editor/re_editor.dart';
+import 'package:code_forge/code_forge.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/styles/vs.dart';
@@ -26,7 +26,7 @@ import 'package:view_source_vibe/utils/cookie_utils.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
-import 'package:view_source_vibe/widgets/contextmenu.dart';
+
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -49,6 +49,8 @@ class HtmlService with ChangeNotifier {
       selectedContentType; // Track the selected content type for syntax highlighting
   ScrollController? _verticalScrollController;
   ScrollController? _activeHorizontalScrollController;
+  final Map<String, ScrollController> _cachedVerticalControllers = {};
+  final Map<String, ScrollController> _cachedHorizontalControllers = {};
   GlobalKey? _codeEditorKey;
   AppStateService? _appStateService;
   AppSettings? _appSettings;
@@ -115,11 +117,11 @@ class HtmlService with ChangeNotifier {
   InAppWebViewController? activeWebViewController;
 
   Timer? _autoSaveTimer;
-  final List<CodeLineEditingController> _disposalQueue = [];
+  final List<CodeForgeController> _disposalQueue = [];
   Timer? _disposalTimer;
 
   // Track the currently active find controller
-  CodeFindController? _activeFindController;
+  FindController? _activeFindController;
 
   // Index of the currently active tab in HomeScreen
   int _activeTabIndex = 0;
@@ -159,8 +161,8 @@ class HtmlService with ChangeNotifier {
   }
 
   // Expose search state
-  CodeFindController? get activeFindController => _activeFindController;
-  bool get isSearchActive => _activeFindController?.value != null;
+  FindController? get activeFindController => _activeFindController;
+  bool get isSearchActive => _activeFindController?.isActive ?? false;
 
   bool get isHtml {
     final contentType =
@@ -627,8 +629,19 @@ class HtmlService with ChangeNotifier {
     }
     _disposalQueue.clear();
 
-    _verticalScrollController?.dispose();
+    // Do NOT dispose _verticalScrollController here as it might be an external controller
+    // or PrimaryScrollController.of(context).
+    _verticalScrollController = null;
     _activeHorizontalScrollController = null;
+
+    // Dispose all cached vertical controllers
+    for (final controller in _cachedVerticalControllers.values) {
+      if (controller.hasClients) {
+        // Safe check
+      }
+      controller.dispose();
+    }
+    _cachedVerticalControllers.clear();
 
     // Dispose all cached re_editor controllers
     for (final controller in _cachedControllers.values) {
@@ -2997,7 +3010,7 @@ Technical details: $e''';
     }
 
     // Always create a new controller to avoid issues with listeners from deactivated widgets
-    final controller = CodeLineEditingController.fromText(processedContent);
+    final controller = CodeForgeController()..text = processedContent;
 
     // Resolve the vertical scroll controller
     // If customScrollController is provided, use it.
@@ -3012,65 +3025,40 @@ Technical details: $e''';
     // Create a code theme using the selected theme
     final mode =
         _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
-    final codeTheme = CodeHighlightTheme(
-      languages: {languageName: CodeHighlightThemeMode(mode: mode)},
-      theme: _getThemeByName(themeName),
-    );
 
-    // Create the scroll controller for CodeEditor
-    final codeScrollController = CodeScrollController(
-      verticalScroller: effectiveVerticalController,
-      horizontalScroller: _activeHorizontalScrollController,
-    );
+    // Return the Editor Widget, using the GlobalKey to preserve state
+    final codeEditor = SizedBox.expand(
+      child: CodeForge(
+        controller: controller,
+        readOnly: true,
+        lineWrap: wrapText,
+        innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
+        editorTheme: _getThemeByName(themeName),
+        language: mode,
+        textStyle: TextStyle(
+          fontSize: fontSize,
+          fontFamily: 'Courier',
+          fontFamilyFallback: const ['monospace', 'Courier New'],
+          height: 1.2,
+        ),
+        enableGutter: showLineNumbers,
+        finderBuilder: (context, controller) {
+          // Update the active find controller when the builder is called
+          // This ensures we always have the correct controller for the current editor
+          if (_activeFindController != controller) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _updateActiveFindController(controller);
+            });
+          }
 
-    // Create the final widget
-    final codeEditor = CodeEditor(
-      controller: controller,
-      showCursorWhenReadOnly: false,
-      readOnly: true,
-      toolbarController: const ContextMenuControllerImpl(),
-      wordWrap: wrapText,
-      padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
-      scrollController: codeScrollController,
-      style: CodeEditorStyle(
-        codeTheme: codeTheme,
-        fontSize: fontSize,
-        fontFamily: 'Courier',
-        fontFamilyFallback: const ['monospace', 'Courier New'],
-        fontHeight: 1.2,
+          // Return empty container to disable in-editor panel
+          // The panel will be rendered in the AppBar instead
+          return const PreferredSize(
+            preferredSize: Size.zero,
+            child: SizedBox.shrink(),
+          );
+        },
       ),
-      sperator: showLineNumbers ? SizedBox(width: fontSize / 2) : null,
-      indicatorBuilder: showLineNumbers
-          ? (context, editingController, chunkController, notifier) {
-              return DefaultCodeLineNumber(
-                controller: editingController,
-                notifier: notifier,
-                textStyle: TextStyle(
-                  fontSize: fontSize,
-                  fontFamily: 'Courier',
-                  height: 1.2,
-                  fontFamilyFallback: const ['monospace', 'Courier New'],
-                  color: Colors.grey[600], // Subtle color for line numbers
-                ),
-              );
-            }
-          : null,
-      findBuilder: (context, controller, readOnly) {
-        // Update the active find controller when the builder is called
-        // This ensures we always have the correct controller for the current editor
-        if (_activeFindController != controller) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _updateActiveFindController(controller);
-          });
-        }
-
-        // Return empty container to disable in-editor panel
-        // The panel will be rendered in the AppBar instead
-        return const PreferredSize(
-          preferredSize: Size.zero,
-          child: SizedBox.shrink(),
-        );
-      },
     );
 
     // Enforce cache size limits
@@ -3241,9 +3229,8 @@ Technical details: $e''';
   }
 
   // Cache for editor state to prevent crashes and flickering
-  final Map<String, CodeLineEditingController> _cachedControllers = {};
+  final Map<String, CodeForgeController> _cachedControllers = {};
   final Map<String, GlobalKey> _cachedGlobalKeys = {};
-  final Map<String, ScrollController> _cachedHorizontalControllers = {};
 
   /// Clear the editor cache
   void clearHighlightCache() {
@@ -3261,7 +3248,7 @@ Technical details: $e''';
   }
 
   /// Queue a controller for disposal after a delay to ensure it's unmounted
-  void _queueForDisposal(CodeLineEditingController controller) {
+  void _queueForDisposal(CodeForgeController controller) {
     _disposalQueue.add(controller);
     _disposalTimer?.cancel();
     _disposalTimer = Timer(const Duration(seconds: 2), () {
@@ -3307,6 +3294,16 @@ Technical details: $e''';
         }
         // Also remove all associated global keys and horizontal controllers for this content
         _cachedGlobalKeys.removeWhere((ekey, _) => ekey.startsWith(key));
+
+        // Find and remove vertical controllers matching this key prefix
+        final vKeysToRemove = _cachedVerticalControllers.keys
+            .where((vKey) => vKey.startsWith(key))
+            .toList();
+
+        for (final vKey in vKeysToRemove) {
+          _cachedVerticalControllers[vKey]?.dispose();
+          _cachedVerticalControllers.remove(vKey);
+        }
 
         // Find and remove horizontal controllers matching this key prefix
         final hKeysToRemove = _cachedHorizontalControllers.keys
@@ -3381,6 +3378,11 @@ Technical details: $e''';
       // Get or create GlobalKey for this scroll context
       final globalKey = _cachedGlobalKeys[editorKey] ??= GlobalKey();
 
+      // Get or create cached vertical scroll controller
+      final verticalController =
+          _cachedVerticalControllers[editorKey] ??= ScrollController();
+      _verticalScrollController = verticalController;
+
       // Get or create cached horizontal scroll controller
       final horizontalController =
           _cachedHorizontalControllers[editorKey] ??= ScrollController();
@@ -3390,6 +3392,7 @@ Technical details: $e''';
         context,
         controller,
         globalKey,
+        verticalController,
         horizontalController,
         extension,
         themeName,
@@ -3432,36 +3435,39 @@ Technical details: $e''';
     // Process content (simulated async if heavy)
     String processedContent = content;
     if (useSimplifiedHighlighting) {
-      final maxHighlightLength = 200000;
+      const maxHighlightLength = 200000;
       if (content.length > maxHighlightLength) {
         processedContent = content.substring(0, maxHighlightLength);
       }
     }
 
-    // Create Controller & GlobalKey
-    // Create Controller & GlobalKey & Horizontal Scroll Controller
-    final controller = CodeLineEditingController.fromText(processedContent);
+    // Create Controller & GlobalKey & Scroll Controllers
+    final controller = CodeForgeController()..text = processedContent;
     final globalKey = GlobalKey();
+    final verticalController = ScrollController();
     final horizontalController = ScrollController();
 
     // Cache them
     _cachedControllers[controllerKey] = controller;
     _cachedGlobalKeys[editorKey] = globalKey;
+    _cachedVerticalControllers[editorKey] = verticalController;
     _cachedHorizontalControllers[editorKey] = horizontalController;
     _enforceCacheSizeLimits();
 
     if (!context.mounted) {
-      horizontalController
-          .dispose(); // Should not happen often but safe cleanup
+      verticalController.dispose();
+      horizontalController.dispose();
       return const SizedBox.shrink();
     }
 
+    _verticalScrollController = verticalController;
     _activeHorizontalScrollController = horizontalController;
 
     return _buildEditorWidget(
       context,
       controller,
       globalKey,
+      verticalController,
       horizontalController,
       extension,
       themeName,
@@ -3473,8 +3479,9 @@ Technical details: $e''';
 
   Widget _buildEditorWidget(
     BuildContext context,
-    CodeLineEditingController controller,
+    CodeForgeController controller,
     GlobalKey key,
+    ScrollController verticalController,
     ScrollController horizontalController,
     String extension,
     String themeName,
@@ -3483,73 +3490,48 @@ Technical details: $e''';
     bool showLineNumbers,
   ) {
     // Determine language
-    String languageName = getLanguageForExtension(
-      extension,
-    ); // Use existing helper method
-
-    // Resolve Scroll Controller
-    final effectiveVerticalController = PrimaryScrollController.of(context);
-
-    _verticalScrollController = effectiveVerticalController;
+    String languageName = getLanguageForExtension(extension);
 
     // Create Theme
     final mode =
         _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
-    final codeTheme = CodeHighlightTheme(
-      languages: {languageName: CodeHighlightThemeMode(mode: mode)},
-      theme: _getThemeByName(themeName),
-    );
-
-    // Create CodeScrollController linked to CURRENT effective controller
-    final codeScrollController = CodeScrollController(
-      verticalScroller: effectiveVerticalController,
-      horizontalScroller: horizontalController,
-    );
 
     // Return the Editor Widget, using the GlobalKey to preserve state
-    return CodeEditor(
-      key: key,
-      controller: controller,
-      showCursorWhenReadOnly: true,
-      readOnly: true,
-      toolbarController: const ContextMenuControllerImpl(),
-      wordWrap: wrapText,
-      padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
-      scrollController: codeScrollController,
-      style: CodeEditorStyle(
-        codeTheme: codeTheme,
-        fontSize: fontSize,
-        fontFamily: 'Courier',
-        fontFamilyFallback: const ['monospace', 'Courier New'],
-        fontHeight: 1.2,
-      ),
-      sperator: showLineNumbers ? SizedBox(width: fontSize / 2) : null,
-      indicatorBuilder: showLineNumbers
-          ? (context, editingController, chunkController, notifier) {
-              return DefaultCodeLineNumber(
-                controller: editingController,
-                notifier: notifier,
-                textStyle: TextStyle(
-                  fontSize: fontSize,
-                  fontFamily: 'Courier',
-                  height: 1.2,
-                  fontFamilyFallback: const ['monospace', 'Courier New'],
-                  color: Colors.grey[600],
-                ),
-              );
+    // We wrap it in a local PrimaryScrollController so that components like the
+    // status bar or external scroll buttons can find it easily via context.
+    return PrimaryScrollController(
+      controller: verticalController,
+      child: SizedBox.expand(
+        child: CodeForge(
+          key: key,
+          controller: controller,
+          readOnly: true,
+          lineWrap: wrapText,
+          innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
+          verticalScrollController: verticalController,
+          horizontalScrollController: horizontalController,
+          editorTheme: _getThemeByName(themeName),
+          language: mode,
+          textStyle: TextStyle(
+            fontSize: fontSize,
+            fontFamily: 'Courier',
+            fontFamilyFallback: const ['monospace', 'Courier New'],
+            height: 1.2,
+          ),
+          enableGutter: showLineNumbers,
+          finderBuilder: (context, controller) {
+            if (_activeFindController != controller) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _updateActiveFindController(controller);
+              });
             }
-          : null,
-      findBuilder: (context, controller, readOnly) {
-        if (_activeFindController != controller) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _updateActiveFindController(controller);
-          });
-        }
-        return const PreferredSize(
-          preferredSize: Size.zero,
-          child: SizedBox.shrink(),
-        );
-      },
+            return const PreferredSize(
+              preferredSize: Size.zero,
+              child: SizedBox.shrink(),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -3593,16 +3575,12 @@ Technical details: $e''';
   /// Toggle the search panel for the current editor
   void toggleSearch() {
     if (_activeFindController != null) {
-      if (_activeFindController!.value == null) {
-        _activeFindController!.findMode();
-      } else {
-        _activeFindController!.close();
-      }
+      _activeFindController!.toggleActive();
     }
   }
 
   /// Update the active find controller and manage listeners
-  void _updateActiveFindController(CodeFindController? newController) {
+  void _updateActiveFindController(FindController? newController) {
     if (_activeFindController == newController) return;
 
     // Remove listener from old controller

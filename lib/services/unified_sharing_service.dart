@@ -175,50 +175,15 @@ class UnifiedSharingService {
       final htmlService = Provider.of<HtmlService>(context, listen: false);
 
       // Route to the appropriate processing method
+      // Route to the appropriate processing method
       if (type == 'url' && content != null) {
-        // ALWAYS ask the user what to do with the URL
-        final dialogContext = context.mounted
-            ? context
-            : (MyApp.navigatorKey.currentState?.context ?? context);
-
-        isShowingShareDialog = true;
-        final choice = await _showShareChoiceDialog(dialogContext, content);
-        isShowingShareDialog = false;
-
-        if (choice == 'url') {
-          // Check if original context is still valid
-          if (context.mounted) {
-            await _processSharedUrl(context, htmlService, content);
-          } else {
-            // Fallback to navigator key context if available
-            final navContext = MyApp.navigatorKey.currentContext;
-            if (navContext != null && navContext.mounted) {
-              await _processSharedUrl(navContext, htmlService, content);
-            }
-          }
-        } else if (choice == 'text') {
-          // Treat as text content
-          if (context.mounted) {
-            await _processSharedText(
-              context,
-              htmlService,
-              content,
-              fileName: fileName,
-              path: filePath ?? 'shared://url',
-              type: 'url',
-            );
-          } else {
-            final navContext = MyApp.navigatorKey.currentContext;
-            if (navContext != null && navContext.mounted) {
-              await _processSharedText(
-                navContext,
-                htmlService,
-                content,
-                fileName: fileName,
-                path: filePath ?? 'shared://url',
-                type: 'url',
-              );
-            }
+        // Automatically load URL
+        if (context.mounted) {
+          await _processSharedUrl(context, htmlService, content);
+        } else {
+          final navContext = MyApp.navigatorKey.currentContext;
+          if (navContext != null && navContext.mounted) {
+            await _processSharedUrl(navContext, htmlService, content);
           }
         }
       } else if (content != null) {
@@ -230,7 +195,6 @@ class UnifiedSharingService {
           final trimmedContent = content.trim();
           String? urlToLoad;
           // Detect if it's a URL (either the whole string or containing one)
-          // We removed the isUrl check to always force the dialog for URLs
           if (isPotentialUrl(trimmedContent)) {
             final uri = Uri.tryParse(trimmedContent);
             if (uri != null &&
@@ -249,39 +213,17 @@ class UnifiedSharingService {
             }
           }
 
-          // If a URL was detected, ask the user what to do
+          // If a URL was detected, just load it
           if (urlToLoad != null) {
-            try {
-              // Try to get context from navigatorKey for the dialog
-              final dialogContext = context.mounted
-                  ? context
-                  : (MyApp.navigatorKey.currentState?.context ?? context);
-
-              isShowingShareDialog = true;
-              final choice =
-                  await _showShareChoiceDialog(dialogContext, urlToLoad);
-              isShowingShareDialog = false;
-
-              if (choice == 'url') {
-                // Check if original context is still valid
-                if (context.mounted) {
-                  await _processSharedUrl(context, htmlService, urlToLoad);
-                } else {
-                  // Fallback to navigator key context if available
-                  final navContext = MyApp.navigatorKey.currentContext;
-                  if (navContext != null && navContext.mounted) {
-                    await _processSharedUrl(navContext, htmlService, urlToLoad);
-                  }
-                }
-                return;
+            if (context.mounted) {
+              await _processSharedUrl(context, htmlService, urlToLoad);
+            } else {
+              final navContext = MyApp.navigatorKey.currentContext;
+              if (navContext != null && navContext.mounted) {
+                await _processSharedUrl(navContext, htmlService, urlToLoad);
               }
-              // If they chose 'text' or cancelled, fall through to text processing
-            } catch (e) {
-              isShowingShareDialog = false;
-              debugPrint(
-                  'UnifiedSharingService: Error showing choice dialog: $e');
-              // Fallback to showing text if dialog fails
             }
+            return;
           }
 
           // Handle it as text content
@@ -828,46 +770,6 @@ If you're the app developer, please update the native iOS Share Extension code.'
       }
       rethrow;
     }
-  }
-
-  /// Show share choice dialog for detected URLs
-  static Future<String?> _showShareChoiceDialog(
-      BuildContext context, String url) async {
-    return showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'Shared URL Detected',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.public),
-              title: const Text('Load URL Source'),
-              subtitle: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
-              onTap: () => Navigator.pop(context, 'url'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: const Text('Display as Text'),
-              onTap: () => Navigator.pop(context, 'text'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
   }
 
   /// Show snackbar message

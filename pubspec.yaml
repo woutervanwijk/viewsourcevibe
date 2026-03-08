@@ -38,7 +38,6 @@ dependencies:
   app_links: ^3.2.0
   
   # Code editor
-  re_editor: ^0.8.0
   re_highlight: ^0.0.3
   flutter_inappwebview: ^6.1.5
 
@@ -59,6 +58,7 @@ dependencies:
   
   # XML parsing for DOM tree
   xml: ^6.5.0
+  code_forge: ^9.1.0
   
 dev_dependencies:
   flutter_test:

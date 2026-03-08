@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:re_editor/re_editor.dart';
+import 'package:code_forge/code_forge.dart';
 import 'dart:math';
 
 const EdgeInsetsGeometry _kDefaultFindMargin = EdgeInsets.only(right: 4);
@@ -20,7 +20,7 @@ const EdgeInsetsGeometry _kDefaultFindInputContentPadding =
 );
 
 class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
-  final CodeFindController controller;
+  final FindController controller;
   final EdgeInsetsGeometry margin;
   final bool readOnly;
   final Color? iconColor;
@@ -57,44 +57,41 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => Size(
       double.infinity,
-      controller.value == null
+      !controller.isActive
           ? 0
-          : ((controller.value!.replaceMode
+          : ((controller.isReplaceMode
                   ? _kDefaultReplacePanelHeight
                   : _kDefaultFindPanelHeight) +
               margin.vertical));
 
   @override
   Widget build(BuildContext context) {
-    if (controller.value == null) {
+    if (!controller.isActive) {
       return const SizedBox(width: 0, height: 0);
     }
     return Container(
         margin: margin,
         alignment: Alignment.topRight,
-        // height: preferredSize.height, // Allow dynamic height
         child: Column(
           children: [
             _buildFindInputView(context),
-            if (controller.value!.replaceMode) _buildReplaceInputView(context),
+            if (controller.isReplaceMode) _buildReplaceInputView(context),
           ],
         ));
   }
 
   Widget _buildFindInputView(BuildContext context) {
-    final CodeFindValue value = controller.value!;
     final String result;
-    if (value.result == null) {
+    if (controller.matchCount == 0) {
       result = 'none';
     } else {
-      result = '${value.result!.index + 1}/${value.result!.matches.length}';
+      result = '${controller.currentMatchIndex + 1}/${controller.matchCount}';
     }
     return Row(
       children: [
         Expanded(
           flex: 2,
           child: SizedBox(
-              // height: _kDefaultFindPanelHeight, // Remove fixed height
               child: Stack(
             alignment: Alignment.center,
             children: [
@@ -104,7 +101,7 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
                   focusNode: controller.findInputFocusNode,
                   iconsWidth: _kDefaultFindIconWidth * 1.5,
                   onSubmitted: (_) {
-                    controller.nextMatch();
+                    controller.next();
                     controller.findInputFocusNode.requestFocus();
                   }),
               Row(
@@ -113,19 +110,12 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
                   _buildCheckIcon(
                       context: context,
                       icon: Icons.abc,
-                      checked: value.option.caseSensitive,
+                      checked: controller.caseSensitive,
                       tooltip: 'Match Case',
                       onPressed: () {
                         controller.toggleCaseSensitive();
                       }),
                   SizedBox(width: 12),
-                  // _buildCheckText(
-                  //     context: context,
-                  //     text: '.*',
-                  //     checked: value.option.regex,
-                  //     onPressed: () {
-                  //       controller.toggleRegex();
-                  //     })
                 ],
               )
             ],
@@ -139,24 +129,24 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildIconButton(
-                  onPressed: value.result == null
+                  onPressed: controller.matchCount == 0
                       ? null
                       : () {
-                          controller.previousMatch();
+                          controller.previous();
                         },
                   icon: Icons.arrow_upward,
                   tooltip: 'Previous'),
               _buildIconButton(
-                  onPressed: value.result == null
+                  onPressed: controller.matchCount == 0
                       ? null
                       : () {
-                          controller.nextMatch();
+                          controller.next();
                         },
                   icon: Icons.arrow_downward,
                   tooltip: 'Next'),
               _buildIconButton(
                   onPressed: () {
-                    controller.close();
+                    controller.toggleActive();
                   },
                   icon: Icons.close,
                   tooltip: 'Close')
@@ -168,36 +158,34 @@ class CodeFindPanelView extends StatelessWidget implements PreferredSizeWidget {
   }
 
   Widget _buildReplaceInputView(BuildContext context) {
-    final CodeFindValue value = controller.value!;
     return Row(
       children: [
         Expanded(
           child: SizedBox(
-            // height: _kDefaultFindPanelHeight, // Remove fixed height
             child: _buildTextField(
               context: context,
               controller: controller.replaceInputController,
               focusNode: controller.replaceInputFocusNode,
               onSubmitted: (_) {
-                controller.replaceMatch();
+                controller.replace();
                 controller.replaceInputFocusNode.requestFocus();
               },
             ),
           ),
         ),
         _buildIconButton(
-            onPressed: value.result == null
+            onPressed: controller.matchCount == 0
                 ? null
                 : () {
-                    controller.replaceMatch();
+                    controller.replace();
                   },
             icon: Icons.done,
             tooltip: 'Replace'),
         _buildIconButton(
-            onPressed: value.result == null
+            onPressed: controller.matchCount == 0
                 ? null
                 : () {
-                    controller.replaceAllMatches();
+                    controller.replaceAll();
                   },
             icon: Icons.done_all,
             tooltip: 'Replace All')

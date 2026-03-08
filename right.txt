@@ -1,0 +1,649 @@
+52:  final Map<String, ScrollController> _cachedVerticalControllers = {};
+53:  final Map<String, ScrollController> _cachedHorizontalControllers = {};
+94:  final Map<String, String> _beautifiedCache = {};
+112:      }
+114:    }
+115:  }
+160:    }
+161:  }
+174:    }
+202:  }
+212:  }
+221:    }
+225:    }
+244:  }
+264:    }
+266:  }
+282:    }
+284:  }
+296:    }
+302:  }
+306:  }
+316:      }
+323:        debugPrint('Lazy loading source for: ${_currentFile!.path}');
+325:      }
+326:    }
+327:  }
+342:      }
+343:    } catch (e) {
+346:    } finally {
+349:    }
+350:  }
+359:        debugPrint('Triggering browser reload for: ${_currentFile!.path}');
+364:      }
+365:    }
+366:  }
+372:    }
+373:  }
+378:  }
+381:  void _resetLoadState({String? newUrl, bool notify = true}) {
+402:    }
+409:  }
+418:  }) async {
+424:    }
+432:    }
+446:    }
+456:    }
+461:    // }
+480:      }
+500:      }
+509:      }
+512:    } else {
+524:      } catch (e) {
+529:      } finally {
+532:      }
+533:    }
+534:  }
+541:    } else {
+554:          }
+555:        } catch (e) {
+557:        }
+558:      }
+559:    }
+560:  }
+564:  }
+571:  }
+582:  }
+592:      'headers': <String, String>{'content-type': 'text/html'},
+595:    };
+620:  }
+629:    }
+641:      }
+643:    }
+649:    }
+655:    }
+661:  }
+670:      } catch (e) {
+673:      }
+674:    }
+676:  }
+684:      } catch (e) {
+687:      }
+688:    }
+690:  }
+700:          } catch (e) {
+702:          }
+703:        });
+704:      }
+705:    }
+706:  }
+710:  }
+716:  }
+722:  }
+745:        }
+747:      }
+748:    } catch (e) {
+750:    }
+751:  }
+767:    } catch (e) {
+769:    }
+770:  }
+778:      }
+779:    });
+780:  }
+790:          } catch (e) {
+792:          }
+793:        });
+794:      }
+795:    }
+796:  }
+800:    if (isVisible != null) {}
+804:      } catch (e) {
+806:      }
+807:    }
+809:  }
+825:    } catch (e) {
+827:    }
+828:  }
+837:    }
+855:      };
+858:      } else {
+860:      }
+861:    }
+881:    } else {
+883:    }
+919:    };
+923:    }
+928:  }
+938:  }) async {
+944:      }
+956:      });
+965:      }
+985:        } else {
+987:            'Blocked redirect to unsafe scheme: ${redirectUri.scheme}',
+990:        }
+991:      }
+995:    } catch (e) {
+1005:      }
+1009:    }
+1010:  }
+1020:    }
+1025:    }
+1046:      }
+1053:      }
+1056:      if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
+1061:        }
+1062:      }
+1067:      }
+1068:    }
+1072:  }
+1080:  }) async {
+1103:          }
+1105:        }
+1106:      }
+1154:      }
+1180:          } else if (filenameLower.endsWith('.rss')) {
+1182:          } else {
+1184:          }
+1240:            } else if (ct.contains('gif')) {
+1242:            } else if (ct.contains('webp')) {
+1244:            } else if (ct.contains('svg')) {
+1246:            } else if (ct.contains('icon') || ct.contains('ico')) {
+1248:            } else if (ct.contains('avif')) {
+1250:            } else {
+1252:            }
+1253:          } else {
+1255:          }
+1262:            } else if (ct.contains('ogg')) {
+1264:            } else if (ct.contains('quicktime') || ct.contains('mov')) {
+1266:            } else if (ct.contains('avi')) {
+1268:            } else if (ct.contains('mkv') || ct.contains('matroska')) {
+1270:            } else {
+1272:            }
+1273:          } else {
+1275:          }
+1282:            } else if (ct.contains('ogg')) {
+1284:            } else if (ct.contains('aac')) {
+1286:            } else if (ct.contains('flac')) {
+1288:            } else {
+1290:            }
+1291:          } else {
+1293:          }
+1298:      }
+1300:    } catch (e) {
+1303:    }
+1304:  }
+1317:    }
+1322:    }
+1328:    } else {
+1330:    }
+1332:    return '$filename${detectedType == 'Text' ? '.txt' : detectedType == 'HTML' ? '.html' : detectedType == 'XML' ? '.xml' : detectedType == 'JSON' ? '.json' : detectedType == 'YAML' ? '.yaml' : detectedType == 'Markdown' ? '.md' : detectedType == 'CSS' ? '.css' : detectedType == 'JavaScript' ? '.js' : detectedType == 'Python' ? '.py' : detectedType == 'Java' ? '.java' : detectedType == 'C++' ? '.cpp' : detectedType == 'SQL' ? '.sql' : '.txt'}';
+1333:  }
+1342:    }
+1345:    }
+1348:    }
+1349:    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
+1352:    }
+1355:    }
+1358:    }
+1361:    }
+1365:    }
+1369:    }
+1372:    }
+1375:    }
+1378:  }
+1386:    }
+1388:  }
+1397:    } catch (e) {
+1400:    }
+1401:  }
+1410:    }
+1428:    }
+1437:  }
+1456:      }
+1459:      }
+1468:    } catch (e) {
+1471:    }
+1472:  }
+1496:        }
+1497:      }
+1498:    }
+1499:  }
+1506:  }) async {
+1513:    }
+1524:    }
+1533:    }
+1546:        }
+1547:      }
+1548:    }
+1554:    }
+1559:    }
+1564:    }
+1572:          '⚠️  Very large file loading: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)',
+1574:      } else {
+1577:          '📄 Loading large file: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)',
+1579:      }
+1580:    }
+1604:      } else {
+1613:        }
+1614:      }
+1618:      } else if (localContentType != selectedContentType) {
+1622:      }
+1637:        }
+1638:      }
+1639:    } catch (e) {
+1642:    }
+1659:    } else {
+1665:      }
+1668:    }
+1672:  }
+1702:    };
+1705:  }
+1718:    } finally {
+1722:    }
+1723:  }
+1726:    final key = '${content.hashCode}_$type';
+1729:    }
+1734:  }
+1740:    }
+1745:    }
+1747:  }
+1749:  Future<void> clearFile({bool clearProbe = true}) async {
+1761:    }
+1769:  }
+1812:      }
+1813:    }
+1822:      }
+1823:    }
+1829:      }
+1830:    }
+1833:  }
+1846:      }
+1848:    }
+1870:  }
+1881:        'Back navigation: Loading previous file: ${previousFile.path}',
+1886:    } finally {
+1888:    }
+1889:  }
+1901:      }
+1907:      }
+1912:      }
+1926:        }
+1927:      } catch (e) {
+1929:      }
+1937:      };
+1952:      }
+1960:      });
+1971:        }
+1972:      } catch (e) {
+1976:      }
+1985:      final respHeaders = <String, String>{};
+1988:      });
+2002:      };
+2007:      }
+2021:      };
+2025:      }
+2060:      } else {
+2065:            : 'response_${hResponse.statusCode}';
+2077:      }
+2078:    } catch (e) {
+2082:      } else if (e is FormatException) {
+2084:      } else if (e is SocketException) {
+2085:        errorMessage = 'Network error: ${e.message}';
+2086:      } else {
+2088:      }
+2131:    }
+2132:  }
+2139:  }) async {
+2147:  }
+2155:  }) async {
+2157:      return _probeResult ?? {};
+2158:    }
+2162:      return {};
+2163:    }
+2178:    }
+2194:      }
+2215:          }
+2216:        } catch (e) {
+2217:          debugPrint('DNS Lookup failed for ${uri.host}: $e');
+2218:        }
+2219:      }
+2234:      } catch (e) {
+2243:      }
+2250:        }
+2251:      } catch (e) {
+2253:      }
+2262:      } catch (e) {
+2265:      }
+2274:        } else {
+2276:        }
+2277:      }
+2280:      final normalizedHeaders = <String, String>{};
+2283:      });
+2294:      };
+2316:        };
+2323:        }
+2335:          }
+2336:        }
+2356:            }
+2357:          }).catchError((e) {
+2359:          });
+2360:        }
+2364:      } else {
+2368:        return {};
+2369:      }
+2370:    } catch (e) {
+2374:      }
+2375:      return {}; // Return empty instead of rethrowing to avoid unhandled async exceptions
+2376:    } finally {
+2380:      } catch (e) {
+2382:      }
+2390:      }
+2391:    }
+2392:  }
+2406:    }
+2413:    }
+2416:    }
+2420:    }
+2424:    }
+2427:  }
+2901:    }
+2902:  }
+2912:      }
+2921:      }
+2925:    } catch (e) {
+2928:    }
+2929:  }
+2940:  }) {
+2950:          '⚠️  Very large file: ${contentSizeMB.toStringAsFixed(2)} MB',
+2960:                  'Large file (${contentSizeMB.toStringAsFixed(1)} MB). Syntax highlighting may be slow.',
+2966:          });
+2967:        } catch (e) {
+2969:        }
+2970:      } else {
+2973:          '🚨 Large file detected: ${contentSizeMB.toStringAsFixed(2)} MB',
+2976:      }
+2977:    }
+2990:    // }
+3007:          '   Processing first ${maxHighlightLength ~/ 1024}KB for highlighting',
+3009:      }
+3010:    }
+3051:            });
+3052:          }
+3060:        },
+3072:  }
+3079:    }
+3111:    };
+3118:    }
+3126:    }
+3135:    }
+3142:    }
+3150:    }
+3159:    }
+3163:  }
+3201:    }
+3202:  }
+3209:  }) {
+3211:    return 'hl:${contentHash}_ext:${extension}_simple:$useSimplified';
+3212:  }
+3229:  }
+3232:  final Map<String, CodeForgeController> _cachedControllers = {};
+3233:  final Map<String, GlobalKey> _cachedGlobalKeys = {};
+3239:    }
+3244:    }
+3248:  }
+3258:        } catch (e) {
+3260:        }
+3261:      }
+3265:    });
+3266:  }
+3277:  }
+3294:        }
+3306:        }
+3316:        }
+3317:      }
+3319:    }
+3320:  }
+3333:    }
+3341:    }
+3348:  }
+3360:  }) {
+3403:    }
+3418:  }
+3441:      }
+3442:    }
+3461:    }
+3478:  }
+3526:              });
+3527:            }
+3532:          },
+3536:  }
+3542:  }
+3554:  }) async {
+3561:    }
+3573:  }
+3579:    }
+3580:  }
+3589:    }
+3596:    }
+3600:  }
+3605:  }
+3608:  Future<void> _extractMetadata({bool isPartial = false}) async {
+3624:        'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS, ${_pageMetadata?['media']?['images']?.length} Images',
+3629:      }
+3635:      }
+3636:    } catch (e, stack) {
+3639:    } finally {
+3642:    }
+3643:  }
+3657:    };
+3675:          },
+3680:  }
+3694:        return {'transfer': src.length, 'decoded': src.length};
+3695:      }
+3702:        orElse: () => {},
+3716:              }, orElse: () => {});
+3717:            }
+3718:          }
+3719:        } catch (e) {
+3721:        }
+3722:      }
+3725:        return {'transfer': match['transfer'], 'decoded': match['decoded']};
+3726:      }
+3728:    }
+3735:      }
+3742:        }
+3743:      }
+3745:    }
+3751:      }
+3757:        }
+3758:      }
+3760:    }
+3766:      }
+3772:        }
+3773:      }
+3775:    }
+3791:          }
+3792:        }
+3793:      }
+3794:    }
+3810:          } else {
+3812:            links[i] = {'href': href, 'size': size};
+3813:          }
+3814:        }
+3815:      }
+3816:    }
+3830:          } else {
+3832:            links[i] = {'src': src, 'size': size};
+3833:          }
+3834:        }
+3835:      }
+3836:    }
+3851:          }
+3852:        }
+3853:      }
+3854:    }
+3857:  }
+3868:      }
+3870:    }
+3876:      });
+3877:    }
+3883:      });
+3884:    }
+3891:      });
+3892:    }
+3893:  }
+3907:          final map = {'src': item};
+3910:        } else if (item is Map) {
+3916:            }
+3917:          }
+3918:        }
+3919:      }
+3920:    }
+3928:          final map = {'href': item};
+3931:        } else if (item is Map) {
+3937:            }
+3938:          }
+3939:        }
+3940:      }
+3941:    }
+3954:            }
+3955:          }
+3956:        }
+3957:      }
+3958:    }
+3979:          } else if (item['href'] is String) {
+3981:          }
+3986:              item['size'] = {'transfer': size, 'decoded': size};
+3988:            }
+3989:          }
+3990:        }),
+3997:      }
+3998:    }
+3999:  }
+4012:      };
+4013:    } catch (e) {
+4015:      return {'error': e.toString()};
+4016:    }
+4017:  }
+4029:    };
+4031:    final Map<String, String> parsed = {};
+4042:          }
+4043:        }
+4044:      }
+4045:    }
+4047:  }
+4055:    }
+4056:    return '-----BEGIN CERTIFICATE-----\n${chunks.join('\n')}\n-----END CERTIFICATE-----';
+4057:  }
+4064:      } catch (e) {
+4074:      }
+4075:    }
+4077:  }
+4079:  Future<void> syncWebViewState(String url, {bool isPartial = false}) async {
+4086:    }
+4103:        return <String, dynamic>{};
+4104:      });
+4105:    } else {
+4108:    }
+4120:                }
+4122:              })();
+4153:              }
+4154:            } catch (e) {
+4156:            }
+4157:          }
+4158:        }
+4159:      } catch (e) {
+4163:        }
+4164:      }
+4170:              '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; var seen=new Set(); for(var i=0; i<r.length; i++) { var name=r[i].name; tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); seen.add(name); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n && !seen.has(n.name)) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else if(!n && !seen.has(document.location.href)) { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();',
+4176:        }
+4197:                  },
+4200:            }
+4226:                } else if (name.endsWith('.css') ||
+4232:                } else if (name.endsWith('.png') ||
+4243:                } else if (name.endsWith('.html') ||
+4251:                } else {
+4255:                }
+4256:              }
+4257:            }
+4275:                  },
+4280:                  },
+4285:                  },
+4290:                  },
+4295:                  },
+4296:                },
+4297:              },
+4299:            };
+4306:            };
+4310:            }
+4311:          }
+4312:        }
+4313:      } catch (e) {
+4315:      }
+4323:      } catch (_) {}
+4336:    } catch (e) {
+4338:    } finally {
+4342:      }
+4343:    }
+4344:  }
+4378:            }
+4379:          } catch (e) {
+4381:          }
+4382:        }),
+4384:    }
+4399:    final Map<String, Map<String, dynamic>> uniqueResources = {};
+4404:      }
+4405:    }
+4421:      } else if (name.endsWith('.css') ||
+4427:      } else if (name.endsWith('.png') ||
+4438:      } else if (name.endsWith('.html') ||
+4446:      } else {
+4450:      }
+4451:    }
+4466:        },
+4467:        'css': {'count': cssCount, 'transfer': cssTx, 'decoded': cssDec},
+4468:        'images': {'count': imgCount, 'transfer': imgTx, 'decoded': imgDec},
+4469:        'html': {'count': htmlCount, 'transfer': htmlTx, 'decoded': htmlDec},
+4474:        },
+4475:      },
+4476:    };
+4481:    }
+4487:  }
+4496:      };
+4508:          }
+4509:        }
+4510:      } catch (e) {
+4512:      }
+4527:        streamedResponse.stream.listen((_) {}).cancel();
+4537:            }
+4538:          }
+4543:          }
+4544:        }
+4545:      } catch (e) {
+4547:      }
+4548:    } catch (e) {
+4550:    }
+4552:  }
+4559:    }
+4560:  }
+4569:    }
+4579:  }
+4586:  }
+4600:    }
+4601:  }
+4646:      }
+4647:    } catch (e) {
+4649:    }
+4650:  }
+4651:}

@@ -456,6 +456,7 @@ class FileViewer extends StatelessWidget {
                       String displayContent = snapshot.data ?? file.content;
 
                       return Stack(
+                        fit: StackFit.expand,
                         children: [
                           _buildEditorWithFuture(
                             context,

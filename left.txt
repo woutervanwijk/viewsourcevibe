@@ -1,0 +1,647 @@
+40:class HtmlService with ChangeNotifier {
+52:  final Map<String, ScrollController> _cachedVerticalControllers = {};
+53:  final Map<String, ScrollController> _cachedHorizontalControllers = {};
+94:  final Map<String, String> _beautifiedCache = {};
+100:  set webViewScrollY(double value) {
+101:    if (_webViewScrollY != value) {
+109:          now.difference(_lastScrollUpdate!).inMilliseconds > 100) {
+156:  set currentInputText(String? value) {
+157:    if (_currentInputText != value) {
+167:  bool get isHtml {
+172:        contentType.contains('application/xhtml+xml')) {
+204:  bool get isSvg {
+214:  bool get isXml {
+219:        contentType.contains('text/xml')) {
+223:        contentType.contains('application/atom+xml')) {
+256:  bool get showServerTabs {
+262:            _currentInputText!.contains('://'))) {
+270:  bool get isBrowserSupported {
+280:            _currentInputText!.contains('://'))) {
+286:  bool get isMedia {
+292:        contentType.contains('audio/')) {
+304:  void consumeTabSwitchRequest() {
+308:  void setActiveTabIndex(int index) {
+309:    if (_activeTabIndex != index) {
+314:      if (index == browserTabIndex) {
+322:          (_currentFile?.isUrl ?? false)) {
+323:        debugPrint('Lazy loading source for: ${_currentFile!.path}');
+330:  Future<void> _loadSourceOnly(String url) async {
+336:    try {
+340:      if (_currentFile?.path == url) {
+343:    } catch (e) {
+346:    } finally {
+353:  Future<void> triggerBrowserReload() async {
+356:        _currentFile!.isUrl) {
+358:      if (currentBrowserUrl.toString() != _currentFile!.path) {
+359:        debugPrint('Triggering browser reload for: ${_currentFile!.path}');
+368:  void updateWebViewLoadingProgress(double progress) {
+369:    if (_webViewLoadingProgress != progress) {
+375:  HtmlService() {
+381:  void _resetLoadState({String? newUrl, bool notify = true}) {
+399:    if (newUrl != null) {
+413:    String url, {
+418:  }) async {
+422:    if (url.startsWith('data:') || url.startsWith('blob:')) {
+430:    if (!url.contains('://') && !url.startsWith('about:')) {
+444:        !_isNavigatingBack) {
+454:    if (switchToTab != null) {
+459:    // if (activeWebViewController != null) {
+470:    if (shouldUseBrowserLogic) {
+478:      if (_activeTabIndex != browserTabIndex && switchToTab == null) {
+494:      if (url.isNotEmpty && _shouldAddToHistory(tempFile)) {
+505:      if (activeWebViewController != null && !skipWebViewLoad) {
+512:    } else {
+520:      try {
+524:      } catch (e) {
+529:      } finally {
+536:  Future<void> reloadCurrentFile() async {
+539:    if (_currentFile!.isUrl) {
+541:    } else {
+543:      if (_currentFile!.path.isNotEmpty) {
+544:        try {
+546:          if (await file.exists()) {
+555:        } catch (e) {
+562:  void triggerWebViewLoad(String url) {
+566:  void handleWebViewError(String errorDescription) {
+573:  void cancelWebViewLoad() {
+584:  Future<void> completeWebViewLoad(String html, String url) async {
+589:    final probeResult = {
+592:      'headers': <String, String>{'content-type': 'text/html'},
+623:  void dispose() {
+627:    for (final controller in _disposalQueue) {
+638:    for (final controller in _cachedVerticalControllers.values) {
+639:      if (controller.hasClients) {
+647:    for (final controller in _cachedControllers.values) {
+653:    for (final controller in _cachedHorizontalControllers.values) {
+664:  double? getCurrentScrollPosition() {
+666:        _verticalScrollController!.hasClients) {
+667:      try {
+670:      } catch (e) {
+679:  double? getCurrentHorizontalScrollPosition() {
+681:        _activeHorizontalScrollController!.hasClients) {
+682:      try {
+684:      } catch (e) {
+693:  void restoreScrollPosition(double? position) {
+694:    if (position != null) {
+696:      if (controller != null && controller.hasClients) {
+697:        WidgetsBinding.instance.addPostFrameCallback((_) {
+698:          try {
+700:          } catch (e) {
+708:  void setAppStateService(AppStateService service) {
+712:  void setAppSettings(AppSettings settings) {
+718:  void setUrlHistoryService(UrlHistoryService service) {
+725:  Future<void> _loadNavigationStack() async {
+726:    try {
+730:      if (savedUrls != null && savedUrls.isNotEmpty) {
+733:        for (final url in savedUrls) {
+748:    } catch (e) {
+754:  Future<void> _saveNavigationStack() async {
+755:    try {
+767:    } catch (e) {
+773:  void _autoSave() {
+775:    _autoSaveTimer = Timer(const Duration(milliseconds: 1500), () {
+776:      if (_appStateService != null) {
+783:  void restoreHorizontalScrollPosition(double? position) {
+784:    if (position != null) {
+786:      if (controller != null && controller.hasClients) {
+787:        WidgetsBinding.instance.addPostFrameCallback((_) {
+788:          try {
+790:          } catch (e) {
+799:  void restoreProbeState(bool? isVisible, String? resultJson) {
+800:    if (isVisible != null) {}
+801:    if (resultJson != null && resultJson.isNotEmpty) {
+802:      try {
+804:      } catch (e) {
+811:  Future<void> saveCurrentState(AppStateService appStateService) async {
+812:    try {
+825:    } catch (e) {
+832:  String generateDescriptiveFilename(Uri uri, String content) {
+835:    if (domain.startsWith('www.')) {
+842:    if (domainParts.length >= 2) {
+843:      final commonTlds = {
+856:      if (!commonTlds.contains(domainParts[domainParts.length - 1])) {
+858:      } else {
+879:    if (pathSegments.isNotEmpty) {
+881:    } else {
+895:    final knownExtensions = {
+921:    if (knownExtensions.any((ext) => baseLower.endsWith(ext))) {
+935:    Map<String, String> headers, {
+938:  }) async {
+939:    try {
+941:      if (redirectDepth > 5) {
+954:      headers.forEach((key, value) {
+963:      if (hResponse.certificate != null) {
+970:          hResponse.headers.value('location') != null) {
+977:        if (redirectUri.scheme == 'http' || redirectUri.scheme == 'https') {
+985:        } else {
+987:            'Blocked redirect to unsafe scheme: ${redirectUri.scheme}',
+995:    } catch (e) {
+1000:      if (e is SocketException || e.toString().contains('Failed host lookup')) {
+1013:  String ensureHtmlExtension(String filename, String content) {
+1018:        !filename.contains('.') && !filename.contains('/')) {
+1023:    if (filename.contains('.')) {
+1032:    if (content.isNotEmpty) {
+1044:          lowerContent.contains('<html')) {
+1051:          lowerContent.startsWith('<feed')) {
+1056:      if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
+1057:          (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
+1059:        if (lowerContent.contains('"') && lowerContent.contains(':')) {
+1065:      if (lowerContent.startsWith('---\n')) {
+1078:    String content, {
+1080:  }) async {
+1081:    try {
+1093:          !filename.contains('.') && !filename.contains('/')) {
+1099:            detectedLower != 'audio') {
+1101:          if (filename.contains('rss') || filename.contains('feed')) {
+1152:      if (hasProperExtension) {
+1160:      switch (detectedType.toLowerCase()) {
+1178:          if (filenameLower.endsWith('.atom')) {
+1180:          } else if (filenameLower.endsWith('.rss')) {
+1182:          } else {
+1236:          if (contentType != null) {
+1238:            if (ct.contains('jpeg') || ct.contains('jpg')) {
+1240:            } else if (ct.contains('gif')) {
+1242:            } else if (ct.contains('webp')) {
+1244:            } else if (ct.contains('svg')) {
+1246:            } else if (ct.contains('icon') || ct.contains('ico')) {
+1248:            } else if (ct.contains('avif')) {
+1250:            } else {
+1253:          } else {
+1258:          if (contentType != null) {
+1260:            if (ct.contains('webm')) {
+1262:            } else if (ct.contains('ogg')) {
+1264:            } else if (ct.contains('quicktime') || ct.contains('mov')) {
+1266:            } else if (ct.contains('avi')) {
+1268:            } else if (ct.contains('mkv') || ct.contains('matroska')) {
+1270:            } else {
+1273:          } else {
+1278:          if (contentType != null) {
+1280:            if (ct.contains('wav')) {
+1282:            } else if (ct.contains('ogg')) {
+1284:            } else if (ct.contains('aac')) {
+1286:            } else if (ct.contains('flac')) {
+1288:            } else {
+1291:          } else {
+1300:    } catch (e) {
+1310:  ) async {
+1315:        !filename.contains('.') && !filename.contains('/')) {
+1320:    if (filename.contains('.')) {
+1326:    if (content.length > 32 * 1024) {
+1328:    } else {
+1332:    return '$filename${detectedType == 'Text' ? '.txt' : detectedType == 'HTML' ? '.html' : detectedType == 'XML' ? '.xml' : detectedType == 'JSON' ? '.json' : detectedType == 'YAML' ? '.yaml' : detectedType == 'Markdown' ? '.md' : detectedType == 'CSS' ? '.css' : detectedType == 'JavaScript' ? '.js' : detectedType == 'Python' ? '.py' : detectedType == 'Java' ? '.java' : detectedType == 'C++' ? '.cpp' : detectedType == 'SQL' ? '.sql' : '.txt'}';
+1335:  static String _fallbackContentDetectionInternal(String content) {
+1340:        lowerContent.contains('<!doctype html')) {
+1343:    if (lowerContent.contains('body {') || lowerContent.contains('@media')) {
+1346:    if (lowerContent.contains('function ') || lowerContent.contains('const ')) {
+1349:    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
+1350:        (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
+1353:    if (lowerContent.startsWith('---') || lowerContent.contains(': ')) {
+1356:    if (lowerContent.startsWith('# ') || lowerContent.contains('## ')) {
+1359:    if (_tryParseAsXmlInternal(content)) {
+1363:        lowerContent.contains('system.out.println')) {
+1367:        lowerContent.contains('int main(')) {
+1370:    if (lowerContent.contains('def ') || lowerContent.contains('print(')) {
+1373:    if (lowerContent.contains('select ') || lowerContent.contains('from ')) {
+1382:  Future<bool> tryParseAsXml(String content) async {
+1384:    if (content.length > 32 * 1024) {
+1390:  static bool _tryParseAsXmlInternal(String content) {
+1392:    try {
+1397:    } catch (e) {
+1404:  bool _shouldAddToHistory(HtmlFile file) {
+1408:    if (!file.path.startsWith('http://') && !file.path.startsWith('https://')) {
+1426:        file.isError) {
+1441:  bool areUrlsEqual(String url1, String url2) {
+1444:    try {
+1454:      if (path1.endsWith('/') && path1.length > 1) {
+1457:      if (path2.endsWith('/') && path2.length > 1) {
+1468:    } catch (e) {
+1475:  void _pushToNavigationStack() {
+1476:    if (!_isNavigatingBack && _currentFile != null) {
+1478:      if (_shouldAddToHistory(_currentFile!)) {
+1493:            !areUrlsEqual(_navigationStack.last.path, fileToStack.path)) {
+1502:    HtmlFile file, {
+1506:  }) async {
+1511:    if (_currentFile != null && !areUrlsEqual(_currentFile!.path, file.path)) {
+1521:        areUrlsEqual(previousLoadingUrl, file.path)) {
+1531:    if (file.probeResult != null) {
+1536:    if (_probeResult != null && _probeResult!['headers'] is Map) {
+1542:      if (contentType != null && contentType is String) {
+1544:        if (detectedLanguage != null) {
+1551:    if (_shouldAddToHistory(file)) {
+1557:    if (switchToTab != null) {
+1562:    if (!file.isUrl && switchToTab == null) {
+1568:    if (file.size > 1 * 1024 * 1024) {
+1569:      if (file.size > 7 * 1024 * 1024) {
+1572:          '⚠️  Very large file loading: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)',
+1574:      } else {
+1577:          '📄 Loading large file: ${file.name} (${fileSizeMB.toStringAsFixed(2)} MB)',
+1584:    try {
+1602:      if (selectedContentType == null) {
+1604:      } else {
+1611:        if (isGenericProbe) {
+1616:      if (preferLocalDetection) {
+1618:      } else if (localContentType != selectedContentType) {
+1626:      if (file.isUrl) {
+1633:        if (correctFilename != file.name) {
+1639:    } catch (e) {
+1656:            _currentFile!.name.endsWith('.xhtml'))) {
+1659:    } else {
+1663:          !(selectedContentType == 'html' || selectedContentType == 'xml')) {
+1675:  String _mapDetectedTypeToContentType(String detectedType) {
+1677:    const typeMapping = {
+1709:  Future<void> toggleIsBeautifyEnabled() async {
+1713:    try {
+1718:    } finally {
+1725:  Future<String> getBeautifiedContent(String content, String type) async {
+1726:    final key = '${content.hashCode}_$type';
+1727:    if (_beautifiedCache.containsKey(key)) {
+1736:  Future<void> scrollToZero() async {
+1738:    if (_verticalScrollController?.hasClients ?? false) {
+1743:    if (_activeHorizontalScrollController?.hasClients ?? false) {
+1749:  Future<void> clearFile({bool clearProbe = true}) async {
+1758:    if (clearProbe) {
+1772:  List<String> getAvailableContentTypes() {
+1809:    for (final type in ['html', 'xml']) {
+1810:      if (availableLanguages.contains(type) && !result.contains(type)) {
+1816:    for (final type in commonTypes) {
+1820:          !result.contains(type)) {
+1826:    for (final type in availableLanguages) {
+1827:      if (!result.contains(type)) {
+1836:  void updateFileContentType(String newContentType) {
+1840:    if (newContentType == 'automatic') {
+1841:      if (_originalFile != null) {
+1873:  Future<void> goBack() async {
+1879:    try {
+1881:        'Back navigation: Loading previous file: ${previousFile.path}',
+1886:    } finally {
+1891:  Future<HtmlFile> _loadFromUrlInternal(String url) async {
+1894:    try {
+1899:          !url.startsWith('data:')) {
+1905:      if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+1910:      if (uri.scheme != 'http' && uri.scheme != 'https') {
+1920:      try {
+1924:        if (addresses.isNotEmpty) {
+1927:      } catch (e) {
+1932:      final headers = {
+1948:      if (finalUrl != url) {
+1958:      headers.forEach((key, value) {
+1968:      try {
+1969:        if (hResponse.certificate != null) {
+1972:      } catch (e) {
+1985:      final respHeaders = <String, String>{};
+1986:      hResponse.headers.forEach((name, values) {
+1995:      final securityHeaders = {
+2005:      if (contentLength <= 0 && respHeaders.containsKey('content-length')) {
+2009:      currentProbeResult = {
+2023:      if (finalUrl != url) {
+2031:      if (hResponse.statusCode == 200) {
+2060:      } else {
+2065:            : 'response_${hResponse.statusCode}';
+2078:    } catch (e) {
+2080:      if (e is TimeoutException) {
+2082:      } else if (e is FormatException) {
+2084:      } else if (e is SocketException) {
+2085:        errorMessage = 'Network error: ${e.message}';
+2086:      } else {
+2135:    String url, {
+2139:  }) async {
+2153:    String url, {
+2155:  }) async {
+2156:    if (!forceReload && _currentlyProbingUrl == url && _isProbing) {
+2157:      return _probeResult ?? {};
+2161:    if (url.startsWith('about:')) {
+2162:      return {};
+2175:    if (!isEquivalent || forceReload) {
+2186:    try {
+2192:          !targetUrl.startsWith('data:')) {
+2208:      if (uri.host.isNotEmpty) {
+2209:        try {
+2213:          if (addresses.isNotEmpty) {
+2216:        } catch (e) {
+2217:          debugPrint('DNS Lookup failed for ${uri.host}: $e');
+2227:      try {
+2234:      } catch (e) {
+2247:      try {
+2248:        if (response.certificate != null) {
+2251:      } catch (e) {
+2260:      try {
+2262:      } catch (e) {
+2270:      if (contentLength <= 0) {
+2272:        if (lengthHeader != null) {
+2274:        } else {
+2280:      final normalizedHeaders = <String, String>{};
+2281:      response.headers.forEach((key, values) {
+2286:      final securityHeaders = {
+2301:      if (_currentlyProbingUrl == url) {
+2303:        _probeResult = {
+2321:        if (_currentFile != null && areUrlsEqual(_currentFile!.path, url)) {
+2329:        if (response.isRedirect) {
+2331:          if (location != null && location.isNotEmpty) {
+2348:        if (isFeed && _useBrowserByDefault) {
+2352:          _loadFromUrlInternal(targetUrl).then((file) {
+2354:                _currentFile?.path == targetUrl) {
+2357:          }).catchError((e) {
+2364:      } else {
+2368:        return {};
+2370:    } catch (e) {
+2372:      if (_currentlyProbingUrl == url) {
+2375:      return {}; // Return empty instead of rethrowing to avoid unhandled async exceptions
+2376:    } finally {
+2378:      try {
+2380:      } catch (e) {
+2385:      if (_currentlyProbingUrl == url) {
+2395:  String? getLanguageForMimeType(String mimeType) {
+2404:        baseMime == 'text/ecmascript') {
+2411:        baseMime == 'application/atom+xml') {
+2414:    if (baseMime.contains('markdown') || baseMime == 'text/x-markdown') {
+2418:    if (baseMime == 'text/x-dart' || baseMime == 'application/dart') {
+2422:        baseMime == 'application/x-python-code') {
+2429:  String getLanguageForExtension(String extension) {
+2434:    switch (ext) {
+2904:  Mode? getReHighlightModeForExtension(String extension) {
+2908:    try {
+2910:      if (builtinAllLanguages.containsKey(languageName)) {
+2917:          languageName == 'xml') {
+2925:    } catch (e) {
+2934:    BuildContext context, {
+2940:  }) {
+2946:    if (contentSize > 1 * 1024 * 1024) {
+2947:      if (contentSize > 7 * 1024 * 1024) {
+2950:          '⚠️  Very large file: ${contentSizeMB.toStringAsFixed(2)} MB',
+2955:        try {
+2956:          WidgetsBinding.instance.addPostFrameCallback((_) {
+2960:                  'Large file (${contentSizeMB.toStringAsFixed(1)} MB). Syntax highlighting may be slow.',
+2967:        } catch (e) {
+2970:      } else {
+2973:          '🚨 Large file detected: ${contentSizeMB.toStringAsFixed(2)} MB',
+2987:    // if (_highlightCache.containsKey(fullCacheKey)) {
+2995:    if (useSimplifiedHighlighting) {
+3003:      if (content.length > maxHighlightLength) {
+3007:          '   Processing first ${maxHighlightLength ~/ 1024}KB for highlighting',
+3045:        finderBuilder: (context, controller) {
+3048:          if (_activeFindController != controller) {
+3049:            WidgetsBinding.instance.addPostFrameCallback((_) {
+3075:  Mode? _getReHighlightMode(String languageName) {
+3077:    if (builtinAllLanguages.containsKey(languageName)) {
+3082:    const languageMap = {
+3116:        builtinAllLanguages.containsKey(mappedLanguageName)) {
+3124:        languageName == 'xhtml') {
+3132:        languageName == 'tsx') {
+3138:    if (languageName == 'typescript' || languageName == 'ts') {
+3148:        languageName == 'svg') {
+3157:        languageName == 'shell') {
+3166:  Map<String, TextStyle> _getThemeByName(String themeName) {
+3167:    switch (themeName) {
+3205:  String _generateControllerCacheKey({
+3209:  }) {
+3211:    return 'hl:${contentHash}_ext:${extension}_simple:$useSimplified';
+3215:  String _simpleHash(String input) {
+3232:  final Map<String, CodeForgeController> _cachedControllers = {};
+3233:  final Map<String, GlobalKey> _cachedGlobalKeys = {};
+3236:  void clearHighlightCache() {
+3237:    for (final controller in _cachedControllers.values) {
+3242:    for (final controller in _cachedHorizontalControllers.values) {
+3251:  void _queueForDisposal(CodeForgeController controller) {
+3254:    _disposalTimer = Timer(const Duration(seconds: 2), () {
+3255:      for (final c in _disposalQueue) {
+3256:        try {
+3258:        } catch (e) {
+3269:  Future<void> _prepareForEditorReset() async {
+3280:  void _enforceCacheSizeLimits() {
+3283:    if (_cachedControllers.length > maxCacheEntries) {
+3290:      for (final key in keysToRemove) {
+3292:        if (controller != null) {
+3303:        for (final vKey in vKeysToRemove) {
+3313:        for (final hKey in hKeysToRemove) {
+3323:  void clearCacheForContent(String content) {
+3331:    for (final key in controllerKeys) {
+3339:    for (final key in hControllerKeys) {
+3355:    BuildContext context, {
+3360:  }) {
+3375:    if (_cachedControllers.containsKey(controllerKey)) {
+3431:  ) async {
+3437:    if (useSimplifiedHighlighting) {
+3439:      if (content.length > maxHighlightLength) {
+3457:    if (!context.mounted) {
+3491:  ) {
+3522:          finderBuilder: (context, controller) {
+3523:            if (_activeFindController != controller) {
+3524:              WidgetsBinding.instance.addPostFrameCallback((_) {
+3539:  void cancelPendingHighlight() {
+3548:    BuildContext context, {
+3554:  }) async {
+3559:    if (!context.mounted) {
+3576:  void toggleSearch() {
+3577:    if (_activeFindController != null) {
+3583:  void _updateActiveFindController(FindController? newController) {
+3587:    if (_activeFindController != null) {
+3594:    if (_activeFindController != null) {
+3603:  void _onSearchStateChanged() {
+3608:  Future<void> _extractMetadata({bool isPartial = false}) async {
+3616:    try {
+3624:        'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS, ${_pageMetadata?['media']?['images']?.length} Images',
+3627:      if (_lastPageWeight != null) {
+3632:      if (_pageMetadata != null) {
+3636:    } catch (e, stack) {
+3639:    } finally {
+3646:  void _updateAnalyzedCookies() {
+3653:    _probeResult ??= {
+3669:          (c) => {
+3683:  void _enrichMetadataWithSizes(String baseUrl) {
+3687:    Map<String, int>? findSize(String? src) {
+3692:      if (src.startsWith('data:') || src.startsWith('<svg')) {
+3694:        return {'transfer': src.length, 'decoded': src.length};
+3702:        orElse: () => {},
+3705:      if (match.isEmpty) {
+3707:        try {
+3710:          if (path.isNotEmpty) {
+3712:            if (fileName.length > 3) {
+3713:              match = _resourcePerformanceData!.firstWhere((r) {
+3716:              }, orElse: () => {});
+3719:        } catch (e) {
+3724:      if (match.isNotEmpty) {
+3725:        return {'transfer': match['transfer'], 'decoded': match['decoded']};
+3732:        (_pageMetadata!['externalCssLinks'] as List).isNotEmpty) {
+3733:      if (_pageMetadata!['cssLinks'] == null) {
+3739:      for (var ext in external) {
+3740:        if (!local.contains(ext)) {
+3748:        (_pageMetadata!['externalJsLinks'] as List).isNotEmpty) {
+3749:      if (_pageMetadata!['jsLinks'] == null) {
+3754:      for (var ext in external) {
+3755:        if (!local.contains(ext)) {
+3763:        (_pageMetadata!['externalIframeLinks'] as List).isNotEmpty) {
+3764:      if (_pageMetadata!['iframeLinks'] == null) {
+3769:      for (var ext in external) {
+3770:        if (!local.contains(ext)) {
+3779:        _pageMetadata!['media']['images'] != null) {
+3781:      for (int i = 0; i < images.length; i++) {
+3782:        if (images[i] is Map) {
+3788:          if (size != null) {
+3797:    if (_pageMetadata!['cssLinks'] != null) {
+3803:      for (int i = 0; i < links.length; i++) {
+3807:        if (size != null) {
+3808:          if (css is Map) {
+3810:          } else {
+3812:            links[i] = {'href': href, 'size': size};
+3819:    if (_pageMetadata!['jsLinks'] != null) {
+3823:      for (int i = 0; i < links.length; i++) {
+3827:        if (size != null) {
+3828:          if (js is Map) {
+3830:          } else {
+3832:            links[i] = {'src': src, 'size': size};
+3840:        _pageMetadata!['media']['videos'] != null) {
+3842:      for (int i = 0; i < videos.length; i++) {
+3843:        if (videos[i] is Map) {
+3848:          if (size != null) {
+3859:  void _sortMetadataLists() {
+3862:    int getSize(dynamic item) {
+3866:          item['size'].containsKey('decoded')) {
+3873:    if (_pageMetadata!['cssLinks'] != null) {
+3874:      (_pageMetadata!['cssLinks'] as List).sort((a, b) {
+3880:    if (_pageMetadata!['jsLinks'] != null) {
+3881:      (_pageMetadata!['jsLinks'] as List).sort((a, b) {
+3888:        _pageMetadata!['media']['images'] != null) {
+3889:      (_pageMetadata!['media']['images'] as List).sort((a, b) {
+3895:  Future<void> _fetchMissingMetadataSizesAsync() async {
+3901:    if (_pageMetadata!['jsLinks'] != null) {
+3903:      for (int i = 0; i < list.length; i++) {
+3905:        if (item is String && !item.startsWith('data:')) {
+3907:          final map = {'src': item};
+3910:        } else if (item is Map) {
+3912:          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
+3914:            if (url != null && !url.startsWith('data:')) {
+3923:    if (_pageMetadata!['cssLinks'] != null) {
+3925:      for (int i = 0; i < list.length; i++) {
+3927:        if (item is String && !item.startsWith('data:')) {
+3928:          final map = {'href': item};
+3931:        } else if (item is Map) {
+3933:          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
+3935:            if (url != null && !url.startsWith('data:')) {
+3945:        _pageMetadata!['media']['images'] != null) {
+3947:      for (var item in list) {
+3948:        if (item is Map) {
+3950:          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
+3952:            if (url != null && !url.startsWith('data:')) {
+3966:    for (var i = 0; i < itemsToFetch.length; i += batchSize) {
+3975:        batch.map((item) async {
+3977:          if (item['src'] is String) {
+3979:          } else if (item['href'] is String) {
+3983:          if (url != null) {
+3985:            if (size > 0) {
+3986:              item['size'] = {'transfer': size, 'decoded': size};
+3994:      if (hasUpdates) {
+4001:  Map<String, dynamic> _extractCertificateInfo(X509Certificate cert) {
+4002:    try {
+4003:      return {
+4013:    } catch (e) {
+4015:      return {'error': e.toString()};
+4019:  Map<String, String> _parseX509String(String x509) {
+4020:    final Map<String, String> labels = {
+4031:    final Map<String, String> parsed = {};
+4034:    for (var part in parts) {
+4035:      if (part.contains('=')) {
+4037:        if (kv.length >= 2) {
+4040:          if (key.isNotEmpty && value.isNotEmpty) {
+4049:  String _convertToPem(List<int> der) {
+4052:    for (var i = 0; i < base64String.length; i += 64) {
+4056:    return '-----BEGIN CERTIFICATE-----\n${chunks.join('\n')}\n-----END CERTIFICATE-----';
+4059:  String _unquoteHtml(String html) {
+4060:    if (html.startsWith('"') && html.endsWith('"')) {
+4061:      try {
+4064:      } catch (e) {
+4079:  Future<void> syncWebViewState(String url, {bool isPartial = false}) async {
+4083:    if (_currentInputText != url) {
+4096:    if (_currentlyProbingUrl != url && !alreadyProbed) {
+4101:      probeUrl(url).catchError((e) {
+4103:        return <String, dynamic>{};
+4105:    } else {
+4110:    try {
+4113:      try {
+4116:              (function() {
+4118:                if (contentType && (contentType.includes('xml') || contentType.includes('rss'))) {
+4126:        if (html is String) {
+4132:              content.contains('<pre')) {
+4133:            try {
+4140:              if (preMatch != null) {
+4154:            } catch (e) {
+4159:      } catch (e) {
+4161:        if (content.isEmpty) {
+4167:      try {
+4170:              '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; var seen=new Set(); for(var i=0; i<r.length; i++) { var name=r[i].name; tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); seen.add(name); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n && !seen.has(n.name)) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else if(!n && !seen.has(document.location.href)) { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();',
+4174:        if (weightRaw is String) {
+4178:        if (jsonStr.isNotEmpty) {
+4180:          if (decoded is Map) {
+4190:            if (weightMap['list'] != null && weightMap['list'] is List) {
+4193:                  (e) => {
+4214:            if (_resourcePerformanceData != null) {
+4215:              for (var r in _resourcePerformanceData!) {
+4222:                    name.contains('script')) {
+4228:                    name.contains('style')) {
+4239:                    name.contains('image')) {
+4247:                    name == url.toLowerCase()) {
+4251:                } else {
+4260:            _browserProbeResult = {
+4265:              'pageWeight': {
+4270:                'breakdown': {
+4271:                  'scripts': {
+4276:                  'css': {
+4281:                  'images': {
+4286:                  'html': {
+4291:                  'other': {
+4302:            _lastPageWeight = {
+4308:            if (_pageMetadata != null) {
+4313:      } catch (e) {
+4321:      try {
+4323:      } catch (_) {}
+4336:    } catch (e) {
+4338:    } finally {
+4339:      if (!isPartial) {
+4347:  Future<void> _enrichResourceSizes() async {
+4362:    for (var i = 0; i < resourcesToUpdate.length; i += batchSize) {
+4369:        batch.map((resource) async {
+4370:          try {
+4373:            if (size > 0) {
+4379:          } catch (e) {
+4399:    final Map<String, Map<String, dynamic>> uniqueResources = {};
+4400:    for (var r in _resourcePerformanceData!) {
+4402:      if (name.isNotEmpty) {
+4410:    for (var r in _resourcePerformanceData!) {
+4417:          name.contains('script')) {
+4423:          name.contains('style')) {
+4434:          name.contains('image')) {
+4442:          name == url) {
+4446:      } else {
+4457:    _lastPageWeight = {
+4461:      'breakdown': {
+4462:        'scripts': {
+4467:        'css': {'count': cssCount, 'transfer': cssTx, 'decoded': cssDec},
+4468:        'images': {'count': imgCount, 'transfer': imgTx, 'decoded': imgDec},
+4469:        'html': {'count': htmlCount, 'transfer': htmlTx, 'decoded': htmlDec},
+4470:        'other': {
+4479:    if (_pageMetadata != null) {
+4489:  Future<int> _fetchResourceSize(String url) async {
+4490:    try {
+4493:      final headers = {
+4499:      try {
+4503:        if (headResponse.statusCode >= 200 && headResponse.statusCode < 400) {
+4505:          if (contentLength != null) {
+4510:      } catch (e) {
+4515:      try {
+4527:        streamedResponse.stream.listen((_) {}).cancel();
+4531:            streamedResponse.statusCode < 400) {
+4532:          if (contentRangeStr != null) {
+4534:            if (parts.length == 2) {
+4540:          if (contentLengthStr != null) {
+4545:      } catch (e) {
+4548:    } catch (e) {
+4555:  Future<void> clearBrowserCache() async {
+4556:    if (activeWebViewController != null) {
+4563:  Future<void> clearBrowserStorage() async {
+4564:    if (activeWebViewController != null) {
+4581:  http.Client _createClient() {
+4588:  void updateWebViewUrl(String url) {
+4589:    if (_currentInputText != url) {
+4603:  Future<void> extractCurrentWebViewContent() async {
+4606:    try {
+4616:      if (url != null) {
+4647:    } catch (e) {
