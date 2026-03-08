@@ -37,9 +37,7 @@ dependencies:
   # Deep linking for URL schemes
   app_links: ^3.2.0
   
-  # Code editor
-  re_highlight: ^0.0.3
-  flutter_inappwebview: ^6.1.5
+  flutter_inappwebview: ^6.2.0-beta.3
 
   # File type detection
   mime_type: ^1.0.0
