@@ -132,7 +132,7 @@ class HtmlService with ChangeNotifier {
   }
 
   Timer? _autoSaveTimer;
-  final List<CodeForgeController> _disposalQueue = [];
+  final List<dynamic> _disposalQueue = [];
   Timer? _disposalTimer;
 
   // Track the currently active find controller
@@ -3293,7 +3293,7 @@ Technical details: $e''';
     _cachedControllers.clear();
     _cachedGlobalKeys.clear();
     for (final controller in _cachedHorizontalControllers.values) {
-      controller.dispose();
+      _queueForDisposal(controller);
     }
     _cachedHorizontalControllers.clear();
     _activeHorizontalScrollController = null;
@@ -3301,7 +3301,7 @@ Technical details: $e''';
   }
 
   /// Queue a controller for disposal after a delay to ensure it's unmounted
-  void _queueForDisposal(CodeForgeController controller) {
+  void _queueForDisposal(dynamic controller) {
     _disposalQueue.add(controller);
     _disposalTimer?.cancel();
     _disposalTimer = Timer(const Duration(seconds: 2), () {
@@ -3354,8 +3354,8 @@ Technical details: $e''';
             .toList();
 
         for (final vKey in vKeysToRemove) {
-          _cachedVerticalControllers[vKey]?.dispose();
-          _cachedVerticalControllers.remove(vKey);
+          final c = _cachedVerticalControllers.remove(vKey);
+          if (c != null) _queueForDisposal(c);
         }
 
         // Find and remove horizontal controllers matching this key prefix
@@ -3364,8 +3364,8 @@ Technical details: $e''';
             .toList();
 
         for (final hKey in hKeysToRemove) {
-          _cachedHorizontalControllers[hKey]?.dispose();
-          _cachedHorizontalControllers.remove(hKey);
+          final c = _cachedHorizontalControllers.remove(hKey);
+          if (c != null) _queueForDisposal(c);
         }
       }
       debugPrint('🔄 Trimmed editor cache to $maxCacheEntries entries');
@@ -3382,7 +3382,8 @@ Technical details: $e''';
         .where((key) => key.startsWith(controllerKeyPrefix))
         .toList();
     for (final key in controllerKeys) {
-      _cachedControllers.remove(key)?.dispose();
+      final c = _cachedControllers.remove(key);
+      if (c != null) _queueForDisposal(c);
     }
 
     // Dispose and remove horizontal controllers
@@ -3390,7 +3391,8 @@ Technical details: $e''';
         .where((key) => key.startsWith(controllerKeyPrefix))
         .toList();
     for (final key in hControllerKeys) {
-      _cachedHorizontalControllers.remove(key)?.dispose();
+      final c = _cachedHorizontalControllers.remove(key);
+      if (c != null) _queueForDisposal(c);
     }
 
     _cachedGlobalKeys.removeWhere(
@@ -3500,18 +3502,19 @@ Technical details: $e''';
     final verticalController = ScrollController();
     final horizontalController = ScrollController();
 
+    if (!context.mounted) {
+      controller.dispose();
+      verticalController.dispose();
+      horizontalController.dispose();
+      return const SizedBox.shrink();
+    }
+
     // Cache them
     _cachedControllers[controllerKey] = controller;
     _cachedGlobalKeys[editorKey] = globalKey;
     _cachedVerticalControllers[editorKey] = verticalController;
     _cachedHorizontalControllers[editorKey] = horizontalController;
     _enforceCacheSizeLimits();
-
-    if (!context.mounted) {
-      verticalController.dispose();
-      horizontalController.dispose();
-      return const SizedBox.shrink();
-    }
 
     _verticalScrollController = verticalController;
     _activeHorizontalScrollController = horizontalController;

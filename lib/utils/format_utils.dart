@@ -66,15 +66,16 @@ class FormatUtils {
     return value.toStringAsFixed(1);
   }
 
-  /// Formats a number string with dots as thousand separators
+  /// Formats a number string with the locale-appropriate thousands separator
   static String formatNumberWithDots(String numberStr) {
     if (numberStr.isEmpty) return numberStr;
 
+    final sep = _thousandsSeparator;
     final buffer = StringBuffer();
     final chars = numberStr.split('').reversed.toList();
     for (int i = 0; i < chars.length; i++) {
       if (i > 0 && i % 3 == 0) {
-        buffer.write('.');
+        buffer.write(sep);
       }
       buffer.write(chars[i]);
     }
@@ -91,14 +92,15 @@ class FormatUtils {
   }
 
   /// Returns the locale-appropriate thousands separator.
-  /// Dutch/German/Spanish use '.'; English uses ','.
+  /// Dutch/German/Spanish/French use '.'; English uses ','.
   static String get _thousandsSeparator {
     final lang = PlatformDispatcher.instance.locale.languageCode.toLowerCase();
-    // Languages that conventionally use '.' as thousands separator
+    // Languages that conventionally use '.' (or a space interpreted as '.') as thousands separator
     const dotLanguages = {
       'nl',
       'de',
       'es',
+      'fr',
       'pt',
       'it',
       'pl',

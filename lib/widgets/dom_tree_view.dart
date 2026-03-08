@@ -324,10 +324,9 @@ class DomTreeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
     final baseFontSize = settings.fontSize;
-    final tagFontSize =
-        baseFontSize * 0.8; // Slightly smaller than editor for tree view
-    final attrFontSize = tagFontSize * 0.85;
-    final textFontSize = tagFontSize * 0.9;
+    final tagFontSize = baseFontSize;
+    final attrFontSize = baseFontSize;
+    final textFontSize = baseFontSize;
 
     final node = entry.node;
     final isElement = node.isElement;
