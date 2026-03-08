@@ -27,10 +27,26 @@ class BrowserView extends StatefulWidget {
 class _BrowserViewState extends State<BrowserView> {
   InAppWebViewController? _controller;
   String? _currentRssUrl;
+  HtmlService? _htmlService; // cached to use safely in dispose()
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cache the reference now while the element is still active.
+    _htmlService = Provider.of<HtmlService>(context, listen: false);
+  }
 
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    // Use the cached reference — Provider.of is NOT safe here
+    // because the widget's element is already deactivated.
+    _htmlService?.clearWebViewController();
+    super.dispose();
   }
 
   @override
@@ -40,10 +56,13 @@ class _BrowserViewState extends State<BrowserView> {
         oldWidget.file?.content != widget.file?.content) {
       if (_controller != null && widget.file?.path != null) {
         _controller!.getUrl().then((currentUrlUri) async {
+          if (!mounted) return;
           final url = currentUrlUri.toString();
 
           final isRss = await RssTemplateService.isRssFeed(
               widget.file?.name ?? '', widget.file?.content ?? '');
+
+          if (!mounted) return;
 
           if (url == widget.file!.path && !isRss) {
             debugPrint(
@@ -54,6 +73,8 @@ class _BrowserViewState extends State<BrowserView> {
           debugPrint(
               'didUpdateWidget: Reloading from $url to ${widget.file!.path}');
           _loadContentIfVisible();
+        }).catchError((e) {
+          debugPrint('didUpdateWidget: controller error (likely disposed): $e');
         });
       } else {
         _loadContentIfVisible();
@@ -62,6 +83,7 @@ class _BrowserViewState extends State<BrowserView> {
   }
 
   void _loadContentIfVisible() {
+    if (!mounted) return;
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     if (htmlService.activeTabIndex == htmlService.browserTabIndex) {
       _loadContent();
@@ -69,7 +91,7 @@ class _BrowserViewState extends State<BrowserView> {
   }
 
   Future<void> _loadContent() async {
-    if (_controller == null) return;
+    if (_controller == null || !mounted) return;
 
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     String targetUrl = widget.file?.path ??

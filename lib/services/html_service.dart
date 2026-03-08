@@ -114,7 +114,22 @@ class HtmlService with ChangeNotifier {
     }
   }
 
-  InAppWebViewController? activeWebViewController;
+  InAppWebViewController? _activeWebViewController;
+  bool _webViewControllerDisposed = false;
+
+  InAppWebViewController? get activeWebViewController =>
+      _webViewControllerDisposed ? null : _activeWebViewController;
+
+  set activeWebViewController(InAppWebViewController? controller) {
+    _activeWebViewController = controller;
+    _webViewControllerDisposed = false;
+  }
+
+  /// Called by BrowserView.dispose() to signal the controller is no longer valid.
+  void clearWebViewController() {
+    _webViewControllerDisposed = true;
+    _activeWebViewController = null;
+  }
 
   Timer? _autoSaveTimer;
   final List<CodeForgeController> _disposalQueue = [];
@@ -128,9 +143,23 @@ class HtmlService with ChangeNotifier {
   int get activeTabIndex => _activeTabIndex;
 
   // Dynamic Tab Indices based on settings
-  // Dynamic Tab Indices based on settings
   bool get _useBrowserByDefault => _appSettings?.useBrowserByDefault ?? true;
-  int get browserTabIndex => _useBrowserByDefault ? 0 : 1;
+
+  /// The index of the Browser tab in the current tab layout.
+  /// When browser-first: Browser is always at 0.
+  /// When source-first: Browser is appended last (after Source, DOM, Metadata, Server tabs).
+  int get browserTabIndex {
+    if (_useBrowserByDefault) return 0;
+    // Source-First mode: Browser tab is placed AFTER Source (0)
+    // Count how many other tabs exist before it to find its actual position.
+    // Tab order: Source(0), [DOM Tree?], [Metadata/Services/Media?], [Server tabs?], Browser (last)
+    int idx = 1; // starts after Source
+    if (isHtmlOrXml) idx += 1; // DOM Tree
+    if (showMetadataTabs) idx += 3; // Metadata + Services + Media
+    if (showServerTabs) idx += 4; // Cookies + Probe + Headers + Security
+    return idx;
+  }
+
   int get sourceTabIndex => _useBrowserByDefault ? 1 : 0;
 
   // Debouncing for syntax highlighting
@@ -249,6 +278,25 @@ class HtmlService with ChangeNotifier {
   /// Metadata/Services/Media extraction is only useful for full web pages
   bool get showMetadataTabs => isHtml;
 
+  /// Whether to show the Browser tab. This is deliberately stable — it stays
+  /// true whenever a URL is in ANY loading phase so that the tab never
+  /// disappears and reappears mid-navigation (which also prevented disposed
+  /// controller crashes by keeping the WebView widget mounted).
+  bool get shouldShowBrowserTab {
+    // Already loaded a URL
+    if (_currentFile?.isUrl ?? false) return true;
+    // WebView is actively loading
+    if (_isWebViewLoading) return true;
+    // A URL load was triggered but _currentFile is still null (_resetLoadState ran)
+    if (_pendingUrl != null &&
+        (_pendingUrl!.startsWith('http') || _pendingUrl!.contains('://'))) {
+      return true;
+    }
+    // isWebViewLoading alias (redundant but safe)
+    if (_webViewLoadingUrl != null) return true;
+    return false;
+  }
+
   /// DOM Tree and Probe tabs are useful for any structured markup
   bool get isHtmlOrXml => isHtml || isXml;
 
@@ -351,17 +399,22 @@ class HtmlService with ChangeNotifier {
 
   /// Trigger a browser reload if the URL has changed and the browser tab is visible
   Future<void> triggerBrowserReload() async {
-    if (activeWebViewController != null &&
-        _currentFile != null &&
-        _currentFile!.isUrl) {
-      final currentBrowserUrl = await activeWebViewController!.getUrl();
+    final controller = activeWebViewController;
+    if (controller == null || _currentFile == null || !_currentFile!.isUrl) {
+      return;
+    }
+    try {
+      final currentBrowserUrl = await controller.getUrl();
       if (currentBrowserUrl.toString() != _currentFile!.path) {
         debugPrint('Triggering browser reload for: ${_currentFile!.path}');
-        _webViewLoadingUrl = _currentFile!.path; // Set to avoid interception
-        await activeWebViewController!.loadUrl(
+        _webViewLoadingUrl = _currentFile!.path;
+        await controller.loadUrl(
           urlRequest: URLRequest(url: WebUri(_currentFile!.path)),
         );
       }
+    } catch (e) {
+      debugPrint(
+          'triggerBrowserReload: controller error (likely disposed): $e');
     }
   }
 
@@ -3683,47 +3736,83 @@ Technical details: $e''';
   void _enrichMetadataWithSizes(String baseUrl) {
     if (_pageMetadata == null) return;
 
-    // Helper to find size
+    // Helper to find size using a 4-tier lookup strategy
     Map<String, int>? findSize(String? src) {
       if (src == null || src.isEmpty) return null;
 
-      // Special case: Data URIs or Base64 SVGs (already embedded)
-      // Extract size from the string itself if possible
+      // Tier 0: Data URIs / inline SVGs — size is the content itself
       if (src.startsWith('data:') || src.startsWith('<svg')) {
-        // Approximate byte size: length * 3/4 for base64, but length is fine for diagnostic use
         return {'transfer': src.length, 'decoded': src.length};
       }
 
       if (_resourcePerformanceData == null) return null;
 
-      // Try exact match first
+      // Tier 1: Exact string match
       var match = _resourcePerformanceData!.firstWhere(
         (r) => r['name'] == src,
         orElse: () => {},
       );
-
-      if (match.isEmpty) {
-        // Try matching by suffix if exact URL fails (handles relative vs absolute, or query params)
-        try {
-          final uri = Uri.parse(src);
-          final path = uri.path;
-          if (path.isNotEmpty) {
-            final fileName = path.split('/').last;
-            if (fileName.length > 3) {
-              match = _resourcePerformanceData!.firstWhere((r) {
-                final rName = r['name'].toString();
-                return rName.endsWith(fileName) || rName.contains(fileName);
-              }, orElse: () => {});
-            }
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-
       if (match.isNotEmpty) {
-        return {'transfer': match['transfer'], 'decoded': match['decoded']};
+        return {
+          'transfer': match['transfer'] as int,
+          'decoded': match['decoded'] as int,
+        };
       }
+
+      // Tier 2: URL-normalised match (handles trailing slashes, case)
+      try {
+        match = _resourcePerformanceData!.firstWhere(
+          (r) => areUrlsEqual(r['name'].toString(), src),
+          orElse: () => {},
+        );
+        if (match.isNotEmpty) {
+          return {
+            'transfer': match['transfer'] as int,
+            'decoded': match['decoded'] as int,
+          };
+        }
+      } catch (_) {}
+
+      // Tier 3: Path-only match (ignore query params — common with CDN versioning)
+      try {
+        final srcPath = Uri.parse(src).path;
+        if (srcPath.length > 3) {
+          match = _resourcePerformanceData!.firstWhere((r) {
+            try {
+              final rPath = Uri.parse(r['name'].toString()).path;
+              return rPath == srcPath;
+            } catch (_) {
+              return false;
+            }
+          }, orElse: () => {});
+          if (match.isNotEmpty) {
+            return {
+              'transfer': match['transfer'] as int,
+              'decoded': match['decoded'] as int,
+            };
+          }
+        }
+      } catch (_) {}
+
+      // Tier 4: Strict filename suffix match
+      // Requires the filename to be preceded by '/' so "chunk.js"
+      // does NOT match "vendor-chunk.js"
+      try {
+        final srcFileName = Uri.parse(src).path.split('/').last;
+        if (srcFileName.length > 4) {
+          match = _resourcePerformanceData!.firstWhere((r) {
+            final rName = r['name'].toString();
+            return rName.endsWith('/$srcFileName') || rName == srcFileName;
+          }, orElse: () => {});
+          if (match.isNotEmpty) {
+            return {
+              'transfer': match['transfer'] as int,
+              'decoded': match['decoded'] as int,
+            };
+          }
+        }
+      } catch (_) {}
+
       return null;
     }
 
@@ -4696,8 +4785,12 @@ Technical details: $e''';
 
         _currentFile = htmlFile;
         _currentInputText = url;
-        _requestedTabIndex =
-            0; // Switch to Source tab to show extracted content
+        // Only switch to the Source tab if the user isn't already on the Browser tab.
+        // Previously this was hardcoded to 0, which caused a loop where the Browser tab
+        // would appear and then immediately disappear as content switched to Source.
+        if (_activeTabIndex != browserTabIndex) {
+          _requestedTabIndex = sourceTabIndex;
+        }
 
         // Clear cache and reset beautify on new file load
         _beautifiedCache.clear();

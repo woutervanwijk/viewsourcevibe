@@ -64,8 +64,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final showMetadataTabs = htmlService.showMetadataTabs;
     final showServerTabs = htmlService.showServerTabs;
     final isBrowserSupported = htmlService.isBrowserSupported;
-    final shouldShowBrowser = (htmlService.currentFile?.isUrl ?? false) ||
-        htmlService.isWebViewLoading;
+    final shouldShowBrowser = htmlService.shouldShowBrowserTab;
 
     if (isHtmlOrXml == _lastIsHtmlOrXml &&
         showMetadataTabs == _lastShowMetadataTabs &&
@@ -165,8 +164,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final showServerTabs = htmlService.showServerTabs;
     final isBrowserSupported = htmlService.isBrowserSupported;
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
-    final shouldShowBrowser = (htmlService.currentFile?.isUrl ?? false) ||
-        htmlService.isWebViewLoading;
+    final shouldShowBrowser = htmlService.shouldShowBrowserTab;
 
     final sourceTab = _buildTab(Icons.code, 'Source');
     final browserTab = _buildTab(Icons.language, 'Browser');
@@ -190,7 +188,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return [
       if (shouldShowBrowser && useBrowserByDefault) browserTab,
       sourceTab,
-      if (shouldShowBrowser && !useBrowserByDefault) browserTab,
       if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
       if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
       if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
@@ -201,6 +198,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _buildTab(Icons.list_alt, 'Headers'),
         _buildTab(Icons.security, 'Security'),
       ],
+      // When 'Always use browser' is off, Browser tab goes last
+      if (shouldShowBrowser && !useBrowserByDefault) browserTab,
     ];
   }
 
@@ -210,8 +209,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final showServerTabs = htmlService.showServerTabs;
     final isBrowserSupported = htmlService.isBrowserSupported;
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
-    final shouldShowBrowser =
-        (currentFile?.isUrl ?? false) || htmlService.isWebViewLoading;
+    final shouldShowBrowser = htmlService.shouldShowBrowserTab;
 
     final sourceView = currentFile != null
         ? KeepAliveWrapper(
@@ -239,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       (currentFile.isUrl ||
                           isHtmlOrXml ||
                           useBrowserByDefault)) ||
-                  htmlService.isWebViewLoading
+                  htmlService.shouldShowBrowserTab
               ? BrowserView(
                   file: currentFile,
                   gestureRecognizers: {
@@ -297,9 +295,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return [
       if (shouldShowBrowser && useBrowserByDefault) browserView,
       sourceView,
-      if (shouldShowBrowser && !useBrowserByDefault) browserView,
 
-      // 3. DOM Tree (Conditional)
+      // 2. DOM Tree (Conditional)
       if (isHtmlOrXml)
         KeepAliveWrapper(
             child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
@@ -328,22 +325,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: _buildScrollableRefreshable(
                 const ProbeCookiesView(), 'cookies')),
 
-      // 7. Probe: General
+      // 7-9. Probe: General, Headers, Security
       if (showServerTabs) ...[
         KeepAliveWrapper(
             child:
                 _buildScrollableRefreshable(const ProbeGeneralView(), 'probe')),
-
-        // 8. Probe: Headers
         KeepAliveWrapper(
             child: _buildScrollableRefreshable(
                 const ProbeHeadersView(), 'headers')),
-
-        // 9. Probe: Security
         KeepAliveWrapper(
             child: _buildScrollableRefreshable(
                 const ProbeSecurityView(), 'security')),
       ],
+
+      // When 'Always use browser' is off, Browser tab goes last
+      if (shouldShowBrowser && !useBrowserByDefault) browserView,
     ];
   }
 
@@ -353,8 +349,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     // Update TabController synchronously if content type changed
     // This MUST happen before building the TabBar to avoid length mismatch
-    final shouldShowBrowser = (htmlService.currentFile?.isUrl ?? false) ||
-        htmlService.isWebViewLoading;
+    final shouldShowBrowser = htmlService.shouldShowBrowserTab;
 
     if (htmlService.isHtmlOrXml != _lastIsHtmlOrXml ||
         htmlService.showMetadataTabs != _lastShowMetadataTabs ||

@@ -1,4 +1,5 @@
-/// Utility class for formatting data to be more human-readable
+import 'dart:ui' show PlatformDispatcher;
+
 class FormatUtils {
   /// Formats a string to be more human-readable.
   /// 1. Adds human-readable durations for max-age and ma patterns.
@@ -89,20 +90,57 @@ class FormatUtils {
     return '${_formatWithCommas(kb)} KB';
   }
 
+  /// Returns the locale-appropriate thousands separator.
+  /// Dutch/German/Spanish use '.'; English uses ','.
+  static String get _thousandsSeparator {
+    final lang = PlatformDispatcher.instance.locale.languageCode.toLowerCase();
+    // Languages that conventionally use '.' as thousands separator
+    const dotLanguages = {
+      'nl',
+      'de',
+      'es',
+      'pt',
+      'it',
+      'pl',
+      'ro',
+      'tr',
+      'hu',
+      'bg',
+      'hr',
+      'sr',
+      'sl',
+      'sk',
+      'cs',
+      'da',
+      'nb',
+      'sv',
+      'fi',
+      'el',
+      'uk',
+      'ru',
+      'id',
+      'ms',
+      'vi',
+      'th',
+    };
+    return dotLanguages.contains(lang) ? '.' : ',';
+  }
+
   static String _formatWithCommas(int n) {
+    final sep = _thousandsSeparator;
     final s = n.toString();
     final buffer = StringBuffer();
     final chars = s.split('').reversed.toList();
     for (int i = 0; i < chars.length; i++) {
-      if (i > 0 && i % 3 == 0) buffer.write(',');
+      if (i > 0 && i % 3 == 0) buffer.write(sep);
       buffer.write(chars[i]);
     }
     return buffer.toString().split('').reversed.join('');
   }
 
   /// Formats a size map: decoded size in KB first, then transfer size in brackets.
-  /// Shows: "1,205 KB (↓ 400 KB)" when transfer size differs from decoded size.
-  /// Shows: "1,205 KB" when only decoded size is available or sizes are equal.
+  /// Shows: "1.205 KB (↓ 400 KB)" when transfer size differs from decoded size.
+  /// Shows: "1.205 KB" when only decoded size is available or sizes are equal.
   static String formatBytesWithTransfer(Map<String, dynamic>? sizeMap) {
     if (sizeMap == null) return '';
     final decoded = sizeMap['decoded'] as int? ?? 0;
