@@ -4299,10 +4299,18 @@ Technical details: $e''';
           if (decoded is Map) {
             final weightMap = Map<String, dynamic>.from(decoded);
 
-            // Extract cookies
-            final String browserCookies =
-                weightMap['cookies']?.toString() ?? '';
-            _lastBrowserCookies = browserCookies;
+            // Extract cookies via native CookieManager (captures HttpOnly cookies unlike JS document.cookie)
+            try {
+              final cookies =
+                  await CookieManager.instance().getCookies(url: WebUri(url));
+              _lastBrowserCookies = cookies
+                  .where((c) => c.name.isNotEmpty)
+                  .map((c) => '${c.name}=${c.value}')
+                  .join('; ');
+            } catch (e) {
+              debugPrint('Error getting native cookies: $e');
+              _lastBrowserCookies = weightMap['cookies']?.toString() ?? '';
+            }
             _updateAnalyzedCookies();
 
             // Parse detailed resource data
