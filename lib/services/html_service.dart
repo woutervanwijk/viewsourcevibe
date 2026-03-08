@@ -4167,7 +4167,34 @@ Technical details: $e''';
       try {
         final weightRaw = await activeWebViewController!.evaluateJavascript(
           source:
-              '(function() { var tTx=0; var tDec=0; var r=performance.getEntriesByType("resource"); var list=[]; var seen=new Set(); for(var i=0; i<r.length; i++) { var name=r[i].name; tTx+=(r[i].transferSize||0); tDec+=(r[i].decodedBodySize||0); list.push({n: name, t: r[i].transferSize||0, d: r[i].decodedBodySize||0}); seen.add(name); } var n=performance.getEntriesByType("navigation")[0]; var nTx=0; var nDec=0; if(n && !seen.has(n.name)) { nTx=(n.transferSize||0); nDec=(n.decodedBodySize||0); if(nDec===0) nDec=document.documentElement.outerHTML.length; tTx+=nTx; tDec+=nDec; list.push({n: n.name, t: nTx, d: nDec}); } else if(!n && !seen.has(document.location.href)) { var size=document.documentElement.outerHTML.length; tDec+=size; tTx+=size; nTx=size; nDec=size; list.push({n: document.location.href, t: size, d: size}); } return JSON.stringify({tx: tTx, dec: tDec, nTx: nTx, nDec: nDec, list: list, cookies: document.cookie}); })();',
+              // JS: Collect performance resource timings. For cached resources (transferSize==0),
+              // use decodedBodySize as the effective size so we don't silently report 0 for cache hits.
+              '(function() {'
+              ' var tTx=0; var tDec=0;'
+              ' var r=performance.getEntriesByType("resource");'
+              ' var list=[]; var seen=new Set();'
+              ' for(var i=0;i<r.length;i++) {'
+              '   var name=r[i].name;'
+              '   var tx=r[i].transferSize||0;'
+              '   var dec=r[i].decodedBodySize||0;'
+              '   tTx+=tx; tDec+=dec;'
+              '   list.push({n:name,t:tx,d:dec});'
+              '   seen.add(name);'
+              ' }'
+              ' var nav=performance.getEntriesByType("navigation")[0];'
+              ' var nTx=0; var nDec=0;'
+              ' if(nav && !seen.has(nav.name)) {'
+              '   nTx=nav.transferSize||0; nDec=nav.decodedBodySize||0;'
+              '   if(nDec===0) nDec=document.documentElement.outerHTML.length;'
+              '   tTx+=nTx; tDec+=nDec;'
+              '   list.push({n:nav.name,t:nTx,d:nDec});'
+              ' } else if(!nav && !seen.has(document.location.href)) {'
+              '   var sz=document.documentElement.outerHTML.length;'
+              '   nTx=sz; nDec=sz; tTx+=sz; tDec+=sz;'
+              '   list.push({n:document.location.href,t:sz,d:sz});'
+              ' }'
+              ' return JSON.stringify({tx:tTx,dec:tDec,nTx:nTx,nDec:nDec,list:list,cookies:document.cookie});'
+              ' })();',
         );
 
         String jsonStr = '';
@@ -4217,41 +4244,33 @@ Technical details: $e''';
                 final int mTx = (r['transfer'] as num? ?? 0).toInt();
                 final int mDec = (r['decoded'] as num? ?? 0).toInt();
 
-                if (name.endsWith('.js') ||
-                    name.contains('.js?') ||
-                    name.contains('script')) {
-                  scriptCount++;
-                  scriptTx += mTx;
-                  scriptDec += mDec;
-                } else if (name.endsWith('.css') ||
-                    name.contains('.css?') ||
-                    name.contains('style')) {
-                  cssCount++;
-                  cssTx += mTx;
-                  cssDec += mDec;
-                } else if (name.endsWith('.png') ||
-                    name.endsWith('.jpg') ||
-                    name.endsWith('.jpeg') ||
-                    name.endsWith('.gif') ||
-                    name.endsWith('.webp') ||
-                    name.endsWith('.svg') ||
-                    name.endsWith('.ico') ||
-                    name.contains('image')) {
-                  imgCount++;
-                  imgTx += mTx;
-                  imgDec += mDec;
-                } else if (name.endsWith('.html') ||
-                    name.endsWith('.htm') ||
-                    name.contains('document') ||
-                    (!name.contains('.') && name.startsWith('http')) ||
-                    name == url.toLowerCase()) {
-                  htmlCount++;
-                  htmlTx += mTx;
-                  htmlDec += mDec;
-                } else {
-                  otherCount++;
-                  otherTx += mTx;
-                  otherDec += mDec;
+                final type = _categorizeResource(name, url.toLowerCase());
+                switch (type) {
+                  case 'script':
+                    scriptCount++;
+                    scriptTx += mTx;
+                    scriptDec += mDec;
+                    break;
+                  case 'style':
+                    cssCount++;
+                    cssTx += mTx;
+                    cssDec += mDec;
+                    break;
+                  case 'image':
+                    imgCount++;
+                    imgTx += mTx;
+                    imgDec += mDec;
+                    break;
+                  case 'document':
+                    htmlCount++;
+                    htmlTx += mTx;
+                    htmlDec += mDec;
+                    break;
+                  default:
+                    otherCount++;
+                    otherTx += mTx;
+                    otherDec += mDec;
+                    break;
                 }
               }
             }
@@ -4383,10 +4402,23 @@ Technical details: $e''';
       );
     }
 
-    // Recalculate totals based on new data
-    // _recalculatePageWeight(); // This method might not exist, let's use the explicit logic
+    // Deduplicate resource list by URL
+    final Map<String, Map<String, dynamic>> uniqueResources = {};
+    for (var r in _resourcePerformanceData!) {
+      final name = r['name'] as String? ?? '';
+      if (name.isNotEmpty) {
+        // Keep the entry with the larger decoded size (prefer non-cached data)
+        final existing = uniqueResources[name];
+        if (existing == null ||
+            (r['decoded'] as num? ?? 0) > (existing['decoded'] as num? ?? 0)) {
+          uniqueResources[name] = r;
+        }
+      }
+    }
+    _resourcePerformanceData = uniqueResources.values.toList();
 
-    // Recalculate directly to be safe
+    // Recalculate breakdown counts. For totals, prefer the original browser-reported
+    // value since cached resources are already included there.
     int scriptCount = 0, scriptTx = 0, scriptDec = 0;
     int cssCount = 0, cssTx = 0, cssDec = 0;
     int imgCount = 0, imgTx = 0, imgDec = 0;
@@ -4395,64 +4427,50 @@ Technical details: $e''';
 
     final url = _currentFile?.path.toLowerCase() ?? '';
 
-    // Use a Map to unique-ify by name if duplicates exist
-    final Map<String, Map<String, dynamic>> uniqueResources = {};
-    for (var r in _resourcePerformanceData!) {
-      final name = r['name'] as String? ?? '';
-      if (name.isNotEmpty) {
-        uniqueResources[name] = r;
-      }
-    }
-
-    // Update the list with unique entries
-    _resourcePerformanceData = uniqueResources.values.toList();
-
     for (var r in _resourcePerformanceData!) {
       final String name = (r['name'] as String? ?? '').toLowerCase();
       final int mTx = (r['transfer'] as num? ?? 0).toInt();
       final int mDec = (r['decoded'] as num? ?? 0).toInt();
 
-      if (name.endsWith('.js') ||
-          name.contains('.js?') ||
-          name.contains('script')) {
-        scriptCount++;
-        scriptTx += mTx;
-        scriptDec += mDec;
-      } else if (name.endsWith('.css') ||
-          name.contains('.css?') ||
-          name.contains('style')) {
-        cssCount++;
-        cssTx += mTx;
-        cssDec += mDec;
-      } else if (name.endsWith('.png') ||
-          name.endsWith('.jpg') ||
-          name.endsWith('.jpeg') ||
-          name.endsWith('.gif') ||
-          name.endsWith('.webp') ||
-          name.endsWith('.svg') ||
-          name.endsWith('.ico') ||
-          name.contains('image')) {
-        imgCount++;
-        imgTx += mTx;
-        imgDec += mDec;
-      } else if (name.endsWith('.html') ||
-          name.endsWith('.htm') ||
-          name.contains('document') ||
-          (!name.contains('.') && name.startsWith('http')) ||
-          name == url) {
-        htmlCount++;
-        htmlTx += mTx;
-        htmlDec += mDec;
-      } else {
-        otherCount++;
-        otherTx += mTx;
-        otherDec += mDec;
+      final type = _categorizeResource(name, url);
+      switch (type) {
+        case 'script':
+          scriptCount++;
+          scriptTx += mTx;
+          scriptDec += mDec;
+          break;
+        case 'style':
+          cssCount++;
+          cssTx += mTx;
+          cssDec += mDec;
+          break;
+        case 'image':
+          imgCount++;
+          imgTx += mTx;
+          imgDec += mDec;
+          break;
+        case 'document':
+          htmlCount++;
+          htmlTx += mTx;
+          htmlDec += mDec;
+          break;
+        default:
+          otherCount++;
+          otherTx += mTx;
+          otherDec += mDec;
+          break;
       }
     }
 
-    // Mathematical consistency: Total = sum of parts
-    final totalTransferSize = scriptTx + cssTx + imgTx + htmlTx + otherTx;
-    final totalDecodedSize = scriptDec + cssDec + imgDec + htmlDec + otherDec;
+    // For the overall total, prefer the previously stored browser-reported value
+    // (which includes cached resources) over summing from the resource list.
+    // Only override if we have a meaningfully larger sum (e.g., after fetching missing sizes).
+    final sumTx = scriptTx + cssTx + imgTx + htmlTx + otherTx;
+    final sumDec = scriptDec + cssDec + imgDec + htmlDec + otherDec;
+    final prevTx = (_lastPageWeight?['transfer'] as num? ?? 0).toInt();
+    final prevDec = (_lastPageWeight?['decoded'] as num? ?? 0).toInt();
+    final totalTransferSize = sumTx > prevTx ? sumTx : prevTx;
+    final totalDecodedSize = sumDec > prevDec ? sumDec : prevDec;
 
     _lastPageWeight = {
       'transfer': totalTransferSize,
@@ -4484,6 +4502,54 @@ Technical details: $e''';
     final baseUrl = _currentFile?.isUrl == true ? _currentFile!.path : '';
     _enrichMetadataWithSizes(baseUrl);
     notifyListeners();
+  }
+
+  String _categorizeResource(String name, String pageUrl) {
+    name = name.toLowerCase();
+    pageUrl = pageUrl.toLowerCase();
+
+    // 1. Script (Explicitly checking for .js prevents overlap with names like "newsletter-style.js")
+    if (name.endsWith('.js') ||
+        name.contains('.js?') ||
+        name.contains('.js#') ||
+        name.contains('script')) {
+      return 'script';
+    }
+
+    // 2. Style
+    if (name.endsWith('.css') ||
+        name.contains('.css?') ||
+        name.contains('.css#') ||
+        name.contains('style')) {
+      return 'style';
+    }
+
+    // 3. Image/Media
+    if (name.endsWith('.png') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.gif') ||
+        name.endsWith('.webp') ||
+        name.endsWith('.svg') ||
+        name.endsWith('.ico') ||
+        name.endsWith('.avif') ||
+        name.contains('image/') ||
+        name.contains('img_') ||
+        name.contains('/images/')) {
+      return 'image';
+    }
+
+    // 4. Document (HTML)
+    if (name == pageUrl ||
+        name == '$pageUrl/' ||
+        name.endsWith('.html') ||
+        name.endsWith('.htm') ||
+        name.contains('document') ||
+        (!name.contains('.') && name.startsWith('http'))) {
+      return 'document';
+    }
+
+    return 'other';
   }
 
   Future<int> _fetchResourceSize(String url) async {
