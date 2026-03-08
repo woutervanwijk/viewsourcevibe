@@ -57,6 +57,7 @@ dependencies:
   # XML parsing for DOM tree
   xml: ^6.5.0
   code_forge: ^9.1.0
+  re_highlight: ^0.0.3
   
 dev_dependencies:
   flutter_test:
