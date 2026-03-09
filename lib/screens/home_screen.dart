@@ -262,32 +262,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
         if (showMetadataTabs)
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(
-                  const MetadataView(), 'metadata',
-                  hasScrollBody: false)),
+              child: _buildRefreshable(const MetadataView(), 'metadata')),
         if (showMetadataTabs)
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(
-                  const ServicesView(), 'services',
-                  hasScrollBody: false)),
+              child: _buildRefreshable(const ServicesView(), 'services')),
         if (showMetadataTabs)
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(const MediaView(), 'media',
-                  useSliverToBoxAdapter: true)),
+              child: _buildRefreshable(const MediaView(), 'media')),
         if (showServerTabs)
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(
-                  const ProbeCookiesView(), 'cookies')),
+              child: _buildRefreshable(const ProbeCookiesView(), 'cookies')),
         if (showServerTabs) ...[
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(
-                  const ProbeGeneralView(), 'probe')),
+              child: _buildRefreshable(const ProbeGeneralView(), 'probe')),
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(
-                  const ProbeHeadersView(), 'headers')),
+              child: _buildRefreshable(const ProbeHeadersView(), 'headers')),
           KeepAliveWrapper(
-              child: _buildScrollableRefreshable(
-                  const ProbeSecurityView(), 'security')),
+              child: _buildRefreshable(const ProbeSecurityView(), 'security')),
         ],
       ];
     }
@@ -304,38 +295,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // 3. Metadata (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const MetadataView(), 'metadata',
-                hasScrollBody: false)),
+            child: _buildRefreshable(const MetadataView(), 'metadata')),
 
       // 4. Services (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const ServicesView(), 'services',
-                hasScrollBody: false)),
+            child: _buildRefreshable(const ServicesView(), 'services')),
 
       // 5. Media (Conditional)
       if (showMetadataTabs)
-        KeepAliveWrapper(
-            child: _buildScrollableRefreshable(const MediaView(), 'media',
-                useSliverToBoxAdapter: true)),
+        KeepAliveWrapper(child: _buildRefreshable(const MediaView(), 'media')),
 
       // 6. Probe: Cookies
       if (showServerTabs)
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(
-                const ProbeCookiesView(), 'cookies')),
+            child: _buildRefreshable(const ProbeCookiesView(), 'cookies')),
 
       // 7-9. Probe: General, Headers, Security
       if (showServerTabs) ...[
         KeepAliveWrapper(
-            child:
-                _buildScrollableRefreshable(const ProbeGeneralView(), 'probe')),
+            child: _buildRefreshable(const ProbeGeneralView(), 'probe')),
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(
-                const ProbeHeadersView(), 'headers')),
+            child: _buildRefreshable(const ProbeHeadersView(), 'headers')),
         KeepAliveWrapper(
-            child: _buildScrollableRefreshable(
-                const ProbeSecurityView(), 'security')),
+            child: _buildRefreshable(const ProbeSecurityView(), 'security')),
       ],
 
       // When 'Always use browser' is off, Browser tab goes last

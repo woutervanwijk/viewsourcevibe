@@ -36,6 +36,8 @@ class ServicesView extends StatelessWidget {
       ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
 
     return SingleChildScrollView(
+      primary: true,
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         child: Column(

@@ -104,6 +104,8 @@ class MediaView extends StatelessWidget {
     }
 
     return SingleChildScrollView(
+      primary: true,
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

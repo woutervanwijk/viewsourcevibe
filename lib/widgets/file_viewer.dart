@@ -327,6 +327,40 @@ class FileViewer extends StatelessWidget {
                             },
                           ),
                           const SizedBox(width: 2),
+                          // Font Family picker
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.font_download_outlined,
+                                size: 20),
+                            padding: const EdgeInsets.all(2),
+                            constraints: const BoxConstraints(),
+                            tooltip: 'Font Family',
+                            onSelected: (String family) {
+                              settings.fontFamily = family;
+                            },
+                            itemBuilder: (BuildContext context) {
+                              return AppSettings.availableFontFamilies
+                                  .map((family) {
+                                return PopupMenuItem<String>(
+                                  value: family,
+                                  child: Row(
+                                    children: [
+                                      Text(family,
+                                          style: TextStyle(fontFamily: family)),
+                                      if (settings.fontFamily == family) ...[
+                                        const Spacer(),
+                                        Icon(Icons.check,
+                                            size: 16,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              }).toList();
+                            },
+                          ),
+                          const SizedBox(width: 2),
                           // Word Wrap button
                           Container(
                             decoration: BoxDecoration(
@@ -541,6 +575,7 @@ class FileViewer extends StatelessWidget {
       selectedContentType ?? file.extension,
       context,
       fontSize: settings.fontSize,
+      fontFamily: settings.fontFamily,
       themeName: settings.themeName,
       wrapText: settings.wrapText,
       showLineNumbers: settings.showLineNumbers,

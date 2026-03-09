@@ -2047,14 +2047,18 @@ class HtmlService with ChangeNotifier {
 
       // Convert HttpClient headers
       final respHeaders = <String, String>{};
+      final List<String> extractedCookies = [];
       hResponse.headers.forEach((name, values) {
-        respHeaders[name.toLowerCase()] = values.join(', ');
+        final lowerName = name.toLowerCase();
+        if (lowerName == 'set-cookie') {
+          extractedCookies.addAll(values);
+        } else {
+          respHeaders[lowerName] = values.join(', ');
+        }
       });
 
       // Construct Probe Result
-      final setCookie = respHeaders['set-cookie'];
-      final List<String> cookies =
-          setCookie != null ? setCookie.split(RegExp(r',(?=[^;]+?=)')) : [];
+      final List<String> cookies = extractedCookies;
 
       final securityHeaders = {
         'Strict-Transport-Security': respHeaders['strict-transport-security'],
@@ -2342,8 +2346,14 @@ Technical details: $e''';
 
       // Standardize on lowercase keys for consistent lookup
       final normalizedHeaders = <String, String>{};
+      final List<String> serverCookies = [];
       response.headers.forEach((key, values) {
-        normalizedHeaders[key.toLowerCase()] = values.join(', ');
+        final lowerKey = key.toLowerCase();
+        if (lowerKey == 'set-cookie') {
+          serverCookies.addAll(values);
+        } else {
+          normalizedHeaders[lowerKey] = values.join(', ');
+        }
       });
 
       // Security Headers Check
@@ -2357,9 +2367,8 @@ Technical details: $e''';
         'Permissions-Policy': normalizedHeaders['permissions-policy'],
       };
 
-      // Cookies - use response.cookies to handle multiple Set-Cookie headers correctly
-      final List<String> cookies =
-          response.cookies.map((c) => c.toString()).toList();
+      // Cookies - use headers directly to avoid strict parsing errors in dart:io
+      final List<String> cookies = serverCookies;
 
       // Only update state if this probe is still relevant
       if (_currentlyProbingUrl == url) {
@@ -2997,6 +3006,7 @@ Technical details: $e''';
     String extension,
     BuildContext context, {
     double fontSize = 16.0,
+    String fontFamily = 'Courier',
     String themeName = 'github',
     bool wrapText = false,
     bool showLineNumbers = true,
@@ -3101,8 +3111,8 @@ Technical details: $e''';
         language: mode,
         textStyle: TextStyle(
           fontSize: fontSize,
-          fontFamily: 'Courier',
-          fontFamilyFallback: const ['monospace', 'Courier New'],
+          fontFamily: fontFamily,
+          fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
           height: 1.2,
         ),
         enableGutter: showLineNumbers,
@@ -3420,6 +3430,7 @@ Technical details: $e''';
     String extension,
     BuildContext context, {
     double fontSize = 16.0,
+    String fontFamily = 'Courier',
     String themeName = 'github',
     bool wrapText = false,
     bool showLineNumbers = true,
@@ -3463,6 +3474,7 @@ Technical details: $e''';
         extension,
         themeName,
         fontSize,
+        fontFamily,
         wrapText,
         showLineNumbers,
       );
@@ -3474,6 +3486,7 @@ Technical details: $e''';
       extension,
       context,
       fontSize,
+      fontFamily,
       themeName,
       wrapText,
       showLineNumbers,
@@ -3488,6 +3501,7 @@ Technical details: $e''';
     String extension,
     BuildContext context,
     double fontSize,
+    String fontFamily,
     String themeName,
     bool wrapText,
     bool showLineNumbers,
@@ -3539,6 +3553,7 @@ Technical details: $e''';
       extension,
       themeName,
       fontSize,
+      fontFamily,
       wrapText,
       showLineNumbers,
     );
@@ -3553,6 +3568,7 @@ Technical details: $e''';
     String extension,
     String themeName,
     double fontSize,
+    String fontFamily,
     bool wrapText,
     bool showLineNumbers,
   ) {
@@ -3581,8 +3597,8 @@ Technical details: $e''';
           language: mode,
           textStyle: TextStyle(
             fontSize: fontSize,
-            fontFamily: 'Courier',
-            fontFamilyFallback: const ['monospace', 'Courier New'],
+            fontFamily: fontFamily,
+            fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
             height: 1.2,
           ),
           enableGutter: showLineNumbers,
@@ -3614,6 +3630,7 @@ Technical details: $e''';
     String extension,
     BuildContext context, {
     double fontSize = 16.0,
+    String fontFamily = 'Courier',
     String themeName = 'github',
     bool wrapText = false,
     bool showLineNumbers = true,
@@ -3632,6 +3649,7 @@ Technical details: $e''';
       extension,
       context,
       fontSize: fontSize,
+      fontFamily: fontFamily,
       themeName: themeName,
       wrapText: wrapText,
       showLineNumbers: showLineNumbers,

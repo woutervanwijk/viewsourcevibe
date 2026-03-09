@@ -22,6 +22,7 @@ class AppSettings with ChangeNotifier {
   static const String _prefsThemeName = 'themeName';
   static const String _prefsThemeMode = 'themeMode'; // system, light, dark
   static const String _prefsFontSize = 'fontSize';
+  static const String _prefsFontFamily = 'fontFamily';
   static const String _prefsShowLineNumbers = 'showLineNumbers';
   static const String _prefsWrapText = 'wrapText';
   static const String _prefsUseBrowserByDefault = 'useBrowserByDefault';
@@ -36,6 +37,7 @@ class AppSettings with ChangeNotifier {
 
   // Display settings
   double _fontSize = 16.0;
+  String _fontFamily = 'Courier';
   bool _showLineNumbers = true;
 
   // Behavior settings
@@ -47,6 +49,7 @@ class AppSettings with ChangeNotifier {
   bool get darkMode => _darkMode;
   String get themeName => _themeName;
   double get fontSize => _fontSize;
+  String get fontFamily => _fontFamily;
   bool get showLineNumbers => _showLineNumbers;
   bool get wrapText => _wrapText;
   bool get useBrowserByDefault => _useBrowserByDefault;
@@ -237,6 +240,14 @@ class AppSettings with ChangeNotifier {
     }
   }
 
+  set fontFamily(String value) {
+    if (_fontFamily != value) {
+      _fontFamily = value;
+      _saveSetting(_prefsFontFamily, value);
+      notifyListeners();
+    }
+  }
+
   set showLineNumbers(bool value) {
     if (_showLineNumbers != value) {
       _showLineNumbers = value;
@@ -281,6 +292,7 @@ class AppSettings with ChangeNotifier {
     _darkMode = _prefs!.getBool(_prefsDarkMode) ?? false;
     _themeName = _prefs!.getString(_prefsThemeName) ?? 'github';
     _fontSize = _prefs!.getDouble(_prefsFontSize) ?? 16.0;
+    _fontFamily = _prefs!.getString(_prefsFontFamily) ?? 'Courier';
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
     _useBrowserByDefault = _prefs!.getBool(_prefsUseBrowserByDefault) ?? true;
@@ -308,8 +320,8 @@ class AppSettings with ChangeNotifier {
   void resetToDefaults() {
     _themeMode = ThemeModeOption.system;
     _darkMode = false;
-    _themeName = 'github';
     _fontSize = 16.0;
+    _fontFamily = 'Courier';
     _showLineNumbers = true;
     _wrapText = false;
     _useBrowserByDefault = true;
@@ -327,6 +339,7 @@ class AppSettings with ChangeNotifier {
     await _saveSetting(_prefsDarkMode, _darkMode);
     await _saveSetting(_prefsThemeName, _themeName);
     await _saveSetting(_prefsFontSize, _fontSize);
+    await _saveSetting(_prefsFontFamily, _fontFamily);
     await _saveSetting(_prefsShowLineNumbers, _showLineNumbers);
     await _saveSetting(_prefsWrapText, _wrapText);
     await _saveSetting(_prefsUseBrowserByDefault, _useBrowserByDefault);
@@ -484,4 +497,16 @@ class AppSettings with ChangeNotifier {
   // Available font sizes
   static List<double> get availableFontSizes =>
       [10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0];
+
+  // Available font families (monospace)
+  static List<String> get availableFontFamilies => [
+        'Courier',
+        'Menlo',
+        'Monaco',
+        'SF Mono',
+        'Roboto Mono',
+        'Fira Code',
+        'JetBrains Mono',
+        'monospace',
+      ];
 }

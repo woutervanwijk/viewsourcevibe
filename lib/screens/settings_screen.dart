@@ -82,6 +82,14 @@ class SettingsScreen extends StatelessWidget {
                         onTap: () => _showFontSizeDialog(context, settings),
                       ),
 
+                      // Font Family
+                      ListTile(
+                        title: const Text('Font Family'),
+                        subtitle: Text(settings.fontFamily),
+                        trailing: const Icon(Icons.arrow_forward_ios),
+                        onTap: () => _showFontFamilyDialog(context, settings),
+                      ),
+
                       // Line Numbers Toggle
                       SwitchListTile(
                         title: const Text('Show Line Numbers'),
@@ -410,6 +418,40 @@ class SettingsScreen extends StatelessWidget {
                           : null,
                       onTap: () {
                         settings.fontSize = size;
+                        Navigator.of(context).pop();
+                      },
+                    ))
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFontFamilyDialog(BuildContext context, AppSettings settings) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Font Family'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: AppSettings.availableFontFamilies
+                .map((family) => ListTile(
+                      title: Text(
+                        family,
+                        style: TextStyle(fontFamily: family),
+                      ),
+                      trailing: settings.fontFamily == family
+                          ? const Icon(Icons.check, color: Colors.blue)
+                          : null,
+                      onTap: () {
+                        settings.fontFamily = family;
                         Navigator.of(context).pop();
                       },
                     ))

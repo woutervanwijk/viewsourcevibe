@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:html_unescape/html_unescape.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import '../utils/format_utils.dart';
 
 class MetadataView extends StatelessWidget {
@@ -11,6 +12,7 @@ class MetadataView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final htmlService = Provider.of<HtmlService>(context);
+    final settings = Provider.of<AppSettings>(context);
     final metadata = htmlService.pageMetadata;
 
     if (metadata == null) {
@@ -36,43 +38,44 @@ class MetadataView extends StatelessWidget {
     if (metadata['detectedTech']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'Technology Stack',
-        content: _buildTechSection(context, metadata['detectedTech']),
+        content: _buildTechSection(context, metadata['detectedTech'], settings),
       ));
     }
     if (metadata['article']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'Article Information',
-        content: _buildMapSection(context, metadata['article']),
+        content: _buildMapSection(context, metadata['article'], settings),
       ));
     }
     if (metadata['pageConfig']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'Page Configuration',
-        content: _buildMapSection(context, metadata['pageConfig']),
+        content: _buildMapSection(context, metadata['pageConfig'], settings),
       ));
     }
     if (metadata['resourceHints']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'Optimization (Resource Hints)',
-        content: _buildHintSection(context, metadata['resourceHints']),
+        content:
+            _buildHintSection(context, metadata['resourceHints'], settings),
       ));
     }
     if (metadata['openGraph']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'OpenGraph Tags',
-        content: _buildMapSection(context, metadata['openGraph']),
+        content: _buildMapSection(context, metadata['openGraph'], settings),
       ));
     }
     if (metadata['twitter']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'Twitter Card Information',
-        content: _buildMapSection(context, metadata['twitter']),
+        content: _buildMapSection(context, metadata['twitter'], settings),
       ));
     }
     if (metadata['otherMeta']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'Other Meta Tags',
-        content: _buildMapSection(context, metadata['otherMeta']),
+        content: _buildMapSection(context, metadata['otherMeta'], settings),
       ));
     }
 
@@ -80,11 +83,13 @@ class MetadataView extends StatelessWidget {
     dynamicSections.sort((a, b) => a.title.compareTo(b.title));
 
     return SingleChildScrollView(
+      primary: true,
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         child: Column(
           children: [
-            _buildHeaderSection(context, metadata),
+            _buildHeaderSection(context, metadata, settings),
             const SizedBox(height: 24),
             ...dynamicSections.expand((section) => [
                   _buildSectionTitle(context, section.title),
@@ -92,14 +97,14 @@ class MetadataView extends StatelessWidget {
                   const SizedBox(height: 24),
                 ]),
             _buildSectionTitle(context, 'Linked Resources'),
-            _buildLinkSection(
-                context, 'Stylesheets (CSS)', metadata['cssLinks'], Icons.css),
-            _buildLinkSection(
-                context, 'Scripts (JS)', metadata['jsLinks'], Icons.javascript),
+            _buildLinkSection(context, 'Stylesheets (CSS)',
+                metadata['cssLinks'], Icons.css, settings),
+            _buildLinkSection(context, 'Scripts (JS)', metadata['jsLinks'],
+                Icons.javascript, settings),
             _buildLinkSection(context, 'Iframes (HTML)',
-                metadata['iframeLinks'], Icons.web_asset),
+                metadata['iframeLinks'], Icons.web_asset, settings),
             _buildLinkSection(context, 'RSS/Atom Feeds', metadata['rssLinks'],
-                Icons.rss_feed),
+                Icons.rss_feed, settings),
             const SizedBox(height: 80),
           ],
         ),
@@ -107,8 +112,8 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildHeaderSection(
-      BuildContext context, Map<String, dynamic> metadata) {
+  Widget _buildHeaderSection(BuildContext context,
+      Map<String, dynamic> metadata, AppSettings settings) {
     final unescape = HtmlUnescape();
     final title = unescape.convert(metadata['title'] ?? 'No Title');
     final description = unescape
@@ -195,21 +200,26 @@ class MetadataView extends StatelessWidget {
         ],
         const SizedBox(height: 24),
         _buildSectionTitle(context, 'Page Weight'),
-        _buildPageWeightSection(context, metadata['pageWeight']),
+        _buildPageWeightSection(context, metadata['pageWeight'], settings),
         const SizedBox(height: 24),
         _buildSectionTitle(context, 'Basic Information'),
-        _buildMapSection(context, {
-          'Title': title,
-          if (metadata['language'] != null) 'Language': metadata['language'],
-          if (metadata['charset'] != null) 'Charset': metadata['charset'],
-          if (favicon != null) 'Icon URL': favicon,
-          'Description': description,
-        }),
+        _buildMapSection(
+            context,
+            {
+              'Title': title,
+              if (metadata['language'] != null)
+                'Language': metadata['language'],
+              if (metadata['charset'] != null) 'Charset': metadata['charset'],
+              if (favicon != null) 'Icon URL': favicon,
+              'Description': description,
+            },
+            settings),
       ],
     );
   }
 
-  Widget _buildHintSection(BuildContext context, Map<String, dynamic> hints) {
+  Widget _buildHintSection(
+      BuildContext context, Map<String, dynamic> hints, AppSettings settings) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -244,8 +254,8 @@ class MetadataView extends StatelessWidget {
               ...sortedUrls.map((url) => ListTile(
                     title: Text(
                       url.toString(),
-                      style: const TextStyle(
-                          fontSize: 12, fontFamily: 'monospace'),
+                      style: TextStyle(
+                          fontSize: 12, fontFamily: settings.fontFamily),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -271,7 +281,8 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildTechSection(BuildContext context, Map<String, dynamic> tech) {
+  Widget _buildTechSection(
+      BuildContext context, Map<String, dynamic> tech, AppSettings settings) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -279,7 +290,8 @@ class MetadataView extends StatelessWidget {
         return Chip(
           avatar: Icon(Icons.code,
               size: 16, color: Theme.of(context).colorScheme.primary),
-          label: Text('${e.key}: ${e.value}'),
+          label: Text('${e.key}: ${e.value}',
+              style: TextStyle(fontFamily: settings.fontFamily)),
           backgroundColor: Theme.of(context)
               .colorScheme
               .primaryContainer
@@ -309,7 +321,8 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildMapSection(BuildContext context, Map<String, dynamic> data) {
+  Widget _buildMapSection(
+      BuildContext context, Map<String, dynamic> data, AppSettings settings) {
     if (data.isEmpty) {
       return const Text('None detected.',
           style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey));
@@ -338,16 +351,17 @@ class MetadataView extends StatelessWidget {
               ListTile(
                 title: Text(
                   e.key,
-                  style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: settings.fontFamily,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 subtitle: SelectableText(
                   value,
                   style: TextStyle(
-                    fontSize: 13,
-                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    fontFamily: settings.fontFamily,
                     color: isUrl ? Theme.of(context).colorScheme.primary : null,
                     decoration: isUrl ? TextDecoration.underline : null,
                   ),
@@ -384,8 +398,8 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildLinkSection(
-      BuildContext context, String title, List<dynamic> links, IconData icon) {
+  Widget _buildLinkSection(BuildContext context, String title,
+      List<dynamic> links, IconData icon, AppSettings settings) {
     if (links.isEmpty) return const SizedBox.shrink();
 
     final sortedLinks = List<dynamic>.from(links);
@@ -440,7 +454,7 @@ class MetadataView extends StatelessWidget {
             child: ListTile(
               title: Text(
                 url,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                style: TextStyle(fontSize: 13, fontFamily: settings.fontFamily),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -469,8 +483,8 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildPageWeightSection(
-      BuildContext context, Map<String, dynamic>? weight) {
+  Widget _buildPageWeightSection(BuildContext context,
+      Map<String, dynamic>? weight, AppSettings settings) {
     if (weight == null) {
       return Card(
         elevation: 0,
@@ -525,29 +539,33 @@ class MetadataView extends StatelessWidget {
                 'decoded': weight['decoded'] as int? ?? 0,
                 'transfer': weight['transfer'] as int? ?? 0,
               }),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                fontFamily: 'monospace',
+                fontFamily: settings.fontFamily,
               ),
             ),
             dense: true,
           ),
           if (breakdown != null) ...[
             const Divider(height: 1),
-            _buildWeightRow(context, 'External JS', breakdown['scripts']),
-            _buildWeightRow(context, 'CSS Files', breakdown['css']),
-            _buildWeightRow(context, 'Images/Media', breakdown['images']),
-            _buildWeightRow(context, 'HTML/Content', breakdown['html']),
-            _buildWeightRow(context, 'Misc. Resources', breakdown['other']),
+            _buildWeightRow(
+                context, 'External JS', breakdown['scripts'], settings),
+            _buildWeightRow(context, 'CSS Files', breakdown['css'], settings),
+            _buildWeightRow(
+                context, 'Images/Media', breakdown['images'], settings),
+            _buildWeightRow(
+                context, 'HTML/Content', breakdown['html'], settings),
+            _buildWeightRow(
+                context, 'Misc. Resources', breakdown['other'], settings),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildWeightRow(
-      BuildContext context, String label, Map<String, dynamic>? data) {
+  Widget _buildWeightRow(BuildContext context, String label,
+      Map<String, dynamic>? data, AppSettings settings) {
     if (data == null || (data['count'] as int? ?? 0) == 0) {
       return const SizedBox.shrink();
     }
@@ -562,7 +580,7 @@ class MetadataView extends StatelessWidget {
           'decoded': data['decoded'] as int? ?? 0,
           'transfer': data['transfer'] as int? ?? 0,
         }),
-        style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+        style: TextStyle(fontSize: 12, fontFamily: settings.fontFamily),
       ),
       dense: true,
       visualDensity: VisualDensity.compact,

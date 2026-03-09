@@ -208,6 +208,13 @@ class CookieUtils {
     'ct0': {'cat': CookieCategory.essential, 'prov': 'Twitter'},
     'auth_token': {'cat': CookieCategory.essential, 'prov': 'Twitter'},
 
+    // --- Snapchat ---
+    '_scid': {'cat': CookieCategory.advertising, 'prov': 'Snapchat Pixel'},
+    '_sctr': {'cat': CookieCategory.advertising, 'prov': 'Snapchat Pixel'},
+
+    // --- Reddit ---
+    '_rdt_uuid': {'cat': CookieCategory.advertising, 'prov': 'Reddit Pixel'},
+
     // --- TikTok ---
     'tt_webid': {'cat': CookieCategory.analytics, 'prov': 'TikTok'},
     'tt_webid_v2': {'cat': CookieCategory.analytics, 'prov': 'TikTok'},
@@ -243,8 +250,15 @@ class CookieUtils {
     '_cto_bidid': {'cat': CookieCategory.advertising, 'prov': 'Criteo'},
     '_pcid': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
     '_cc_id': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
+    '_cc_cc': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
+    '_cc_dc': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
     '_st_id': {'cat': CookieCategory.analytics, 'prov': 'StatCounter'},
     '__tbc': {'cat': CookieCategory.advertising, 'prov': 'Taboola / Piano'},
+    'taboola_session_id': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Taboola'
+    },
+    't_session_id': {'cat': CookieCategory.advertising, 'prov': 'Taboola'},
     '_pctx': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
     '_pcus': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
     '_pprv': {
@@ -258,6 +272,48 @@ class CookieUtils {
     'ecos.dt': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
     'ckns_policy': {'cat': CookieCategory.essential, 'prov': 'Consent Manager'},
     'usnatUUID': {'cat': CookieCategory.essential, 'prov': 'Privacy/Consent'},
+
+    // --- Adobe Analytics / Experience Cloud ---
+    's_ecid': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
+    's_fid': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
+    's_cc': {'cat': CookieCategory.essential, 'prov': 'Adobe Analytics'},
+    's_sq': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
+    's_vi': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
+    's_nr': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
+    's_ppv': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
+    's_ptc': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
+    'AMCVS_': {
+      'cat': CookieCategory.essential,
+      'prov': 'Adobe Experience Cloud'
+    },
+    'AMCV_': {
+      'cat': CookieCategory.essential,
+      'prov': 'Adobe Experience Cloud'
+    },
+    'mbox': {'cat': CookieCategory.analytics, 'prov': 'Adobe Target'},
+
+    // --- Advertising (Additional AdTech) ---
+    'bkdc': {'cat': CookieCategory.advertising, 'prov': 'Oracle BlueKai'},
+    'bku': {'cat': CookieCategory.advertising, 'prov': 'Oracle BlueKai'},
+    'obuid': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
+    'rpb': {'cat': CookieCategory.advertising, 'prov': 'Rubicon Project'},
+    'khaos': {'cat': CookieCategory.advertising, 'prov': 'Rubicon Project'},
+    'KRTB_CLIENT_ID': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
+    'KTPCACHED': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
+    'tdid': {'cat': CookieCategory.advertising, 'prov': 'The Trade Desk'},
+    'TDID': {'cat': CookieCategory.advertising, 'prov': 'The Trade Desk'},
+    'TDCPM': {'cat': CookieCategory.advertising, 'prov': 'The Trade Desk'},
+    'mt_id': {'cat': CookieCategory.advertising, 'prov': 'MediaMath'},
+    'mt_muid': {'cat': CookieCategory.advertising, 'prov': 'MediaMath'},
+    'mc': {'cat': CookieCategory.advertising, 'prov': 'Quantcast'},
+    'sifi_uuid': {'cat': CookieCategory.advertising, 'prov': 'Simpli.fi'},
+    '__adroll_fpc': {'cat': CookieCategory.advertising, 'prov': 'AdRoll'},
+    '__ar_v4': {'cat': CookieCategory.advertising, 'prov': 'AdRoll'},
+    'gg_id': {'cat': CookieCategory.advertising, 'prov': 'GumGum'},
+    'idl': {'cat': CookieCategory.advertising, 'prov': 'LiveRamp'},
+    '_sh_id': {'cat': CookieCategory.advertising, 'prov': 'SteelHouse'},
+    'tluid': {'cat': CookieCategory.advertising, 'prov': 'TripleLift'},
+    '_cb_sv': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
 
     // --- Analytics (General) ---
     'mp_': {'cat': CookieCategory.analytics, 'prov': 'Mixpanel'},

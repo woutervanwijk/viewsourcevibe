@@ -409,9 +409,14 @@ class DomTreeTile extends StatelessWidget {
                   style: TextStyle(
                     color: _getTagColor(context, node.label),
                     fontWeight: FontWeight.bold,
-                    fontFamily: 'Courier',
-                    fontFamilyFallback: ['Courier New', 'SF Mono', 'monospace'],
+                    fontFamily: settings.fontFamily,
+                    fontFamilyFallback: const [
+                      'monospace',
+                      'Courier New',
+                      'SF Mono'
+                    ],
                     fontSize: tagFontSize,
+                    height: 1.2,
                   ),
                 ),
 
@@ -424,13 +429,14 @@ class DomTreeTile extends StatelessWidget {
                         attrString,
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.secondary,
-                          fontFamily: 'Courier',
-                          fontFamilyFallback: [
+                          fontFamily: settings.fontFamily,
+                          fontFamilyFallback: const [
+                            'monospace',
                             'Courier New',
-                            'SF Mono',
-                            'monospace'
+                            'SF Mono'
                           ],
                           fontSize: attrFontSize,
+                          height: 1.2,
                         ),
                       ),
                     ),
@@ -442,9 +448,14 @@ class DomTreeTile extends StatelessWidget {
                   style: TextStyle(
                     color: _getTagColor(context, node.label),
                     fontWeight: FontWeight.bold,
-                    fontFamily: 'Courier',
-                    fontFamilyFallback: ['Courier New', 'SF Mono', 'monospace'],
+                    fontFamily: settings.fontFamily,
+                    fontFamilyFallback: const [
+                      'monospace',
+                      'Courier New',
+                      'SF Mono'
+                    ],
                     fontSize: tagFontSize,
+                    height: 1.2,
                   ),
                 ),
               ] else ...[
@@ -454,13 +465,14 @@ class DomTreeTile extends StatelessWidget {
                     node.label,
                     style: TextStyle(
                       fontSize: textFontSize,
-                      fontFamily: 'Courier',
-                      fontFamilyFallback: [
+                      fontFamily: settings.fontFamily,
+                      fontFamilyFallback: const [
+                        'monospace',
                         'Courier New',
-                        'SF Mono',
-                        'monospace'
+                        'SF Mono'
                       ],
                       color: Colors.grey,
+                      height: 1.2,
                     ),
                   ),
                 ),
