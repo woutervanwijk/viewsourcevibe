@@ -103,37 +103,39 @@ class MediaView extends StatelessWidget {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          if (videos.isNotEmpty) ...[
-            _buildSectionTitle(context, 'Videos (${videos.length})'),
-            const SizedBox(height: 8),
-            ...videos.map((video) => _buildVideoItem(context, video)),
-            const SizedBox(height: 24),
-          ],
-          if (images.isNotEmpty) ...[
-            _buildSectionTitle(context, 'Images (${images.length})'),
-            const SizedBox(height: 8),
-            GridView.builder(
-              primary: false,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent:
-                    200, // Responsive: more columns on wider screens
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.8,
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (videos.isNotEmpty) ...[
+              _buildSectionTitle(context, 'Videos (${videos.length})'),
+              const SizedBox(height: 8),
+              ...videos.map((video) => _buildVideoItem(context, video)),
+              const SizedBox(height: 24),
+            ],
+            if (images.isNotEmpty) ...[
+              _buildSectionTitle(context, 'Images (${images.length})'),
+              const SizedBox(height: 8),
+              GridView.builder(
+                primary: false,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent:
+                      200, // Responsive: more columns on wider screens
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.8,
+                ),
+                itemCount: images.length,
+                itemBuilder: (context, index) =>
+                    _buildImageItem(context, images[index]),
               ),
-              itemCount: images.length,
-              itemBuilder: (context, index) =>
-                  _buildImageItem(context, images[index]),
-            ),
+            ],
+            const SizedBox(height: 80),
           ],
-          const SizedBox(height: 80),
-        ],
+        ),
       ),
     );
   }

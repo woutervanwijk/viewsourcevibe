@@ -79,28 +79,30 @@ class MetadataView extends StatelessWidget {
     // Sort sections by title
     dynamicSections.sort((a, b) => a.title.compareTo(b.title));
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        children: [
-          _buildHeaderSection(context, metadata),
-          const SizedBox(height: 24),
-          ...dynamicSections.expand((section) => [
-                _buildSectionTitle(context, section.title),
-                section.content,
-                const SizedBox(height: 24),
-              ]),
-          _buildSectionTitle(context, 'Linked Resources'),
-          _buildLinkSection(
-              context, 'Stylesheets (CSS)', metadata['cssLinks'], Icons.css),
-          _buildLinkSection(
-              context, 'Scripts (JS)', metadata['jsLinks'], Icons.javascript),
-          _buildLinkSection(context, 'Iframes (HTML)', metadata['iframeLinks'],
-              Icons.web_asset),
-          _buildLinkSection(
-              context, 'RSS/Atom Feeds', metadata['rssLinks'], Icons.rss_feed),
-          const SizedBox(height: 80),
-        ],
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Column(
+          children: [
+            _buildHeaderSection(context, metadata),
+            const SizedBox(height: 24),
+            ...dynamicSections.expand((section) => [
+                  _buildSectionTitle(context, section.title),
+                  section.content,
+                  const SizedBox(height: 24),
+                ]),
+            _buildSectionTitle(context, 'Linked Resources'),
+            _buildLinkSection(
+                context, 'Stylesheets (CSS)', metadata['cssLinks'], Icons.css),
+            _buildLinkSection(
+                context, 'Scripts (JS)', metadata['jsLinks'], Icons.javascript),
+            _buildLinkSection(context, 'Iframes (HTML)',
+                metadata['iframeLinks'], Icons.web_asset),
+            _buildLinkSection(context, 'RSS/Atom Feeds', metadata['rssLinks'],
+                Icons.rss_feed),
+            const SizedBox(height: 80),
+          ],
+        ),
       ),
     );
   }

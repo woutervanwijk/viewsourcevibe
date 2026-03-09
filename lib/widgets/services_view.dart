@@ -35,58 +35,60 @@ class ServicesView extends StatelessWidget {
     final sortedEntries = services.entries.toList()
       ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        children: [
-          _buildSectionTitle(context, 'Detected Services'),
-          const Text(
-            'Common third-party services, trackers, and infrastructure used by this page.',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
-          ),
-          const SizedBox(height: 24),
-          ...sortedEntries.map((entry) {
-            return _buildServiceCategory(context, entry.key, entry.value);
-          }),
-          if (metadata?['analyzedCookies'] != null &&
-              (metadata!['analyzedCookies'] as List).isNotEmpty)
-            ..._buildCookieSection(
-                context, metadata['analyzedCookies'] as List),
-          const Divider(height: 48),
-          _buildSectionTitle(context, 'External Resources'),
-          const Text(
-            'JavaScript and CSS files loaded by this page.',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          _buildResourceSection(
-              context,
-              'Scripts (JS)',
-              [
-                ...(metadata?['jsLinks'] ?? []),
-                ...(metadata?['externalJsLinks'] ?? [])
-              ],
-              Icons.javascript),
-          const SizedBox(height: 16),
-          _buildResourceSection(
-              context,
-              'Stylesheets (CSS)',
-              [
-                ...(metadata?['cssLinks'] ?? []),
-                ...(metadata?['externalCssLinks'] ?? [])
-              ],
-              Icons.css),
-          const SizedBox(height: 16),
-          _buildResourceSection(
-              context,
-              'Iframes (HTML)',
-              [
-                ...(metadata?['iframeLinks'] ?? []),
-                ...(metadata?['externalIframeLinks'] ?? [])
-              ],
-              Icons.web_asset),
-          const SizedBox(height: 80),
-        ],
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Column(
+          children: [
+            _buildSectionTitle(context, 'Detected Services'),
+            const Text(
+              'Common third-party services, trackers, and infrastructure used by this page.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 24),
+            ...sortedEntries.map((entry) {
+              return _buildServiceCategory(context, entry.key, entry.value);
+            }),
+            if (metadata?['analyzedCookies'] != null &&
+                (metadata!['analyzedCookies'] as List).isNotEmpty)
+              ..._buildCookieSection(
+                  context, metadata['analyzedCookies'] as List),
+            const Divider(height: 48),
+            _buildSectionTitle(context, 'External Resources'),
+            const Text(
+              'JavaScript and CSS files loaded by this page.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            _buildResourceSection(
+                context,
+                'Scripts (JS)',
+                [
+                  ...(metadata?['jsLinks'] ?? []),
+                  ...(metadata?['externalJsLinks'] ?? [])
+                ],
+                Icons.javascript),
+            const SizedBox(height: 16),
+            _buildResourceSection(
+                context,
+                'Stylesheets (CSS)',
+                [
+                  ...(metadata?['cssLinks'] ?? []),
+                  ...(metadata?['externalCssLinks'] ?? [])
+                ],
+                Icons.css),
+            const SizedBox(height: 16),
+            _buildResourceSection(
+                context,
+                'Iframes (HTML)',
+                [
+                  ...(metadata?['iframeLinks'] ?? []),
+                  ...(metadata?['externalIframeLinks'] ?? [])
+                ],
+                Icons.web_asset),
+            const SizedBox(height: 80),
+          ],
+        ),
       ),
     );
   }
