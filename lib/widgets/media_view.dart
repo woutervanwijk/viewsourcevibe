@@ -40,8 +40,10 @@ class MediaView extends StatelessWidget {
         final mapB = b as Map;
 
         // Highest Priority: Move inline SVGs (base64) to the bottom
-        final isInlineA = mapA['type'] == 'base64';
-        final isInlineB = mapB['type'] == 'base64';
+        final isInlineA = mapA['type'] == 'base64' ||
+            (mapA['src'] as String? ?? '').startsWith('data:');
+        final isInlineB = mapB['type'] == 'base64' ||
+            (mapB['src'] as String? ?? '').startsWith('data:');
         if (isInlineA != isInlineB) {
           return isInlineA ? 1 : -1;
         }
@@ -54,22 +56,32 @@ class MediaView extends StatelessWidget {
           return (sizeB as num).compareTo(sizeA as num);
         }
 
-        // Tertiary: Sort by original appearance order in HTML
-        final orderA = mapA['order'] ?? 0;
-        final orderB = mapB['order'] ?? 0;
-        if (orderA != orderB) {
-          return (orderA as num).compareTo(orderB as num);
+        return (mapA['src'] ?? '')
+            .toString()
+            .toLowerCase()
+            .compareTo((mapB['src'] ?? '').toString().toLowerCase());
+      });
+
+    // Deduplicate videos and sort by size desc, then alphabet
+    final List<dynamic> videos = _deduplicateMedia(
+      List.from(metadata['media']['videos'] ?? []),
+    )..sort((a, b) {
+        final mapA = a as Map;
+        final mapB = b as Map;
+
+        final sizeA = mapA['size']?['decoded'] ?? 0;
+        final sizeB = mapB['size']?['decoded'] ?? 0;
+
+        // Sort by file size descending
+        if (sizeB != sizeA) {
+          return (sizeB as num).compareTo(sizeA as num);
         }
 
         return (mapA['src'] ?? '')
             .toString()
-            .compareTo((mapB['src'] ?? '').toString());
+            .toLowerCase()
+            .compareTo((mapB['src'] ?? '').toString().toLowerCase());
       });
-
-    // Deduplicate videos as well
-    final List<dynamic> videos = _deduplicateMedia(
-      List.from(metadata['media']['videos'] ?? []),
-    );
 
     if (images.isEmpty && videos.isEmpty) {
       return ConstrainedBox(

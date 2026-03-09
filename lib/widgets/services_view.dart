@@ -31,6 +31,10 @@ class ServicesView extends StatelessWidget {
       );
     }
 
+    // Sort the detected services by category name
+    final sortedEntries = services.entries.toList()
+      ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: Column(
@@ -41,7 +45,7 @@ class ServicesView extends StatelessWidget {
             style: TextStyle(color: Colors.grey, fontSize: 13),
           ),
           const SizedBox(height: 24),
-          ...services.entries.map((entry) {
+          ...sortedEntries.map((entry) {
             return _buildServiceCategory(context, entry.key, entry.value);
           }),
           if (metadata?['analyzedCookies'] != null &&
@@ -91,6 +95,22 @@ class ServicesView extends StatelessWidget {
       BuildContext context, String title, List<dynamic>? links, IconData icon) {
     if (links == null || links.isEmpty) return const SizedBox.shrink();
 
+    final sortedLinks = List<dynamic>.from(links);
+    sortedLinks.sort((a, b) {
+      final sizeA = a is Map ? (a['size']?['decoded'] as num? ?? 0) : 0;
+      final sizeB = b is Map ? (b['size']?['decoded'] as num? ?? 0) : 0;
+
+      if (sizeB != sizeA) {
+        return sizeB.compareTo(sizeA);
+      }
+
+      final urlA = (a is Map ? (a['src'] ?? a['href'] ?? '') : a.toString())
+          .toLowerCase();
+      final urlB = (b is Map ? (b['src'] ?? b['href'] ?? '') : b.toString())
+          .toLowerCase();
+      return urlA.compareTo(urlB);
+    });
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -113,7 +133,7 @@ class ServicesView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  links.length.toString(),
+                  sortedLinks.length.toString(),
                   style: const TextStyle(
                     fontSize: 10,
                     color: Colors.grey,
@@ -124,7 +144,7 @@ class ServicesView extends StatelessWidget {
             ],
           ),
         ),
-        ...links.map((link) {
+        ...sortedLinks.map((link) {
           final String url = link is Map
               ? (link['src'] ?? link['href'] ?? '')
               : link.toString();
@@ -258,16 +278,21 @@ class ServicesView extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: items.map((item) {
-              return Chip(
-                label: Text(item),
-                backgroundColor: color.withValues(alpha: 0.05),
-                side: BorderSide(color: color.withValues(alpha: 0.2)),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                labelStyle: const TextStyle(fontSize: 13),
-              );
-            }).toList(),
+            children: (() {
+              final sortedItems = List<String>.from(items)
+                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+              return sortedItems.map((item) {
+                return Chip(
+                  label: Text(item),
+                  backgroundColor: color.withValues(alpha: 0.05),
+                  side: BorderSide(color: color.withValues(alpha: 0.2)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  labelStyle: const TextStyle(fontSize: 13),
+                );
+              });
+            }())
+                .toList(),
           ),
         ],
       ),
@@ -323,9 +348,15 @@ class ServicesView extends StatelessWidget {
         style: TextStyle(color: Colors.grey, fontSize: 13),
       ),
       const SizedBox(height: 24),
-      ...grouped.entries.map((entry) {
-        return _buildServiceCategory(context, entry.key, entry.value.toList());
-      }),
+      ...(() {
+        final sortedKeys = grouped.keys.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        return sortedKeys.map((key) {
+          final items = grouped[key]!.toList()
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          return _buildServiceCategory(context, key, items);
+        });
+      }()),
     ];
   }
 }

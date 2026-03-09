@@ -350,7 +350,8 @@ class ProbeHeadersView extends ProbeViewBase {
   Widget buildContent(BuildContext context, HtmlService htmlService,
       Map<String, dynamic> result) {
     final Map<String, dynamic> headers = result['headers'] ?? {};
-    final sortedKeys = headers.keys.toList()..sort();
+    final sortedKeys = headers.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -433,43 +434,48 @@ class ProbeSecurityView extends ProbeViewBase {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        ...security.entries.map((e) {
-          final isPresent = e.value != null;
-          return Card(
-            elevation: 0,
-            margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              side: BorderSide(
-                color: isPresent
-                    ? Colors.green.withValues(alpha: 0.3)
-                    : Colors.orange.withValues(alpha: 0.3),
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ListTile(
-              leading: Icon(
-                isPresent
-                    ? Icons.check_circle_outline
-                    : Icons.warning_amber_rounded,
-                color: isPresent ? Colors.green : Colors.orange,
-              ),
-              title: Text(e.key,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.bold)),
-              subtitle: Text(
-                isPresent
-                    ? FormatUtils.formatHumanData(e.value!)
-                    : 'Missing Header',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  color: isPresent ? null : Colors.orange[700],
+        ...(() {
+          final sortedSecurity = security.entries.toList()
+            ..sort(
+                (a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
+          return sortedSecurity.map((e) {
+            final isPresent = e.value != null;
+            return Card(
+              elevation: 0,
+              margin: const EdgeInsets.only(bottom: 8),
+              shape: RoundedRectangleBorder(
+                side: BorderSide(
+                  color: isPresent
+                      ? Colors.green.withValues(alpha: 0.3)
+                      : Colors.orange.withValues(alpha: 0.3),
                 ),
+                borderRadius: BorderRadius.circular(8),
               ),
-              dense: true,
-            ),
-          );
-        }),
+              child: ListTile(
+                leading: Icon(
+                  isPresent
+                      ? Icons.check_circle_outline
+                      : Icons.warning_amber_rounded,
+                  color: isPresent ? Colors.green : Colors.orange,
+                ),
+                title: Text(e.key,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  isPresent
+                      ? FormatUtils.formatHumanData(e.value!)
+                      : 'Missing Header',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: isPresent ? null : Colors.orange[700],
+                  ),
+                ),
+                dense: true,
+              ),
+            );
+          }).toList();
+        }()),
         const SizedBox(height: 24),
         Text(
           'SSL Certificate',
@@ -657,12 +663,41 @@ class ProbeCookiesView extends ProbeViewBase {
     final List<dynamic>? analyzedCookies = result['analyzedCookies'];
 
     if (analyzedCookies != null && analyzedCookies.isNotEmpty) {
+      final sortedCookies = List<Map<String, dynamic>>.from(analyzedCookies);
+      sortedCookies.sort((a, b) {
+        final categoryA = a['category'] as String? ?? 'unknown';
+        final categoryB = b['category'] as String? ?? 'unknown';
+
+        // Known cookies first (essential, analytics, advertising, social)
+        bool isKnown(String cat) => cat != 'unknown';
+        final aKnown = isKnown(categoryA);
+        final bKnown = isKnown(categoryB);
+
+        if (aKnown != bKnown) {
+          return aKnown ? -1 : 1;
+        }
+
+        // If known, sort by provider name first, then cookie name
+        if (aKnown) {
+          final providerA = (a['provider'] as String? ?? '').toLowerCase();
+          final providerB = (b['provider'] as String? ?? '').toLowerCase();
+          if (providerA != providerB) {
+            return providerA.compareTo(providerB);
+          }
+        }
+
+        // Default: sort by name
+        final nameA = (a['name'] as String? ?? '').toLowerCase();
+        final nameB = (b['name'] as String? ?? '').toLowerCase();
+        return nameA.compareTo(nameB);
+      });
+
       return ListView.builder(
         primary: false,
         padding: const EdgeInsets.all(16),
-        itemCount: analyzedCookies.length,
+        itemCount: sortedCookies.length,
         itemBuilder: (context, index) {
-          final cookie = analyzedCookies[index] as Map<String, dynamic>;
+          final cookie = sortedCookies[index];
           final name = cookie['name'] as String? ?? 'Unknown';
           final value = cookie['value'] as String? ?? '';
           final category = cookie['category'] as String? ?? 'unknown';
@@ -790,6 +825,7 @@ class ProbeCookiesView extends ProbeViewBase {
     // Fallback to basic list if no analysis available
     final List<String> cookies =
         (result['cookies'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    cookies.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     if (cookies.isEmpty) {
       return const Center(
