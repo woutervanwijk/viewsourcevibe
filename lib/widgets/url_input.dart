@@ -113,14 +113,19 @@ class _UrlInputState extends State<UrlInput> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<HtmlService>(
-      builder: (context, htmlService, child) {
+    return Selector<HtmlService, _UrlInputStructure>(
+      selector: (context, service) => _UrlInputStructure(
+        currentInputText: service.currentInputText,
+        currentFile: service.currentFile,
+        isLoading: service.isLoading,
+        activeTabIndex: service.activeTabIndex,
+      ),
+      builder: (context, structure, child) {
+        final htmlService = Provider.of<HtmlService>(context, listen: false);
+
         // Update URL display when file changes
-        debugPrint(
-          'url input change ${htmlService.currentFile?.path} ${htmlService.currentFile?.extension}',
-        );
-        if (htmlService.currentInputText != null) {
-          final currentText = htmlService.currentInputText!;
+        if (structure.currentInputText != null) {
+          final currentText = structure.currentInputText!;
 
           if (_urlController.text != currentText) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -154,16 +159,15 @@ class _UrlInputState extends State<UrlInput> {
                         }
                         return history.where((String option) {
                           return option.toLowerCase().contains(
-                            textEditingValue.text.toLowerCase(),
-                          );
+                                textEditingValue.text.toLowerCase(),
+                              );
                         });
                       },
                       onSelected: (String selection) {
                         _urlController.text = selection;
-                        // We don't load here anymore to avoid double loading on Enter.
-                        // Loading is handled by onSubmitted (Enter key) or onTap (Click).
                       },
-                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      fieldViewBuilder:
+                          (context, controller, focusNode, onFieldSubmitted) {
                         return KeyboardListener(
                           focusNode: FocusNode(skipTraversal: true),
                           onKeyEvent: (event) {
@@ -184,76 +188,27 @@ class _UrlInputState extends State<UrlInput> {
                             controller: controller,
                             focusNode: focusNode,
                             decoration: InputDecoration(
-                              hintText:
-                                  htmlService.currentFile != null &&
-                                      htmlService.currentFile!.isUrl
+                              hintText: structure.currentFile != null &&
+                                      structure.currentFile!.isUrl
                                   ? ''
-                                  : htmlService.currentFile != null
-                                  ? 'Local file loaded: ${htmlService.currentFile!.name}'
-                                  : '',
+                                  : structure.currentFile != null
+                                      ? 'Local file loaded: ${structure.currentFile!.name}'
+                                      : '',
                               prefixIcon: IconButton(
                                 icon: const Icon(Icons.link, size: 20),
                                 tooltip: 'Reload',
                                 onPressed: () {
                                   _loadUrl(
-                                    switchToTab: htmlService.activeTabIndex,
+                                    switchToTab: structure.activeTabIndex,
                                   );
                                 },
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              suffixIcon:
-                                  (htmlService.isLoading ||
-                                      (htmlService.webViewLoadingProgress > 0 &&
-                                          htmlService.webViewLoadingProgress <
-                                              1.0))
-                                  ? GestureDetector(
-                                      onTap: () =>
-                                          htmlService.cancelWebViewLoad(),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16.0),
-                                        child: SizedBox(
-                                          width: 12,
-                                          height: 12,
-                                          child: Stack(
-                                            alignment: Alignment.center,
-                                            children: [
-                                              CircularProgressIndicator(
-                                                value:
-                                                    htmlService
-                                                            .webViewLoadingProgress >
-                                                        0
-                                                    ? htmlService
-                                                          .webViewLoadingProgress
-                                                    : null,
-                                                strokeWidth: 1,
-                                              ),
-                                              // if (htmlService
-                                              //         .webViewLoadingProgress >
-                                              //     0)
-                                              //   Text(
-                                              //     '${(htmlService.webViewLoadingProgress * 100).toInt()}%',
-                                              //     style: const TextStyle(
-                                              //         fontSize: 8),
-                                              //   ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  : (_urlController.text.isNotEmpty
-                                        ? IconButton(
-                                            icon: const Icon(
-                                              Icons.clear,
-                                              size: 20,
-                                            ),
-                                            onPressed: () {
-                                              _urlController.clear();
-                                              htmlService.cancelWebViewLoad();
-                                            },
-                                          )
-                                        : null),
+                              suffixIcon: _UrlInputProgress(
+                                  htmlService: htmlService,
+                                  controller: _urlController),
                               contentPadding: const EdgeInsets.symmetric(
                                 vertical: 10,
                                 horizontal: 12,
@@ -263,14 +218,10 @@ class _UrlInputState extends State<UrlInput> {
                             keyboardType: TextInputType.url,
                             textInputAction: TextInputAction.go,
                             onSubmitted: (value) {
-                              // Only apply autocomplete selection if the user has actively navigated to it
-                              // OR if they clicked it (which is handled by onTap/onSelected separately).
-                              // For Enter key, we only want to select if they used arrow keys.
                               if (_userHasNavigated) {
                                 onFieldSubmitted();
                               }
 
-                              // Proceed to load the URL (either the selected one or what was typed)
                               _loadUrl(switchToTab: 0);
                             },
                           ),
@@ -290,7 +241,7 @@ class _UrlInputState extends State<UrlInput> {
                 ],
               ),
               if (_errorMessage.isNotEmpty ||
-                  (htmlService.currentFile?.isError ?? false)) ...[
+                  (structure.currentFile?.isError ?? false)) ...[
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -423,7 +374,7 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
                 color: isHighlighted
                     ? Theme.of(
                         context,
-                      ).colorScheme.primaryContainer.withValues(alpha: 0.3)
+                      ).colorScheme.primaryContainer.withAlpha(77)
                     : null,
                 child: ListTile(
                   title: Text(
@@ -449,4 +400,121 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
       ),
     );
   }
+}
+
+/// Helper component to isolate progress indicator rebuilds
+class _UrlInputProgress extends StatelessWidget {
+  final HtmlService htmlService;
+  final TextEditingController controller;
+
+  const _UrlInputProgress({
+    required this.htmlService,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<HtmlService, _UrlInputProgressData>(
+      selector: (context, service) => _UrlInputProgressData(
+        isLoading: service.isLoading,
+        webViewLoadingProgress: service.webViewLoadingProgress,
+      ),
+      builder: (context, data, child) {
+        final bool showProgress = data.isLoading ||
+            (data.webViewLoadingProgress > 0 &&
+                data.webViewLoadingProgress < 1.0);
+
+        if (showProgress) {
+          return GestureDetector(
+            onTap: () => htmlService.cancelWebViewLoad(),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  value: data.webViewLoadingProgress > 0
+                      ? data.webViewLoadingProgress
+                      : null,
+                  strokeWidth: 1,
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Use ListenableBuilder for the controller text to avoid rebuilding the whole UrlInput
+        return ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) {
+            if (controller.text.isNotEmpty) {
+              return IconButton(
+                icon: const Icon(Icons.clear, size: 20),
+                onPressed: () {
+                  controller.clear();
+                  htmlService.cancelWebViewLoad();
+                },
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        );
+      },
+    );
+  }
+}
+
+@immutable
+class _UrlInputStructure {
+  final String? currentInputText;
+  final dynamic
+      currentFile; // Use dynamic to avoid deep dependency check if not needed
+  final bool isLoading;
+  final int activeTabIndex;
+
+  const _UrlInputStructure({
+    this.currentInputText,
+    this.currentFile,
+    required this.isLoading,
+    required this.activeTabIndex,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _UrlInputStructure &&
+          runtimeType == other.runtimeType &&
+          currentInputText == other.currentInputText &&
+          currentFile == other.currentFile &&
+          isLoading == other.isLoading &&
+          activeTabIndex == other.activeTabIndex;
+
+  @override
+  int get hashCode =>
+      currentInputText.hashCode ^
+      currentFile.hashCode ^
+      isLoading.hashCode ^
+      activeTabIndex.hashCode;
+}
+
+@immutable
+class _UrlInputProgressData {
+  final bool isLoading;
+  final double webViewLoadingProgress;
+
+  const _UrlInputProgressData({
+    required this.isLoading,
+    required this.webViewLoadingProgress,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _UrlInputProgressData &&
+          runtimeType == other.runtimeType &&
+          isLoading == other.isLoading &&
+          webViewLoadingProgress == other.webViewLoadingProgress;
+
+  @override
+  int get hashCode => isLoading.hashCode ^ webViewLoadingProgress.hashCode;
 }

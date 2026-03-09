@@ -345,137 +345,157 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final htmlService = Provider.of<HtmlService>(context);
+    // Use listen: false to prevent the entire HomeScreen from rebuilding
+    // on every single change (like webViewLoadingProgress).
+    // We use Selector below to only rebuild when relevant parts change.
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
 
-    // Update TabController synchronously if content type changed
-    // This MUST happen before building the TabBar to avoid length mismatch
-    final shouldShowBrowser = htmlService.shouldShowBrowserTab;
-
-    if (htmlService.isHtmlOrXml != _lastIsHtmlOrXml ||
-        htmlService.showMetadataTabs != _lastShowMetadataTabs ||
-        htmlService.showServerTabs != _lastShowServerTabs ||
-        htmlService.isBrowserSupported != _lastIsBrowserSupported ||
-        shouldShowBrowser != _lastShouldShowBrowser) {
-      _updateTabs(htmlService);
-    }
-
-    // Handle requested tab switch
-    if (htmlService.requestedTabIndex != null) {
-      final targetIndex = htmlService.requestedTabIndex!;
-      if (targetIndex < _tabController.length) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _tabController.animateTo(targetIndex);
-        });
-      }
-      htmlService.consumeTabSwitchRequest();
-    }
-
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        if (didPop) return;
-        final htmlService = Provider.of<HtmlService>(context, listen: false);
-        if (htmlService.canGoBack) {
-          htmlService.goBack();
-        } else {
-          // Default behavior: exit app if at root
-          final NavigatorState navigator = Navigator.of(context);
-          if (navigator.canPop()) {
-            navigator.pop();
-          } else {
-            await SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-          }
+    return Selector<HtmlService, _HomeScreenStructure>(
+      selector: (context, service) => _HomeScreenStructure(
+        isHtmlOrXml: service.isHtmlOrXml,
+        showMetadataTabs: service.showMetadataTabs,
+        showServerTabs: service.showServerTabs,
+        isBrowserSupported: service.isBrowserSupported,
+        shouldShowBrowserTab: service.shouldShowBrowserTab,
+        browserTabIndex: service.browserTabIndex,
+        currentFile: service.currentFile,
+        isLoading: service.isLoading,
+        requestedTabIndex: service.requestedTabIndex,
+      ),
+      builder: (context, structure, child) {
+        // Update TabController synchronously if content type changed
+        // This MUST happen before building the TabBar to avoid length mismatch
+        if (structure.isHtmlOrXml != _lastIsHtmlOrXml ||
+            structure.showMetadataTabs != _lastShowMetadataTabs ||
+            structure.showServerTabs != _lastShowServerTabs ||
+            structure.isBrowserSupported != _lastIsBrowserSupported ||
+            structure.shouldShowBrowserTab != _lastShouldShowBrowser) {
+          _updateTabs(htmlService);
         }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: GestureDetector(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const AboutScreen(),
+
+        // Handle requested tab switch
+        if (structure.requestedTabIndex != null) {
+          final targetIndex = structure.requestedTabIndex!;
+          if (targetIndex < _tabController.length) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _tabController.animateTo(targetIndex);
+              }
+            });
+          }
+          htmlService.consumeTabSwitchRequest();
+        }
+
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (bool didPop, dynamic result) async {
+            if (didPop) return;
+            final htmlService =
+                Provider.of<HtmlService>(context, listen: false);
+            if (htmlService.canGoBack) {
+              htmlService.goBack();
+            } else {
+              // Default behavior: exit app if at root
+              final NavigatorState navigator = Navigator.of(context);
+              if (navigator.canPop()) {
+                navigator.pop();
+              } else {
+                await SystemChannels.platform
+                    .invokeMethod('SystemNavigator.pop');
+              }
+            }
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const AboutScreen(),
+                    ),
+                  );
+                },
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: Image.asset(
+                          'assets/icon.webp',
+                          width: 28,
+                          height: 28,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      const Text(
+                        'View\nSource\nVibe',
+                        style: TextStyle(fontSize: 10, height: 1),
+                      ),
+                    ],
+                  ),
                 ),
-              );
-            },
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
+              ),
+              actions: const [
+                Toolbar(),
+              ],
+              centerTitle: false,
+            ),
+            body: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                FocusScope.of(context).unfocus();
+              },
+              child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Image.asset(
-                      'assets/icon.webp',
-                      width: 28,
-                      height: 28,
-                      fit: BoxFit.contain,
+                  const UrlInput(),
+                  // The Toolbar with Navigation Tabs
+                  Container(
+                    color: Theme.of(context).colorScheme.surface,
+                    child: TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      labelColor: Theme.of(context).colorScheme.primary,
+                      unselectedLabelColor:
+                          Theme.of(context).colorScheme.onSurfaceVariant,
+                      indicatorColor: Theme.of(context).colorScheme.primary,
+                      indicatorSize: TabBarIndicatorSize.label,
+                      tabs: _getTabs(htmlService),
                     ),
                   ),
-                  const Text(
-                    'View\nSource\nVibe',
-                    style: TextStyle(fontSize: 10, height: 1),
+                  const Divider(height: 1),
+                  Expanded(
+                    child:
+                        (structure.currentFile == null && !structure.isLoading)
+                            ? Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Center(
+                                  child: Text(
+                                    'No file loaded\n\nEnter an url to view the source\nOr share a file or url to this app\nOr tap the folder icon to open a local file',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withAlpha(153),
+                                    ),
+                                  ),
+                                ))
+                            : TabBarView(
+                                controller: _tabController,
+                                children: _getTabViews(
+                                    htmlService, structure.currentFile),
+                              ),
                   ),
                 ],
               ),
             ),
           ),
-          actions: const [
-            Toolbar(),
-          ],
-          centerTitle: false,
-        ),
-        body: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () {
-            FocusScope.of(context).unfocus();
-          },
-          child: Column(
-            children: [
-              const UrlInput(),
-              // The Toolbar with Navigation Tabs
-              Container(
-                color: Theme.of(context).colorScheme.surface,
-                child: TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  labelColor: Theme.of(context).colorScheme.primary,
-                  unselectedLabelColor:
-                      Theme.of(context).colorScheme.onSurfaceVariant,
-                  indicatorColor: Theme.of(context).colorScheme.primary,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  tabs: _getTabs(htmlService),
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: (htmlService.currentFile == null &&
-                        !htmlService.isLoading)
-                    ? Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Center(
-                          child: Text(
-                            'No file loaded\n\nEnter an url to view the source\nOr share a file or url to this app\nOr tap the folder icon to open a local file',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withAlpha(153),
-                            ),
-                          ),
-                        ))
-                    : TabBarView(
-                        controller: _tabController,
-                        children:
-                            _getTabViews(htmlService, htmlService.currentFile),
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -491,6 +511,59 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
   }
+}
+
+/// Helper class to track structure-defining state for HomeScreen
+@immutable
+class _HomeScreenStructure {
+  final bool isHtmlOrXml;
+  final bool showMetadataTabs;
+  final bool showServerTabs;
+  final bool isBrowserSupported;
+  final bool shouldShowBrowserTab;
+  final int browserTabIndex;
+  final HtmlFile? currentFile;
+  final bool isLoading;
+  final int? requestedTabIndex;
+
+  const _HomeScreenStructure({
+    required this.isHtmlOrXml,
+    required this.showMetadataTabs,
+    required this.showServerTabs,
+    required this.isBrowserSupported,
+    required this.shouldShowBrowserTab,
+    required this.browserTabIndex,
+    this.currentFile,
+    required this.isLoading,
+    this.requestedTabIndex,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _HomeScreenStructure &&
+          runtimeType == other.runtimeType &&
+          isHtmlOrXml == other.isHtmlOrXml &&
+          showMetadataTabs == other.showMetadataTabs &&
+          showServerTabs == other.showServerTabs &&
+          isBrowserSupported == other.isBrowserSupported &&
+          shouldShowBrowserTab == other.shouldShowBrowserTab &&
+          browserTabIndex == other.browserTabIndex &&
+          currentFile == other.currentFile &&
+          isLoading == other.isLoading &&
+          requestedTabIndex == other.requestedTabIndex;
+
+  @override
+  int get hashCode =>
+      isHtmlOrXml.hashCode ^
+      showMetadataTabs.hashCode ^
+      showServerTabs.hashCode ^
+      isBrowserSupported.hashCode ^
+      shouldShowBrowserTab.hashCode ^
+      browserTabIndex.hashCode ^
+      currentFile.hashCode ^
+      isLoading.hashCode ^
+      requestedTabIndex.hashCode;
 }
 
 class TabPageWrapper extends StatefulWidget {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:code_forge/code_forge.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -203,11 +204,15 @@ class FileViewer extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // File info header or Search Panel
-        Consumer<HtmlService>(
-          builder: (context, htmlService, child) {
-            if (htmlService.isSearchActive &&
-                htmlService.activeFindController != null) {
+        Selector<HtmlService, _FileViewerHeaderData>(
+          selector: (context, service) => _FileViewerHeaderData(
+            isSearchActive: service.isSearchActive,
+            activeFindController: service.activeFindController,
+            isMedia: service.isMedia,
+            selectedContentType: service.selectedContentType,
+          ),
+          builder: (context, data, child) {
+            if (data.isSearchActive && data.activeFindController != null) {
               return GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: () {
@@ -216,7 +221,7 @@ class FileViewer extends StatelessWidget {
                 child: Container(
                   color: Theme.of(context).cardColor,
                   child: CodeFindPanelView(
-                    controller: htmlService.activeFindController!,
+                    controller: data.activeFindController!,
                     readOnly: false,
                     margin: const EdgeInsets.symmetric(
                         horizontal: 8.0,
@@ -226,7 +231,7 @@ class FileViewer extends StatelessWidget {
               );
             }
 
-            final isTapEnabled = !htmlService.isMedia && file.isTextBased;
+            final isTapEnabled = !data.isMedia && file.isTextBased;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -254,8 +259,7 @@ class FileViewer extends StatelessWidget {
                             children: [
                               Text(
                                 _getDisplayNameForContentType(
-                                    htmlService.selectedContentType ??
-                                        file.extension),
+                                    data.selectedContentType ?? file.extension),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
@@ -276,14 +280,19 @@ class FileViewer extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (!htmlService.isMedia) ...[
+                        if (!data.isMedia) ...[
                           // Find button
                           IconButton(
                             icon: const Icon(Icons.search, size: 20),
                             padding: const EdgeInsets.all(2),
                             constraints: const BoxConstraints(),
                             visualDensity: VisualDensity.compact,
-                            onPressed: () => htmlService.toggleSearch(),
+                            onPressed: () {
+                              final htmlService = Provider.of<HtmlService>(
+                                  context,
+                                  listen: false);
+                              htmlService.toggleSearch();
+                            },
                             tooltip: 'Find',
                           ),
                           const SizedBox(width: 2),
@@ -352,7 +361,9 @@ class FileViewer extends StatelessWidget {
                           // Beautify Toggle button
                           Container(
                             decoration: BoxDecoration(
-                              color: htmlService.isBeautifyEnabled
+                              color: Provider.of<HtmlService>(context,
+                                          listen: false)
+                                      .isBeautifyEnabled
                                   ? Theme.of(context)
                                       .colorScheme
                                       .primary
@@ -362,20 +373,29 @@ class FileViewer extends StatelessWidget {
                             ),
                             child: IconButton(
                               icon: Icon(
-                                htmlService.isBeautifyEnabled
+                                Provider.of<HtmlService>(context, listen: false)
+                                        .isBeautifyEnabled
                                     ? Icons.format_indent_increase
                                     : Icons.format_indent_increase_outlined,
                                 size: 20,
-                                color: htmlService.isBeautifyEnabled
+                                color: Provider.of<HtmlService>(context,
+                                            listen: false)
+                                        .isBeautifyEnabled
                                     ? Theme.of(context).colorScheme.primary
                                     : null,
                               ),
                               padding: const EdgeInsets.all(2),
                               constraints: const BoxConstraints(),
                               visualDensity: VisualDensity.compact,
-                              onPressed: () =>
-                                  htmlService.toggleIsBeautifyEnabled(),
-                              tooltip: htmlService.isBeautifyEnabled
+                              onPressed: () {
+                                final htmlService = Provider.of<HtmlService>(
+                                    context,
+                                    listen: false);
+                                htmlService.toggleIsBeautifyEnabled();
+                              },
+                              tooltip: Provider.of<HtmlService>(context,
+                                          listen: false)
+                                      .isBeautifyEnabled
                                   ? 'Show Raw'
                                   : 'Beautify Code',
                             ),
@@ -433,19 +453,26 @@ class FileViewer extends StatelessWidget {
               }
               return false;
             },
-            child: Consumer<HtmlService>(
-              builder: (context, htmlService, child) {
-                if (htmlService.isMedia) {
+            child: Selector<HtmlService, _FileViewerBodyData>(
+              selector: (context, service) => _FileViewerBodyData(
+                isMedia: service.isMedia,
+                isBeautifyEnabled: service.isBeautifyEnabled,
+                selectedContentType: service.selectedContentType,
+              ),
+              builder: (context, data, child) {
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                if (data.isMedia) {
                   return MediaBrowser(file: file);
                 }
 
-                if (htmlService.isBeautifyEnabled) {
+                if (data.isBeautifyEnabled) {
                   return FutureBuilder<String>(
                     // Key ensures rebuild when content or type changes
                     key: ValueKey(
-                        'beautify_${file.path}_${htmlService.selectedContentType ?? file.extension}'),
+                        'beautify_${file.path}_${data.selectedContentType ?? file.extension}'),
                     future: htmlService.getBeautifiedContent(file.content,
-                        htmlService.selectedContentType ?? file.extension),
+                        data.selectedContentType ?? file.extension),
                     builder: (context, snapshot) {
                       final bool isLoading =
                           snapshot.connectionState != ConnectionState.done ||
@@ -464,6 +491,7 @@ class FileViewer extends StatelessWidget {
                             displayContent,
                             settings,
                             file,
+                            data.selectedContentType,
                           ),
                           if (isLoading)
                             Container(
@@ -489,8 +517,8 @@ class FileViewer extends StatelessWidget {
                 }
 
                 // Default content if beautify is disabled
-                return _buildEditorWithFuture(
-                    context, htmlService, file.content, settings, file);
+                return _buildEditorWithFuture(context, htmlService,
+                    file.content, settings, file, data.selectedContentType);
               },
             ),
           ),
@@ -499,13 +527,18 @@ class FileViewer extends StatelessWidget {
     );
   }
 
-  Widget _buildEditorWithFuture(BuildContext context, HtmlService htmlService,
-      String displayContent, AppSettings settings, HtmlFile file) {
+  Widget _buildEditorWithFuture(
+      BuildContext context,
+      HtmlService htmlService,
+      String displayContent,
+      AppSettings settings,
+      HtmlFile file,
+      String? selectedContentType) {
     // Build the editor, handling both cached (sync) and new (async) states
     // explicitly to prevent flickering and crashes.
     final result = htmlService.buildEditor(
       displayContent,
-      htmlService.selectedContentType ?? file.extension,
+      selectedContentType ?? file.extension,
       context,
       fontSize: settings.fontSize,
       themeName: settings.themeName,
@@ -588,4 +621,65 @@ class SearchHighlightPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+/// Helper classes for FileViewer Selector
+@immutable
+class _FileViewerHeaderData {
+  final bool isSearchActive;
+  final FindController? activeFindController;
+  final bool isMedia;
+  final String? selectedContentType;
+
+  const _FileViewerHeaderData({
+    required this.isSearchActive,
+    this.activeFindController,
+    required this.isMedia,
+    this.selectedContentType,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _FileViewerHeaderData &&
+          runtimeType == other.runtimeType &&
+          isSearchActive == other.isSearchActive &&
+          activeFindController == other.activeFindController &&
+          isMedia == other.isMedia &&
+          selectedContentType == other.selectedContentType;
+
+  @override
+  int get hashCode =>
+      isSearchActive.hashCode ^
+      activeFindController.hashCode ^
+      isMedia.hashCode ^
+      selectedContentType.hashCode;
+}
+
+@immutable
+class _FileViewerBodyData {
+  final bool isMedia;
+  final bool isBeautifyEnabled;
+  final String? selectedContentType;
+
+  const _FileViewerBodyData({
+    required this.isMedia,
+    required this.isBeautifyEnabled,
+    this.selectedContentType,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _FileViewerBodyData &&
+          runtimeType == other.runtimeType &&
+          isMedia == other.isMedia &&
+          isBeautifyEnabled == other.isBeautifyEnabled &&
+          selectedContentType == other.selectedContentType;
+
+  @override
+  int get hashCode =>
+      isMedia.hashCode ^
+      isBeautifyEnabled.hashCode ^
+      selectedContentType.hashCode;
 }

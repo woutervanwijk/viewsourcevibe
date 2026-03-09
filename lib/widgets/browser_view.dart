@@ -227,7 +227,8 @@ class _BrowserViewState extends State<BrowserView> {
         }
       },
       onProgressChanged: (controller, progress) {
-        // Handle progress
+        final htmlService = Provider.of<HtmlService>(context, listen: false);
+        htmlService.updateWebViewLoadingProgress(progress / 100.0);
       },
       onReceivedError: (controller, request, error) {
         if (request.isForMainFrame ?? true) {

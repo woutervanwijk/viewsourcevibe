@@ -213,15 +213,16 @@ class Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<HtmlService>(
-      builder: (context, htmlService, child) {
+    return Selector<HtmlService, bool>(
+      selector: (context, service) => service.canGoBack,
+      builder: (context, canGoBack, child) {
+        final htmlService = Provider.of<HtmlService>(context, listen: false);
         return Row(
           children: [
             IconButton(
               icon: const Icon(Icons.arrow_back, size: 24),
               tooltip: 'Back',
-              onPressed:
-                  htmlService.canGoBack ? () => htmlService.goBack() : null,
+              onPressed: canGoBack ? () => htmlService.goBack() : null,
             ),
             IconButton(
               icon: const Icon(Icons.folder_open),
