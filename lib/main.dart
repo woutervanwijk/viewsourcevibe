@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
@@ -11,6 +12,7 @@ import 'package:app_links/app_links.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:universal_io/io.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 /// Sets up URL scheme handling for deep linking
 Future<void> setupUrlHandling(HtmlService htmlService) async {
@@ -242,6 +244,11 @@ Try these solutions:
 void main() async {
   // Initialize Flutter binding before any async operations
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Disable InAppWebView debug logging
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+    PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
+  }
 
   final htmlService = HtmlService();
   final appSettings = AppSettings();

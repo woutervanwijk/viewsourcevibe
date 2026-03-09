@@ -3,7 +3,7 @@ enum CookieCategory {
   analytics,
   advertising,
   social,
-  functional, // Added new category
+  functional,
   unknown,
 }
 
@@ -56,6 +56,17 @@ class CookieUtils {
     'IDE': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick'},
     'DSID': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick'},
     '_greza_p': {'cat': CookieCategory.functional, 'prov': 'Google Recaptcha'},
+    '_GRECAPTCHA': {
+      'cat': CookieCategory.essential,
+      'prov': 'Google reCAPTCHA'
+    },
+    '__gsas': {'cat': CookieCategory.analytics, 'prov': 'Google Ads'},
+    'pm_sess': {'cat': CookieCategory.functional, 'prov': 'Google'},
+    'cookiePreferences': {
+      'cat': CookieCategory.functional,
+      'prov': 'Google Tag Manager'
+    },
+    'td': {'cat': CookieCategory.analytics, 'prov': 'Google Tag Manager'},
 
     // --- Meta / Facebook ---
     '_fbp': {'cat': CookieCategory.advertising, 'prov': 'Meta Pixel'},
@@ -96,6 +107,7 @@ class CookieUtils {
     'li_sugr': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'UserMatchHistory': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
     'bscookie': {'cat': CookieCategory.social, 'prov': 'LinkedIn'},
+    'bcookie': {'cat': CookieCategory.social, 'prov': 'LinkedIn'},
     'lidc': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'lang': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
 
@@ -137,13 +149,30 @@ class CookieUtils {
     // --- Snowplow ---
     '_sp_': {'cat': CookieCategory.analytics, 'prov': 'Snowplow'},
 
-    // --- CookieHub / Consent ---
+    // --- Cookie Consent (Various) ---
     'cookiehub': {'cat': CookieCategory.essential, 'prov': 'CookieHub'},
     'OptanonConsent': {'cat': CookieCategory.essential, 'prov': 'OneTrust'},
     'OptanonAlertBoxClosed': {
       'cat': CookieCategory.essential,
       'prov': 'OneTrust'
     },
+    'euconsent': {'cat': CookieCategory.essential, 'prov': 'IAB Consent'},
+    'euconsent-v2': {'cat': CookieCategory.essential, 'prov': 'IAB Consent'},
+    'Cookieyes-consent': {'cat': CookieCategory.essential, 'prov': 'CookieYes'},
+    'cookieyes-': {'cat': CookieCategory.essential, 'prov': 'CookieYes'},
+    '_cs_c': {'cat': CookieCategory.essential, 'prov': 'Contentsquare'},
+    'ckns_explicit': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent Manager'
+    },
+    'CookieConsent': {'cat': CookieCategory.essential, 'prov': 'Cookiebot'},
+    'CookieConsentBulkTicket': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookiebot'
+    },
+    'userlang': {'cat': CookieCategory.functional, 'prov': 'Cookiebot'},
+    'consentUUID': {'cat': CookieCategory.essential, 'prov': 'Cookiebot'},
+    'CrossConsent': {'cat': CookieCategory.essential, 'prov': 'Cookiebot'},
 
     // --- Amazon / AWS ---
     'aws-target-visitor-id': {'cat': CookieCategory.analytics, 'prov': 'AWS'},
@@ -184,6 +213,17 @@ class CookieUtils {
     'tt_webid_v2': {'cat': CookieCategory.analytics, 'prov': 'TikTok'},
     '_tiktok_headers': {'cat': CookieCategory.functional, 'prov': 'TikTok'},
 
+    // --- Pinterest ---
+    '_pin_dot': {'cat': CookieCategory.advertising, 'prov': 'Pinterest'},
+    '_pinterest_sess': {'cat': CookieCategory.essential, 'prov': 'Pinterest'},
+    '_pinterest_ct_ua': {'cat': CookieCategory.analytics, 'prov': 'Pinterest'},
+
+    // --- Chartbeat ---
+    '_cb': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
+    '_chartbeat2': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
+    '_cb_ls': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
+    '_cb_cp': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
+
     // --- Advertising & Tracking (General) ---
     '__qca': {'cat': CookieCategory.advertising, 'prov': 'Quantcast'},
     'uuid': {'cat': CookieCategory.advertising, 'prov': 'General AdTech'},
@@ -194,7 +234,30 @@ class CookieUtils {
       'cat': CookieCategory.functional,
       'prov': 'Consent Manager'
     },
-    'euconsent-v2': {'cat': CookieCategory.functional, 'prov': 'IAB Consent'},
+    'Universal_uid': {'cat': CookieCategory.analytics, 'prov': 'Universal ID'},
+    'ltid': {'cat': CookieCategory.analytics, 'prov': 'LiveIntent'},
+    '_li_ss': {'cat': CookieCategory.advertising, 'prov': 'LiveIntent'},
+    '__ain_cid': {'cat': CookieCategory.analytics, 'prov': 'AudiencePlus'},
+    '__aim_hls': {'cat': CookieCategory.analytics, 'prov': 'AudiencePlus'},
+    '__eoi': {'cat': CookieCategory.advertising, 'prov': 'Google Ad Manager'},
+    '_cto_bidid': {'cat': CookieCategory.advertising, 'prov': 'Criteo'},
+    '_pcid': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
+    '_cc_id': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
+    '_st_id': {'cat': CookieCategory.analytics, 'prov': 'StatCounter'},
+    '__tbc': {'cat': CookieCategory.advertising, 'prov': 'Taboola / Piano'},
+    '_pctx': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
+    '_pcus': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
+    '_pprv': {
+      'cat': CookieCategory.essential,
+      'prov': 'Piano Analytics (Privacy)'
+    },
+    'cX_G': {'cat': CookieCategory.analytics, 'prov': 'Piano (Cxense)'},
+    'cx_P': {'cat': CookieCategory.analytics, 'prov': 'Piano (Cxense)'},
+    'xbc': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
+    'permutive-id': {'cat': CookieCategory.analytics, 'prov': 'Permutive'},
+    'ecos.dt': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
+    'ckns_policy': {'cat': CookieCategory.essential, 'prov': 'Consent Manager'},
+    'usnatUUID': {'cat': CookieCategory.essential, 'prov': 'Privacy/Consent'},
 
     // --- Analytics (General) ---
     'mp_': {'cat': CookieCategory.analytics, 'prov': 'Mixpanel'},
@@ -202,9 +265,20 @@ class CookieUtils {
       'cat': CookieCategory.analytics,
       'prov': 'Optimizely'
     },
+    'optimizelySession': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Optimizely'
+    },
     '_ym_uid': {'cat': CookieCategory.analytics, 'prov': 'Yandex Metrica'},
     '_ym_d': {'cat': CookieCategory.analytics, 'prov': 'Yandex Metrica'},
     '_ym_isad': {'cat': CookieCategory.analytics, 'prov': 'Yandex Metrica'},
+    'ELQSTATUS': {'cat': CookieCategory.analytics, 'prov': 'Oracle Eloqua'},
+    'ELOQUA': {'cat': CookieCategory.analytics, 'prov': 'Oracle Eloqua'},
+
+    // --- A/B Testing & Personalization ---
+    '_vwo_': {'cat': CookieCategory.analytics, 'prov': 'VWO'},
+    '_vis_opt_': {'cat': CookieCategory.analytics, 'prov': 'VWO'},
+    '_ga_exp': {'cat': CookieCategory.analytics, 'prov': 'Google Optimize'},
 
     // --- Server / CMS / Tech ---
     'eviivo': {'cat': CookieCategory.essential, 'prov': 'eviivo'},
@@ -221,6 +295,17 @@ class CookieUtils {
       'cat': CookieCategory.functional,
       'prov': 'WordPress'
     },
+    'laravel_session': {'cat': CookieCategory.essential, 'prov': 'Laravel'},
+    'XSRF-TOKEN': {'cat': CookieCategory.essential, 'prov': 'Security/CSRF'},
+    '__Secure-PHPSESSID': {'cat': CookieCategory.essential, 'prov': 'PHP'},
+    'csrftoken': {'cat': CookieCategory.essential, 'prov': 'Django/Security'},
+
+    // --- Security & Bot Management ---
+    'ak_bmsc': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
+    'bm_sv': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
+    'bm_sz': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
+    'bm_mi': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
+    '_abck': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
   };
 
   static CookieInfo analyze(String rawCookie, String source) {
@@ -266,22 +351,13 @@ class CookieUtils {
 
     // process server headers first
     for (var sc in serverCookies) {
-      // Basic parsing of Set-Cookie header to get name
-      // Header format: Name=Value; attributes...
       final firstPart = sc.split(';')[0];
       final name = firstPart.split('=')[0].trim();
-
       merged[name] = analyze(firstPart, 'Server');
     }
 
-    // process browser cookies (overwrite server ones if present, as they are "live")
-    // or keep separate? User said "without browser... only server, with browser... as much as possible"
-    // Usually browser has the latest state.
     final browserList = parseBrowserCookies(browserCookies);
     for (var bc in browserList) {
-      // If it existed from server, we might want to flag it was seen on both?
-      // For now, simplify to just showing unique cookies.
-      // Changing source to 'Browser + Server' if needed, but let's keep it simple.
       if (merged.containsKey(bc.name)) {
         merged[bc.name] = CookieInfo(
             name: bc.name,
