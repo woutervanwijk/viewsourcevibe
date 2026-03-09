@@ -333,6 +333,7 @@ class CookieUtils {
 
     // --- A/B Testing & Personalization ---
     '_vwo_': {'cat': CookieCategory.analytics, 'prov': 'VWO'},
+    '_vwo_ds': {'cat': CookieCategory.analytics, 'prov': 'VWO'},
     '_vis_opt_': {'cat': CookieCategory.analytics, 'prov': 'VWO'},
     '_ga_exp': {'cat': CookieCategory.analytics, 'prov': 'Google Optimize'},
 
@@ -362,6 +363,738 @@ class CookieUtils {
     'bm_sz': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
     'bm_mi': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
     '_abck': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
+
+    // --- Consent Management (Mozilla Rules) ---
+    '.consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (galaxus.de)'
+    },
+    'BCP': {'cat': CookieCategory.essential, 'prov': 'Consent (bing.com)'},
+    'BDK_CookieLawAccepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (borger.dk)'
+    },
+    'BayernMatomo': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bayern.de)'
+    },
+    'CBARIH': {'cat': CookieCategory.essential, 'prov': 'Consent (alza.cz)'},
+    'CONSENTMGR': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (vodafone.com)'
+    },
+    'ConsentChecked': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (intersport.bg)'
+    },
+    'ConsentV2': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (intersport.fo)'
+    },
+    'CookieBanner_Closed': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (jamanetwork.com)'
+    },
+    'CookiePermissionInfo': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (postnl.nl)'
+    },
+    'ECCC': {'cat': CookieCategory.essential, 'prov': 'Consent (ecosia.org)'},
+    'FC2_GDPR': {'cat': CookieCategory.essential, 'prov': 'Consent (fc2.com)'},
+    'FCCDCF': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (kupujemprodajem.com)'
+    },
+    'FCNEC': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (kupujemprodajem.com)'
+    },
+    'HASSEENNOTICE': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (ups.com)'
+    },
+    'OPTOUTCONSENT': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (vodafone.pt)'
+    },
+    'OPTOUTMULTI_TYPE': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (autodesk.com)'
+    },
+    'PRIVACY_POLICY_INFO_2018_OPT_OUT': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (uio.no)'
+    },
+    'RABO_PSL': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (rabobank.nl)'
+    },
+    'SSLB': {'cat': CookieCategory.essential, 'prov': 'Consent (swedbank.se)'},
+    'TC_PRIVACY': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (sparkasse.at)'
+    },
+    'UA_ADS': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (novilist.hr)'
+    },
+    '_CookiePolicyHint': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bequiet.com)'
+    },
+    '__Secure-HO_Cookie_Consent_Declined': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (hetzner.com)'
+    },
+    '__cookie__agree': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (sberdevices.ru)'
+    },
+    '__tnw_cookieConsent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (thenextweb.com)'
+    },
+    '_accept_usage': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (censor.net)'
+    },
+    '_cookies_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (ubuntu.com)'
+    },
+    '_cookies_v2': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (blablacar.com.br)'
+    },
+    '_hjFirstSeen': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (ox.ac.uk)'
+    },
+    '_s.cookie_consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (smallpdf.com)'
+    },
+    '_tt_enable_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (eventbrite.com)'
+    },
+    '_youtube_vimeo_vid': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (verbatim.co.il)'
+    },
+    'accept_cookies': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (aemet.es)'
+    },
+    'accepts-cookies': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (milenio.com)'
+    },
+    'addtl_consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (promotions.hu)'
+    },
+    'analytic': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (supersport.hr)'
+    },
+    'analytics_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (aboutcookies.org)'
+    },
+    'and_cba_EN_US': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (android.com)'
+    },
+    'approve': {'cat': CookieCategory.essential, 'prov': 'Consent (linker.hr)'},
+    'bolConsentChoices': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bol.com)'
+    },
+    'c24consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (check24.de)'
+    },
+    'cb': {'cat': CookieCategory.essential, 'prov': 'Consent (threads.net)'},
+    'cc_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (yazio.com)'
+    },
+    'cc_cookie_accept': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (petel.bg)'
+    },
+    'cck1': {'cat': CookieCategory.essential, 'prov': 'Consent (europa.eu)'},
+    'ck': {'cat': CookieCategory.essential, 'prov': 'Consent (ilovepdf.com)'},
+    'cmc_gdpr_hide': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (coinmarketcap.com)'
+    },
+    'cocos': {'cat': CookieCategory.essential, 'prov': 'Consent (t-mobile.cz)'},
+    'consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (science.org)'
+    },
+    'consentLevel': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (web.de)'
+    },
+    'consent_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (worldbank.org)'
+    },
+    'consent_functional': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (huk24.de)'
+    },
+    'consent_marketing': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (huk24.de)'
+    },
+    'consent_status': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (immobilienscout24.de)'
+    },
+    'consent_technical': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (huk24.de)'
+    },
+    'consent_version': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (huk24.de)'
+    },
+    'cookie-agreed': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (gsis.gr)'
+    },
+    'cookie-allow-necessary': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bundesfinanzministerium.de)'
+    },
+    'cookie-allow-tracking': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bundesfinanzministerium.de)'
+    },
+    'cookie-banner': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bundesfinanzministerium.de)'
+    },
+    'cookie-banner-acceptance-state': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (migros.ch)'
+    },
+    'cookie-consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (tiktok.com)'
+    },
+    'cookie-policy-agreement': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (anwb.nl)'
+    },
+    'cookie-preference': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (korodrogerie.de)'
+    },
+    'cookie-preferences': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (coolblue.nl)'
+    },
+    'cookieAgree': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (reg.ru)'
+    },
+    'cookieApprove': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (nv.ua)'
+    },
+    'cookieBarSeen': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (olx.ua)'
+    },
+    'cookieChoice': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (ok.ru)'
+    },
+    'cookieConsent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (telekom.mk)'
+    },
+    'cookieConsentVersion': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (telekom.sk)'
+    },
+    'cookieControl': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (teamspeak.com)'
+    },
+    'cookieControlPrefs': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (zamunda.net)'
+    },
+    'cookieControllerStatus': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (verbatim.co.il)'
+    },
+    'cookieDeclined': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (grundstoff.net)'
+    },
+    'cookieNotification': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (vegetology.com)'
+    },
+    'cookiePolicy': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (pnas.org)'
+    },
+    'cookiePolicyConfirmation': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (halooglasi.com)'
+    },
+    'cookieSettings': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (steamcommunity.com)'
+    },
+    'cookie_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (aboutcookies.org)'
+    },
+    'cookie_banner': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bitly.com)'
+    },
+    'cookie_consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (arbeitsagentur.de)'
+    },
+    'cookie_consent_essential': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (opera.com)'
+    },
+    'cookie_consent_marketing': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (opera.com)'
+    },
+    'cookie_dismiss': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (duh.de)'
+    },
+    'cookie_functional': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bequiet.com)'
+    },
+    'cookie_manager': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (credit-agricole.com)'
+    },
+    'cookie_manager_cookie_marketing_enabled': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (credit-agricole.it)'
+    },
+    'cookie_manager_cookie_necessary_enabled': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (credit-agricole.it)'
+    },
+    'cookie_manager_cookie_statistic_enabled': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (credit-agricole.it)'
+    },
+    'cookie_manager_policy_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (credit-agricole.it)'
+    },
+    'cookie_marketing': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bequiet.com)'
+    },
+    'cookie_notice_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (danas.rs)'
+    },
+    'cookie_policy_agreement': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (chollometro.com)'
+    },
+    'cookiebanner': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (thw.de)'
+    },
+    'cookiebanner_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (raspberrypi.com)'
+    },
+    'cookieconsent_dismissed': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (online-filmek.me)'
+    },
+    'cookieconsent_status': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (021.rs)'
+    },
+    'cookiehint': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (dataport.de)'
+    },
+    'cookielaw': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (openwrt.org)'
+    },
+    'cookiepermission': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (seasonic.com)'
+    },
+    'cookies': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (deutschetelekomitsolutions.sk)'
+    },
+    'cookiesAccepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (onlyfans.com)'
+    },
+    'cookiesAgreement': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (dnevnik.bg)'
+    },
+    'cookiesPolicy': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (elcorteingles.es)'
+    },
+    'cookiesPrivacyPolicy': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (akyga.com)'
+    },
+    'cookiesPrivacyPolicyExtended': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (akyga.com)'
+    },
+    'cookies_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (mindfactory.de)'
+    },
+    'cookies_denied': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (aboutcookies.org)'
+    },
+    'cookies_ok': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (project529.com)'
+    },
+    'cookiesconsent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (alo.bg)'
+    },
+    'cookiesjsr': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (mediamarktsaturn.com)'
+    },
+    'corec': {'cat': CookieCategory.essential, 'prov': 'Consent (t-mobile.cz)'},
+    'cpnbCookiesDeclined': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (vodafone.pf)'
+    },
+    'cpnb_cookiesSettings': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (vodafone.pf)'
+    },
+    'cto_bundle': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (sport24.gr)'
+    },
+    'cuPivacyNotice': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (columbia.edu)'
+    },
+    'd_prefs': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (twitter.com)'
+    },
+    'data_consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (pricerunner.dk)'
+    },
+    'dont-track': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (chollometro.com)'
+    },
+    'dp-cookie-consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bob-sh.de)'
+    },
+    'eclipse_cookieconsent_status': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (adoptium.net)'
+    },
+    'ekConsentTcf2': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (kleinanzeigen.de)'
+    },
+    'et_cookies': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (elegantthemes.com)'
+    },
+    'eu_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (reddit.com)'
+    },
+    'euconsent-bypass': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (web.de)'
+    },
+    'f_c': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (chollometro.com)'
+    },
+    'fedconsent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (belgium.be)'
+    },
+    'fucking-eu-cookies': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bazos.sk)'
+    },
+    'functionalCookieStatus': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (verbatim.co.il)'
+    },
+    'g_p': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (chollometro.com)'
+    },
+    'gdpr': {'cat': CookieCategory.essential, 'prov': 'Consent (kinopoisk.ru)'},
+    'gdpr_agreed': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (usnews.com)'
+    },
+    'googleAnalyticsCookieStatus': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (verbatim.co.il)'
+    },
+    'gsbbanner': {'cat': CookieCategory.essential, 'prov': 'Consent (bmbf.de)'},
+    'happycow-cookie-policy': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (happycow.net)'
+    },
+    'hideCookieBanner': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (substack.com)'
+    },
+    'hidecookie': {'cat': CookieCategory.essential, 'prov': 'Consent (vrn.de)'},
+    'isReadCookiePolicyDNT': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (asus.com)'
+    },
+    'isReadCookiePolicyDNTAa': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (asus.com)'
+    },
+    'isTrackingConsentGiven': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bund.de)'
+    },
+    'is_agree': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (gordonua.com)'
+    },
+    'js-cookie-opt-in__consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (anexia.com)'
+    },
+    'ks-cookie-consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (roku.com)'
+    },
+    'legal_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (meteo.be)'
+    },
+    'mal_consent_gdpr_personalization': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (mall.cz)'
+    },
+    'mal_consent_gdpr_remarketing': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (mall.cz)'
+    },
+    'marketing': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (supersport.hr)'
+    },
+    'marketing_consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (arbeitsagentur.de)'
+    },
+    'mdpi_cookies_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (mdpi.com)'
+    },
+    'meta_connect_cookies_session': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (metaconnect.com)'
+    },
+    'miCookieOptOut': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (obi.de)'
+    },
+    'mkto_opt_out': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (washington.edu)'
+    },
+    'moove_gdpr_popup': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (endorfy.com)'
+    },
+    'notice_gdpr_prefs': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (flickr.com)'
+    },
+    'nrkno-cookie-information': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (nrk.no)'
+    },
+    'obiConsent': {'cat': CookieCategory.essential, 'prov': 'Consent (obi.de)'},
+    'oil_data': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (tagesanzeiger.ch)'
+    },
+    'onleiheTracking': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (onleihe.de)'
+    },
+    'optout': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (indiatimes.com)'
+    },
+    'orange_cookieconsent_dismissed': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (orange.sn)'
+    },
+    'osano_consentmanager': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (wiley.com)'
+    },
+    'p': {'cat': CookieCategory.essential, 'prov': 'Consent (etsy.com)'},
+    'paydirektCookieAllowed': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (paydirekt.de)'
+    },
+    'paydirektCookieAllowedPWS': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (paydirekt.de)'
+    },
+    'personalization_consent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (arbeitsagentur.de)'
+    },
+    'policy_level': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (skroutz.gr)'
+    },
+    'politica_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (dedeman.ro)'
+    },
+    'polityka15': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (nazwa.pl)'
+    },
+    'privacy': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (teamgroupinc.com)'
+    },
+    'privacySettings': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (deepl.com)'
+    },
+    'privacy_accepted': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (naslovi.net)'
+    },
+    'privacy_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bakecaincontrii.com)'
+    },
+    'purpose_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (telekom.sk)'
+    },
+    'pwaconsent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (mediamarkt.at)'
+    },
+    'receiver_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (telekom.sk)'
+    },
+    'request_consent_v': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (bahn.de)'
+    },
+    'sbrf.pers_notice': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (sberbank.ru)'
+    },
+    'sensitive_pixel_option': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (wordpress.com)'
+    },
+    'show_gdpr_consent_messaging': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (nbcnews.com)'
+    },
+    'site_cookie_info_i': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (intersport.mk)'
+    },
+    'sq': {'cat': CookieCategory.essential, 'prov': 'Consent (nike.com)'},
+    'startsiden-gdpr-disclaimer': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (startsiden.no)'
+    },
+    'syno_confirm_v4_answer': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (synology.cn)'
+    },
+    'tp_privacy_base': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (tp-link.com)'
+    },
+    'tp_privacy_marketing': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (tp-link.com)'
+    },
+    'trackingconsent': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (abc.net.au)'
+    },
+    'tv2samtykke': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (tv2.no)'
+    },
+    'twtr_pixel_opt_in': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (twitter.com)'
+    },
+    'user_allowed_save_cookie': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (altex.ro)'
+    },
+    'uw_marketo_opt_in': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (washington.edu)'
+    },
+    'vfconsents': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (vodafone.cz)'
+    },
+    'viewed_cookie_policy': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (katalozi.net)'
+    },
+    'wa_cb': {
+      'cat': CookieCategory.essential,
+      'prov': 'Consent (whatsapp.com)'
+    },
+    'yleconsent': {'cat': CookieCategory.essential, 'prov': 'Consent (yle.fi)'},
   };
 
   static CookieInfo analyze(String rawCookie, String source) {
