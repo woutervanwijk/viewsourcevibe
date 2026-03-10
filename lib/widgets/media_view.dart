@@ -287,12 +287,23 @@ class MediaView extends StatelessWidget {
 
     // Decode data URI if present
     Uint8List? dataBytes;
-    if (isInline && src.startsWith('data:image/svg+xml;base64,')) {
-      try {
-        final base64String = src.split(',').last;
-        dataBytes = base64Decode(base64String);
-      } catch (e) {
-        debugPrint('Error decoding SVG data URI: $e');
+    bool isSvg = false;
+    if (isInline) {
+      if (src.startsWith('data:image/svg+xml;base64,')) {
+        isSvg = true;
+        try {
+          final base64String = src.split(',').last;
+          dataBytes = base64Decode(base64String);
+        } catch (e) {
+          debugPrint('Error decoding SVG data URI: $e');
+        }
+      } else if (src.startsWith('data:image/')) {
+        try {
+          final base64String = src.split(',').last;
+          dataBytes = base64Decode(base64String);
+        } catch (e) {
+          debugPrint('Error decoding image data URI: $e');
+        }
       }
     }
 
@@ -331,7 +342,8 @@ class MediaView extends StatelessWidget {
                       ? Colors.grey[900]!
                       : const Color(0xFFFFFFFF),
                 ),
-                child: _buildImageContent(src, isInline, dataBytes),
+                child:
+                    _buildImageContent(src, isInline, dataBytes, isSvg: isSvg),
               ),
             ),
             Container(
@@ -368,29 +380,41 @@ class MediaView extends StatelessWidget {
     );
   }
 
-  Widget _buildImageContent(String src, bool isInline, Uint8List? dataBytes) {
+  Widget _buildImageContent(String src, bool isInline, Uint8List? dataBytes,
+      {bool isSvg = false}) {
     // If the image has a transparent background, the checkerboard shows through.
     // The text is separate (in a Column), so it shouldn't be obscured by the image itself.
     // However, if the aspect ratio is tight, the text might be pushed off or clipped.
     // We already use Expanded for the image, so it should shrink to fit available space.
     if (isInline && dataBytes != null) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-          final h =
-              constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
-          return Center(
-            child: SvgPicture.memory(
-              dataBytes,
-              width: w,
-              height: h,
-              fit: BoxFit.contain,
-              placeholderBuilder: (context) =>
-                  const CircularProgressIndicator(),
-            ),
-          );
-        },
-      );
+      if (isSvg) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return Center(
+              child: SvgPicture.memory(
+                dataBytes,
+                fit: BoxFit.contain,
+                placeholderBuilder: (context) => const Center(
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      } else {
+        return Center(
+          child: Image.memory(
+            dataBytes,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) =>
+                const Icon(Icons.broken_image, color: Colors.grey),
+          ),
+        );
+      }
     }
 
     // For inline SVGs that indicate base64 but failed to decode string
@@ -415,11 +439,18 @@ class MediaView extends StatelessWidget {
               ),
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
-                return CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
+                return Center(
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  ),
                 );
               },
             ),
@@ -507,15 +538,9 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final w =
-                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            final h =
-                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
             return Center(
               child: SvgPicture.memory(
                 snapshot.data!,
-                width: w,
-                height: h,
                 fit: widget.fit,
                 placeholderBuilder: widget.placeholderBuilder,
               ),

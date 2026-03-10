@@ -436,7 +436,15 @@ class ProbeCookiesView extends ProbeViewBase {
   @override
   Widget buildContent(BuildContext context, HtmlService htmlService,
       Map<String, dynamic> result, AppSettings settings) {
-    final List<dynamic> cookies = result['cookies'] ?? [];
+    var cookies = result['analyzedCookies'] as List<dynamic>? ?? [];
+
+    // Fallback if analyzedCookies is empty but raw cookies exist (e.g. during a transition)
+    if (cookies.isEmpty && result['cookies'] != null) {
+      final raw = result['cookies'] as List;
+      if (raw.isNotEmpty && raw[0] is Map) {
+        cookies = raw;
+      }
+    }
 
     if (cookies.isEmpty) {
       return const Center(child: Text('No cookies detected.'));

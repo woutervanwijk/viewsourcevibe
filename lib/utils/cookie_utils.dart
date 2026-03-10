@@ -15,6 +15,10 @@ class CookieInfo {
   final String? provider;
   final String source; // 'Server' or 'Browser'
 
+  final String? expires;
+  final bool secure;
+  final bool httpOnly;
+
   CookieInfo({
     required this.name,
     required this.value,
@@ -22,10 +26,17 @@ class CookieInfo {
     required this.category,
     this.provider,
     required this.source,
+    this.expires,
+    this.secure = false,
+    this.httpOnly = false,
   });
 }
 
 class CookieUtils {
+  static final List<String> _prefixKeys = _knownCookies.keys
+      .where((k) => k.endsWith('_') || k.endsWith('-'))
+      .toList();
+
   static final Map<String, Map<String, dynamic>> _knownCookies = {
     // --- Google & DoubleClick ---
     '_ga': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
@@ -1096,16 +1107,31 @@ class CookieUtils {
     },
     'yleconsent': {'cat': CookieCategory.essential, 'prov': 'Consent (yle.fi)'},
     // --- Open Cookie Database (Jack Kwakman) ---
-    '.ASPXANONYMOUS': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    '.ASPXAUTH': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    '.AspNetCore.Antiforgery.': {'cat': CookieCategory.essential, 'prov': 'Microsoft'},
-    '.AspNetCore.Mvc.CookieTempDataProvider': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
+    '.ASPXANONYMOUS': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    '.ASPXAUTH': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    '.AspNetCore.Antiforgery.': {
+      'cat': CookieCategory.essential,
+      'prov': 'Microsoft'
+    },
+    '.AspNetCore.Mvc.CookieTempDataProvider': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
     '.auth': {'cat': CookieCategory.functional, 'prov': 'AFAS'},
     '.secureclient': {'cat': CookieCategory.functional, 'prov': 'AFAS'},
     '.securesession': {'cat': CookieCategory.functional, 'prov': 'AFAS'},
     '.stateflags': {'cat': CookieCategory.functional, 'prov': 'AFAS'},
     'A': {'cat': CookieCategory.advertising, 'prov': 'Google'},
-    'AADNonce.forms': {'cat': CookieCategory.functional, 'prov': 'Microsoft Dynamics'},
+    'AADNonce.forms': {
+      'cat': CookieCategory.functional,
+      'prov': 'Microsoft Dynamics'
+    },
     'AADSSO': {'cat': CookieCategory.functional, 'prov': 'Bing / Microsoft'},
     'ABSELB': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
     'ABTasty': {'cat': CookieCategory.analytics, 'prov': 'ABTasty'},
@@ -1126,31 +1152,73 @@ class CookieUtils {
     'AMP_TOKEN': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     'ANID': {'cat': CookieCategory.functional, 'prov': 'Google AdSense'},
     'ANON': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
-    'APC': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick/Google Marketing'},
+    'APC': {
+      'cat': CookieCategory.advertising,
+      'prov': 'DoubleClick/Google Marketing'
+    },
     'APID': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
     'APIDTS': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
     'ASLBSA': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'ASLBSACORS': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
+    'ASLBSACORS': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
     'ASP.NET_Sessio': {'cat': CookieCategory.functional, 'prov': 'Microsoft'},
-    'ASP.NET_Sessio_Fallback': {'cat': CookieCategory.functional, 'prov': 'Microsoft'},
-    'ASPSESSIO': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
+    'ASP.NET_Sessio_Fallback': {
+      'cat': CookieCategory.functional,
+      'prov': 'Microsoft'
+    },
+    'ASPSESSIO': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
     'ATN': {'cat': CookieCategory.advertising, 'prov': 'Atlas'},
     'AUTH_SESSION_ID': {'cat': CookieCategory.functional, 'prov': 'Keycloak'},
-    'AUTH_SESSION_ID_LEGACY': {'cat': CookieCategory.functional, 'prov': 'Keycloak'},
-    'AWSALBTG': {'cat': CookieCategory.functional, 'prov': 'Amazon Web Services'},
-    'AWSALBTGCORS': {'cat': CookieCategory.functional, 'prov': 'Amazon Web Services'},
+    'AUTH_SESSION_ID_LEGACY': {
+      'cat': CookieCategory.functional,
+      'prov': 'Keycloak'
+    },
+    'AWSALBTG': {
+      'cat': CookieCategory.functional,
+      'prov': 'Amazon Web Services'
+    },
+    'AWSALBTGCORS': {
+      'cat': CookieCategory.functional,
+      'prov': 'Amazon Web Services'
+    },
     'AWSELB': {'cat': CookieCategory.functional, 'prov': 'Amazon Web Services'},
-    'AWSELBCORS': {'cat': CookieCategory.functional, 'prov': 'Amazon Web Services'},
+    'AWSELBCORS': {
+      'cat': CookieCategory.functional,
+      'prov': 'Amazon Web Services'
+    },
     'ActionSetHistory': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
     'AdID': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'AlteonP': {'cat': CookieCategory.functional, 'prov': 'Alteon'},
-    'AnalyticsSyncHistory': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
-    'ApplicationGatewayAffinity': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'ApplicationGatewayAffinityCORS': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
+    'AnalyticsSyncHistory': {
+      'cat': CookieCategory.analytics,
+      'prov': 'LinkedIn'
+    },
+    'ApplicationGatewayAffinity': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'ApplicationGatewayAffinityCORS': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
     'BAYEAX_BROWSER': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'BCPermissionLevel': {'cat': CookieCategory.functional, 'prov': 'Blueconic.com'},
-    'BCReferrerOverrule': {'cat': CookieCategory.advertising, 'prov': 'Blueconic.com'},
-    'BCRefusedObjectives': {'cat': CookieCategory.advertising, 'prov': 'Blueconic.com'},
+    'BCPermissionLevel': {
+      'cat': CookieCategory.functional,
+      'prov': 'Blueconic.com'
+    },
+    'BCReferrerOverrule': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Blueconic.com'
+    },
+    'BCRefusedObjectives': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Blueconic.com'
+    },
     'BCRevision': {'cat': CookieCategory.advertising, 'prov': 'Blueconic.com'},
     'BCSessionID': {'cat': CookieCategory.advertising, 'prov': 'Blueconic.com'},
     'BCTempID': {'cat': CookieCategory.advertising, 'prov': 'Blueconic.com'},
@@ -1164,7 +1232,10 @@ class CookieUtils {
     'BVBRANDSID': {'cat': CookieCategory.analytics, 'prov': 'Bazaar Voice'},
     'BVID': {'cat': CookieCategory.advertising, 'prov': 'Bazaar Voice'},
     'BVSID': {'cat': CookieCategory.advertising, 'prov': 'Bazaar Voice'},
-    'BizographicsOptOut': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
+    'BizographicsOptOut': {
+      'cat': CookieCategory.advertising,
+      'prov': 'LinkedIn'
+    },
     'BlurTime': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
     'BrowserId': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'BrowserId_sec': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
@@ -1181,15 +1252,24 @@ class CookieUtils {
     'CMPS': {'cat': CookieCategory.advertising, 'prov': 'Casale Media'},
     'CMSCookieLevel': {'cat': CookieCategory.functional, 'prov': 'Kentico'},
     'CMSCsrfCookie': {'cat': CookieCategory.essential, 'prov': 'Kentico'},
-    'CMSLandingPageLoaded': {'cat': CookieCategory.analytics, 'prov': 'Kentico'},
-    'CMSPreferredCulture': {'cat': CookieCategory.functional, 'prov': 'Kentico'},
+    'CMSLandingPageLoaded': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Kentico'
+    },
+    'CMSPreferredCulture': {
+      'cat': CookieCategory.functional,
+      'prov': 'Kentico'
+    },
     'CMST': {'cat': CookieCategory.advertising, 'prov': 'Casale Media'},
     'CMSUserPage': {'cat': CookieCategory.analytics, 'prov': 'Kentico'},
     'COKENBLD': {'cat': CookieCategory.functional, 'prov': 'PubMatic'},
     'COMPASS': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'COOKIELAW': {'cat': CookieCategory.functional, 'prov': 'Lightspeed'},
     'COOKIELAW_ADS': {'cat': CookieCategory.functional, 'prov': 'Lightspeed'},
-    'COOKIELAW_SOCIAL': {'cat': CookieCategory.functional, 'prov': 'Lightspeed'},
+    'COOKIELAW_SOCIAL': {
+      'cat': CookieCategory.functional,
+      'prov': 'Lightspeed'
+    },
     'COOKIELAW_STATS': {'cat': CookieCategory.functional, 'prov': 'Lightspeed'},
     'CPSessID': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
     'CRAFT_CSRF_TOKEN': {'cat': CookieCategory.essential, 'prov': 'CraftCMS'},
@@ -1200,11 +1280,23 @@ class CookieUtils {
     'ClickAndChange': {'cat': CookieCategory.functional, 'prov': 'Jimdo'},
     'Comp': {'cat': CookieCategory.advertising, 'prov': 'Smartadserver'},
     'Conversion': {'cat': CookieCategory.advertising, 'prov': 'Google Ads'},
-    'CookieConsentBulkSetting-': {'cat': CookieCategory.functional, 'prov': 'Cookiebot'},
-    'CookieConsentPolicy': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'CookieConsentBulkSetting-': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookiebot'
+    },
+    'CookieConsentPolicy': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'CookieControl': {'cat': CookieCategory.functional, 'prov': 'Civic'},
-    'CookieLawInfoConsent': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'CookieScriptConsent': {'cat': CookieCategory.functional, 'prov': 'Cookie Script'},
+    'CookieLawInfoConsent': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'CookieScriptConsent': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Script'
+    },
     'CraftSessionId': {'cat': CookieCategory.functional, 'prov': 'CraftCMS'},
     'CurrentContact': {'cat': CookieCategory.analytics, 'prov': 'Kentico'},
     'DEVICE_INFO': {'cat': CookieCategory.functional, 'prov': 'Youtube'},
@@ -1219,16 +1311,31 @@ class CookieUtils {
     'DPFQ': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
     'DPPIX_ON': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
     'DPSync': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
-    'DSP_UID': {'cat': CookieCategory.advertising, 'prov': 'Fidelity-media.com'},
+    'DSP_UID': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Fidelity-media.com'
+    },
     'DV': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'DYID': {'cat': CookieCategory.functional, 'prov': 'Dynamic Yield'},
     'DYSES': {'cat': CookieCategory.functional, 'prov': 'Dynamic Yield'},
     'Datadome': {'cat': CookieCategory.functional, 'prov': 'Datadome'},
     'DcLcid': {'cat': CookieCategory.functional, 'prov': 'Microsoft Dynamics'},
-    'DotMetrics.DeviceKey': {'cat': CookieCategory.analytics, 'prov': 'Dotmetrics'},
-    'DotMetrics.SessionCookieTemp': {'cat': CookieCategory.analytics, 'prov': 'Dotmetrics'},
-    'DotMetrics.SessionCookieTempTimed': {'cat': CookieCategory.analytics, 'prov': 'Dotmetrics'},
-    'DotMetrics.UniqueUserIdentityCookie': {'cat': CookieCategory.analytics, 'prov': 'Dotmetrics'},
+    'DotMetrics.DeviceKey': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Dotmetrics'
+    },
+    'DotMetrics.SessionCookieTemp': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Dotmetrics'
+    },
+    'DotMetrics.SessionCookieTempTimed': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Dotmetrics'
+    },
+    'DotMetrics.UniqueUserIdentityCookie': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Dotmetrics'
+    },
     'DotomiSession_': {'cat': CookieCategory.advertising, 'prov': 'Dotomi'},
     'DotomiStatus': {'cat': CookieCategory.advertising, 'prov': 'Dotomi'},
     'DotomiSync': {'cat': CookieCategory.advertising, 'prov': 'Dotomi'},
@@ -1236,17 +1343,32 @@ class CookieUtils {
     'EBFC': {'cat': CookieCategory.advertising, 'prov': 'Adform'},
     'EBFCD': {'cat': CookieCategory.advertising, 'prov': 'Adform'},
     'EE': {'cat': CookieCategory.advertising, 'prov': 'Nielsen'},
-    'FDLBCAMPAIGNCDOM': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
+    'FDLBCAMPAIGNCDOM': {
+      'cat': CookieCategory.functional,
+      'prov': 'Command Act'
+    },
     'FDLBCTLY': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
     'FDLBFIRST': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
     'FDLBFIRSTAPI': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
-    'FDLBFIRSTCAMPAIGN': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
-    'FDLBFIRSTCAMPAIGNEF': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
+    'FDLBFIRSTCAMPAIGN': {
+      'cat': CookieCategory.functional,
+      'prov': 'Command Act'
+    },
+    'FDLBFIRSTCAMPAIGNEF': {
+      'cat': CookieCategory.functional,
+      'prov': 'Command Act'
+    },
     'FDLBFIRSTCMP': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
     'FDLBFIRSTDATA': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
-    'FDLBFIRSTEVENTS': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
+    'FDLBFIRSTEVENTS': {
+      'cat': CookieCategory.functional,
+      'prov': 'Command Act'
+    },
     'FDLBFIRSTTMS': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
-    'FLC': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick/Google Marketing'},
+    'FLC': {
+      'cat': CookieCategory.advertising,
+      'prov': 'DoubleClick/Google Marketing'
+    },
     'FPAU': {'cat': CookieCategory.advertising, 'prov': 'Google Analytics'},
     'FPGCLAW': {'cat': CookieCategory.advertising, 'prov': 'Google Ads'},
     'FPGCLDC': {'cat': CookieCategory.advertising, 'prov': 'Google'},
@@ -1261,7 +1383,10 @@ class CookieUtils {
     'FunctionalCookie': {'cat': CookieCategory.functional, 'prov': 'OneTrust'},
     'GCLB': {'cat': CookieCategory.functional, 'prov': 'Google'},
     'GCM': {'cat': CookieCategory.advertising, 'prov': 'Adform'},
-    'GED_PLAYLIST_ACTIVITY': {'cat': CookieCategory.advertising, 'prov': 'Google AdSense'},
+    'GED_PLAYLIST_ACTIVITY': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Google AdSense'
+    },
     'GN_PREF': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'GPS': {'cat': CookieCategory.advertising, 'prov': 'Youtube'},
     'GRV_BHV_BRND_': {'cat': CookieCategory.advertising, 'prov': 'Groovinads'},
@@ -1277,7 +1402,10 @@ class CookieUtils {
     'G_AUTHUSER_H': {'cat': CookieCategory.functional, 'prov': 'Google'},
     'Gdyn': {'cat': CookieCategory.analytics, 'prov': 'Gemius'},
     'GeoIP': {'cat': CookieCategory.analytics, 'prov': 'Wikimedia'},
-    'GoogleAdServingTest': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick/Google Marketing'},
+    'GoogleAdServingTest': {
+      'cat': CookieCategory.advertising,
+      'prov': 'DoubleClick/Google Marketing'
+    },
     'HAAPPLB': {'cat': CookieCategory.functional, 'prov': 'Civic'},
     'HACIVIC': {'cat': CookieCategory.functional, 'prov': 'Civic'},
     'HACIVICLB': {'cat': CookieCategory.functional, 'prov': 'Civic'},
@@ -1285,11 +1413,17 @@ class CookieUtils {
     'Hm_lpvt_': {'cat': CookieCategory.analytics, 'prov': 'Baidu'},
     'Hm_lvt_': {'cat': CookieCategory.analytics, 'prov': 'Baidu'},
     'Host-ERIC_PROD-': {'cat': CookieCategory.essential, 'prov': 'Salesforce'},
-    'ID': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick/Google Marketing'},
+    'ID': {
+      'cat': CookieCategory.advertising,
+      'prov': 'DoubleClick/Google Marketing'
+    },
     'IDSYNC': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
     'IMRID': {'cat': CookieCategory.advertising, 'prov': 'Nielsen'},
     'INDEED_CSRF_TOKEN': {'cat': CookieCategory.essential, 'prov': 'Indeed'},
-    'INGRESSCOOKIE': {'cat': CookieCategory.functional, 'prov': 'NGINX Ingresss'},
+    'INGRESSCOOKIE': {
+      'cat': CookieCategory.functional,
+      'prov': 'NGINX Ingresss'
+    },
     'IRLD': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
     'JSESSIO': {'cat': CookieCategory.functional, 'prov': 'Oracle'},
     'KADUSERCOOKIE': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
@@ -1300,12 +1434,18 @@ class CookieUtils {
     'KC_STATE_CHECKER': {'cat': CookieCategory.functional, 'prov': 'Keycloak'},
     'KEYCLOAK_IDENTITY': {'cat': CookieCategory.functional, 'prov': 'Keycloak'},
     'KEYCLOAK_LOCALE': {'cat': CookieCategory.functional, 'prov': 'Keycloak'},
-    'KEYCLOAK_REMEMBER_ME': {'cat': CookieCategory.functional, 'prov': 'Keycloak'},
+    'KEYCLOAK_REMEMBER_ME': {
+      'cat': CookieCategory.functional,
+      'prov': 'Keycloak'
+    },
     'KEYCLOAK_SESSION': {'cat': CookieCategory.functional, 'prov': 'Keycloak'},
     'KRTBCOOKIE_': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
     'KTPCACOOKIE': {'cat': CookieCategory.functional, 'prov': 'PubMatic'},
     'KelkooID': {'cat': CookieCategory.advertising, 'prov': 'Kelkoo'},
-    'KievRPSAuth': {'cat': CookieCategory.functional, 'prov': 'Bing / Microsoft'},
+    'KievRPSAuth': {
+      'cat': CookieCategory.functional,
+      'prov': 'Bing / Microsoft'
+    },
     'Kiyohnl': {'cat': CookieCategory.functional, 'prov': 'Kiyoh'},
     'LANG': {'cat': CookieCategory.functional, 'prov': 'Piano'},
     'LANG_CHANGED': {'cat': CookieCategory.functional, 'prov': 'Piano'},
@@ -1318,20 +1458,32 @@ class CookieUtils {
     'MRM_UID': {'cat': CookieCategory.advertising, 'prov': 'FreeWheel'},
     'MS0': {'cat': CookieCategory.functional, 'prov': 'Bing / Microsoft'},
     'MSFPC': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
-    'MSNRPSAuth': {'cat': CookieCategory.functional, 'prov': 'Bing / Microsoft'},
+    'MSNRPSAuth': {
+      'cat': CookieCategory.functional,
+      'prov': 'Bing / Microsoft'
+    },
     'MSO': {'cat': CookieCategory.functional, 'prov': 'Microsoft'},
     'MSPAuth': {'cat': CookieCategory.functional, 'prov': 'Bing / Microsoft'},
     'MSPProf': {'cat': CookieCategory.functional, 'prov': 'Bing / Microsoft'},
     'MSPTC': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
-    'MicrosoftApplicationsTelemetryDeviceId': {'cat': CookieCategory.analytics, 'prov': 'Microsoft'},
+    'MicrosoftApplicationsTelemetryDeviceId': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Microsoft'
+    },
     'NAP': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
     'NEXT_LOCALE': {'cat': CookieCategory.functional, 'prov': 'Next'},
-    'NOPCOMMERCE.AUTH': {'cat': CookieCategory.functional, 'prov': 'nopCommerce'},
+    'NOPCOMMERCE.AUTH': {
+      'cat': CookieCategory.functional,
+      'prov': 'nopCommerce'
+    },
     'NPA': {'cat': CookieCategory.advertising, 'prov': 'Groovinads'},
     'NSC_': {'cat': CookieCategory.functional, 'prov': 'Citrix'},
     'NetWorkProbeLimit': {'cat': CookieCategory.analytics, 'prov': 'Wikimedia'},
     'Nop.customer': {'cat': CookieCategory.functional, 'prov': 'nopCommerce'},
-    'NopCommerce.RecentlyViewedProducts': {'cat': CookieCategory.functional, 'prov': 'nopCommerce'},
+    'NopCommerce.RecentlyViewedProducts': {
+      'cat': CookieCategory.functional,
+      'prov': 'nopCommerce'
+    },
     'OAGEO': {'cat': CookieCategory.advertising, 'prov': 'openx.net'},
     'OAID': {'cat': CookieCategory.advertising, 'prov': 'openx.net'},
     'OGP': {'cat': CookieCategory.advertising, 'prov': 'Google Maps'},
@@ -1343,9 +1495,15 @@ class CookieUtils {
     'OSID': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'OTH': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
     'OTZ': {'cat': CookieCategory.advertising, 'prov': 'Google'},
-    'OneTrustWPCCPAGoogleOptOut': {'cat': CookieCategory.functional, 'prov': 'OneTrust'},
+    'OneTrustWPCCPAGoogleOptOut': {
+      'cat': CookieCategory.functional,
+      'prov': 'OneTrust'
+    },
     'OptanonControl': {'cat': CookieCategory.functional, 'prov': 'OneTrust'},
-    'PAIDCONTENT': {'cat': CookieCategory.advertising, 'prov': 'Google Surveys'},
+    'PAIDCONTENT': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Google Surveys'
+    },
     'PID': {'cat': CookieCategory.advertising, 'prov': 'ComScore'},
     'PLAY_FLASH': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'PLAY_LANG': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
@@ -1359,23 +1517,53 @@ class CookieUtils {
     'PUBUIDSYNCUPFQ': {'cat': CookieCategory.functional, 'prov': 'PubMatic'},
     'P_': {'cat': CookieCategory.functional, 'prov': 'SurveyMonkey'},
     'PageReferrer': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
-    'Pastease.passive.activated': {'cat': CookieCategory.analytics, 'prov': 'Mopinion.com'},
-    'Pastease.passive.chance': {'cat': CookieCategory.analytics, 'prov': 'Mopinion.com'},
+    'Pastease.passive.activated': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Mopinion.com'
+    },
+    'Pastease.passive.chance': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Mopinion.com'
+    },
     'Pdomid': {'cat': CookieCategory.functional, 'prov': 'Smartadserver'},
     'Player': {'cat': CookieCategory.functional, 'prov': 'Vimeo'},
-    'PreferredLanguage': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'PreferredLanguage': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'PugT': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
     'Pwb': {'cat': CookieCategory.advertising, 'prov': 'Smartadserver'},
     'QCQQ': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'QSIPopUnder_PopUnderTarget_SI_': {'cat': CookieCategory.functional, 'prov': 'Qualtrics'},
+    'QSIPopUnder_PopUnderTarget_SI_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Qualtrics'
+    },
     'QSI_CT': {'cat': CookieCategory.functional, 'prov': 'Qualtrics'},
     'QSI_DATA': {'cat': CookieCategory.functional, 'prov': 'Qualtrics'},
-    'QSI_HistorySession': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
-    'QSI_OptInIDsAndTargetOrigins': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
-    'QSI_OptInIDsAndWindowNames': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
-    'QSI_ReplaySession_Info_': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
-    'QSI_ReplaySession_SampledOut_': {'cat': CookieCategory.functional, 'prov': 'Qualtrics'},
-    'QSI_ReplaySession_Throttled_': {'cat': CookieCategory.functional, 'prov': 'Qualtrics'},
+    'QSI_HistorySession': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Qualtrics'
+    },
+    'QSI_OptInIDsAndTargetOrigins': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Qualtrics'
+    },
+    'QSI_OptInIDsAndWindowNames': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Qualtrics'
+    },
+    'QSI_ReplaySession_Info_': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Qualtrics'
+    },
+    'QSI_ReplaySession_SampledOut_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Qualtrics'
+    },
+    'QSI_ReplaySession_Throttled_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Qualtrics'
+    },
     'QSI_SI_': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
     'QSI_S_': {'cat': CookieCategory.functional, 'prov': 'Qualtrics'},
     'QSI_TestSessions_': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
@@ -1385,8 +1573,14 @@ class CookieUtils {
     'RP_': {'cat': CookieCategory.functional, 'prov': 'SurveyMonkey'},
     'RRetURL': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'RT': {'cat': CookieCategory.functional, 'prov': 'Tripadvisor'},
-    'RUL': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick/Google Marketing'},
-    'RpsContextCookie': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
+    'RUL': {
+      'cat': CookieCategory.advertising,
+      'prov': 'DoubleClick/Google Marketing'
+    },
+    'RpsContextCookie': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
     'SAML_': {'cat': CookieCategory.functional, 'prov': 'SAP'},
     'SCM': {'cat': CookieCategory.advertising, 'prov': 'Smaato'},
     'SCMaps': {'cat': CookieCategory.advertising, 'prov': 'Smaato'},
@@ -1416,13 +1610,25 @@ class CookieUtils {
     'Secret': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'Secure-YEC': {'cat': CookieCategory.functional, 'prov': 'Google'},
     'SecureSessionID-': {'cat': CookieCategory.functional, 'prov': 'Intershop'},
-    'Secure_customer_sig': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'Secure_customer_sig': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'ServerPool': {'cat': CookieCategory.advertising, 'prov': 'Tripadvisor'},
-    'SetupDomainProbePassed': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'SetupDomainProbePassed': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'SiteReferrer': {'cat': CookieCategory.analytics, 'prov': 'Qualtrics'},
-    'SnapABugHistory': {'cat': CookieCategory.advertising, 'prov': 'SnapEngage'},
+    'SnapABugHistory': {
+      'cat': CookieCategory.advertising,
+      'prov': 'SnapEngage'
+    },
     'SnapABugRef': {'cat': CookieCategory.advertising, 'prov': 'SnapEngage'},
-    'SnapABugUserAlias': {'cat': CookieCategory.functional, 'prov': 'SnapEngage'},
+    'SnapABugUserAlias': {
+      'cat': CookieCategory.functional,
+      'prov': 'SnapEngage'
+    },
     'SnapABugVisit': {'cat': CookieCategory.functional, 'prov': 'SnapEngage'},
     'SyncRTB': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
     'TADCID': {'cat': CookieCategory.advertising, 'prov': 'Tripadvisor'},
@@ -1435,22 +1641,43 @@ class CookieUtils {
     'TCIPD': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
     'TCLANDINGURL': {'cat': CookieCategory.advertising, 'prov': 'Command Act'},
     'TCREDIRECT': {'cat': CookieCategory.advertising, 'prov': 'Command Act'},
-    'TCREDIRECT_DEDUP': {'cat': CookieCategory.advertising, 'prov': 'Command Act'},
+    'TCREDIRECT_DEDUP': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Command Act'
+    },
     'TCSESSION': {'cat': CookieCategory.advertising, 'prov': 'Command Act'},
-    'TC_CHECK_COOKIES_SUPPORT': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
+    'TC_CHECK_COOKIES_SUPPORT': {
+      'cat': CookieCategory.functional,
+      'prov': 'Command Act'
+    },
     'TC_OUTPUT': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
-    'TC_OUTPUT_categories': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
-    'TC_PRIVACY_CENTER': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
+    'TC_OUTPUT_categories': {
+      'cat': CookieCategory.functional,
+      'prov': 'Command Act'
+    },
+    'TC_PRIVACY_CENTER': {
+      'cat': CookieCategory.functional,
+      'prov': 'Command Act'
+    },
     'TMS': {'cat': CookieCategory.advertising, 'prov': 'Command Act'},
     'TPC': {'cat': CookieCategory.advertising, 'prov': 'Adform'},
     'TXCD': {'cat': CookieCategory.advertising, 'prov': 'Tappx'},
     'TXCSDMN_': {'cat': CookieCategory.advertising, 'prov': 'Tappx'},
     'TapAd_DID': {'cat': CookieCategory.advertising, 'prov': 'Tapad'},
     'TapAd_TS': {'cat': CookieCategory.advertising, 'prov': 'Tapad'},
-    'TawkConnectionTime': {'cat': CookieCategory.functional, 'prov': 'Tawk.to Chat'},
+    'TawkConnectionTime': {
+      'cat': CookieCategory.functional,
+      'prov': 'Tawk.to Chat'
+    },
     'TawkCookie': {'cat': CookieCategory.functional, 'prov': 'Tawk.to Chat'},
-    'TestIfCookie': {'cat': CookieCategory.advertising, 'prov': 'Smartadserver'},
-    'TestIfCookieP': {'cat': CookieCategory.advertising, 'prov': 'Smartadserver'},
+    'TestIfCookie': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Smartadserver'
+    },
+    'TestIfCookieP': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Smartadserver'
+    },
     'ToptOut': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
     'UID': {'cat': CookieCategory.advertising, 'prov': 'ComScore'},
     'UIDR': {'cat': CookieCategory.advertising, 'prov': 'ComScore'},
@@ -1459,12 +1686,18 @@ class CookieUtils {
     'UTID_ENC': {'cat': CookieCategory.advertising, 'prov': 'Undertone'},
     'UULE': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     'VID': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
-    'VISITOR_PRIVACY_METADATA': {'cat': CookieCategory.advertising, 'prov': 'Youtube'},
+    'VISITOR_PRIVACY_METADATA': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Youtube'
+    },
     'VfAccess': {'cat': CookieCategory.functional, 'prov': 'Viafoura'},
     'VfRefresh': {'cat': CookieCategory.functional, 'prov': 'Viafoura'},
     'VfSess': {'cat': CookieCategory.functional, 'prov': 'Viafoura'},
     'VisitorStatus': {'cat': CookieCategory.analytics, 'prov': 'Kentico'},
-    'VisitorStorageGuid': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
+    'VisitorStorageGuid': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
     'WID': {'cat': CookieCategory.advertising, 'prov': 'Command Act'},
     'WLSSC': {'cat': CookieCategory.functional, 'prov': 'Bing / Microsoft'},
     'WMF-Last-Access': {'cat': CookieCategory.analytics, 'prov': 'Wikimedia'},
@@ -1481,7 +1714,10 @@ class CookieUtils {
     'XID': {'cat': CookieCategory.advertising, 'prov': 'ComScore'},
     'ZCAMPAIGN_CSRF_TOKEN': {'cat': CookieCategory.essential, 'prov': 'ZOHO'},
     'ZD-buid': {'cat': CookieCategory.analytics, 'prov': 'Zendesk'},
-    'ZD-launcherLabelRemoved': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
+    'ZD-launcherLabelRemoved': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zendesk'
+    },
     'ZD-settings': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
     'ZD-store': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
     'ZD-suid': {'cat': CookieCategory.analytics, 'prov': 'Zendesk'},
@@ -1489,46 +1725,115 @@ class CookieUtils {
     'ZD-zE_oauth': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
     '_ALGOLIA': {'cat': CookieCategory.analytics, 'prov': 'Algolia'},
     '_BEAMER_DATE_': {'cat': CookieCategory.advertising, 'prov': 'Beamer'},
-    '_BEAMER_FILTER_BY_URL_': {'cat': CookieCategory.advertising, 'prov': 'Beamer'},
-    '_BEAMER_FIRST_VISIT_': {'cat': CookieCategory.advertising, 'prov': 'Beamer'},
-    '_BEAMER_LAST_POST_SHOWN_': {'cat': CookieCategory.advertising, 'prov': 'Beamer'},
+    '_BEAMER_FILTER_BY_URL_': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Beamer'
+    },
+    '_BEAMER_FIRST_VISIT_': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Beamer'
+    },
+    '_BEAMER_LAST_POST_SHOWN_': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Beamer'
+    },
     '_BEAMER_USER_ID_': {'cat': CookieCategory.advertising, 'prov': 'Beamer'},
     '_Brochure_session': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
     '_CEFT': {'cat': CookieCategory.analytics, 'prov': 'Crazy Egg'},
     '_CT_RS_': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
     '_HPVN': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
     '_KMPage': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageDispatcher': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageFilter': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageFilterArticleArticleType': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageFilterArticlePublishStatus': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageFilterArticleValidationStatus': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageFilterLanguage': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageFilterMyDraftArticleType': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageFilterMyDraftPublishStatus': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageFilterMyDraftValidationStatus': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageSortFieldArticle': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_KnowledgePageSortFieldMyDraft': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    '_KnowledgePageDispatcher': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageFilter': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageFilterArticleArticleType': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageFilterArticlePublishStatus': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageFilterArticleValidationStatus': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageFilterLanguage': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageFilterMyDraftArticleType': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageFilterMyDraftPublishStatus': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageFilterMyDraftValidationStatus': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageSortFieldArticle': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_KnowledgePageSortFieldMyDraft': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     '_RwBf': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
-    '_SUPERFLY_nosample': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
+    '_SUPERFLY_nosample': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Chartbeat'
+    },
     '_Secure-ENID': {'cat': CookieCategory.functional, 'prov': 'Google'},
     '_Secure-YEC': {'cat': CookieCategory.functional, 'prov': 'Google'},
     '_TCCookieSync': {'cat': CookieCategory.analytics, 'prov': 'Command Act'},
     '_UR': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
-    '__AntiXsrfToken': {'cat': CookieCategory.essential, 'prov': 'Azure / Microsoft'},
+    '__AntiXsrfToken': {
+      'cat': CookieCategory.essential,
+      'prov': 'Azure / Microsoft'
+    },
     '__CT_Data': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
-    '__Host-ERIC_PROD-': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    '__Host-ERIC_PROD-': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     '__Host-GAPS': {'cat': CookieCategory.functional, 'prov': 'Google'},
-    '__Host-gist_user_session_same_site': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
-    '__Host-next-auth.csrf-token': {'cat': CookieCategory.functional, 'prov': 'NextAuth.js'},
-    '__Host-user_session_same_site': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
-    '__RequestVerificationToken': {'cat': CookieCategory.functional, 'prov': 'Microsoft'},
+    '__Host-gist_user_session_same_site': {
+      'cat': CookieCategory.functional,
+      'prov': 'GitHub'
+    },
+    '__Host-next-auth.csrf-token': {
+      'cat': CookieCategory.functional,
+      'prov': 'NextAuth.js'
+    },
+    '__Host-user_session_same_site': {
+      'cat': CookieCategory.functional,
+      'prov': 'GitHub'
+    },
+    '__RequestVerificationToken': {
+      'cat': CookieCategory.functional,
+      'prov': 'Microsoft'
+    },
     '__Secure-ENID': {'cat': CookieCategory.functional, 'prov': 'Google'},
     '__Secure-OSID': {'cat': CookieCategory.advertising, 'prov': 'Google'},
-    '__Secure-ROLLOUT_TOKEN': {'cat': CookieCategory.advertising, 'prov': 'Youtube'},
+    '__Secure-ROLLOUT_TOKEN': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Youtube'
+    },
     '__Secure-YNID': {'cat': CookieCategory.functional, 'prov': 'Google'},
     '__Secure-fgpt': {'cat': CookieCategory.functional, 'prov': 'OneTrust'},
-    '__Secure-next-auth.callback-url': {'cat': CookieCategory.functional, 'prov': 'NextAuth.js'},
+    '__Secure-next-auth.callback-url': {
+      'cat': CookieCategory.functional,
+      'prov': 'NextAuth.js'
+    },
     '___m_rec': {'cat': CookieCategory.analytics, 'prov': 'Marfeel'},
     '__adal_ca': {'cat': CookieCategory.advertising, 'prov': 'Adalyser.com'},
     '__adal_cw': {'cat': CookieCategory.advertising, 'prov': 'Adalyser.com'},
@@ -1544,38 +1849,101 @@ class CookieUtils {
     '__cfruid': {'cat': CookieCategory.functional, 'prov': 'Cloudflare'},
     '__cfseq': {'cat': CookieCategory.functional, 'prov': 'Cloudflare'},
     '__cfwaitingroom': {'cat': CookieCategory.functional, 'prov': 'CloudFlare'},
-    '__cmpQQ_CookieConsent': {'cat': CookieCategory.essential, 'prov': 'QookieQloud'},
-    '__cmpQQ_consentID': {'cat': CookieCategory.essential, 'prov': 'QookieQloud'},
-    '__cmpQQ_usedCoookies': {'cat': CookieCategory.essential, 'prov': 'QookieQloud'},
+    '__cmpQQ_CookieConsent': {
+      'cat': CookieCategory.essential,
+      'prov': 'QookieQloud'
+    },
+    '__cmpQQ_consentID': {
+      'cat': CookieCategory.essential,
+      'prov': 'QookieQloud'
+    },
+    '__cmpQQ_usedCoookies': {
+      'cat': CookieCategory.essential,
+      'prov': 'QookieQloud'
+    },
     '__cmpcc': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpccc': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpccpausps': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpccx': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpconsent': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpcpc': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpcvc': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpfcc': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpiab': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpiuid': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
+    '__cmpccc': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
+    '__cmpccpausps': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
+    '__cmpccx': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
+    '__cmpconsent': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
+    '__cmpcpc': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
+    '__cmpcvc': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
+    '__cmpfcc': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
+    '__cmpiab': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
+    '__cmpiuid': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
     '__cmpld': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
-    '__cmpwel': {'cat': CookieCategory.functional, 'prov': 'Consentmanager.net'},
+    '__cmpwel': {
+      'cat': CookieCategory.functional,
+      'prov': 'Consentmanager.net'
+    },
     '__code': {'cat': CookieCategory.functional, 'prov': 'Piano'},
-    '__cpmQQ_trackers': {'cat': CookieCategory.essential, 'prov': 'QookieQloud'},
-    '__cpmQQ_trackers_timestamp': {'cat': CookieCategory.essential, 'prov': 'QookieQloud'},
+    '__cpmQQ_trackers': {
+      'cat': CookieCategory.essential,
+      'prov': 'QookieQloud'
+    },
+    '__cpmQQ_trackers_timestamp': {
+      'cat': CookieCategory.essential,
+      'prov': 'QookieQloud'
+    },
     '__editor_layout': {'cat': CookieCategory.functional, 'prov': 'Codepen'},
     '__eea': {'cat': CookieCategory.functional, 'prov': 'Piano'},
     '__exponea_etc__': {'cat': CookieCategory.advertising, 'prov': 'Exponea'},
-    '__gpi_optout': {'cat': CookieCategory.advertising, 'prov': 'Google AdSense'},
-    '__hs_cookie_cat_pref': {'cat': CookieCategory.functional, 'prov': 'HubSpot'},
+    '__gpi_optout': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Google AdSense'
+    },
+    '__hs_cookie_cat_pref': {
+      'cat': CookieCategory.functional,
+      'prov': 'HubSpot'
+    },
     '__hs_do_not_track': {'cat': CookieCategory.functional, 'prov': 'Hubspot'},
-    '__hs_gpc_banner_dismiss': {'cat': CookieCategory.functional, 'prov': 'HubSpot'},
-    '__hs_initial_opt_in': {'cat': CookieCategory.functional, 'prov': 'Hubspot'},
-    '__hs_notify_banner_dismiss': {'cat': CookieCategory.functional, 'prov': 'HubSpot'},
+    '__hs_gpc_banner_dismiss': {
+      'cat': CookieCategory.functional,
+      'prov': 'HubSpot'
+    },
+    '__hs_initial_opt_in': {
+      'cat': CookieCategory.functional,
+      'prov': 'Hubspot'
+    },
+    '__hs_notify_banner_dismiss': {
+      'cat': CookieCategory.functional,
+      'prov': 'HubSpot'
+    },
     '__hs_opt_out': {'cat': CookieCategory.functional, 'prov': 'Hubspot'},
     '__hsmem': {'cat': CookieCategory.functional, 'prov': 'Hubspot'},
     '__idr': {'cat': CookieCategory.functional, 'prov': 'Piano'},
     '__insp_dct': {'cat': CookieCategory.analytics, 'prov': 'Inspectlet'},
-    '__insp_norec_sess': {'cat': CookieCategory.analytics, 'prov': 'Inspectlet'},
+    '__insp_norec_sess': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Inspectlet'
+    },
     '__insp_nv': {'cat': CookieCategory.analytics, 'prov': 'Inspectlet'},
     '__insp_pad': {'cat': CookieCategory.analytics, 'prov': 'Inspectlet'},
     '__insp_ref': {'cat': CookieCategory.analytics, 'prov': 'Inspectlet'},
@@ -1630,7 +1998,10 @@ class CookieUtils {
     '__zlcmid': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
     '__zlcprivacy': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
     '_ab': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    '_answer_bot_service_session': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
+    '_answer_bot_service_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zendesk'
+    },
     '_bit': {'cat': CookieCategory.analytics, 'prov': 'Bit.ly'},
     '_biz_ABTestA': {'cat': CookieCategory.analytics, 'prov': 'Marketo'},
     '_biz_EventA': {'cat': CookieCategory.analytics, 'prov': 'Marketo'},
@@ -1657,8 +2028,14 @@ class CookieUtils {
     '_conv_r': {'cat': CookieCategory.functional, 'prov': 'Convert Insights'},
     '_conv_s': {'cat': CookieCategory.functional, 'prov': 'Convert Insights'},
     '_conv_v': {'cat': CookieCategory.functional, 'prov': 'Convert Insights'},
-    '_cq_duid': {'cat': CookieCategory.functional, 'prov': 'CHEQ AI Technologies'},
-    '_cq_suid': {'cat': CookieCategory.functional, 'prov': 'CHEQ AI Technologies'},
+    '_cq_duid': {
+      'cat': CookieCategory.functional,
+      'prov': 'CHEQ AI Technologies'
+    },
+    '_cq_suid': {
+      'cat': CookieCategory.functional,
+      'prov': 'CHEQ AI Technologies'
+    },
     '_crazyegg': {'cat': CookieCategory.advertising, 'prov': 'Crazy Egg'},
     '_cs_cvars': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
     '_cs_debug': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
@@ -1668,28 +2045,46 @@ class CookieUtils {
     '_cs_mk_ga': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
     '_cs_optout': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
     '_cs_rl': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
-    '_cs_root-domain': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
+    '_cs_root-domain': {
+      'cat': CookieCategory.analytics,
+      'prov': 'ContentSquare'
+    },
     '_cs_s': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
     '_cs_same_site': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
     '_cs_tld': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
     '_csrf': {'cat': CookieCategory.essential, 'prov': 'Stonly'},
     '_curtime': {'cat': CookieCategory.functional, 'prov': 'PubMatic'},
-    '_customer_account_shop_sessions': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    '_customer_account_shop_sessions': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     '_dbefe': {'cat': CookieCategory.advertising, 'prov': 'Pulsepoint'},
     '_dc_gtm_': {'cat': CookieCategory.analytics, 'prov': 'Google Analytics'},
     '_dcid': {'cat': CookieCategory.advertising, 'prov': 'Google'},
     '_derived_epik': {'cat': CookieCategory.advertising, 'prov': 'Pinterest'},
     '_device_id': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
     '_distillery': {'cat': CookieCategory.functional, 'prov': 'Wistia'},
-    '_dp': {'cat': CookieCategory.advertising, 'prov': 'Adobe Audience Manager'},
+    '_dp': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Audience Manager'
+    },
     '_dsp_uid': {'cat': CookieCategory.advertising, 'prov': 'Bidence'},
-    '_dy_cs_cookie_items': {'cat': CookieCategory.advertising, 'prov': 'Dynamic Yield'},
-    '_dy_cs_storage_items': {'cat': CookieCategory.advertising, 'prov': 'Dynamic Yield'},
+    '_dy_cs_cookie_items': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Dynamic Yield'
+    },
+    '_dy_cs_storage_items': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Dynamic Yield'
+    },
     '_dy_csc_ses': {'cat': CookieCategory.analytics, 'prov': 'Dynamic Yield'},
     '_dy_df_geo': {'cat': CookieCategory.analytics, 'prov': 'Dynamic Yield'},
     '_dy_geo': {'cat': CookieCategory.analytics, 'prov': 'Dynamic Yield'},
     '_dy_lu_ses': {'cat': CookieCategory.functional, 'prov': 'Dynamic Yield'},
-    '_dy_ses_load_seq': {'cat': CookieCategory.functional, 'prov': 'Dynamic Yield'},
+    '_dy_ses_load_seq': {
+      'cat': CookieCategory.functional,
+      'prov': 'Dynamic Yield'
+    },
     '_dy_soct': {'cat': CookieCategory.functional, 'prov': 'Dynamic Yield'},
     '_dy_toffset': {'cat': CookieCategory.functional, 'prov': 'Dynamic Yield'},
     '_dycmc': {'cat': CookieCategory.analytics, 'prov': 'Dynamic Yield'},
@@ -1725,31 +2120,76 @@ class CookieUtils {
     '_gig_lt': {'cat': CookieCategory.functional, 'prov': 'SAP'},
     '_gig_shareUI_cb_': {'cat': CookieCategory.functional, 'prov': 'SAP'},
     '_gig_shareUI_lastUID': {'cat': CookieCategory.advertising, 'prov': 'SAP'},
-    '_global_lucky_opt_out': {'cat': CookieCategory.functional, 'prov': 'Lucky Orange'},
+    '_global_lucky_opt_out': {
+      'cat': CookieCategory.functional,
+      'prov': 'Lucky Orange'
+    },
     '_gtmeec': {'cat': CookieCategory.advertising, 'prov': 'Stape'},
     '_guid': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
-    '_help_center_session': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
-    '_hjCachedUserAttributes': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
-    '_hjClosedSurveyInvites': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    '_help_center_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zendesk'
+    },
+    '_hjCachedUserAttributes': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Hotjar'
+    },
+    '_hjClosedSurveyInvites': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Hotjar'
+    },
     '_hjCookieTest': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
     '_hjDonePolls': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
-    '_hjDoneTestersWidgets': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
-    '_hjHasCachedUserAttributes': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
-    '_hjIncludedInPageviewSample': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
-    '_hjIncludedInSessionSample': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
+    '_hjDoneTestersWidgets': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Hotjar'
+    },
+    '_hjHasCachedUserAttributes': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Hotjar'
+    },
+    '_hjIncludedInPageviewSample': {
+      'cat': CookieCategory.functional,
+      'prov': 'Hotjar'
+    },
+    '_hjIncludedInSessionSample': {
+      'cat': CookieCategory.functional,
+      'prov': 'Hotjar'
+    },
     '_hjLocalStorageTest': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
     '_hjMinimizedPolls': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
-    '_hjMinimizedTestersWidgets': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    '_hjMinimizedTestersWidgets': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Hotjar'
+    },
     '_hjSessionRejected': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
     '_hjSessionResumed': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
-    '_hjSessionStorageTest': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
+    '_hjSessionStorageTest': {
+      'cat': CookieCategory.functional,
+      'prov': 'Hotjar'
+    },
     '_hjSessionTooLarge': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
-    '_hjShownFeedbackMessage': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
+    '_hjShownFeedbackMessage': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Hotjar'
+    },
     '_hjTLDTest': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
-    '_hjUserAttrbutesHash': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
-    '_hjUserAttributes': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
-    '_hjUserAttributesHash': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
-    '_hjasCachedUserAttributes': {'cat': CookieCategory.analytics, 'prov': 'ContentSquare'},
+    '_hjUserAttrbutesHash': {
+      'cat': CookieCategory.analytics,
+      'prov': 'ContentSquare'
+    },
+    '_hjUserAttributes': {
+      'cat': CookieCategory.analytics,
+      'prov': 'ContentSquare'
+    },
+    '_hjUserAttributesHash': {
+      'cat': CookieCategory.functional,
+      'prov': 'Hotjar'
+    },
+    '_hjasCachedUserAttributes': {
+      'cat': CookieCategory.analytics,
+      'prov': 'ContentSquare'
+    },
     '_hjid': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
     '_hjptid': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
     '_iub_cs-': {'cat': CookieCategory.functional, 'prov': 'Iubenda'},
@@ -1767,7 +2207,10 @@ class CookieUtils {
     '_lo_uid': {'cat': CookieCategory.analytics, 'prov': 'Lucky Orange'},
     '_lo_v': {'cat': CookieCategory.analytics, 'prov': 'Lucky Orange'},
     '_lv': {'cat': CookieCategory.analytics, 'prov': 'Marfeel'},
-    '_mailmunch_visitor_id': {'cat': CookieCategory.advertising, 'prov': 'MailMunch'},
+    '_mailmunch_visitor_id': {
+      'cat': CookieCategory.advertising,
+      'prov': 'MailMunch'
+    },
     '_mb': {'cat': CookieCategory.advertising, 'prov': 'Vuble'},
     '_mkto_trk': {'cat': CookieCategory.advertising, 'prov': 'OneTrust'},
     '_nrbi': {'cat': CookieCategory.analytics, 'prov': 'Marfeel'},
@@ -1782,21 +2225,39 @@ class CookieUtils {
     '_orig_referrer': {'cat': CookieCategory.advertising, 'prov': 'Shopify'},
     '_pangle': {'cat': CookieCategory.advertising, 'prov': 'Pangle'},
     '_parsely_session': {'cat': CookieCategory.functional, 'prov': 'Parse.ly'},
-    '_parsely_slot_click': {'cat': CookieCategory.functional, 'prov': 'Parse.ly'},
-    '_parsely_tpa_blocked': {'cat': CookieCategory.functional, 'prov': 'Parse.ly'},
+    '_parsely_slot_click': {
+      'cat': CookieCategory.functional,
+      'prov': 'Parse.ly'
+    },
+    '_parsely_tpa_blocked': {
+      'cat': CookieCategory.functional,
+      'prov': 'Parse.ly'
+    },
     '_parsely_visitor': {'cat': CookieCategory.functional, 'prov': 'Parse.ly'},
-    '_pbjs_userid_consent_data': {'cat': CookieCategory.functional, 'prov': 'Prebid'},
+    '_pbjs_userid_consent_data': {
+      'cat': CookieCategory.functional,
+      'prov': 'Prebid'
+    },
     '_pin_unauth': {'cat': CookieCategory.advertising, 'prov': 'Pinterest'},
     '_pinterest_cm': {'cat': CookieCategory.functional, 'prov': 'Pinterest'},
     '_pinterest_ct': {'cat': CookieCategory.advertising, 'prov': 'Pinterest'},
-    '_pinterest_ct_rt': {'cat': CookieCategory.advertising, 'prov': 'Pinterest'},
+    '_pinterest_ct_rt': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Pinterest'
+    },
     '_pk_cvar': {'cat': CookieCategory.analytics, 'prov': 'Matomo'},
     '_pk_hsr': {'cat': CookieCategory.analytics, 'prov': 'Matomo'},
     '_pk_id.': {'cat': CookieCategory.analytics, 'prov': 'Piwik'},
     '_pk_ses.': {'cat': CookieCategory.analytics, 'prov': 'Piwik'},
     '_pk_testcookie': {'cat': CookieCategory.analytics, 'prov': 'Matomo'},
-    '_rd_experiment_version': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
-    '_rd_wa_first_session': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
+    '_rd_experiment_version': {
+      'cat': CookieCategory.advertising,
+      'prov': 'RD Station'
+    },
+    '_rd_wa_first_session': {
+      'cat': CookieCategory.advertising,
+      'prov': 'RD Station'
+    },
     '_rd_wa_id': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
     '_rd_wa_ses_id': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
     '_rdlps_pp': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
@@ -1807,12 +2268,18 @@ class CookieUtils {
     '_s': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
     '_schn': {'cat': CookieCategory.advertising, 'prov': 'Snapchat'},
     '_scid_r': {'cat': CookieCategory.advertising, 'prov': 'Snapchat'},
-    '_secure_account_session_id': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    '_secure_account_session_id': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     '_secure_session_id': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     '_shopify_country': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     '_shopify_d': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
     '_shopify_essential': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    '_shopify_essential_': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    '_shopify_essential_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     '_shopify_fs': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
     '_shopify_ga': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
     '_shopify_m': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
@@ -1829,18 +2296,45 @@ class CookieUtils {
     '_sn_m': {'cat': CookieCategory.advertising, 'prov': 'Sleeknote'},
     '_sn_n': {'cat': CookieCategory.functional, 'prov': 'Sleeknote'},
     '_sp_id.': {'cat': CookieCategory.analytics, 'prov': 'Snowplow'},
-    '_sp_root_domain_test_': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
+    '_sp_root_domain_test_': {
+      'cat': CookieCategory.advertising,
+      'prov': 'RD Station'
+    },
     '_sp_ses.': {'cat': CookieCategory.analytics, 'prov': 'Snowplow'},
-    '_sp_wa_first_session': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
+    '_sp_wa_first_session': {
+      'cat': CookieCategory.advertising,
+      'prov': 'RD Station'
+    },
     '_sp_wa_id': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
     '_sp_wa_ses_id': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
-    '_splunk_rum_sid': {'cat': CookieCategory.functional, 'prov': 'SurveyMonkey'},
-    '_spring_KmMlAnyoneDraftArticlesList': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_spring_KmMlArchivedArticlesList': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_spring_KmMlMyDraftArticlesList': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_spring_KmMlMyDraftTranslationsList': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_spring_KmMlPublishedArticlesList': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    '_spring_KmMlPublishedTranslationsList': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    '_splunk_rum_sid': {
+      'cat': CookieCategory.functional,
+      'prov': 'SurveyMonkey'
+    },
+    '_spring_KmMlAnyoneDraftArticlesList': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_spring_KmMlArchivedArticlesList': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_spring_KmMlMyDraftArticlesList': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_spring_KmMlMyDraftTranslationsList': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_spring_KmMlPublishedArticlesList': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    '_spring_KmMlPublishedTranslationsList': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     '_ssc': {'cat': CookieCategory.advertising, 'prov': 'Totvs'},
     '_ssp_update_time': {'cat': CookieCategory.advertising, 'prov': 'Bidence'},
     '_stg_optout': {'cat': CookieCategory.analytics, 'prov': 'Piwik'},
@@ -1856,13 +2350,34 @@ class CookieUtils {
     '_vfa': {'cat': CookieCategory.analytics, 'prov': 'Viafoura'},
     '_vfb': {'cat': CookieCategory.analytics, 'prov': 'Viafoura'},
     '_vfz': {'cat': CookieCategory.analytics, 'prov': 'Viafoura'},
-    '_vis_opt_exp_': {'cat': CookieCategory.functional, 'prov': 'Visual Website Optimizer'},
-    '_vis_opt_s': {'cat': CookieCategory.functional, 'prov': 'Visual Website Optimizer'},
-    '_vis_opt_test_cookie': {'cat': CookieCategory.functional, 'prov': 'Visual Website Optimizer'},
-    '_vwo_referrer': {'cat': CookieCategory.analytics, 'prov': 'Visual Website Optimizer'},
-    '_vwo_sn': {'cat': CookieCategory.analytics, 'prov': 'Visual Website Optimizer'},
-    '_vwo_ssm': {'cat': CookieCategory.functional, 'prov': 'Visual Website Optimizer'},
-    '_vwo_uuid': {'cat': CookieCategory.functional, 'prov': 'Visual Website Optimizer'},
+    '_vis_opt_exp_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Visual Website Optimizer'
+    },
+    '_vis_opt_s': {
+      'cat': CookieCategory.functional,
+      'prov': 'Visual Website Optimizer'
+    },
+    '_vis_opt_test_cookie': {
+      'cat': CookieCategory.functional,
+      'prov': 'Visual Website Optimizer'
+    },
+    '_vwo_referrer': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Visual Website Optimizer'
+    },
+    '_vwo_sn': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Visual Website Optimizer'
+    },
+    '_vwo_ssm': {
+      'cat': CookieCategory.functional,
+      'prov': 'Visual Website Optimizer'
+    },
+    '_vwo_uuid': {
+      'cat': CookieCategory.functional,
+      'prov': 'Visual Website Optimizer'
+    },
     '_wepublishGa': {'cat': CookieCategory.analytics, 'prov': 'WePublish'},
     '_wepublishGa_gid': {'cat': CookieCategory.analytics, 'prov': 'WePublish'},
     '_wixCIDX': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
@@ -1870,17 +2385,41 @@ class CookieUtils {
     '_y': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
     '_yasc': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
     '_ym_debug': {'cat': CookieCategory.functional, 'prov': 'Yandex.Metrica'},
-    '_ym_hostIndex': {'cat': CookieCategory.functional, 'prov': 'Yandex.Metrica'},
-    '_ym_metrika_enabled': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
+    '_ym_hostIndex': {
+      'cat': CookieCategory.functional,
+      'prov': 'Yandex.Metrica'
+    },
+    '_ym_metrika_enabled': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Yandex.Metrica'
+    },
     '_ym_visorc_': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
-    '_zdsession_talk_embeddables_service': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
-    '_zdshared_user_session_analytics': {'cat': CookieCategory.analytics, 'prov': 'Zendesk'},
-    '_zendesk_authenticated': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
+    '_zdsession_talk_embeddables_service': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zendesk'
+    },
+    '_zdshared_user_session_analytics': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Zendesk'
+    },
+    '_zendesk_authenticated': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zendesk'
+    },
     '_zendesk_cookie': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
-    '_zendesk_nps_session': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
+    '_zendesk_nps_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zendesk'
+    },
     '_zendesk_session': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
-    '_zendesk_shared_session': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
-    'aam_uuid': {'cat': CookieCategory.advertising, 'prov': 'Adobe Audience Manager'},
+    '_zendesk_shared_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zendesk'
+    },
+    'aam_uuid': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Audience Manager'
+    },
     'ab': {'cat': CookieCategory.advertising, 'prov': 'Neustar'},
     'ab._gd': {'cat': CookieCategory.functional, 'prov': 'Braze'},
     'ab.optOut': {'cat': CookieCategory.functional, 'prov': 'Braze'},
@@ -1892,20 +2431,41 @@ class CookieUtils {
     'abiRedirect': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'ablyft_exps': {'cat': CookieCategory.analytics, 'prov': 'ABlyft'},
     'ablyft_queue': {'cat': CookieCategory.analytics, 'prov': 'ABlyft'},
-    'ablyft_tracking_consent': {'cat': CookieCategory.analytics, 'prov': 'ABlyft'},
+    'ablyft_tracking_consent': {
+      'cat': CookieCategory.analytics,
+      'prov': 'ABlyft'
+    },
     'ablyft_uvs': {'cat': CookieCategory.analytics, 'prov': 'ABlyft'},
-    'aboutads_sessNNN': {'cat': CookieCategory.essential, 'prov': 'Google AdSense'},
+    'aboutads_sessNNN': {
+      'cat': CookieCategory.essential,
+      'prov': 'Google AdSense'
+    },
     'ac_L': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'ac_LD': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'ac_enable_tracking': {'cat': CookieCategory.advertising, 'prov': 'Active Campaign'},
+    'ac_enable_tracking': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Active Campaign'
+    },
     'acalltracker': {'cat': CookieCategory.advertising, 'prov': 'Adcalls'},
-    'acalltrackernumber': {'cat': CookieCategory.advertising, 'prov': 'Adcalls'},
-    'acalltrackerreferrer': {'cat': CookieCategory.analytics, 'prov': 'Adcalls'},
-    'acalltrackersession': {'cat': CookieCategory.functional, 'prov': 'Adcalls'},
+    'acalltrackernumber': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adcalls'
+    },
+    'acalltrackerreferrer': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Adcalls'
+    },
+    'acalltrackersession': {
+      'cat': CookieCategory.functional,
+      'prov': 'Adcalls'
+    },
     'activeView': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'ad-id': {'cat': CookieCategory.advertising, 'prov': 'Amazon'},
     'ad-privacy': {'cat': CookieCategory.advertising, 'prov': 'Amazon'},
-    'adaptv_unique_user_cookie': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
+    'adaptv_unique_user_cookie': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Yahoo'
+    },
     'adcloud': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
     'adform_uid': {'cat': CookieCategory.advertising, 'prov': 'Adhese'},
     'adformfrpid': {'cat': CookieCategory.advertising, 'prov': 'Adform'},
@@ -1916,18 +2476,33 @@ class CookieUtils {
     'adx_ts': {'cat': CookieCategory.advertising, 'prov': 'Ortec'},
     'ahoy_visit': {'cat': CookieCategory.analytics, 'prov': 'Ahoy'},
     'ahoy_visitor': {'cat': CookieCategory.analytics, 'prov': 'Ahoy'},
-    'ai_session': {'cat': CookieCategory.functional, 'prov': 'Microsoft Azure App Insights'},
-    'ai_user': {'cat': CookieCategory.functional, 'prov': 'Microsoft Azure App Insights'},
+    'ai_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'Microsoft Azure App Insights'
+    },
+    'ai_user': {
+      'cat': CookieCategory.functional,
+      'prov': 'Microsoft Azure App Insights'
+    },
     'ajs_group_id': {'cat': CookieCategory.analytics, 'prov': 'Trustpilot'},
     'aks': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'aksb': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
-    'algoliasearch-client-js': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
+    'algoliasearch-client-js': {
+      'cat': CookieCategory.functional,
+      'prov': 'Twitch'
+    },
     'all_u_b': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'alohaEpt': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'am-uid': {'cat': CookieCategory.advertising, 'prov': 'Admixer'},
     'am_tokens': {'cat': CookieCategory.advertising, 'prov': 'MediaVine'},
-    'am_tokens_invalidate-verizon-pushes': {'cat': CookieCategory.advertising, 'prov': 'MediaVine'},
-    'amplitude_cookie_test': {'cat': CookieCategory.analytics, 'prov': 'Amplitude'},
+    'am_tokens_invalidate-verizon-pushes': {
+      'cat': CookieCategory.advertising,
+      'prov': 'MediaVine'
+    },
+    'amplitude_cookie_test': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Amplitude'
+    },
     'amplitude_id': {'cat': CookieCategory.advertising, 'prov': 'Trustpilot'},
     'amplitude_id_': {'cat': CookieCategory.analytics, 'prov': 'Amplitude'},
     'amplitude_test': {'cat': CookieCategory.analytics, 'prov': 'Amplitude'},
@@ -1935,8 +2510,14 @@ class CookieUtils {
     'anj': {'cat': CookieCategory.advertising, 'prov': 'Xandr'},
     'apbct_': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
     'apbct_antibot': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
-    'apbct_cookies_test': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
-    'apex__EmailAddress': {'cat': CookieCategory.advertising, 'prov': 'Salesforce'},
+    'apbct_cookies_test': {
+      'cat': CookieCategory.functional,
+      'prov': 'CleanTalk'
+    },
+    'apex__EmailAddress': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Salesforce'
+    },
     'apiDomain_': {'cat': CookieCategory.advertising, 'prov': 'SAP'},
     'api_token': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
     'apnxs': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
@@ -1945,17 +2526,29 @@ class CookieUtils {
     'app_manifest_token': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
     'app_ts': {'cat': CookieCategory.advertising, 'prov': 'Ortec'},
     'appnexus_uid': {'cat': CookieCategory.advertising, 'prov': 'Adhese'},
-    'ar_debug': {'cat': CookieCategory.advertising, 'prov': 'DoubleClick/Google Marketing'},
-    'at_check': {'cat': CookieCategory.functional, 'prov': 'Adobe Audience Manager'},
+    'ar_debug': {
+      'cat': CookieCategory.advertising,
+      'prov': 'DoubleClick/Google Marketing'
+    },
+    'at_check': {
+      'cat': CookieCategory.functional,
+      'prov': 'Adobe Audience Manager'
+    },
     'atidvisitor': {'cat': CookieCategory.analytics, 'prov': 'AT Internet'},
-    'attribution_user_id': {'cat': CookieCategory.advertising, 'prov': 'Typeform'},
+    'attribution_user_id': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Typeform'
+    },
     'atuserid': {'cat': CookieCategory.analytics, 'prov': 'AT Internet'},
     'audience': {'cat': CookieCategory.advertising, 'prov': 'SpotX'},
     'audit': {'cat': CookieCategory.advertising, 'prov': 'Magnite'},
     'audit_p': {'cat': CookieCategory.advertising, 'prov': 'Magnite'},
     'auid': {'cat': CookieCategory.advertising, 'prov': 'Acuity'},
     'aum': {'cat': CookieCategory.advertising, 'prov': 'Acuity'},
-    'auraBrokenDefGraph': {'cat': CookieCategory.analytics, 'prov': 'Salesforce'},
+    'auraBrokenDefGraph': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Salesforce'
+    },
     'auth-token': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
     'auth0': {'cat': CookieCategory.functional, 'prov': 'Auth0'},
     'auth0-mf': {'cat': CookieCategory.functional, 'prov': 'Auth0'},
@@ -1963,22 +2556,46 @@ class CookieUtils {
     'auth0_compat': {'cat': CookieCategory.functional, 'prov': 'Auth0'},
     'autocomplete': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'avcid-': {'cat': CookieCategory.advertising, 'prov': 'richAudience'},
-    'aw_popup_viewed_page': {'cat': CookieCategory.functional, 'prov': 'AWS Cookies Popup'},
-    'aws-csds-token': {'cat': CookieCategory.functional, 'prov': 'Amazon Web Services'},
-    'aws-priv': {'cat': CookieCategory.functional, 'prov': 'Amazon Web Services'},
-    'aws_lang': {'cat': CookieCategory.functional, 'prov': 'Amazon Web Services'},
-    'axeptio_all_vendors': {'cat': CookieCategory.functional, 'prov': 'Axeptio'},
-    'axeptio_authorized_vendors': {'cat': CookieCategory.functional, 'prov': 'Axeptio'},
+    'aw_popup_viewed_page': {
+      'cat': CookieCategory.functional,
+      'prov': 'AWS Cookies Popup'
+    },
+    'aws-csds-token': {
+      'cat': CookieCategory.functional,
+      'prov': 'Amazon Web Services'
+    },
+    'aws-priv': {
+      'cat': CookieCategory.functional,
+      'prov': 'Amazon Web Services'
+    },
+    'aws_lang': {
+      'cat': CookieCategory.functional,
+      'prov': 'Amazon Web Services'
+    },
+    'axeptio_all_vendors': {
+      'cat': CookieCategory.functional,
+      'prov': 'Axeptio'
+    },
+    'axeptio_authorized_vendors': {
+      'cat': CookieCategory.functional,
+      'prov': 'Axeptio'
+    },
     'axeptio_cookies': {'cat': CookieCategory.functional, 'prov': 'Axeptio'},
     'axids': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
     'bSession': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
     'bbcpsessionhash': {'cat': CookieCategory.functional, 'prov': 'vBulletin'},
     'bblastactivity': {'cat': CookieCategory.functional, 'prov': 'vBulletin'},
     'bblastvisit': {'cat': CookieCategory.functional, 'prov': 'vBulletin'},
-    'bbnp_notices_displayed': {'cat': CookieCategory.functional, 'prov': 'vBulletin'},
+    'bbnp_notices_displayed': {
+      'cat': CookieCategory.functional,
+      'prov': 'vBulletin'
+    },
     'bbpassword': {'cat': CookieCategory.functional, 'prov': 'vBulletin'},
     'bbsessionhash': {'cat': CookieCategory.functional, 'prov': 'vBulletin'},
-    'bbsitebuilder_active': {'cat': CookieCategory.functional, 'prov': 'vBulletin'},
+    'bbsitebuilder_active': {
+      'cat': CookieCategory.functional,
+      'prov': 'vBulletin'
+    },
     'bbuserid': {'cat': CookieCategory.functional, 'prov': 'vBulletin'},
     'bc_tstgrp': {'cat': CookieCategory.advertising, 'prov': 'Blueconic.com'},
     'bdswch': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
@@ -1986,7 +2603,10 @@ class CookieUtils {
     'be_typo_user': {'cat': CookieCategory.functional, 'prov': 'TYPO3'},
     'belco-anonymous-id': {'cat': CookieCategory.functional, 'prov': 'Belco'},
     'belco-cookies': {'cat': CookieCategory.functional, 'prov': 'Belco'},
-    'betweendigital.com': {'cat': CookieCategory.advertising, 'prov': 'betweendigital.com'},
+    'betweendigital.com': {
+      'cat': CookieCategory.advertising,
+      'prov': 'betweendigital.com'
+    },
     'bh': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
     'bito': {'cat': CookieCategory.advertising, 'prov': 'Beeswax'},
     'bitoIsSecure': {'cat': CookieCategory.advertising, 'prov': 'Beeswax'},
@@ -1994,7 +2614,10 @@ class CookieUtils {
     'borlabs-cookie': {'cat': CookieCategory.functional, 'prov': 'Borlabs'},
     'bounceClientVisit': {'cat': CookieCategory.advertising, 'prov': 'Bouncex'},
     'brcap': {'cat': CookieCategory.functional, 'prov': 'Bing / Microsoft'},
-    'browserupdateorg': {'cat': CookieCategory.functional, 'prov': 'Browser-Update.org'},
+    'browserupdateorg': {
+      'cat': CookieCategory.functional,
+      'prov': 'Browser-Update.org'
+    },
     'brwsr': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
     'buid': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
     'c': {'cat': CookieCategory.advertising, 'prov': 'Magnite'},
@@ -2006,34 +2629,58 @@ class CookieUtils {
     'calViewState': {'cat': CookieCategory.analytics, 'prov': 'Salesforce'},
     'callback': {'cat': CookieCategory.advertising, 'prov': 'ID5'},
     'camfreq_': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
-    'campaign_click_url': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
-    'camptix_client_stats': {'cat': CookieCategory.analytics, 'prov': 'WordPress'},
+    'campaign_click_url': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Facebook'
+    },
+    'camptix_client_stats': {
+      'cat': CookieCategory.analytics,
+      'prov': 'WordPress'
+    },
     'cap': {'cat': CookieCategory.advertising, 'prov': 'Adhese'},
     'car': {'cat': CookieCategory.advertising, 'prov': 'ID5'},
-    'card_update_verification_id': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'card_update_verification_id': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'cart_currency': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'cart_ts': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'cart_ver': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'cb-currency': {'cat': CookieCategory.functional, 'prov': 'Cookiebot'},
     'cc-': {'cat': CookieCategory.functional, 'prov': 'Intershop'},
-    'ccec_user': {'cat': CookieCategory.advertising, 'prov': 'CookieConsent.io'},
+    'ccec_user': {
+      'cat': CookieCategory.advertising,
+      'prov': 'CookieConsent.io'
+    },
     'ccookie': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'cct': {'cat': CookieCategory.advertising, 'prov': 'adscale.de'},
     'ce_login': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
     'ce_sid': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
     'ce_signup_flow': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
-    'ce_signup_partner': {'cat': CookieCategory.advertising, 'prov': 'Crazy Egg'},
-    'ce_successful_csp_check': {'cat': CookieCategory.analytics, 'prov': 'Crazy Egg'},
+    'ce_signup_partner': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Crazy Egg'
+    },
+    'ce_successful_csp_check': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Crazy Egg'
+    },
     'ceac': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
     'cean': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
     'cean_assoc': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
     'cebs': {'cat': CookieCategory.analytics, 'prov': 'Crazy Egg'},
     'cebsp_': {'cat': CookieCategory.analytics, 'prov': 'Crazy Egg'},
     'cecu': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
-    'ceft_variant_override': {'cat': CookieCategory.analytics, 'prov': 'Crazy Egg'},
+    'ceft_variant_override': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Crazy Egg'
+    },
     'cehc': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
     'celi': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
-    'centralnotice_bucket': {'cat': CookieCategory.analytics, 'prov': 'Wikimedia'},
+    'centralnotice_bucket': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Wikimedia'
+    },
     'cf': {'cat': CookieCategory.advertising, 'prov': 'ID5'},
     'cf_chl_rc_i': {'cat': CookieCategory.functional, 'prov': 'CloudFlare'},
     'cf_chl_rc_m': {'cat': CookieCategory.functional, 'prov': 'CloudFlare'},
@@ -2044,13 +2691,31 @@ class CookieUtils {
     'cftoken': {'cat': CookieCategory.functional, 'prov': 'Adobe ColdFusion'},
     'chat_rules_shown': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
     'checkout_prefill': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'checkout_queue_token': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'checkout_session_lookup': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'checkout_session_token': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'checkout_session_token_': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'checkout_queue_token': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'checkout_session_lookup': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'checkout_session_token': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'checkout_session_token_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'checkout_token': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'checkout_worker_session': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'childinfo': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
+    'checkout_worker_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'childinfo': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Bing / Microsoft'
+    },
     'chk': {'cat': CookieCategory.functional, 'prov': 'PubMatic'},
     'chkSecSet': {'cat': CookieCategory.functional, 'prov': 'PubMatic'},
     'chp_token': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
@@ -2067,83 +2732,212 @@ class CookieUtils {
     'ckies_performance': {'cat': CookieCategory.functional, 'prov': 'Jimdo'},
     'cky-action': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
     'cky-consent': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
-    'cli_user_preference': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'client-session-bind': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
+    'cli_user_preference': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'client-session-bind': {
+      'cat': CookieCategory.functional,
+      'prov': 'Wix.com'
+    },
     'clientSrc': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'client_bslstaid': {'cat': CookieCategory.analytics, 'prov': 'Beslist.nl'},
-    'client_bslstmatch': {'cat': CookieCategory.analytics, 'prov': 'Beslist.nl'},
+    'client_bslstmatch': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Beslist.nl'
+    },
     'client_bslstsid': {'cat': CookieCategory.analytics, 'prov': 'Beslist.nl'},
     'client_bslstuid': {'cat': CookieCategory.analytics, 'prov': 'Beslist.nl'},
     'cmp': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
-    'cmplz_banner-status': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
+    'cmplz_banner-status': {
+      'cat': CookieCategory.functional,
+      'prov': 'Complianz'
+    },
     'cmplz_choice': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
-    'cmplz_consented_services': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
+    'cmplz_consented_services': {
+      'cat': CookieCategory.functional,
+      'prov': 'Complianz'
+    },
     'cmplz_functional': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
     'cmplz_id': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
     'cmplz_marketing': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
     'cmplz_policy_id': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
-    'cmplz_preferences': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
-    'cmplz_saved_categories': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
-    'cmplz_saved_services': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
+    'cmplz_preferences': {
+      'cat': CookieCategory.functional,
+      'prov': 'Complianz'
+    },
+    'cmplz_saved_categories': {
+      'cat': CookieCategory.functional,
+      'prov': 'Complianz'
+    },
+    'cmplz_saved_services': {
+      'cat': CookieCategory.functional,
+      'prov': 'Complianz'
+    },
     'cmplz_statistics': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
     'cmplz_stats': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
     'cmplz_user_data': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
     'cnac': {'cat': CookieCategory.advertising, 'prov': 'ID5'},
     'cnfq': {'cat': CookieCategory.advertising, 'prov': 'Smartadserver'},
     'codepen_session': {'cat': CookieCategory.functional, 'prov': 'Codepen'},
-    'codepen_signup_referrer': {'cat': CookieCategory.functional, 'prov': 'Codepen'},
-    'codepen_signup_referrer_date': {'cat': CookieCategory.functional, 'prov': 'Codepen'},
+    'codepen_signup_referrer': {
+      'cat': CookieCategory.functional,
+      'prov': 'Codepen'
+    },
+    'codepen_signup_referrer_date': {
+      'cat': CookieCategory.functional,
+      'prov': 'Codepen'
+    },
     'codexToken': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'codexUserId': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'codexUserName': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
-    'cognito.organization': {'cat': CookieCategory.analytics, 'prov': 'CognitoForms'},
-    'cognito.services.a': {'cat': CookieCategory.analytics, 'prov': 'CognitoForms'},
+    'cognito.organization': {
+      'cat': CookieCategory.analytics,
+      'prov': 'CognitoForms'
+    },
+    'cognito.services.a': {
+      'cat': CookieCategory.analytics,
+      'prov': 'CognitoForms'
+    },
     'color_mode': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
     'comment_author_': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
-    'comment_author_url_': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
+    'comment_author_url_': {
+      'cat': CookieCategory.functional,
+      'prov': 'WordPress'
+    },
     'compass_sid': {'cat': CookieCategory.analytics, 'prov': 'Marfeel'},
     'compass_uid': {'cat': CookieCategory.analytics, 'prov': 'Marfeel'},
-    'complianz_consent_status': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
-    'complianz_policy_id': {'cat': CookieCategory.functional, 'prov': 'Complianz'},
+    'complianz_consent_status': {
+      'cat': CookieCategory.functional,
+      'prov': 'Complianz'
+    },
+    'complianz_policy_id': {
+      'cat': CookieCategory.functional,
+      'prov': 'Complianz'
+    },
     'componentStyle': {'cat': CookieCategory.functional, 'prov': 'Joomla!'},
     'componentType': {'cat': CookieCategory.functional, 'prov': 'Joomla!'},
     'connect.sid': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
     'consent-policy': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
-    'cookie-consent-io': {'cat': CookieCategory.functional, 'prov': 'CookieConsent.io'},
-    'cookie-consent-io-gdpr': {'cat': CookieCategory.functional, 'prov': 'CookieConsent.io'},
-    'cookie-consent-io-timestamp': {'cat': CookieCategory.functional, 'prov': 'CookieConsent.io'},
-    'cookie.policy.banner.eu': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'cookie.policy.banner.nl': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'cookieJartestCookie': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
-    'cookieSettingVerified': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'cookieconsent_level': {'cat': CookieCategory.functional, 'prov': 'Maxlead'},
+    'cookie-consent-io': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieConsent.io'
+    },
+    'cookie-consent-io-gdpr': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieConsent.io'
+    },
+    'cookie-consent-io-timestamp': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieConsent.io'
+    },
+    'cookie.policy.banner.eu': {
+      'cat': CookieCategory.functional,
+      'prov': 'LinkedIn'
+    },
+    'cookie.policy.banner.nl': {
+      'cat': CookieCategory.functional,
+      'prov': 'LinkedIn'
+    },
+    'cookieJartestCookie': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Outbrain'
+    },
+    'cookieSettingVerified': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    'cookieconsent_level': {
+      'cat': CookieCategory.functional,
+      'prov': 'Maxlead'
+    },
     'cookieconsent_page': {'cat': CookieCategory.functional, 'prov': 'Osano'},
     'cookieconsent_seen': {'cat': CookieCategory.functional, 'prov': 'Maxlead'},
-    'cookieconsent_system': {'cat': CookieCategory.functional, 'prov': 'Maxlead'},
-    'cookieconsent_variant': {'cat': CookieCategory.functional, 'prov': 'Maxlead'},
-    'cookiefirst-consent': {'cat': CookieCategory.functional, 'prov': 'Cookie First'},
-    'cookielawinfo-checkbox-advertisement': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'cookielawinfo-checkbox-analytics': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'cookielawinfo-checkbox-functional': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'cookielawinfo-checkbox-marketing': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'cookielawinfo-checkbox-necessary': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'cookielawinfo-checkbox-non-necessary': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'cookielawinfo-checkbox-others': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'cookielawinfo-checkbox-performance': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
-    'cookielawinfo-checkbox-preferences': {'cat': CookieCategory.functional, 'prov': 'Cookie Law Info'},
+    'cookieconsent_system': {
+      'cat': CookieCategory.functional,
+      'prov': 'Maxlead'
+    },
+    'cookieconsent_variant': {
+      'cat': CookieCategory.functional,
+      'prov': 'Maxlead'
+    },
+    'cookiefirst-consent': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie First'
+    },
+    'cookielawinfo-checkbox-advertisement': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'cookielawinfo-checkbox-analytics': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'cookielawinfo-checkbox-functional': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'cookielawinfo-checkbox-marketing': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'cookielawinfo-checkbox-necessary': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'cookielawinfo-checkbox-non-necessary': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'cookielawinfo-checkbox-others': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'cookielawinfo-checkbox-performance': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
+    'cookielawinfo-checkbox-preferences': {
+      'cat': CookieCategory.functional,
+      'prov': 'Cookie Law Info'
+    },
     'cookies-analytics': {'cat': CookieCategory.functional, 'prov': 'Enzuzo'},
     'cookies-functional': {'cat': CookieCategory.functional, 'prov': 'Enzuzo'},
     'cookies-marketing': {'cat': CookieCategory.functional, 'prov': 'Enzuzo'},
     'cookies-preferences': {'cat': CookieCategory.functional, 'prov': 'Enzuzo'},
-    'cookieyes-advertisement': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
-    'cookieyes-analytics': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
-    'cookieyes-consent': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
-    'cookieyes-functional': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
-    'cookieyes-necessary': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
-    'cookieyes-performance': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
+    'cookieyes-advertisement': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieYes'
+    },
+    'cookieyes-analytics': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieYes'
+    },
+    'cookieyes-consent': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieYes'
+    },
+    'cookieyes-functional': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieYes'
+    },
+    'cookieyes-necessary': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieYes'
+    },
+    'cookieyes-performance': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieYes'
+    },
     'cookieyesID': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
-    'cookieyes_privacy_policy_generator_session': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
-    'cookieyes_session': {'cat': CookieCategory.functional, 'prov': 'CookieYes'},
+    'cookieyes_privacy_policy_generator_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieYes'
+    },
+    'cookieyes_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'CookieYes'
+    },
     'cordovaVersion': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'cqcid': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'cref': {'cat': CookieCategory.advertising, 'prov': 'Quantcast'},
@@ -2166,33 +2960,69 @@ class CookieUtils {
     'ct_sfw_': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
     'ct_timezone': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
     'ctkgen': {'cat': CookieCategory.analytics, 'prov': 'Indeed'},
-    'customer_account_locale': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'customer_account_new_login': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'customer_account_preview': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'customer_payment_method': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'customer_shop_pay_agreement': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'customer_account_locale': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'customer_account_new_login': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'customer_account_preview': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'customer_payment_method': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'customer_shop_pay_agreement': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'd': {'cat': CookieCategory.advertising, 'prov': 'Quantcast'},
     'data-': {'cat': CookieCategory.advertising, 'prov': 'Media.net'},
-    'datatricsDebugger': {'cat': CookieCategory.advertising, 'prov': 'Datatrics'},
-    'datatrics_customData': {'cat': CookieCategory.advertising, 'prov': 'Datatrics'},
+    'datatricsDebugger': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Datatrics'
+    },
+    'datatrics_customData': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Datatrics'
+    },
     'datatrics_optin': {'cat': CookieCategory.advertising, 'prov': 'Datatrics'},
     'dbln': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'dc': {'cat': CookieCategory.advertising, 'prov': 'BetweenDigital'},
     'ddid': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
-    'demdex': {'cat': CookieCategory.advertising, 'prov': 'Adobe Audience Manager'},
+    'demdex': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Audience Manager'
+    },
     'denial-client-ip': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'denial-reason-code': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
+    'denial-reason-code': {
+      'cat': CookieCategory.functional,
+      'prov': 'LinkedIn'
+    },
     'deuxesse_uxid': {'cat': CookieCategory.advertising, 'prov': 'Twiago'},
-    'devOverrideCsrfToken': {'cat': CookieCategory.essential, 'prov': 'Salesforce'},
+    'devOverrideCsrfToken': {
+      'cat': CookieCategory.essential,
+      'prov': 'Salesforce'
+    },
     'devicePixelRatio': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'device_id': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
-    'dextp': {'cat': CookieCategory.advertising, 'prov': 'Adobe Audience Manager'},
+    'dextp': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Audience Manager'
+    },
     'df_ts': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
     'dicbo_id': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
     'did': {'cat': CookieCategory.functional, 'prov': 'Auth0'},
     'did_compat': {'cat': CookieCategory.functional, 'prov': 'Auth0'},
     'didomi_token': {'cat': CookieCategory.functional, 'prov': 'Didomi'},
-    'digitalAudience': {'cat': CookieCategory.advertising, 'prov': 'Digital Audience'},
+    'digitalAudience': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Digital Audience'
+    },
     'disco': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'discount_code': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'django_language': {'cat': CookieCategory.functional, 'prov': 'Google'},
@@ -2204,16 +3034,25 @@ class CookieUtils {
     'dnt': {'cat': CookieCategory.advertising, 'prov': 'X'},
     'done_redirects': {'cat': CookieCategory.advertising, 'prov': 'OnAudience'},
     'dotcom_user': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
-    'dpm': {'cat': CookieCategory.advertising, 'prov': 'Adobe Audience Manager'},
+    'dpm': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Audience Manager'
+    },
     'ds_user_id': {'cat': CookieCategory.advertising, 'prov': 'Instagram'},
-    'dst': {'cat': CookieCategory.advertising, 'prov': 'Adobe Audience Manager'},
+    'dst': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Audience Manager'
+    },
     'dt': {'cat': CookieCategory.advertising, 'prov': 'Underdog Media'},
     'dtCookie': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
     'dtDisabled': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
     'dtLatC': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
     'dtPC': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
     'dtSa': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
-    'dtValidationCookie': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
+    'dtValidationCookie': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Dynatrace'
+    },
     'dtm_gdpr_delete': {'cat': CookieCategory.advertising, 'prov': 'Dotomi'},
     'dtm_gpc_optout': {'cat': CookieCategory.advertising, 'prov': 'Dotomi'},
     'dtm_tcdata': {'cat': CookieCategory.advertising, 'prov': 'Dotomi'},
@@ -2225,32 +3064,80 @@ class CookieUtils {
     'dtm_user_id_sc': {'cat': CookieCategory.advertising, 'prov': 'Dotomi'},
     'duid_update_time': {'cat': CookieCategory.advertising, 'prov': 'Bidence'},
     'dy_fs_page': {'cat': CookieCategory.functional, 'prov': 'Dynamic Yield'},
-    'dynamic_checkout_shown_on_cart': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'dynamic_checkout_shown_on_cart': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'dyncdn': {'cat': CookieCategory.functional, 'prov': 'Smartadserver'},
-    'easysize_button_loaded_for_user': {'cat': CookieCategory.functional, 'prov': 'Easysize.me'},
+    'easysize_button_loaded_for_user': {
+      'cat': CookieCategory.functional,
+      'prov': 'Easysize.me'
+    },
     'edgebucket': {'cat': CookieCategory.advertising, 'prov': 'Reddit'},
     'edsid': {'cat': CookieCategory.advertising, 'prov': 'MercadoLibre'},
-    'enable-compact-scene-listing': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
+    'enable-compact-scene-listing': {
+      'cat': CookieCategory.functional,
+      'prov': 'Twitch'
+    },
     'enforce_policy': {'cat': CookieCategory.functional, 'prov': 'PayPal'},
-    'enterprise_trial_redirect_to': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
+    'enterprise_trial_redirect_to': {
+      'cat': CookieCategory.functional,
+      'prov': 'GitHub'
+    },
     'ep': {'cat': CookieCategory.advertising, 'prov': 'Emetric'},
     'esctx': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
     'esctx-': {'cat': CookieCategory.functional, 'prov': 'Microsoft'},
     'eu_cn': {'cat': CookieCategory.advertising, 'prov': 'X'},
     'europe': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
-    'ev_sync_ax': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_bk': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_dd': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_fs': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_ix': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_nx': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_ox': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_pm': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_rc': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_tm': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'ev_sync_yh': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
+    'ev_sync_ax': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_bk': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_dd': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_fs': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_ix': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_nx': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_ox': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_pm': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_rc': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_tm': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
+    'ev_sync_yh': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
     'ev_tm': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
-    'excludecalltracking': {'cat': CookieCategory.functional, 'prov': 'Adcalls'},
+    'excludecalltracking': {
+      'cat': CookieCategory.functional,
+      'prov': 'Adcalls'
+    },
     'expid_': {'cat': CookieCategory.advertising, 'prov': 'Salesforce'},
     'external_no_cache': {'cat': CookieCategory.functional, 'prov': 'Magento'},
     'external_referer': {'cat': CookieCategory.advertising, 'prov': 'X'},
@@ -2276,14 +3163,23 @@ class CookieUtils {
     'fbm_': {'cat': CookieCategory.advertising, 'prov': 'Instagram'},
     'fcookie': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'fe_typo_user': {'cat': CookieCategory.functional, 'prov': 'TYPO3'},
-    'fedops.logger.sessionId': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
+    'fedops.logger.sessionId': {
+      'cat': CookieCategory.functional,
+      'prov': 'Wix.com'
+    },
     'feed-sort': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'fid': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
     'fileTreeExpanded': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
-    'first_snapshot_url': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
+    'first_snapshot_url': {
+      'cat': CookieCategory.functional,
+      'prov': 'Crazy Egg'
+    },
     'fl_inst': {'cat': CookieCategory.advertising, 'prov': 'Platform161'},
     'fonts-loaded': {'cat': CookieCategory.functional, 'prov': 'Funda'},
-    'force-proxy-stream': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'force-proxy-stream': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'force-stream': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'form_key': {'cat': CookieCategory.essential, 'prov': 'Magento'},
     'fpc': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
@@ -2317,24 +3213,48 @@ class CookieUtils {
     'gst': {'cat': CookieCategory.functional, 'prov': 'SAP'},
     'gt': {'cat': CookieCategory.advertising, 'prov': 'X'},
     'guest-view': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'guest_uuid_essential_': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'guest_uuid_essential_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'hasGmid': {'cat': CookieCategory.advertising, 'prov': 'SAP'},
     'has_js': {'cat': CookieCategory.functional, 'prov': 'Drupal CMS'},
     'has_recent_activity': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
     'hash': {'cat': CookieCategory.advertising, 'prov': 'Blue'},
     'help_center_data': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
-    'hideDevelopmentTools': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'hideFilesWarningModal': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'hideIdentityDialog': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'hide_shopify_pay_for_checkout': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'hideDevelopmentTools': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    'hideFilesWarningModal': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    'hideIdentityDialog': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
+    'hide_shopify_pay_for_checkout': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'hjViewportId': {'cat': CookieCategory.functional, 'prov': 'Hotjar'},
     'hj_visitor': {'cat': CookieCategory.analytics, 'prov': 'Hotjar'},
     'hs': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
     'hs-membership-csrf': {'cat': CookieCategory.essential, 'prov': 'Hubspot'},
-    'hs-messages-hide-welcome-message': {'cat': CookieCategory.functional, 'prov': 'Hubspot'},
-    'hs-messages-is-open': {'cat': CookieCategory.functional, 'prov': 'Hubspot'},
+    'hs-messages-hide-welcome-message': {
+      'cat': CookieCategory.functional,
+      'prov': 'Hubspot'
+    },
+    'hs-messages-is-open': {
+      'cat': CookieCategory.functional,
+      'prov': 'Hubspot'
+    },
     'hs_ab_test': {'cat': CookieCategory.functional, 'prov': 'Hubspot'},
-    'hs_langswitcher_choice': {'cat': CookieCategory.functional, 'prov': 'Hubspot'},
+    'hs_langswitcher_choice': {
+      'cat': CookieCategory.functional,
+      'prov': 'Hubspot'
+    },
     'html-classes': {'cat': CookieCategory.functional, 'prov': 'Funda'},
     'hu-consent': {'cat': CookieCategory.functional, 'prov': 'Hu-manity.co'},
     'hubspotapi': {'cat': CookieCategory.advertising, 'prov': 'Hubspot'},
@@ -2344,29 +3264,50 @@ class CookieUtils {
     'i00': {'cat': CookieCategory.advertising, 'prov': 'infOnline'},
     'ick': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'icu': {'cat': CookieCategory.advertising, 'prov': 'Xandr'},
-    'id_adcloud': {'cat': CookieCategory.advertising, 'prov': 'Adobe Advertising'},
+    'id_adcloud': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Adobe Advertising'
+    },
     'id_ts': {'cat': CookieCategory.advertising, 'prov': 'Ortec'},
     'idccsrf': {'cat': CookieCategory.essential, 'prov': 'Salesforce'},
     'ideaToggle': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'identity-state': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'identity-state-': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'identity_customer_account_number': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'identity_customer_account_number': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'idp': {'cat': CookieCategory.advertising, 'prov': 'Zeotap'},
-    'idsync-bsw-uid-s': {'cat': CookieCategory.advertising, 'prov': 'StreamTheWorld'},
+    'idsync-bsw-uid-s': {
+      'cat': CookieCategory.advertising,
+      'prov': 'StreamTheWorld'
+    },
     'ig_cb': {'cat': CookieCategory.advertising, 'prov': 'Instagram'},
     'ig_did': {'cat': CookieCategory.advertising, 'prov': 'Instagram'},
     'igodigitalst_': {'cat': CookieCategory.advertising, 'prov': 'Salesforce'},
-    'igodigitalstdomain': {'cat': CookieCategory.advertising, 'prov': 'Salesforce'},
+    'igodigitalstdomain': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Salesforce'
+    },
     'improvedigital_uid': {'cat': CookieCategory.advertising, 'prov': 'Adhese'},
     'incap_ses_': {'cat': CookieCategory.functional, 'prov': 'Imperva'},
     'initref': {'cat': CookieCategory.advertising, 'prov': 'Reddit'},
     'inst': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'integration_type': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'intercom-device-id-': {'cat': CookieCategory.analytics, 'prov': 'Intercom'},
+    'intercom-device-id-': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Intercom'
+    },
     'intercom-id-': {'cat': CookieCategory.analytics, 'prov': 'Intercom'},
     'intercom-session-': {'cat': CookieCategory.analytics, 'prov': 'Intercom'},
-    'interstitial_page_reg_oauth_url': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
-    'iotcontextsplashdisable': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'interstitial_page_reg_oauth_url': {
+      'cat': CookieCategory.analytics,
+      'prov': 'LinkedIn'
+    },
+    'iotcontextsplashdisable': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'ipc': {'cat': CookieCategory.functional, 'prov': 'PubMatic'},
     'isFirstSession': {'cat': CookieCategory.functional, 'prov': 'Microsoft'},
     'is_gdpr': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
@@ -2377,8 +3318,14 @@ class CookieUtils {
     'jasx_pool_id': {'cat': CookieCategory.analytics, 'prov': 'Indeed'},
     'jetpackState': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'jpp_math_pass': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
-    'jpxumaster': {'cat': CookieCategory.advertising, 'prov': 'justpremium.com'},
-    'jpxumatched': {'cat': CookieCategory.advertising, 'prov': 'justpremium.com'},
+    'jpxumaster': {
+      'cat': CookieCategory.advertising,
+      'prov': 'justpremium.com'
+    },
+    'jpxumatched': {
+      'cat': CookieCategory.advertising,
+      'prov': 'justpremium.com'
+    },
     'js_ver': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'kcdob': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
     'kcrelid': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
@@ -2405,7 +3352,10 @@ class CookieUtils {
     'li_cc': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
     'li_cu': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'li_ec': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'li_ep_auth_context': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
+    'li_ep_auth_context': {
+      'cat': CookieCategory.functional,
+      'prov': 'LinkedIn'
+    },
     'li_fat_id': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'li_feed_xray': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
     'li_gc': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
@@ -2425,9 +3375,15 @@ class CookieUtils {
     'lil-lang': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'lissc': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
     'lists-state': {'cat': CookieCategory.functional, 'prov': 'Plesk'},
-    'liveagent_invite_rejected_': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'liveagent_invite_rejected_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'liveagent_sid': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'ljt_reader': {'cat': CookieCategory.advertising, 'prov': 'Federated Media Publishing'},
+    'ljt_reader': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Federated Media Publishing'
+    },
     'ljtrtb': {'cat': CookieCategory.advertising, 'prov': 'SOVRN'},
     'lkqdid': {'cat': CookieCategory.advertising, 'prov': 'Verve'},
     'lkqdidts': {'cat': CookieCategory.advertising, 'prov': 'Verve'},
@@ -2436,32 +3392,68 @@ class CookieUtils {
     'lms_ads': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
     'lms_analytics': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
     'ln_or': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
-    'local_storage_app_session_id': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
+    'local_storage_app_session_id': {
+      'cat': CookieCategory.functional,
+      'prov': 'Twitch'
+    },
     'locale': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
-    'locale_bar_accepted': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'locale_bar_accepted': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'localization': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'login': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'login_redirect': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'login_with_shop_finalize': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'loginnotify_prevlogins': {'cat': CookieCategory.functional, 'prov': 'Wikimedia'},
+    'login_with_shop_finalize': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'loginnotify_prevlogins': {
+      'cat': CookieCategory.functional,
+      'prov': 'Wikimedia'
+    },
     'lss_bundle_viewer': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
     'lu': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
-    'lz_last_visit': {'cat': CookieCategory.functional, 'prov': 'LiveZilla GmbH'},
+    'lz_last_visit': {
+      'cat': CookieCategory.functional,
+      'prov': 'LiveZilla GmbH'
+    },
     'lz_userid': {'cat': CookieCategory.functional, 'prov': 'LiveZilla GmbH'},
     'lz_visits': {'cat': CookieCategory.functional, 'prov': 'LiveZilla GmbH'},
     'm': {'cat': CookieCategory.functional, 'prov': 'Stripe'},
     'm_user': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
-    'mage-banners-cache-storage': {'cat': CookieCategory.functional, 'prov': 'Magento'},
+    'mage-banners-cache-storage': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
     'mage-cache-sessid': {'cat': CookieCategory.functional, 'prov': 'Magento'},
     'mage-cache-storage': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'mage-cache-storage-section-invalidation': {'cat': CookieCategory.functional, 'prov': 'Magento'},
+    'mage-cache-storage-section-invalidation': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
     'mage-cache-timeout': {'cat': CookieCategory.functional, 'prov': 'Magento'},
     'mage-messages': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'mage-translation-file-version': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'mage-translation-storage': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'mailmunch_second_pageview': {'cat': CookieCategory.advertising, 'prov': 'MailMunch'},
-    'marketplace_repository_ids': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
-    'marketplace_suggested_target_id': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
+    'mage-translation-file-version': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
+    'mage-translation-storage': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
+    'mailmunch_second_pageview': {
+      'cat': CookieCategory.advertising,
+      'prov': 'MailMunch'
+    },
+    'marketplace_repository_ids': {
+      'cat': CookieCategory.functional,
+      'prov': 'GitHub'
+    },
+    'marketplace_suggested_target_id': {
+      'cat': CookieCategory.functional,
+      'prov': 'GitHub'
+    },
     'master_device_id': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'matchadform': {'cat': CookieCategory.advertising, 'prov': 'Roku'},
     'matomo_ignore': {'cat': CookieCategory.analytics, 'prov': 'Matomo'},
@@ -2474,7 +3466,10 @@ class CookieUtils {
     'mics_uaid': {'cat': CookieCategory.advertising, 'prov': 'Mediarithmics'},
     'mics_vid': {'cat': CookieCategory.advertising, 'prov': 'Mediarithmics'},
     'mid': {'cat': CookieCategory.functional, 'prov': 'Instagram'},
-    'mnet_session_depth': {'cat': CookieCategory.advertising, 'prov': 'Media.net'},
+    'mnet_session_depth': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Media.net'
+    },
     'msToken': {'cat': CookieCategory.advertising, 'prov': 'TikTok'},
     'mt_misc': {'cat': CookieCategory.advertising, 'prov': 'MediaMath'},
     'mt_mop': {'cat': CookieCategory.advertising, 'prov': 'MediaMath'},
@@ -2484,7 +3479,10 @@ class CookieUtils {
     'muc_ads': {'cat': CookieCategory.advertising, 'prov': 'X'},
     'muxData': {'cat': CookieCategory.functional, 'prov': 'Wistia'},
     'mv_tokens': {'cat': CookieCategory.advertising, 'prov': 'MediaVine'},
-    'mv_tokens_invalidate-verizon-pushes': {'cat': CookieCategory.advertising, 'prov': 'MediaVine'},
+    'mv_tokens_invalidate-verizon-pushes': {
+      'cat': CookieCategory.advertising,
+      'prov': 'MediaVine'
+    },
     'n': {'cat': CookieCategory.advertising, 'prov': 'Tailtarget'},
     'nSGt-': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
     'nlbi_': {'cat': CookieCategory.functional, 'prov': 'Imperva'},
@@ -2497,44 +3495,101 @@ class CookieUtils {
     'oo': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'opout': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
     'opt_out': {'cat': CookieCategory.advertising, 'prov': 'Nativo'},
-    'optimizelyDomainTestCookie': {'cat': CookieCategory.advertising, 'prov': 'Optimizely'},
-    'optimizelyOptOut': {'cat': CookieCategory.advertising, 'prov': 'Optimizely'},
-    'optimizelyRedirectData': {'cat': CookieCategory.advertising, 'prov': 'Optimizely'},
-    'org_transform_notice': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
+    'optimizelyDomainTestCookie': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Optimizely'
+    },
+    'optimizelyOptOut': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Optimizely'
+    },
+    'optimizelyRedirectData': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Optimizely'
+    },
+    'org_transform_notice': {
+      'cat': CookieCategory.functional,
+      'prov': 'GitHub'
+    },
     'oribi_cookie_test': {'cat': CookieCategory.analytics, 'prov': 'Oribi'},
     'oribi_user_guid': {'cat': CookieCategory.analytics, 'prov': 'Oribi'},
-    'osano_consentmanager_expdate': {'cat': CookieCategory.functional, 'prov': 'Osano'},
-    'osano_consentmanager_uuid': {'cat': CookieCategory.functional, 'prov': 'Osano'},
+    'osano_consentmanager_expdate': {
+      'cat': CookieCategory.functional,
+      'prov': 'Osano'
+    },
+    'osano_consentmanager_uuid': {
+      'cat': CookieCategory.functional,
+      'prov': 'Osano'
+    },
     'otsid': {'cat': CookieCategory.advertising, 'prov': 'Adform'},
-    'outbrain_dicbo_id': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
-    'ozone_uid': {'cat': CookieCategory.advertising, 'prov': 'The Ozone Project'},
-    'pa_google_ts': {'cat': CookieCategory.advertising, 'prov': 'Perfect Audience'},
-    'pa_openx_ts': {'cat': CookieCategory.advertising, 'prov': 'Perfect Audience'},
-    'pa_rubicon_ts': {'cat': CookieCategory.advertising, 'prov': 'Perfect Audience'},
-    'pa_twitter_ts': {'cat': CookieCategory.advertising, 'prov': 'Perfect Audience'},
+    'outbrain_dicbo_id': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Outbrain'
+    },
+    'ozone_uid': {
+      'cat': CookieCategory.advertising,
+      'prov': 'The Ozone Project'
+    },
+    'pa_google_ts': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Perfect Audience'
+    },
+    'pa_openx_ts': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Perfect Audience'
+    },
+    'pa_rubicon_ts': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Perfect Audience'
+    },
+    'pa_twitter_ts': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Perfect Audience'
+    },
     'pa_uid': {'cat': CookieCategory.advertising, 'prov': 'Perfect Audience'},
     'pa_user': {'cat': CookieCategory.analytics, 'prov': 'Piano'},
-    'pa_yahoo_ts': {'cat': CookieCategory.advertising, 'prov': 'Perfect Audience'},
+    'pa_yahoo_ts': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Perfect Audience'
+    },
     'panoramaId': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
     'panoramaId_expiry': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
-    'panoramaId_expiry_exp': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
+    'panoramaId_expiry_exp': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Lotame'
+    },
     'partner-': {'cat': CookieCategory.advertising, 'prov': 'Smartadserver'},
-    'pay_update_intent_id': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'pay_update_intent_id': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'pbw': {'cat': CookieCategory.analytics, 'prov': 'Smartadserver'},
     'pc-unit': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'pcfm': {'cat': CookieCategory.advertising, 'prov': 'Bing / Microsoft'},
     'pctrk': {'cat': CookieCategory.analytics, 'prov': 'Salesforce'},
     'pd': {'cat': CookieCategory.advertising, 'prov': 'openx.net'},
     'pdid': {'cat': CookieCategory.advertising, 'prov': 'richAudience'},
-    'persistent_shopping_cart': {'cat': CookieCategory.functional, 'prov': 'Magento'},
+    'persistent_shopping_cart': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
     'pgid-org-': {'cat': CookieCategory.functional, 'prov': 'Intershop'},
     'phpMyAdmin': {'cat': CookieCategory.functional, 'prov': 'phpMyAdmin'},
     'pi': {'cat': CookieCategory.advertising, 'prov': 'PubMatic'},
     'pi_opt_in': {'cat': CookieCategory.analytics, 'prov': 'Salesforce'},
     'picreel_new_price': {'cat': CookieCategory.analytics, 'prov': 'Picreel'},
-    'picreel_tracker__first_visit': {'cat': CookieCategory.analytics, 'prov': 'Picreel'},
-    'picreel_tracker__page_views': {'cat': CookieCategory.analytics, 'prov': 'Picreel'},
-    'picreel_tracker__visited': {'cat': CookieCategory.analytics, 'prov': 'Picreel'},
+    'picreel_tracker__first_visit': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Picreel'
+    },
+    'picreel_tracker__page_views': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Picreel'
+    },
+    'picreel_tracker__visited': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Picreel'
+    },
     'pid': {'cat': CookieCategory.advertising, 'prov': 'Smartadserver'},
     'pid_short': {'cat': CookieCategory.advertising, 'prov': 'Emetric'},
     'pid_signature': {'cat': CookieCategory.advertising, 'prov': 'Emetric'},
@@ -2551,7 +3606,10 @@ class CookieUtils {
     'pmaUser-': {'cat': CookieCategory.functional, 'prov': 'phpMyAdmin'},
     'pma_lang': {'cat': CookieCategory.functional, 'prov': 'phpMyAdmin'},
     'pnespsdk_pnespid': {'cat': CookieCategory.advertising, 'prov': 'Piano'},
-    'pnespsdk_push_subscription_added': {'cat': CookieCategory.analytics, 'prov': 'Piano'},
+    'pnespsdk_push_subscription_added': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Piano'
+    },
     'pnespsdk_ssn': {'cat': CookieCategory.functional, 'prov': 'Piano'},
     'pnespsdk_visitor': {'cat': CookieCategory.analytics, 'prov': 'Piano'},
     'pollN': {'cat': CookieCategory.functional, 'prov': 'Magento'},
@@ -2562,12 +3620,30 @@ class CookieUtils {
     'preview_theme': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'previous_step': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'prism_': {'cat': CookieCategory.advertising, 'prov': 'Active Campaign'},
-    'privacypillar-cookie-consent': {'cat': CookieCategory.functional, 'prov': 'PrivacyPillar'},
-    'privacypillar-google-consent': {'cat': CookieCategory.functional, 'prov': 'PrivacyPillar'},
-    'private_content_version': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'private_mode_user_session': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
-    'product_data_storage': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'profile_preview_token': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'privacypillar-cookie-consent': {
+      'cat': CookieCategory.functional,
+      'prov': 'PrivacyPillar'
+    },
+    'privacypillar-google-consent': {
+      'cat': CookieCategory.functional,
+      'prov': 'PrivacyPillar'
+    },
+    'private_content_version': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
+    'private_mode_user_session': {
+      'cat': CookieCategory.functional,
+      'prov': 'GitHub'
+    },
+    'product_data_storage': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
+    'profile_preview_token': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'promptTestMod': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'pses': {'cat': CookieCategory.analytics, 'prov': 'Xandr'},
     'ptradtrt': {'cat': CookieCategory.advertising, 'prov': 'Yieldmo'},
@@ -2600,29 +3676,59 @@ class CookieUtils {
     'rai-pltn-pl-': {'cat': CookieCategory.advertising, 'prov': 'richAudience'},
     'rc': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'rdtrk': {'cat': CookieCategory.advertising, 'prov': 'RD Station'},
-    'receive-cookie-deprecation': {'cat': CookieCategory.functional, 'prov': 'Google'},
+    'receive-cookie-deprecation': {
+      'cat': CookieCategory.functional,
+      'prov': 'Google'
+    },
     'recent_history': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'recent_history_status': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'recently_compared_product': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'recently_compared_product_previous': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'recently_viewed_product': {'cat': CookieCategory.functional, 'prov': 'Magento'},
-    'recently_viewed_product_previous': {'cat': CookieCategory.functional, 'prov': 'Magento'},
+    'recent_history_status': {
+      'cat': CookieCategory.functional,
+      'prov': 'LinkedIn'
+    },
+    'recently_compared_product': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
+    'recently_compared_product_previous': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
+    'recently_viewed_product': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
+    'recently_viewed_product_previous': {
+      'cat': CookieCategory.functional,
+      'prov': 'Magento'
+    },
     'recs': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
     'recs-': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
-    'redirectionWarning': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'redirectionWarning': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'ref-': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
     'referrer_url': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
     'rek_content': {'cat': CookieCategory.advertising, 'prov': 'rekmob.com'},
     'remember_checked_on': {'cat': CookieCategory.advertising, 'prov': 'X'},
     'remember_me': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
     'renderCtx': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'renderid': {'cat': CookieCategory.functional, 'prov': 'Adobe Audience Manager'},
+    'renderid': {
+      'cat': CookieCategory.functional,
+      'prov': 'Adobe Audience Manager'
+    },
     'rl_anonymous_id': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
     'rl_auth_token': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
     'rl_group_id': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
     'rl_group_trait': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
-    'rl_page_init_referrer': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
-    'rl_page_init_referring_domain': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
+    'rl_page_init_referrer': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Rudderstack'
+    },
+    'rl_page_init_referring_domain': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Rudderstack'
+    },
     'rl_session': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
     'rl_trait': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
     'rl_user_id': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
@@ -2640,15 +3746,24 @@ class CookieUtils {
     's': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     's_tp': {'cat': CookieCategory.analytics, 'prov': 'Adobe Analytics'},
     'sailthru_content': {'cat': CookieCategory.advertising, 'prov': 'Sailthru'},
-    'sailthru_pageviews': {'cat': CookieCategory.advertising, 'prov': 'Sailthru'},
+    'sailthru_pageviews': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Sailthru'
+    },
     'sailthru_visitor': {'cat': CookieCategory.advertising, 'prov': 'Sailthru'},
     'saml_csrf_token': {'cat': CookieCategory.essential, 'prov': 'GitHub'},
     'saml_return_to': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
-    'saml_return_to_legacy': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
+    'saml_return_to_legacy': {
+      'cat': CookieCategory.functional,
+      'prov': 'GitHub'
+    },
     'sasd': {'cat': CookieCategory.advertising, 'prov': 'Smartadserver'},
     'sat_track': {'cat': CookieCategory.functional, 'prov': 'Adobe Analytics'},
     'sbjs_current': {'cat': CookieCategory.analytics, 'prov': 'WooCommerce'},
-    'sbjs_current_add': {'cat': CookieCategory.analytics, 'prov': 'WooCommerce'},
+    'sbjs_current_add': {
+      'cat': CookieCategory.analytics,
+      'prov': 'WooCommerce'
+    },
     'sbjs_first': {'cat': CookieCategory.analytics, 'prov': 'WooCommerce'},
     'sbjs_first_add': {'cat': CookieCategory.analytics, 'prov': 'WooCommerce'},
     'sbjs_migrations': {'cat': CookieCategory.analytics, 'prov': 'WooCommerce'},
@@ -2664,38 +3779,74 @@ class CookieUtils {
     'section_data_clean': {'cat': CookieCategory.functional, 'prov': 'Magento'},
     'section_data_ids': {'cat': CookieCategory.functional, 'prov': 'Magento'},
     'sentry_device_id': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
-    'server-session-bind': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
+    'server-session-bind': {
+      'cat': CookieCategory.functional,
+      'prov': 'Wix.com'
+    },
     'server_session_id': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
-    'sessionFunnelEventLogged': {'cat': CookieCategory.advertising, 'prov': 'Pinterest'},
-    'session_storage_last_visited_twitch_url': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
+    'sessionFunnelEventLogged': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Pinterest'
+    },
+    'session_storage_last_visited_twitch_url': {
+      'cat': CookieCategory.functional,
+      'prov': 'Twitch'
+    },
     'session_unique_id': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
     'sessionid': {'cat': CookieCategory.advertising, 'prov': 'Instagram'},
     'sfau': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'sfdc-stream': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
-    'sharebox-suggestion': {'cat': CookieCategory.analytics, 'prov': 'LinkedIn'},
+    'sharebox-suggestion': {
+      'cat': CookieCategory.analytics,
+      'prov': 'LinkedIn'
+    },
     'sharing_': {'cat': CookieCategory.functional, 'prov': 'Crazy Egg'},
     'shbid': {'cat': CookieCategory.advertising, 'prov': 'Instagram'},
     'shbts': {'cat': CookieCategory.advertising, 'prov': 'Instagram'},
     'shop_analytics': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
-    'shop_pay_accelerated': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'shopify-editor-unconfirmed-settings': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'shop_pay_accelerated': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
+    'shopify-editor-unconfirmed-settings': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'shopify_pay': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'shopify_pay_redirect': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
+    'shopify_pay_redirect': {
+      'cat': CookieCategory.functional,
+      'prov': 'Shopify'
+    },
     'showComments': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
-    'showNewBuilderWarningMessage': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
+    'showNewBuilderWarningMessage': {
+      'cat': CookieCategory.functional,
+      'prov': 'Salesforce'
+    },
     'show_cookie_banner': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
     'sid_Client': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'sidebarPinned': {'cat': CookieCategory.unknown, 'prov': 'Salesforce'},
-    'sites-active-list-state-collapsed': {'cat': CookieCategory.functional, 'prov': 'Plesk'},
+    'sites-active-list-state-collapsed': {
+      'cat': CookieCategory.functional,
+      'prov': 'Plesk'
+    },
     'smSession': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
     'sm_ir': {'cat': CookieCategory.functional, 'prov': 'SurveyMonkey'},
     'sm_rec': {'cat': CookieCategory.functional, 'prov': 'SurveyMonkey'},
     'sp': {'cat': CookieCategory.analytics, 'prov': 'Snowplow'},
     'sp_landing': {'cat': CookieCategory.functional, 'prov': 'Spotify'},
     'sp_t': {'cat': CookieCategory.functional, 'prov': 'Spotify'},
-    'spbc_cookies_test': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
-    'spbc_firewall_pass_key': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
-    'spbc_is_logged_in': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
+    'spbc_cookies_test': {
+      'cat': CookieCategory.functional,
+      'prov': 'CleanTalk'
+    },
+    'spbc_firewall_pass_key': {
+      'cat': CookieCategory.functional,
+      'prov': 'CleanTalk'
+    },
+    'spbc_is_logged_in': {
+      'cat': CookieCategory.functional,
+      'prov': 'CleanTalk'
+    },
     'spbc_log_id': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
     'spbc_timer': {'cat': CookieCategory.functional, 'prov': 'CleanTalk'},
     'spectroscopyId': {'cat': CookieCategory.advertising, 'prov': 'LinkedIn'},
@@ -2725,14 +3876,23 @@ class CookieUtils {
     'stg_last_interaction': {'cat': CookieCategory.analytics, 'prov': 'Piwik'},
     'stg_pk_campaign': {'cat': CookieCategory.analytics, 'prov': 'Piwik'},
     'stg_returning_visitor': {'cat': CookieCategory.analytics, 'prov': 'Piwik'},
-    'stg_traffic_source_priority': {'cat': CookieCategory.analytics, 'prov': 'Piwik'},
+    'stg_traffic_source_priority': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Piwik'
+    },
     'stg_utm_campaign': {'cat': CookieCategory.analytics, 'prov': 'Piwik'},
     'stnojs': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
-    'stopMobileRedirect': {'cat': CookieCategory.functional, 'prov': 'Wikimedia'},
+    'stopMobileRedirect': {
+      'cat': CookieCategory.functional,
+      'prov': 'Wikimedia'
+    },
     'store': {'cat': CookieCategory.functional, 'prov': 'Magento'},
     'store_notice': {'cat': CookieCategory.functional, 'prov': 'WooCommerce'},
     'storefront_digest': {'cat': CookieCategory.functional, 'prov': 'Shopify'},
-    'stsservicecookie': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
+    'stsservicecookie': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
     'stx_user_id': {'cat': CookieCategory.advertising, 'prov': 'Sharethrough'},
     'svSession': {'cat': CookieCategory.advertising, 'prov': 'Wix.com'},
     'svid': {'cat': CookieCategory.advertising, 'prov': 'Mediaplex'},
@@ -2754,7 +3914,10 @@ class CookieUtils {
     'tPHG-PS': {'cat': CookieCategory.advertising, 'prov': 'Partnerize'},
     't_gid': {'cat': CookieCategory.advertising, 'prov': 'Taboola'},
     't_pt_gid': {'cat': CookieCategory.functional, 'prov': 'Taboola'},
-    'taboola_fp_td_user_id': {'cat': CookieCategory.functional, 'prov': 'Taboola'},
+    'taboola_fp_td_user_id': {
+      'cat': CookieCategory.functional,
+      'prov': 'Taboola'
+    },
     'taboola_select': {'cat': CookieCategory.functional, 'prov': 'Taboola'},
     'tawkUUID': {'cat': CookieCategory.analytics, 'prov': 'Tawk.to Chat'},
     'tb_click_param': {'cat': CookieCategory.analytics, 'prov': 'Taboola'},
@@ -2766,12 +3929,21 @@ class CookieUtils {
     'tc_test_cookie': {'cat': CookieCategory.functional, 'prov': 'Command Act'},
     'tearsheet': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
     'test': {'cat': CookieCategory.functional, 'prov': 'Parse.ly'},
-    'test_cookie': {'cat': CookieCategory.functional, 'prov': 'DoubleClick/Google Marketing'},
-    'test_rudder_cookie': {'cat': CookieCategory.analytics, 'prov': 'Rudderstack'},
+    'test_cookie': {
+      'cat': CookieCategory.functional,
+      'prov': 'DoubleClick/Google Marketing'
+    },
+    'test_rudder_cookie': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Rudderstack'
+    },
     'tf_respondent_cc': {'cat': CookieCategory.functional, 'prov': 'Typeform'},
     'tfw_exp': {'cat': CookieCategory.advertising, 'prov': 'X'},
     'tix_view_token': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
-    'tk_ai': {'cat': CookieCategory.functional, 'prov': 'WooCommerce / Jetpack'},
+    'tk_ai': {
+      'cat': CookieCategory.functional,
+      'prov': 'WooCommerce / Jetpack'
+    },
     'tk_lr': {'cat': CookieCategory.advertising, 'prov': 'WordPress'},
     'tk_or': {'cat': CookieCategory.advertising, 'prov': 'WordPress'},
     'tk_qs': {'cat': CookieCategory.analytics, 'prov': 'WordPress'},
@@ -2781,7 +3953,10 @@ class CookieUtils {
     'tp': {'cat': CookieCategory.advertising, 'prov': 'Bombora'},
     'trac_form_token': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'trac_session': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
-    'tracked_start_checkout': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
+    'tracked_start_checkout': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Shopify'
+    },
     'trc': {'cat': CookieCategory.advertising, 'prov': 'Platform161'},
     'trc_cookie_storage': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
     'triplelift_uid': {'cat': CookieCategory.advertising, 'prov': 'Adhese'},
@@ -2813,7 +3988,10 @@ class CookieUtils {
     'tv_spot_tracker': {'cat': CookieCategory.analytics, 'prov': 'Abovo Media'},
     'tvid': {'cat': CookieCategory.advertising, 'prov': 'Magnite'},
     'twid': {'cat': CookieCategory.advertising, 'prov': 'X'},
-    'twitch.lohp.countryCode': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
+    'twitch.lohp.countryCode': {
+      'cat': CookieCategory.functional,
+      'prov': 'Twitch'
+    },
     'tz': {'cat': CookieCategory.functional, 'prov': 'GitHub'},
     'u': {'cat': CookieCategory.advertising, 'prov': 'Totvs'},
     'ua_': {'cat': CookieCategory.functional, 'prov': 'SAP'},
@@ -2829,7 +4007,10 @@ class CookieUtils {
     'um': {'cat': CookieCategory.advertising, 'prov': 'Improve Digital'},
     'umeh': {'cat': CookieCategory.advertising, 'prov': 'Improve Digital'},
     'unifiedPixel': {'cat': CookieCategory.advertising, 'prov': 'Outbrain'},
-    'unique_ad_source_impression': {'cat': CookieCategory.advertising, 'prov': 'Yahoo'},
+    'unique_ad_source_impression': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Yahoo'
+    },
     'unique_id': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
     'unique_id_durable': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
     'univ_id': {'cat': CookieCategory.advertising, 'prov': 'openx.net'},
@@ -2846,13 +4027,25 @@ class CookieUtils {
     'uuidc': {'cat': CookieCategory.advertising, 'prov': 'MediaMath'},
     'v_usr': {'cat': CookieCategory.advertising, 'prov': 'E-volution.ai'},
     'version': {'cat': CookieCategory.advertising, 'prov': 'Aniview'},
-    'vfThirdpartyCookiesEnabled': {'cat': CookieCategory.functional, 'prov': 'Viafoura'},
+    'vfThirdpartyCookiesEnabled': {
+      'cat': CookieCategory.functional,
+      'prov': 'Viafoura'
+    },
     'vglnk.Agent.p': {'cat': CookieCategory.advertising, 'prov': 'Disqus'},
-    'vglnk.PartnerRfsh.p': {'cat': CookieCategory.advertising, 'prov': 'Disqus'},
-    'videoChat.notice_dismissed': {'cat': CookieCategory.functional, 'prov': 'Twitch'},
+    'vglnk.PartnerRfsh.p': {
+      'cat': CookieCategory.advertising,
+      'prov': 'Disqus'
+    },
+    'videoChat.notice_dismissed': {
+      'cat': CookieCategory.functional,
+      'prov': 'Twitch'
+    },
     'vidoomy-uids': {'cat': CookieCategory.advertising, 'prov': 'Vidoomy'},
     'viewer': {'cat': CookieCategory.advertising, 'prov': 'Ortec'},
-    'viewer_token': {'cat': CookieCategory.advertising, 'prov': 'csync.loopme.me'},
+    'viewer_token': {
+      'cat': CookieCategory.advertising,
+      'prov': 'csync.loopme.me'
+    },
     'visid_incap_': {'cat': CookieCategory.functional, 'prov': 'Imperva'},
     'visitor': {'cat': CookieCategory.advertising, 'prov': 'Nativo'},
     'visitor-id': {'cat': CookieCategory.advertising, 'prov': 'Media.net'},
@@ -2862,44 +4055,122 @@ class CookieUtils {
     'vuid': {'cat': CookieCategory.analytics, 'prov': 'Vimeo'},
     'wa_lang_pref': {'cat': CookieCategory.functional, 'prov': 'WhatsApp'},
     'wa_ul': {'cat': CookieCategory.functional, 'prov': 'WhatsApp'},
-    'waveUserPrefFinderLeftNav': {'cat': CookieCategory.unknown, 'prov': 'Salesforce'},
-    'waveUserPrefFinderListView': {'cat': CookieCategory.unknown, 'prov': 'Salesforce'},
+    'waveUserPrefFinderLeftNav': {
+      'cat': CookieCategory.unknown,
+      'prov': 'Salesforce'
+    },
+    'waveUserPrefFinderListView': {
+      'cat': CookieCategory.unknown,
+      'prov': 'Salesforce'
+    },
     'webact': {'cat': CookieCategory.functional, 'prov': 'Salesforce'},
     'welcome-': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'wfivefivec': {'cat': CookieCategory.advertising, 'prov': 'Roku'},
     'wires': {'cat': CookieCategory.functional, 'prov': 'Processwire'},
-    'wires_challenge': {'cat': CookieCategory.functional, 'prov': 'Processwire'},
+    'wires_challenge': {
+      'cat': CookieCategory.functional,
+      'prov': 'Processwire'
+    },
     'wistia': {'cat': CookieCategory.functional, 'prov': 'Wistia'},
-    'wistia-video-progress-': {'cat': CookieCategory.functional, 'prov': 'Wistia'},
+    'wistia-video-progress-': {
+      'cat': CookieCategory.functional,
+      'prov': 'Wistia'
+    },
     'wixLanguage': {'cat': CookieCategory.functional, 'prov': 'Wix.com'},
-    'woocommerce_cart_hash': {'cat': CookieCategory.functional, 'prov': 'WooCommerce'},
-    'woocommerce_dismissed_suggestions__': {'cat': CookieCategory.functional, 'prov': 'WooCommerce'},
-    'woocommerce_items_in_cart': {'cat': CookieCategory.functional, 'prov': 'WooCommerce'},
-    'woocommerce_recently_viewed': {'cat': CookieCategory.functional, 'prov': 'WooCommerce'},
-    'woocommerce_snooze_suggestions__': {'cat': CookieCategory.functional, 'prov': 'WooCommerce'},
-    'wordpress_google_apps_login': {'cat': CookieCategory.functional, 'prov': 'WP-Glogin'},
-    'wordpress_logged_in_': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
+    'woocommerce_cart_hash': {
+      'cat': CookieCategory.functional,
+      'prov': 'WooCommerce'
+    },
+    'woocommerce_dismissed_suggestions__': {
+      'cat': CookieCategory.functional,
+      'prov': 'WooCommerce'
+    },
+    'woocommerce_items_in_cart': {
+      'cat': CookieCategory.functional,
+      'prov': 'WooCommerce'
+    },
+    'woocommerce_recently_viewed': {
+      'cat': CookieCategory.functional,
+      'prov': 'WooCommerce'
+    },
+    'woocommerce_snooze_suggestions__': {
+      'cat': CookieCategory.functional,
+      'prov': 'WooCommerce'
+    },
+    'wordpress_google_apps_login': {
+      'cat': CookieCategory.functional,
+      'prov': 'WP-Glogin'
+    },
+    'wordpress_logged_in_': {
+      'cat': CookieCategory.functional,
+      'prov': 'WordPress'
+    },
     'wp-postpass_': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'wp-saving-post': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
-    'wp-wpml_current_language': {'cat': CookieCategory.functional, 'prov': 'WPML'},
-    'wp_woocommerce_session_': {'cat': CookieCategory.functional, 'prov': 'WooCommerce'},
+    'wp-wpml_current_language': {
+      'cat': CookieCategory.functional,
+      'prov': 'WPML'
+    },
+    'wp_woocommerce_session_': {
+      'cat': CookieCategory.functional,
+      'prov': 'WooCommerce'
+    },
     'wporg_locale': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'wporg_logged_in': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'wporg_sec': {'cat': CookieCategory.functional, 'prov': 'WordPress'},
     'wwepo': {'cat': CookieCategory.functional, 'prov': 'LinkedIn'},
-    'wwwchannelme_z_sid': {'cat': CookieCategory.functional, 'prov': 'Channel.me'},
-    'x-ms-cpim-admin': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-cache': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-csrf': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-ctx': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-dc': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-geo': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-rc': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-rp': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-slice': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-sso': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-cpim-trans': {'cat': CookieCategory.functional, 'prov': 'Azure / Microsoft'},
-    'x-ms-routing-name': {'cat': CookieCategory.functional, 'prov': 'Lightbox CDN'},
+    'wwwchannelme_z_sid': {
+      'cat': CookieCategory.functional,
+      'prov': 'Channel.me'
+    },
+    'x-ms-cpim-admin': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-cache': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-csrf': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-ctx': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-dc': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-geo': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-rc': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-rp': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-slice': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-sso': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-cpim-trans': {
+      'cat': CookieCategory.functional,
+      'prov': 'Azure / Microsoft'
+    },
+    'x-ms-routing-name': {
+      'cat': CookieCategory.functional,
+      'prov': 'Lightbox CDN'
+    },
     'x-pp-s': {'cat': CookieCategory.functional, 'prov': 'PayPal'},
     'xf_consent': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
     'xf_csrf': {'cat': CookieCategory.essential, 'prov': 'Xenforo'},
@@ -2910,8 +4181,14 @@ class CookieUtils {
     'xf_language_id': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
     'xf_ls': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
     'xf_notice_dismiss': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
-    'xf_push_notice_dismiss': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
-    'xf_push_subscription_updated': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
+    'xf_push_notice_dismiss': {
+      'cat': CookieCategory.functional,
+      'prov': 'Xenforo'
+    },
+    'xf_push_subscription_updated': {
+      'cat': CookieCategory.functional,
+      'prov': 'Xenforo'
+    },
     'xf_session': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
     'xf_style_id': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
     'xf_tfa_trust': {'cat': CookieCategory.functional, 'prov': 'Xenforo'},
@@ -2922,7 +4199,10 @@ class CookieUtils {
     'yandexuid': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
     'yashr': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
     'yieldmo_id': {'cat': CookieCategory.analytics, 'prov': 'Yieldmo'},
-    'yith_wcwl_session_': {'cat': CookieCategory.functional, 'prov': 'Yithemes.com'},
+    'yith_wcwl_session_': {
+      'cat': CookieCategory.functional,
+      'prov': 'Yithemes.com'
+    },
     'ymex': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
     'yuidss': {'cat': CookieCategory.analytics, 'prov': 'Yandex.Metrica'},
     'zc': {'cat': CookieCategory.advertising, 'prov': 'Zeotap'},
@@ -2930,32 +4210,63 @@ class CookieUtils {
     'zc_cu_exp': {'cat': CookieCategory.functional, 'prov': 'ZOHO'},
     'zc_loc': {'cat': CookieCategory.advertising, 'prov': 'ZOHO'},
     'zc_show': {'cat': CookieCategory.advertising, 'prov': 'ZOHO'},
-    'zendesk_thirdparty_test': {'cat': CookieCategory.functional, 'prov': 'Zendesk'},
+    'zendesk_thirdparty_test': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zendesk'
+    },
     'zi': {'cat': CookieCategory.advertising, 'prov': 'Zeotap'},
     'zsc': {'cat': CookieCategory.advertising, 'prov': 'Zeotap'},
     'zuc': {'cat': CookieCategory.advertising, 'prov': 'Zeotap'},
   };
 
   static CookieInfo analyze(String rawCookie, String source) {
-    // Parse name and value
-    final parts = rawCookie.split('=');
-    final name = parts[0].trim();
-    String value = parts.length > 1 ? parts.sublist(1).join('=') : '';
+    // Parse name and value, and handle attributes
+    final parts = rawCookie.split(';');
+    final pair = parts[0].split('=');
+    final name = pair[0].trim();
+    String value = pair.length > 1 ? pair.sublist(1).join('=') : '';
 
-    // If complex set-cookie string (e.g. "name=val; Path=/; Secure"), just take the first part
-    if (value.contains(';')) {
-      value = value.split(';')[0];
+    String? domain;
+    String? expires;
+    bool secure = false;
+    bool httpOnly = false;
+
+    // Parse attributes
+    for (var i = 1; i < parts.length; i++) {
+      final attr = parts[i].trim();
+      final lowerAttr = attr.toLowerCase();
+      final eqIndex = attr.indexOf('=');
+
+      if (lowerAttr.startsWith('domain=')) {
+        if (eqIndex != -1) domain = attr.substring(eqIndex + 1).trim();
+      } else if (lowerAttr.startsWith('expires=')) {
+        if (eqIndex != -1) expires = attr.substring(eqIndex + 1).trim();
+      } else if (lowerAttr == 'secure') {
+        secure = true;
+      } else if (lowerAttr == 'httponly') {
+        httpOnly = true;
+      }
     }
 
-    final known = _knownCookies[name] ??
-        _knownCookies.entries
-            .firstWhere((e) => name.startsWith(e.key),
-                orElse: () => MapEntry('', {}))
-            .value;
+    Map<String, dynamic>? knownData = _knownCookies[name];
+    if (knownData == null) {
+      for (final prefix in _prefixKeys) {
+        if (name.startsWith(prefix)) {
+          knownData = _knownCookies[prefix];
+          break;
+        }
+      }
+    }
+
+    final known = knownData ?? {};
 
     return CookieInfo(
       name: name,
       value: value,
+      domain: domain,
+      expires: expires,
+      secure: secure,
+      httpOnly: httpOnly,
       category: known['cat'] ?? CookieCategory.unknown,
       provider: known['prov'],
       source: source,
@@ -2981,7 +4292,8 @@ class CookieUtils {
     for (var sc in serverCookies) {
       final firstPart = sc.split(';')[0];
       final name = firstPart.split('=')[0].trim();
-      merged[name] = analyze(firstPart, 'Server');
+      if (name.isEmpty) continue;
+      merged[name] = analyze(sc, 'Server');
     }
 
     final browserList = parseBrowserCookies(browserCookies);
@@ -2990,6 +4302,10 @@ class CookieUtils {
         merged[bc.name] = CookieInfo(
             name: bc.name,
             value: bc.value,
+            domain: bc.domain,
+            expires: bc.expires,
+            secure: bc.secure,
+            httpOnly: bc.httpOnly,
             category: bc.category,
             provider: bc.provider,
             source: 'Server + Browser');
