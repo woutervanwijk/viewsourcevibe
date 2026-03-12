@@ -24,6 +24,12 @@ This is what Vibe wrote itself:
 
 ![View Source Vibe Logo](assets/icon.png)
 
+Get it on the Play Store: 
+https://play.google.com/store/apps/details?id=info.wouter.sourceviewer
+
+Or the App Store:
+https://apps.apple.com/us/app/view-source-vibe/id6759335719
+
 **Cross-Platform Source Code Viewer & Page analyzer**
 
 View Source Vibe is a powerful tool to view source code, browse and inspect web pages, and analyze web technologies. Built with Flutter, it offers a desktop-class inspection experience on your mobile device.
