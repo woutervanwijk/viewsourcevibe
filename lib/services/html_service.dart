@@ -3577,8 +3577,8 @@ Technical details: $e''';
       try {
         final weightRaw = await activeWebViewController!.evaluateJavascript(
           source:
-              // JS: Collect performance resource timings. For cached resources (transferSize==0),
-              // use decodedBodySize as the effective size so we don't silently report 0 for cache hits.
+              // JS: Collect performance resource timings. Skip data URIs for global totals
+              // to avoid double counting them since they are literal strings in their parents.
               '(function() {'
               ' var tTx=0; var tDec=0;'
               ' var r=performance.getEntriesByType("resource");'
@@ -3587,7 +3587,9 @@ Technical details: $e''';
               '   var name=r[i].name;'
               '   var tx=r[i].transferSize||0;'
               '   var dec=r[i].decodedBodySize||0;'
-              '   tTx+=tx; tDec+=dec;'
+              '   if(!name.startsWith("data:")) {'
+              '     tTx+=tx; tDec+=dec;'
+              '   }'
               '   list.push({n:name,t:tx,d:dec});'
               '   seen.add(name);'
               ' }'
@@ -3686,31 +3688,43 @@ Technical details: $e''';
                 final int mDec = (r['decoded'] as num? ?? 0).toInt();
 
                 final type = _categorizeResource(name, url.toLowerCase());
+                final bool isInline = name.startsWith('data:') || name.startsWith('<svg');
+
                 switch (type) {
                   case 'script':
                     scriptCount++;
-                    scriptTx += mTx;
-                    scriptDec += mDec;
+                    if (!isInline) {
+                      scriptTx += mTx;
+                      scriptDec += mDec;
+                    }
                     break;
                   case 'style':
                     cssCount++;
-                    cssTx += mTx;
-                    cssDec += mDec;
+                    if (!isInline) {
+                      cssTx += mTx;
+                      cssDec += mDec;
+                    }
                     break;
                   case 'image':
                     imgCount++;
-                    imgTx += mTx;
-                    imgDec += mDec;
+                    if (!isInline) {
+                      imgTx += mTx;
+                      imgDec += mDec;
+                    }
                     break;
                   case 'document':
                     htmlCount++;
-                    htmlTx += mTx;
-                    htmlDec += mDec;
+                    if (!isInline) {
+                      htmlTx += mTx;
+                      htmlDec += mDec;
+                    }
                     break;
                   default:
                     otherCount++;
-                    otherTx += mTx;
-                    otherDec += mDec;
+                    if (!isInline) {
+                      otherTx += mTx;
+                      otherDec += mDec;
+                    }
                     break;
                 }
               }
@@ -3882,31 +3896,43 @@ Technical details: $e''';
       final int mDec = (r['decoded'] as num? ?? 0).toInt();
 
       final type = _categorizeResource(name, url);
+      final bool isInline = name.startsWith('data:') || name.startsWith('<svg');
+
       switch (type) {
         case 'script':
           scriptCount++;
-          scriptTx += mTx;
-          scriptDec += mDec;
+          if (!isInline) {
+            scriptTx += mTx;
+            scriptDec += mDec;
+          }
           break;
         case 'style':
           cssCount++;
-          cssTx += mTx;
-          cssDec += mDec;
+          if (!isInline) {
+            cssTx += mTx;
+            cssDec += mDec;
+          }
           break;
         case 'image':
           imgCount++;
-          imgTx += mTx;
-          imgDec += mDec;
+          if (!isInline) {
+            imgTx += mTx;
+            imgDec += mDec;
+          }
           break;
         case 'document':
           htmlCount++;
-          htmlTx += mTx;
-          htmlDec += mDec;
+          if (!isInline) {
+            htmlTx += mTx;
+            htmlDec += mDec;
+          }
           break;
         default:
           otherCount++;
-          otherTx += mTx;
-          otherDec += mDec;
+          if (!isInline) {
+            otherTx += mTx;
+            otherDec += mDec;
+          }
           break;
       }
     }
