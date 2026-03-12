@@ -630,6 +630,8 @@ class HtmlService extends ChangeNotifier {
       'headers': <String, String>{'content-type': 'text/html'},
       'finalUrl': url,
       'isRedirect': false,
+      'ipAddress': 'N/A',
+      'responseTime': 0,
     };
 
     final filename = generateDescriptiveFilename(Uri.parse(url), html);
@@ -2038,7 +2040,9 @@ class HtmlService extends ChangeNotifier {
         'timing': {
           'total': stopwatch.elapsedMilliseconds,
         },
+        'responseTime': stopwatch.elapsedMilliseconds,
         'ip': ipAddress,
+        'ipAddress': ipAddress,
         'security': securityHeaders,
         'cookies': cookies,
         'certificate': certInfo,
@@ -2339,9 +2343,11 @@ Technical details: $e''';
           'url': url,
           'finalUrl': url,
           'ip': ipAddress,
+          'ipAddress': ipAddress,
           'timing': {
             'total': stopwatch.elapsedMilliseconds,
           },
+          'responseTime': stopwatch.elapsedMilliseconds,
           'security': securityHeaders,
           'cookies': cookies,
           'certificate': certInfo,

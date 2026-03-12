@@ -106,9 +106,11 @@ class ProbeService {
         'url': url,
         'finalUrl': url,
         'ip': ipAddress,
+        'ipAddress': ipAddress,
         'timing': {
           'total': stopwatch.elapsedMilliseconds,
         },
+        'responseTime': stopwatch.elapsedMilliseconds,
         'security': securityHeaders,
         'cookies': serverCookies,
         'certificate': certInfo,
@@ -130,7 +132,9 @@ class ProbeService {
         'issuer': cert.issuer,
         'issuerParsed': parseX509String(cert.issuer),
         'validFrom': cert.startValidity.toIso8601String(),
+        'startValidity': cert.startValidity.toIso8601String(),
         'validTo': cert.endValidity.toIso8601String(),
+        'endValidity': cert.endValidity.toIso8601String(),
         'der': base64Encode(cert.der),
         'pem': convertToPem(cert.der),
       };
