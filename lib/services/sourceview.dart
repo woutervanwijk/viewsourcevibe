@@ -220,8 +220,9 @@ class SourceView {
     // Performance optimization for large files
     String processedContent = content;
     final contentSize = content.length;
-    if (contentSize > 500 * 1024) {
-      final maxHighlightLength = 500 * 1024;
+    // Increased limit to 2MB for modern large pages
+    if (contentSize > 2 * 1024 * 1024) {
+      final maxHighlightLength = 2 * 1024 * 1024;
       if (content.length > maxHighlightLength) {
         processedContent = content.substring(0, maxHighlightLength);
       }

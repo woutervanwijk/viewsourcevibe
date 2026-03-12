@@ -3524,11 +3524,39 @@ Technical details: $e''';
         final html = await activeWebViewController!.evaluateJavascript(
           source: '''
               (function() {
-                var contentType = document.contentType;
-                if (contentType && (contentType.includes('xml') || contentType.includes('rss'))) {
-                  return new XMLSerializer().serializeToString(document);
+                var doc = document;
+                var contentType = doc.contentType;
+                
+                // If it's an XML/RSS/SVG file, return serialized XML
+                if (contentType && (contentType.includes('xml') || contentType.includes('rss') || contentType.includes('svg'))) {
+                  try {
+                    return new XMLSerializer().serializeToString(doc);
+                  } catch (e) {}
                 }
-                return document.documentElement.outerHTML;
+                
+                // For HTML, reconstruction to include DOCTYPE and nodes outside <html>
+                var content = "";
+                try {
+                  var child = doc.firstChild;
+                  while (child) {
+                    if (child.nodeType === Node.DOCUMENT_TYPE_NODE) {
+                      content += new XMLSerializer().serializeToString(child) + "\\n";
+                    } else if (child.nodeType === Node.ELEMENT_NODE) {
+                      content += child.outerHTML;
+                    } else if (child.nodeType === Node.COMMENT_NODE) {
+                      content += "<!--" + child.nodeValue + "-->";
+                    } else if (child.nodeType === Node.TEXT_NODE) {
+                      content += child.nodeValue;
+                    }
+                    child = child.nextSibling;
+                  }
+                } catch (e) {
+                  // Fallback to current element if full serialization fails
+                  content = doc.documentElement ? doc.documentElement.outerHTML : "";
+                }
+                
+                // If still empty (shadow DOM or similar), fallback to simple string
+                return content || (doc.documentElement ? doc.documentElement.outerHTML : "");
               })();
             ''',
         );
@@ -3541,8 +3569,9 @@ Technical details: $e''';
               content.contains('<body') &&
               content.contains('<pre')) {
             try {
+              // More robust regex for PRE tags, allowing for varied style strings or none
               final preMatch = RegExp(
-                r'<pre[^>]*style="[^"]*word-wrap:\s*break-word;\s*white-space:\s*pre-wrap;[^"]*"[^>]*>(.*?)<\/pre>',
+                r'<pre[^>]*>(.*?)<\/pre>',
                 dotAll: true,
                 caseSensitive: false,
               ).firstMatch(content);
