@@ -1,43 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/models/html_file.dart';
-import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:code_forge/code_forge.dart';
 import 'package:re_highlight/re_highlight.dart';
-import 'package:re_highlight/languages/all.dart';
-import 'package:re_highlight/styles/vs.dart';
-import 'package:re_highlight/styles/github.dart';
-import 'package:re_highlight/styles/github-dark.dart';
-import 'package:re_highlight/styles/github-dark-dimmed.dart';
-import 'package:re_highlight/styles/androidstudio.dart';
-import 'package:re_highlight/styles/atom-one-dark.dart';
-import 'package:re_highlight/styles/atom-one-light.dart';
-import 'package:re_highlight/styles/vs2015.dart';
-import 'package:re_highlight/styles/monokai-sublime.dart';
-import 'package:re_highlight/styles/monokai.dart';
-import 'package:re_highlight/styles/nord.dart';
-import 'package:re_highlight/styles/tokyo-night-dark.dart';
-import 'package:re_highlight/styles/tokyo-night-light.dart';
-import 'package:re_highlight/styles/dark.dart';
-import 'package:re_highlight/styles/lightfair.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import 'package:view_source_vibe/utils/cookie_utils.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
-
+import 'package:view_source_vibe/utils/code_beautifier.dart';
+import 'package:view_source_vibe/utils/cookie_utils.dart';
+import 'package:view_source_vibe/services/sourceview.dart';
+import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart'
-    hide X509Certificate;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart' hide X509Certificate;
 import 'package:xml/xml.dart' as xml;
 import 'package:shared_preferences/shared_preferences.dart';
 
-class HtmlService with ChangeNotifier {
+class HtmlService extends ChangeNotifier {
   HtmlFile? _currentFile;
   int? _requestedTabIndex;
   int? get requestedTabIndex => _requestedTabIndex;
@@ -47,14 +31,18 @@ class HtmlService with ChangeNotifier {
   bool _isLoading = false;
   String?
       selectedContentType; // Track the selected content type for syntax highlighting
-  ScrollController? _verticalScrollController;
-  ScrollController? _activeHorizontalScrollController;
-  final Map<String, ScrollController> _cachedVerticalControllers = {};
-  final Map<String, ScrollController> _cachedHorizontalControllers = {};
-  GlobalKey? _codeEditorKey;
-  AppStateService? _appStateService;
   AppSettings? _appSettings;
   UrlHistoryService? _urlHistoryService;
+  AppStateService? _appStateService;
+  GlobalKey? _codeEditorKey;
+
+  // Editor state
+  ScrollController? _verticalScrollController;
+  ScrollController? _activeHorizontalScrollController;
+  FindController? _activeFindController;
+  Timer? _disposalTimer;
+  final List<dynamic> _disposalQueue = [];
+  Timer? _highlightDebounceTimer;
 
   // Navigation stack for "Back" functionality
   final List<HtmlFile> _navigationStack = [];
@@ -125,18 +113,12 @@ class HtmlService with ChangeNotifier {
     _webViewControllerDisposed = false;
   }
 
-  /// Called by BrowserView.dispose() to signal the controller is no longer valid.
   void clearWebViewController() {
     _webViewControllerDisposed = true;
     _activeWebViewController = null;
   }
 
   Timer? _autoSaveTimer;
-  final List<dynamic> _disposalQueue = [];
-  Timer? _disposalTimer;
-
-  // Track the currently active find controller
-  FindController? _activeFindController;
 
   // Index of the currently active tab in HomeScreen
   int _activeTabIndex = 0;
@@ -146,13 +128,8 @@ class HtmlService with ChangeNotifier {
   bool get _useBrowserByDefault => _appSettings?.useBrowserByDefault ?? true;
 
   /// The index of the Browser tab in the current tab layout.
-  /// When browser-first: Browser is always at 0.
-  /// When source-first: Browser is appended last (after Source, DOM, Metadata, Server tabs).
   int get browserTabIndex {
     if (_useBrowserByDefault) return 0;
-    // Source-First mode: Browser tab is placed AFTER Source (0)
-    // Count how many other tabs exist before it to find its actual position.
-    // Tab order: Source(0), [DOM Tree?], [Metadata/Services/Media?], [Server tabs?], Browser (last)
     int idx = 1; // starts after Source
     if (isHtmlOrXml) idx += 1; // DOM Tree
     if (showMetadataTabs) idx += 3; // Metadata + Services + Media
@@ -161,9 +138,6 @@ class HtmlService with ChangeNotifier {
   }
 
   int get sourceTabIndex => _useBrowserByDefault ? 1 : 0;
-
-  // Debouncing for syntax highlighting
-  Timer? _highlightDebounceTimer;
 
   HtmlFile? get currentFile => _currentFile;
   ScrollController? get scrollController => _verticalScrollController;
@@ -689,7 +663,13 @@ class HtmlService with ChangeNotifier {
     _disposalTimer?.cancel();
     // Final immediate disposal
     for (final controller in _disposalQueue) {
-      controller.dispose();
+      if (controller != null) {
+        try {
+          controller.dispose();
+        } catch (e) {
+          debugPrint('Error disposing queued controller in dispose(): $e');
+        }
+      }
     }
     _disposalQueue.clear();
 
@@ -697,27 +677,6 @@ class HtmlService with ChangeNotifier {
     // or PrimaryScrollController.of(context).
     _verticalScrollController = null;
     _activeHorizontalScrollController = null;
-
-    // Dispose all cached vertical controllers
-    for (final controller in _cachedVerticalControllers.values) {
-      if (controller.hasClients) {
-        // Safe check
-      }
-      controller.dispose();
-    }
-    _cachedVerticalControllers.clear();
-
-    // Dispose all cached re_editor controllers
-    for (final controller in _cachedControllers.values) {
-      controller.dispose();
-    }
-    _cachedControllers.clear();
-
-    // Dispose all cached horizontal controllers
-    for (final controller in _cachedHorizontalControllers.values) {
-      controller.dispose();
-    }
-    _cachedHorizontalControllers.clear();
 
     _appSettings?.removeListener(notifyListeners);
 
@@ -1834,12 +1793,12 @@ class HtmlService with ChangeNotifier {
   }
 
   /// Get a list of available content types for syntax highlighting
+  /// Get a list of available content types for syntax highlighting
   List<String> getAvailableContentTypes() {
-    // Get all available language keys from re_highlight
-    final availableLanguages = builtinAllLanguages.keys.toList();
+    // Get all available language keys from SourceView
+    final availableLanguages = SourceView.getAvailableLanguages();
 
     // Filter and sort the list to show most common types first
-    // HTML/XML moved to top after Automatic for better UX
     final commonTypes = [
       'html',
       'xml',
@@ -1864,30 +1823,23 @@ class HtmlService with ChangeNotifier {
       'plaintext',
     ];
 
-    // Add common types first, then add remaining types
-    final result = <String>[];
+    final result = <String>['automatic'];
 
-    // Add "Automatic" as the first option
-    result.add('automatic');
-
-    // Add HTML/XML first (right after Automatic) if they exist
+    // Add HTML/XML first
     for (final type in ['html', 'xml']) {
       if (availableLanguages.contains(type) && !result.contains(type)) {
         result.add(type);
       }
     }
 
-    // Add other common types that exist in re_highlight
+    // Add other common types
     for (final type in commonTypes) {
-      if (type != 'html' &&
-          type != 'xml' &&
-          availableLanguages.contains(type) &&
-          !result.contains(type)) {
+      if (!result.contains(type) && availableLanguages.contains(type)) {
         result.add(type);
       }
     }
 
-    // Add remaining types (excluding duplicates)
+    // Add remaining types
     for (final type in availableLanguages) {
       if (!result.contains(type)) {
         result.add(type);
@@ -2032,7 +1984,7 @@ class HtmlService with ChangeNotifier {
       Map<String, dynamic>? certInfo;
       try {
         if (hResponse.certificate != null) {
-          certInfo = _extractCertificateInfo(hResponse.certificate!);
+          certInfo = ProbeService.extractCertificateInfo(hResponse.certificate!);
         }
       } catch (e) {
         debugPrint(
@@ -2319,7 +2271,7 @@ Technical details: $e''';
       Map<String, dynamic>? certInfo;
       try {
         if (response.certificate != null) {
-          certInfo = _extractCertificateInfo(response.certificate!);
+          certInfo = ProbeService.extractCertificateInfo(response.certificate!);
         }
       } catch (e) {
         debugPrint('Could not read SSL certificate: $e');
@@ -2982,457 +2934,8 @@ Technical details: $e''';
     }
   }
 
-  Mode? getReHighlightModeForExtension(String extension) {
-    final languageName = getLanguageForExtension(extension);
-
-    // Get the mode from re_highlight languages
-    try {
-      // Check if the language exists in re_highlight
-      if (builtinAllLanguages.containsKey(languageName)) {
-        return builtinAllLanguages[languageName]!;
-      }
-
-      // Fallback for HTML - try xml if html is requested
-      if (languageName == 'html' ||
-          languageName == 'htm' ||
-          languageName == 'xml') {
-        return builtinAllLanguages['xml'] ??
-            builtinAllLanguages['xml'] ??
-            builtinAllLanguages['plaintext']!;
-      }
-
-      // Ultimate fallback to plaintext
-      return builtinAllLanguages['plaintext']!;
-    } catch (e) {
-      return builtinAllLanguages[
-          'plaintext']!; // Fallback to plaintext if any error occurs
-    }
-  }
-
-  Widget buildHighlightedText(
-    String content,
-    String extension,
-    BuildContext context, {
-    double fontSize = 16.0,
-    String fontFamily = 'Courier',
-    String themeName = 'github',
-    bool wrapText = false,
-    bool showLineNumbers = true,
-    ScrollController? customScrollController,
-  }) {
-    // Performance monitoring and warnings for large files
-    final contentSize = content.length;
-    final contentSizeMB = contentSize / (1024 * 1024);
-
-    // Warn about potential performance issues with large files
-    if (contentSize > 1 * 1024 * 1024) {
-      if (contentSize > 7 * 1024 * 1024) {
-        // 7MB severe warning
-        debugPrint(
-          '⚠️  Very large file: ${contentSizeMB.toStringAsFixed(2)} MB',
-        );
-        debugPrint('   Significant performance impact expected');
-
-        // Show warning to user if context is available and mounted
-        try {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Large file (${contentSizeMB.toStringAsFixed(1)} MB). Syntax highlighting may be slow.',
-                ),
-                duration: const Duration(seconds: 4),
-                // backgroundColor: Colors.orange,
-              ),
-            );
-          });
-        } catch (e) {
-          debugPrint('Could not show large file warning: $e');
-        }
-      } else {
-        // 1MB warning threshold
-        debugPrint(
-          '🚨 Large file detected: ${contentSizeMB.toStringAsFixed(2)} MB',
-        );
-        debugPrint('   Syntax highlighting may impact performance');
-      }
-    }
-
-    // Performance optimization: Use simplified highlighting for very large files
-    bool useSimplifiedHighlighting =
-        contentSize > 1 * 1024 * 1024; // 1MB threshold
-
-    // Get the appropriate language for syntax highlighting
-    final languageName = getLanguageForExtension(extension);
-
-    // check widget cache
-    // if (_highlightCache.containsKey(fullCacheKey)) {
-    //   debugPrint('🔄 Using cached highlighted widget');
-    //   return _highlightCache[fullCacheKey]!;
-    // }
-
-    // Create a controller for the code editor
-    // Performance optimization: Use chunked content for very large files
-    String processedContent = content;
-    if (useSimplifiedHighlighting) {
-      // For very large files, use a simplified approach
-      // This reduces memory usage and parsing time
-      debugPrint('🔧 Using simplified highlighting for very large file');
-
-      // Limit the amount of content processed for syntax highlighting
-      // while still showing the full content
-      final maxHighlightLength = 5000000; // ~200KB for highlighting
-      if (content.length > maxHighlightLength) {
-        // Take the first part for highlighting, but keep full content for display
-        processedContent = content.substring(0, maxHighlightLength);
-        debugPrint(
-          '   Processing first ${maxHighlightLength ~/ 1024}KB for highlighting',
-        );
-      }
-    }
-
-    // Always create a new controller to avoid issues with listeners from deactivated widgets
-    final controller = CodeForgeController()..text = processedContent;
-
-    // Resolve the vertical scroll controller
-    // If customScrollController is provided, use it.
-    // Otherwise, try to find one in the context.
-    // If that fails, create a temporary one (though this should rarely happen in a valid app structure).
-    final effectiveVerticalController =
-        customScrollController ?? PrimaryScrollController.of(context);
-
-    // Update our reference for external access (e.g. scrollToZero)
-    _verticalScrollController = effectiveVerticalController;
-
-    // Create a code theme using the selected theme
-    final mode =
-        _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
-
-    // Return the Editor Widget, using the GlobalKey to preserve state
-    final codeEditor = SizedBox.expand(
-      child: CodeForge(
-        controller: controller,
-        readOnly: true,
-        lineWrap: wrapText,
-        innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
-        editorTheme: _getThemeByName(themeName),
-        language: mode,
-        textStyle: TextStyle(
-          fontSize: fontSize,
-          fontFamily: fontFamily,
-          fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
-          height: 1.2,
-        ),
-        enableGutter: showLineNumbers,
-        finderBuilder: (context, controller) {
-          // Update the active find controller when the builder is called
-          // This ensures we always have the correct controller for the current editor
-          if (_activeFindController != controller) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _updateActiveFindController(controller);
-            });
-          }
-
-          // Return empty container to disable in-editor panel
-          // The panel will be rendered in the AppBar instead
-          return const PreferredSize(
-            preferredSize: Size.zero,
-            child: SizedBox.shrink(),
-          );
-        },
-      ),
-    );
-
-    // Enforce cache size limits
-    _enforceCacheSizeLimits();
-
-    // Do not cache the CodeEditor widget itself as it can lead to "CodeCursorBlinkController was used after being disposed"
-    // errors when the widget is reused after being unmounted/disposed.
-    // _highlightCache[fullCacheKey] = codeEditor;
-
-    return codeEditor;
-  }
-
-  // Helper method to get re_highlight mode for language name
-  Mode? _getReHighlightMode(String languageName) {
-    // First, try the language name directly
-    if (builtinAllLanguages.containsKey(languageName)) {
-      return builtinAllLanguages[languageName]!;
-    }
-
-    // Map common language names to re_highlight language names
-    const languageMap = {
-      'html': 'xml',
-      'htm': 'xml',
-      'javascript': 'javascript',
-      'js': 'javascript',
-      'typescript': 'typescript',
-      'ts': 'typescript',
-      'jsx': 'javascript',
-      'tsx': 'javascript',
-      'xml': 'XML',
-      'xsd': 'XML',
-      'xsl': 'XML',
-      'svg': 'XML',
-      'rss': 'XML',
-      'atom': 'XML',
-      'rdf': 'XML',
-      'yaml': 'YAML',
-      'yml': 'YAML',
-      'markdown': 'markdown',
-      'md': 'markdown',
-      'asciidoc': 'asciidoc',
-      'adoc': 'asciidoc',
-      'cpp': 'cpp',
-      'c++': 'cpp',
-      'csharp': 'csharp',
-      'cs': 'csharp',
-      'plaintext': 'plaintext',
-      'txt': 'plaintext',
-      'text': 'plaintext',
-    };
-
-    // Try the mapped language name
-    final mappedLanguageName = languageMap[languageName];
-    if (mappedLanguageName != null &&
-        builtinAllLanguages.containsKey(mappedLanguageName)) {
-      return builtinAllLanguages[mappedLanguageName]!;
-    }
-
-    // Special cases and fallbacks
-    // HTML/XML family
-    if (languageName == 'html' ||
-        languageName == 'htm' ||
-        languageName == 'xhtml') {
-      return builtinAllLanguages['xml'] ?? builtinAllLanguages['plaintext']!;
-    }
-
-    // JavaScript family
-    if (languageName == 'javascript' ||
-        languageName == 'js' ||
-        languageName == 'jsx' ||
-        languageName == 'tsx') {
-      return builtinAllLanguages['javascript'] ??
-          builtinAllLanguages['plaintext']!;
-    }
-
-    // TypeScript
-    if (languageName == 'typescript' || languageName == 'ts') {
-      return builtinAllLanguages['typescript'] ??
-          builtinAllLanguages['javascript'] ??
-          builtinAllLanguages['plaintext']!;
-    }
-
-    // XML family
-    if (languageName == 'xml' ||
-        languageName == 'xsd' ||
-        languageName == 'xsl' ||
-        languageName == 'svg') {
-      return builtinAllLanguages['xml'] ?? builtinAllLanguages['plaintext']!;
-    }
-
-    // Shell scripting
-    if (languageName == 'bash' ||
-        languageName == 'sh' ||
-        languageName == 'zsh' ||
-        languageName == 'fish' ||
-        languageName == 'shell') {
-      return builtinAllLanguages['bash'] ?? builtinAllLanguages['plaintext']!;
-    }
-
-    // Ultimate fallback to plaintext
-    return builtinAllLanguages['plaintext']!;
-  }
-
-  // Helper method to get the appropriate theme for re_highlight based on theme name
-  Map<String, TextStyle> _getThemeByName(String themeName) {
-    switch (themeName) {
-      case 'github':
-        return githubTheme;
-      case 'github-dark':
-        return githubDarkTheme;
-      case 'github-dark-dimmed':
-        return githubDarkDimmedTheme;
-      case 'androidstudio':
-        return androidstudioTheme;
-      case 'atom-one-dark':
-        return atomOneDarkTheme;
-      case 'atom-one-light':
-        return atomOneLightTheme;
-      case 'vs':
-        return vsTheme;
-      case 'vs2015':
-        return vs2015Theme;
-      case 'monokai-sublime':
-        return monokaiSublimeTheme;
-      case 'monokai':
-        return monokaiTheme;
-      case 'nord':
-        return nordTheme;
-      case 'tokyo-night-dark':
-        return tokyoNightDarkTheme;
-      case 'tokyo-night-light':
-        return tokyoNightLightTheme;
-      case 'dark':
-        return darkTheme;
-      case 'lightfair':
-        return lightfairTheme;
-      default:
-        // Fallback to github theme
-        return githubTheme;
-    }
-  }
-
-  /// Generate a cache key for the CodeLineEditingController (content-dependent only)
-  String _generateControllerCacheKey({
-    required String content,
-    required String extension,
-    required bool useSimplified,
-  }) {
-    final contentHash = _simpleHash(content);
-    return 'hl:${contentHash}_ext:${extension}_simple:$useSimplified';
-  }
-
-  /// Simple hash function for content
-  String _simpleHash(String input) {
-    // For very long content, use a substring to avoid performance issues
-    final sample = input.length > 1000 ? input.substring(0, 1000) : input;
-
-    // Simple hash using string length and some character positions
-    final hashParts = [
-      sample.length.toString(),
-      sample.isNotEmpty ? sample.codeUnitAt(0).toString() : '0',
-      sample.length > 10 ? sample.codeUnitAt(10).toString() : '0',
-      sample.length > 100 ? sample.codeUnitAt(100).toString() : '0',
-      sample.length > 500 ? sample.codeUnitAt(500).toString() : '0',
-    ];
-
-    return hashParts.join('_');
-  }
-
-  // Cache for editor state to prevent crashes and flickering
-  final Map<String, CodeForgeController> _cachedControllers = {};
-  final Map<String, GlobalKey> _cachedGlobalKeys = {};
-
-  /// Clear the editor cache
-  void clearHighlightCache() {
-    for (final controller in _cachedControllers.values) {
-      _queueForDisposal(controller);
-    }
-    _cachedControllers.clear();
-    _cachedGlobalKeys.clear();
-    for (final controller in _cachedHorizontalControllers.values) {
-      _queueForDisposal(controller);
-    }
-    _cachedHorizontalControllers.clear();
-    _activeHorizontalScrollController = null;
-    debugPrint('🧹 Queued editor cache for lazy disposal');
-  }
-
-  /// Queue a controller for disposal after a delay to ensure it's unmounted
-  void _queueForDisposal(dynamic controller) {
-    _disposalQueue.add(controller);
-    _disposalTimer?.cancel();
-    _disposalTimer = Timer(const Duration(seconds: 2), () {
-      for (final c in _disposalQueue) {
-        try {
-          c.dispose();
-        } catch (e) {
-          debugPrint('Error disposing queued controller: $e');
-        }
-      }
-      final count = _disposalQueue.length;
-      _disposalQueue.clear();
-      debugPrint('♻️ Lazy disposed $count controllers');
-    });
-  }
-
-  /// Prepare the editor for a reset by unfocusing and waiting for blinkers to stop
-  Future<void> _prepareForEditorReset() async {
-    // Unfocus the editor to prevent 'CodeCursorBlinkController' crash on dispose
-    // This stops the cursor blinking timer before the widget is swapped/disposed
-    FocusManager.instance.primaryFocus?.unfocus();
-    // Wait for the blinker to stop its current cycle - increased to 250ms for safety
-    await Future.delayed(const Duration(milliseconds: 250));
-    // Clear the editor cache to force fresh controllers/keys
-    clearHighlightCache();
-  }
-
-  /// Check and enforce cache size limits
-  void _enforceCacheSizeLimits() {
-    const maxCacheEntries = 10;
-
-    if (_cachedControllers.length > maxCacheEntries) {
-      // Unfocus to prevent blinker crash before disposing evicted controllers
-      FocusManager.instance.primaryFocus?.unfocus();
-
-      final keysToRemove = _cachedControllers.keys
-          .take(_cachedControllers.length - maxCacheEntries)
-          .toList();
-      for (final key in keysToRemove) {
-        final controller = _cachedControllers.remove(key);
-        if (controller != null) {
-          _queueForDisposal(controller);
-        }
-        // Also remove all associated global keys and horizontal controllers for this content
-        _cachedGlobalKeys.removeWhere((ekey, _) => ekey.startsWith(key));
-
-        // Find and remove vertical controllers matching this key prefix
-        final vKeysToRemove = _cachedVerticalControllers.keys
-            .where((vKey) => vKey.startsWith(key))
-            .toList();
-
-        for (final vKey in vKeysToRemove) {
-          final c = _cachedVerticalControllers.remove(vKey);
-          if (c != null) _queueForDisposal(c);
-        }
-
-        // Find and remove horizontal controllers matching this key prefix
-        final hKeysToRemove = _cachedHorizontalControllers.keys
-            .where((hKey) => hKey.startsWith(key))
-            .toList();
-
-        for (final hKey in hKeysToRemove) {
-          final c = _cachedHorizontalControllers.remove(hKey);
-          if (c != null) _queueForDisposal(c);
-        }
-      }
-      debugPrint('🔄 Trimmed editor cache to $maxCacheEntries entries');
-    }
-  }
-
-  /// Clear cache for specific content
-  void clearCacheForContent(String content) {
-    final contentHash = _simpleHash(content);
-    final controllerKeyPrefix = 'hl:$contentHash';
-
-    // Dispose and remove controllers
-    final controllerKeys = _cachedControllers.keys
-        .where((key) => key.startsWith(controllerKeyPrefix))
-        .toList();
-    for (final key in controllerKeys) {
-      final c = _cachedControllers.remove(key);
-      if (c != null) _queueForDisposal(c);
-    }
-
-    // Dispose and remove horizontal controllers
-    final hControllerKeys = _cachedHorizontalControllers.keys
-        .where((key) => key.startsWith(controllerKeyPrefix))
-        .toList();
-    for (final key in hControllerKeys) {
-      final c = _cachedHorizontalControllers.remove(key);
-      if (c != null) _queueForDisposal(c);
-    }
-
-    _cachedGlobalKeys.removeWhere(
-      (key, _) => key.startsWith(controllerKeyPrefix),
-    );
-
-    debugPrint('🧹 Cleared cache for content hash $contentHash');
-  }
-
-  /// Build the editor widget, returning strictly synchronous Widget if cached,
-  /// or a Future if processing is needed.
+  /// The main entry point to build an editor for this service.
+  /// Delegated to SourceView for actual implementation.
   FutureOr<Widget> buildEditor(
     String content,
     String extension,
@@ -3443,226 +2946,49 @@ Technical details: $e''';
     bool wrapText = false,
     bool showLineNumbers = true,
   }) {
-    // Performance optimization: Use simplified highlighting for very large files
-    final contentSize = content.length;
-    bool useSimplifiedHighlighting = contentSize > 5 * 1024 * 1024;
+    _verticalScrollController ??= ScrollController();
+    _activeHorizontalScrollController ??= ScrollController();
 
-    // Generate keys
-    final controllerKey = _generateControllerCacheKey(
+    return SourceView.buildEditor(
       content: content,
       extension: extension,
-      useSimplified: useSimplifiedHighlighting,
-    );
-
-    final editorKey = controllerKey;
-
-    // check if we have the controller cached
-    if (_cachedControllers.containsKey(controllerKey)) {
-      final controller = _cachedControllers[controllerKey]!;
-
-      // Get or create GlobalKey for this scroll context
-      final globalKey = _cachedGlobalKeys[editorKey] ??= GlobalKey();
-
-      // Get or create cached vertical scroll controller
-      final verticalController =
-          _cachedVerticalControllers[editorKey] ??= ScrollController();
-      _verticalScrollController = verticalController;
-
-      // Get or create cached horizontal scroll controller
-      final horizontalController =
-          _cachedHorizontalControllers[editorKey] ??= ScrollController();
-      _activeHorizontalScrollController = horizontalController;
-
-      return _buildEditorWidget(
-        context,
-        controller,
-        globalKey,
-        verticalController,
-        horizontalController,
-        extension,
-        themeName,
-        fontSize,
-        fontFamily,
-        wrapText,
-        showLineNumbers,
-      );
-    }
-
-    // Cache Miss: Perform setup (async)
-    return _buildNewEditor(
-      content,
-      extension,
-      context,
-      fontSize,
-      fontFamily,
-      themeName,
-      wrapText,
-      showLineNumbers,
-      useSimplifiedHighlighting,
-      controllerKey,
-      editorKey,
-    );
-  }
-
-  Future<Widget> _buildNewEditor(
-    String content,
-    String extension,
-    BuildContext context,
-    double fontSize,
-    String fontFamily,
-    String themeName,
-    bool wrapText,
-    bool showLineNumbers,
-    bool useSimplifiedHighlighting,
-    String controllerKey,
-    String editorKey,
-  ) async {
-    // Unblock UI for initial render
-    await Future.delayed(Duration.zero);
-
-    // Process content (simulated async if heavy)
-    String processedContent = content;
-    if (useSimplifiedHighlighting) {
-      const maxHighlightLength = 5000000;
-      if (content.length > maxHighlightLength) {
-        processedContent = content.substring(0, maxHighlightLength);
-      }
-    }
-
-    // Create Controller & GlobalKey & Scroll Controllers
-    final controller = CodeForgeController()..text = processedContent;
-    final globalKey = GlobalKey();
-    final verticalController = ScrollController();
-    final horizontalController = ScrollController();
-
-    if (!context.mounted) {
-      controller.dispose();
-      verticalController.dispose();
-      horizontalController.dispose();
-      return const SizedBox.shrink();
-    }
-
-    // Cache them
-    _cachedControllers[controllerKey] = controller;
-    _cachedGlobalKeys[editorKey] = globalKey;
-    _cachedVerticalControllers[editorKey] = verticalController;
-    _cachedHorizontalControllers[editorKey] = horizontalController;
-    _enforceCacheSizeLimits();
-
-    _verticalScrollController = verticalController;
-    _activeHorizontalScrollController = horizontalController;
-
-    return _buildEditorWidget(
-      context,
-      controller,
-      globalKey,
-      verticalController,
-      horizontalController,
-      extension,
-      themeName,
-      fontSize,
-      fontFamily,
-      wrapText,
-      showLineNumbers,
-    );
-  }
-
-  Widget _buildEditorWidget(
-    BuildContext context,
-    CodeForgeController controller,
-    GlobalKey key,
-    ScrollController verticalController,
-    ScrollController horizontalController,
-    String extension,
-    String themeName,
-    double fontSize,
-    String fontFamily,
-    bool wrapText,
-    bool showLineNumbers,
-  ) {
-    // Determine language
-    String languageName = getLanguageForExtension(extension);
-
-    // Create Theme
-    final mode =
-        _getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
-
-    // Return the Editor Widget, using the GlobalKey to preserve state
-    // We wrap it in a local PrimaryScrollController so that components like the
-    // status bar or external scroll buttons can find it easily via context.
-    return PrimaryScrollController(
-      controller: verticalController,
-      child: SizedBox.expand(
-        child: CodeForge(
-          key: key,
-          controller: controller,
-          readOnly: true,
-          lineWrap: wrapText,
-          innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
-          verticalScrollController: verticalController,
-          horizontalScrollController: horizontalController,
-          editorTheme: _getThemeByName(themeName),
-          language: mode,
-          textStyle: TextStyle(
-            fontSize: fontSize,
-            fontFamily: fontFamily,
-            fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
-            height: 1.2,
-          ),
-          enableGutter: showLineNumbers,
-          finderBuilder: (context, controller) {
-            if (_activeFindController != controller) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _updateActiveFindController(controller);
-              });
-            }
-            return const PreferredSize(
-              preferredSize: Size.zero,
-              child: SizedBox.shrink(),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  /// Cancel any pending highlight operations
-  void cancelPendingHighlight() {
-    _highlightDebounceTimer?.cancel();
-    debugPrint('⏹️  Cancelled pending highlight operations');
-  }
-
-  /// Async version of buildHighlightedText to prevent UI blocking
-  Future<Widget> buildHighlightedTextAsync(
-    String content,
-    String extension,
-    BuildContext context, {
-    double fontSize = 16.0,
-    String fontFamily = 'Courier',
-    String themeName = 'github',
-    bool wrapText = false,
-    bool showLineNumbers = true,
-    ScrollController? customScrollController,
-  }) async {
-    // Small delay to allow initial UI render (spinner)
-    await Future.delayed(Duration.zero);
-
-    // Check if mounted before proceeding (though context usage is in buildHighlightedText which is sync)
-    if (!context.mounted) {
-      return const SizedBox.shrink();
-    }
-
-    return buildHighlightedText(
-      content,
-      extension,
-      context,
+      context: context,
+      verticalController: _verticalScrollController!,
+      horizontalController: _activeHorizontalScrollController,
+      activeFindController: _activeFindController,
+      onFindControllerChanged: _updateActiveFindController,
       fontSize: fontSize,
       fontFamily: fontFamily,
       themeName: themeName,
       wrapText: wrapText,
       showLineNumbers: showLineNumbers,
-      customScrollController: customScrollController,
     );
+  }
+
+  /// Cancels highlighting
+  void cancelPendingHighlight() {
+    _highlightDebounceTimer?.cancel();
+  }
+
+  /// Reset the editor cache
+  void clearHighlightCache() {
+    SourceView.clearCache();
+    _verticalScrollController = null;
+    _activeHorizontalScrollController = null;
+    notifyListeners();
+  }
+
+  /// Proxy for tests and internal usage
+  Mode? getReHighlightModeForExtension(String extension) {
+    final languageName = SourceView.getLanguageForExtension(extension);
+    return SourceView.getReHighlightMode(languageName);
+  }
+
+  /// Prepare the editor for a reset by unfocusing and clearing cache
+  Future<void> _prepareForEditorReset() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future.delayed(const Duration(milliseconds: 100));
+    clearHighlightCache();
   }
 
   /// Toggle the search panel for the current editor
@@ -4131,63 +3457,7 @@ Technical details: $e''';
     }
   }
 
-  Map<String, dynamic> _extractCertificateInfo(X509Certificate cert) {
-    try {
-      return {
-        'subject': cert.subject,
-        'subjectParsed': _parseX509String(cert.subject),
-        'issuer': cert.issuer,
-        'issuerParsed': _parseX509String(cert.issuer),
-        'validFrom': cert.startValidity.toIso8601String(),
-        'validTo': cert.endValidity.toIso8601String(),
-        'der': base64Encode(cert.der),
-        'pem': _convertToPem(cert.der),
-      };
-    } catch (e) {
-      debugPrint('Error extracting certificate info: $e');
-      return {'error': e.toString()};
-    }
-  }
 
-  Map<String, String> _parseX509String(String x509) {
-    final Map<String, String> labels = {
-      'CN': 'Common Name',
-      'O': 'Organization',
-      'OU': 'Organizational Unit',
-      'C': 'Country',
-      'L': 'Locality',
-      'ST': 'State/Province',
-      'E': 'Email',
-      'SERIALNUMBER': 'Serial Number',
-    };
-
-    final Map<String, String> parsed = {};
-    // Typical format: /CN=name/O=org... or CN=name, O=org...
-    final parts = x509.split(RegExp(r'[/,]\s*'));
-    for (var part in parts) {
-      if (part.contains('=')) {
-        final kv = part.split('=');
-        if (kv.length >= 2) {
-          final key = kv[0].trim().toUpperCase();
-          final value = kv.sublist(1).join('=').trim();
-          if (key.isNotEmpty && value.isNotEmpty) {
-            parsed[labels[key] ?? key] = value;
-          }
-        }
-      }
-    }
-    return parsed;
-  }
-
-  String _convertToPem(List<int> der) {
-    final base64String = base64Encode(der);
-    final chunks = <String>[];
-    for (var i = 0; i < base64String.length; i += 64) {
-      final end = (i + 64 > base64String.length) ? base64String.length : i + 64;
-      chunks.add(base64String.substring(i, end));
-    }
-    return '-----BEGIN CERTIFICATE-----\n${chunks.join('\n')}\n-----END CERTIFICATE-----';
-  }
 
   String _unquoteHtml(String html) {
     if (html.startsWith('"') && html.endsWith('"')) {
@@ -4653,51 +3923,7 @@ Technical details: $e''';
   }
 
   String _categorizeResource(String name, String pageUrl) {
-    name = name.toLowerCase();
-    pageUrl = pageUrl.toLowerCase();
-
-    // 1. Script (Explicitly checking for .js prevents overlap with names like "newsletter-style.js")
-    if (name.endsWith('.js') ||
-        name.contains('.js?') ||
-        name.contains('.js#') ||
-        name.contains('script')) {
-      return 'script';
-    }
-
-    // 2. Style
-    if (name.endsWith('.css') ||
-        name.contains('.css?') ||
-        name.contains('.css#') ||
-        name.contains('style')) {
-      return 'style';
-    }
-
-    // 3. Image/Media
-    if (name.endsWith('.png') ||
-        name.endsWith('.jpg') ||
-        name.endsWith('.jpeg') ||
-        name.endsWith('.gif') ||
-        name.endsWith('.webp') ||
-        name.endsWith('.svg') ||
-        name.endsWith('.ico') ||
-        name.endsWith('.avif') ||
-        name.contains('image/') ||
-        name.contains('img_') ||
-        name.contains('/images/')) {
-      return 'image';
-    }
-
-    // 4. Document (HTML)
-    if (name == pageUrl ||
-        name == '$pageUrl/' ||
-        name.endsWith('.html') ||
-        name.endsWith('.htm') ||
-        name.contains('document') ||
-        (!name.contains('.') && name.startsWith('http'))) {
-      return 'document';
-    }
-
-    return 'other';
+    return ProbeService.categorizeResource(name, pageUrl);
   }
 
   Future<int> _fetchResourceSize(String url) async {
