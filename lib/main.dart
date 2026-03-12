@@ -472,6 +472,23 @@ Future<void> _performDelayedInitialization(
   }
 }
 
+class _ThemeState {
+  final ThemeModeOption themeMode;
+  final bool darkMode;
+
+  _ThemeState({required this.themeMode, required this.darkMode});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ThemeState &&
+          themeMode == other.themeMode &&
+          darkMode == other.darkMode;
+
+  @override
+  int get hashCode => themeMode.hashCode ^ darkMode.hashCode;
+}
+
 class MyApp extends StatelessWidget {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
@@ -480,56 +497,55 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = Provider.of<AppSettings>(context);
-
-    // Determine the effective theme mode based on user preference
-    ThemeMode effectiveThemeMode;
-    switch (settings.themeMode) {
-      case ThemeModeOption.system:
-        effectiveThemeMode = ThemeMode.system;
-        break;
-      case ThemeModeOption.light:
-        effectiveThemeMode = ThemeMode.light;
-        break;
-      case ThemeModeOption.dark:
-        effectiveThemeMode = ThemeMode.dark;
-        break;
-    }
-
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      title: 'View Source Vibe',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-        ),
-        brightness: Brightness.light,
+    // Only rebuild MaterialApp when theme-relevant settings change
+    return Selector<AppSettings, _ThemeState>(
+      selector: (context, settings) => _ThemeState(
+        themeMode: settings.themeMode,
+        darkMode: settings.darkMode,
       ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Color(0xFF1E1E1E), // Dark background for dark theme
-          surfaceTintColor: Color(0xFF1E1E1E),
-        ),
-        brightness: Brightness.dark,
-      ),
-      themeMode: effectiveThemeMode,
-      home: SharedContentWrapper(child: const HomeScreen()),
-      debugShowCheckedModeBanner: false,
+      builder: (context, themeState, child) {
+        // Determine the effective theme mode
+        final bool isDark = themeState.themeMode == ThemeModeOption.system
+            ? themeState.darkMode
+            : themeState.themeMode == ThemeModeOption.dark;
+
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          title: 'View Source Vibe',
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.blue,
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+            appBarTheme: const AppBarTheme(
+              centerTitle: true,
+              elevation: 0,
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.white,
+            ),
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.blue,
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+            appBarTheme: const AppBarTheme(
+              centerTitle: true,
+              elevation: 0,
+              backgroundColor: Color(0xFF1E1E1E),
+              surfaceTintColor: Color(0xFF1E1E1E),
+            ),
+          ),
+          themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+          // Use the child parameter to preserve the inner tree across theme changes
+          home: child,
+          debugShowCheckedModeBanner: false,
+        );
+      },
+      // This child is created once and reused even when MaterialApp rebuilds
+      child: const SharedContentWrapper(child: HomeScreen()),
     );
   }
 }
