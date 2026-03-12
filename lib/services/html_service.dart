@@ -513,8 +513,9 @@ class HtmlService extends ChangeNotifier {
       _webViewLoadingUrl = url;
       _isWebViewLoading = true;
 
-      // If Browser isn't selected, request switch (unless already switching somewhere else)
-      if (_activeTabIndex != browserTabIndex && switchToTab == null) {
+      // If Browser isn't selected, request switch (unless already switching somewhere else or in Source-First mode)
+      bool isCurrentlyOnBrowser = _activeTabIndex == browserTabIndex;
+      if (!isCurrentlyOnBrowser && switchToTab == null && _useBrowserByDefault) {
         _requestedTabIndex = browserTabIndex;
       }
 
@@ -1530,7 +1531,9 @@ class HtmlService extends ChangeNotifier {
     bool isPartial = false,
     int? switchToTab,
   }) async {
-    _isBeautifyEnabled = false; // Reset beautify mode on new file
+    if (!isPartial) {
+      _isBeautifyEnabled = false; // Reset beautify mode on new file
+    }
 
     // Save current file to navigation stack if we are not going back
     // AND if we are actually navigating to a NEW file (url/path check)
@@ -1539,7 +1542,14 @@ class HtmlService extends ChangeNotifier {
     }
 
     final String? previousLoadingUrl = _webViewLoadingUrl;
-    await clearFile(clearProbe: clearProbe);
+    
+    // Only clear everything if it's NOT a partial update AND it's a different URL
+    // This prevents "flipping" and flickering when the same page updates or finishes sync
+    bool isSameUrl = _currentFile != null && areUrlsEqual(_currentFile!.path, file.path);
+    
+    if (!isPartial && !isSameUrl) {
+      await clearFile(clearProbe: clearProbe, newUrl: file.path);
+    }
 
     // If we were in the middle of a webview load for this exact file/url
     // preserve the loading state so navigation interception doesn't reset it
@@ -1760,7 +1770,16 @@ class HtmlService extends ChangeNotifier {
     return result;
   }
 
-  Future<void> scrollToZero() async {
+  Future<void> scrollToZero({String? newUrl}) async {
+    // If we have a newUrl, we check if it's different from the current one.
+    // If it's the SAME URL, we often want to preserve scroll position (e.g. on partial syncs or refreshes)
+    if (newUrl != null && _currentFile != null) {
+      if (areUrlsEqual(newUrl, _currentFile!.path)) {
+        debugPrint('scrollToZero: Same URL, preserving scroll position');
+        return;
+      }
+    }
+
     // Reset both vertical and horizontal scroll positions when loading new file
     if (_verticalScrollController?.hasClients ?? false) {
       _verticalScrollController?.jumpTo(0);
@@ -1773,9 +1792,9 @@ class HtmlService extends ChangeNotifier {
     await Future.delayed(const Duration(milliseconds: 10));
   }
 
-  Future<void> clearFile({bool clearProbe = true}) async {
+  Future<void> clearFile({bool clearProbe = true, String? newUrl}) async {
     await _prepareForEditorReset();
-    await scrollToZero();
+    await scrollToZero(newUrl: newUrl);
     _currentFile = null;
     _webViewLoadingUrl =
         null; // Clear any pending webview load url to prevent it from overriding local file
