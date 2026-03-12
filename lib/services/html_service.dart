@@ -3081,7 +3081,7 @@ Technical details: $e''';
 
       // Limit the amount of content processed for syntax highlighting
       // while still showing the full content
-      final maxHighlightLength = 200000; // ~200KB for highlighting
+      final maxHighlightLength = 5000000; // ~200KB for highlighting
       if (content.length > maxHighlightLength) {
         // Take the first part for highlighting, but keep full content for display
         processedContent = content.substring(0, maxHighlightLength);
@@ -3445,7 +3445,7 @@ Technical details: $e''';
   }) {
     // Performance optimization: Use simplified highlighting for very large files
     final contentSize = content.length;
-    bool useSimplifiedHighlighting = contentSize > 1 * 1024 * 1024;
+    bool useSimplifiedHighlighting = contentSize > 5 * 1024 * 1024;
 
     // Generate keys
     final controllerKey = _generateControllerCacheKey(
@@ -3523,7 +3523,7 @@ Technical details: $e''';
     // Process content (simulated async if heavy)
     String processedContent = content;
     if (useSimplifiedHighlighting) {
-      const maxHighlightLength = 200000;
+      const maxHighlightLength = 5000000;
       if (content.length > maxHighlightLength) {
         processedContent = content.substring(0, maxHighlightLength);
       }
