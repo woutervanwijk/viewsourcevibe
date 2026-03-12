@@ -28,6 +28,7 @@ class _BrowserViewState extends State<BrowserView> {
   InAppWebViewController? _controller;
   String? _currentRssUrl;
   HtmlService? _htmlService; // cached to use safely in dispose()
+  String? _lastSyncedUrl; // track last early-synced URL to avoid duplicates
 
   @override
   void didChangeDependencies() {
@@ -202,7 +203,7 @@ class _BrowserViewState extends State<BrowserView> {
         }
       },
       onLoadStart: (controller, url) {
-        // Handle load start
+        _lastSyncedUrl = null;
       },
       onLoadStop: (controller, url) async {
         if (mounted && url != null) {
@@ -223,12 +224,24 @@ class _BrowserViewState extends State<BrowserView> {
           }
 
           htmlService.syncWebViewState(urlString, isPartial: false);
+          _lastSyncedUrl = urlString;
           htmlService.updateWebViewLoadingProgress(1.0);
         }
       },
-      onProgressChanged: (controller, progress) {
+      onProgressChanged: (controller, progress) async {
         final htmlService = Provider.of<HtmlService>(context, listen: false);
         htmlService.updateWebViewLoadingProgress(progress / 100.0);
+
+        // Early sync: trigger state update at 98% done to fill tabs faster
+        // while the last bits of slow resources (analytics trackers etc) might still be loading.
+        if (progress >= 98 && progress < 100 && _lastSyncedUrl == null) {
+          final url = await controller.getUrl();
+          final urlString = url?.toString();
+          if (urlString != null && _lastSyncedUrl != urlString) {
+            _lastSyncedUrl = urlString;
+            htmlService.syncWebViewState(urlString, isPartial: true);
+          }
+        }
       },
       onReceivedError: (controller, request, error) {
         if (request.isForMainFrame ?? true) {

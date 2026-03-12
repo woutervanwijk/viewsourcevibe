@@ -3612,12 +3612,35 @@ Technical details: $e''';
 
             // Extract cookies via native CookieManager (captures HttpOnly cookies unlike JS document.cookie)
             try {
-              final cookies =
-                  await CookieManager.instance().getCookies(url: WebUri(url));
-              _lastBrowserCookies = cookies
+              final nativeCookiesList = await CookieManager.instance().getCookies(url: WebUri(url));
+              String nativeCookies = nativeCookiesList
                   .where((c) => c.name.isNotEmpty)
                   .map((c) => '${c.name}=${c.value}')
                   .join('; ');
+
+              final jsCookies = weightMap['cookies']?.toString() ?? '';
+
+              // If native lookup returned nothing, try a broader lookup by origin as a fallback
+              if (nativeCookies.isEmpty && url.startsWith('http')) {
+                try {
+                  final uri = Uri.parse(url);
+                  final originUrl = '${uri.scheme}://${uri.host}/';
+                  final originCookiesList = await CookieManager.instance().getCookies(url: WebUri(originUrl));
+                  nativeCookies = originCookiesList
+                      .where((c) => c.name.isNotEmpty)
+                      .map((c) => '${c.name}=${c.value}')
+                      .join('; ');
+                } catch (_) {}
+              }
+
+              // Prefer native cookies (which include HttpOnly), but fallback to JS cookies if native is empty
+              // And if both are empty, we might have had some from a previous partial sync - don't overwrite with empty
+              // unless we are sure. But usually a full sync should replace.
+              if (nativeCookies.isNotEmpty) {
+                _lastBrowserCookies = nativeCookies;
+              } else if (jsCookies.isNotEmpty) {
+                _lastBrowserCookies = jsCookies;
+              }
             } catch (e) {
               debugPrint('Error getting native cookies: $e');
               _lastBrowserCookies = weightMap['cookies']?.toString() ?? '';
@@ -3775,8 +3798,9 @@ Technical details: $e''';
     } finally {
       if (!isPartial) {
         _isLoading = false;
-        notifyListeners();
       }
+      // Always notify listeners so that tabs (like Cookies) can update even for partial syncs
+      notifyListeners();
     }
   }
 
