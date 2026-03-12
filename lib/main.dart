@@ -486,11 +486,7 @@ class MyApp extends StatelessWidget {
     ThemeMode effectiveThemeMode;
     switch (settings.themeMode) {
       case ThemeModeOption.system:
-        // Use system preference
-        final platformBrightness = MediaQuery.platformBrightnessOf(context);
-        effectiveThemeMode = platformBrightness == Brightness.dark
-            ? ThemeMode.dark
-            : ThemeMode.light;
+        effectiveThemeMode = ThemeMode.system;
         break;
       case ThemeModeOption.light:
         effectiveThemeMode = ThemeMode.light;
