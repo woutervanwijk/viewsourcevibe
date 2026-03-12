@@ -530,27 +530,34 @@ class MetadataView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ListTile(
-            title: Text(
-              'Total Page Size',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Total Page Size',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  FormatUtils.formatBytesWithTransfer({
+                    'decoded': weight['decoded'] as int? ?? 0,
+                    'transfer': weight['transfer'] as int? ?? 0,
+                  }),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: settings.fontFamily,
+                  ),
+                ),
+              ],
             ),
-            trailing: Text(
-              FormatUtils.formatBytesWithTransfer({
-                'decoded': weight['decoded'] as int? ?? 0,
-                'transfer': weight['transfer'] as int? ?? 0,
-              }),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                fontFamily: settings.fontFamily,
-              ),
-            ),
-            dense: true,
           ),
           if (breakdown != null) ...[
             const Divider(height: 1),
@@ -575,20 +582,27 @@ class MetadataView extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return ListTile(
-      title: Text(
-        '$label (${data['count']})',
-        style: const TextStyle(fontSize: 12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$label (${data['count']})',
+              style: const TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            FormatUtils.formatBytesWithTransfer({
+              'decoded': data['decoded'] as int? ?? 0,
+              'transfer': data['transfer'] as int? ?? 0,
+            }),
+            style: TextStyle(fontSize: 12, fontFamily: settings.fontFamily),
+          ),
+        ],
       ),
-      trailing: Text(
-        FormatUtils.formatBytesWithTransfer({
-          'decoded': data['decoded'] as int? ?? 0,
-          'transfer': data['transfer'] as int? ?? 0,
-        }),
-        style: TextStyle(fontSize: 12, fontFamily: settings.fontFamily),
-      ),
-      dense: true,
-      visualDensity: VisualDensity.compact,
     );
   }
 }
