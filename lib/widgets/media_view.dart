@@ -7,6 +7,60 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
 import '../utils/format_utils.dart';
 
+/// Sanitizes SVG data by converting percentage coordinates to absolute values
+/// based on the viewBox. This fixes 'Invalid double: 50%' errors.
+Uint8List _sanitizeSvgData(Uint8List bytes) {
+  try {
+    String content = utf8.decode(bytes, allowMalformed: true).trim();
+    if (content.isEmpty) return bytes;
+
+    // Check if dimensions are present
+    final hasDim = content.contains(
+        RegExp('\\b(width|height|viewBox)\\s*=', caseSensitive: false));
+
+    if (!hasDim) {
+      // Add a fallback viewBox if missing to prevent 'Bad state' error
+      content = content.replaceFirst(
+          RegExp('<svg\\b', caseSensitive: false), '<svg viewBox="0 0 24 24"');
+    }
+
+    // Find viewBox="x y w h" - allow commas as well as spaces
+    final vbRegex = RegExp(
+        'viewBox\\s*=\\s*["\']\\s*(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)\\s*["\']',
+        caseSensitive: false);
+    final viewBoxMatch = vbRegex.firstMatch(content);
+
+    if (viewBoxMatch != null) {
+      final double vbWidth = double.tryParse(viewBoxMatch.group(3)!) ?? 100.0;
+      final double vbHeight = double.tryParse(viewBoxMatch.group(4)!) ?? 100.0;
+
+      // Replace 50% / 100% in cx, cy, x, y, width, height, r, rx, ry
+      final attrRegex = RegExp(
+          '\\b(cx|cy|x|y|width|height|r|rx|ry)\\s*=\\s*["\']\\s*(\\d+\\.?\\d*)\\s*%\\s*["\']',
+          caseSensitive: false);
+      content = content.replaceAllMapped(attrRegex, (match) {
+        final attr = match.group(1);
+        final percentString = match.group(2);
+        final percent = double.tryParse(percentString!) ?? 0.0;
+        final base = (attr == 'cx' ||
+                attr == 'x' ||
+                attr == 'width' ||
+                attr == 'r' ||
+                attr == 'rx')
+            ? vbWidth
+            : vbHeight;
+        final absolute = (percent / 100.0) * base;
+        return '$attr="$absolute"';
+      });
+    }
+
+    return utf8.encode(content);
+  } catch (e) {
+    debugPrint('Error sanitizing SVG: $e');
+    return bytes;
+  }
+}
+
 class MediaView extends StatelessWidget {
   const MediaView({super.key});
 
@@ -287,23 +341,19 @@ class MediaView extends StatelessWidget {
 
     // Decode data URI if present
     Uint8List? dataBytes;
-    bool isSvg = false;
-    if (isInline) {
-      if (src.startsWith('data:image/svg+xml;base64,')) {
-        isSvg = true;
-        try {
+    if (isInline && src.contains('image/svg+xml')) {
+      try {
+        if (src.contains(';base64,')) {
           final base64String = src.split(',').last;
-          dataBytes = base64Decode(base64String);
-        } catch (e) {
-          debugPrint('Error decoding SVG data URI: $e');
+          dataBytes = base64Decode(base64String.trim());
+        } else {
+          // Handle percent-encoded SVG
+          final encoded = src.split(',').last;
+          final decoded = Uri.decodeComponent(encoded);
+          dataBytes = utf8.encode(decoded);
         }
-      } else if (src.startsWith('data:image/')) {
-        try {
-          final base64String = src.split(',').last;
-          dataBytes = base64Decode(base64String);
-        } catch (e) {
-          debugPrint('Error decoding image data URI: $e');
-        }
+      } catch (e) {
+        debugPrint('Error decoding SVG data URI: $e');
       }
     }
 
@@ -342,8 +392,7 @@ class MediaView extends StatelessWidget {
                       ? Colors.grey[900]!
                       : const Color(0xFFFFFFFF),
                 ),
-                child:
-                    _buildImageContent(src, isInline, dataBytes, isSvg: isSvg),
+                child: _buildImageContent(src, isInline, dataBytes),
               ),
             ),
             Container(
@@ -380,39 +429,48 @@ class MediaView extends StatelessWidget {
     );
   }
 
-  Widget _buildImageContent(String src, bool isInline, Uint8List? dataBytes,
-      {bool isSvg = false}) {
+  Widget _buildImageContent(String src, bool isInline, Uint8List? dataBytes) {
     // If the image has a transparent background, the checkerboard shows through.
     // The text is separate (in a Column), so it shouldn't be obscured by the image itself.
     // However, if the aspect ratio is tight, the text might be pushed off or clipped.
     // We already use Expanded for the image, so it should shrink to fit available space.
-    if (isInline && dataBytes != null) {
+    if (isInline && dataBytes != null && dataBytes.isNotEmpty) {
+      final header = String.fromCharCodes(
+          dataBytes.take(dataBytes.length < 100 ? dataBytes.length : 100));
+      final isSvg = src.contains('image/svg+xml') ||
+          header.toLowerCase().contains('<svg');
+
       if (isSvg) {
+        final sanitizedData = _sanitizeSvgData(dataBytes);
+        if (sanitizedData.isEmpty) {
+          return const Center(
+              child: Icon(Icons.broken_image, color: Colors.grey));
+        }
         return LayoutBuilder(
           builder: (context, constraints) {
+            final w =
+                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            final h =
+                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
             return Center(
-              child: SvgPicture.memory(
-                dataBytes,
-                fit: BoxFit.contain,
-                placeholderBuilder: (context) => const Center(
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+              child: ConstrainedBox(
+                constraints: constraints,
+                child: SvgPicture.memory(
+                  sanitizedData,
+                  width: w,
+                  height: h,
+                  fit: BoxFit.contain,
+                  placeholderBuilder: (context) => const Center(
+                    child: CircularProgressIndicator(),
                   ),
+                  errorBuilder: (context, error, stackTrace) {
+                    debugPrint('SVG Render Error (inline): $error');
+                    return const Icon(Icons.broken_image, color: Colors.grey);
+                  },
                 ),
               ),
             );
           },
-        );
-      } else {
-        return Center(
-          child: Image.memory(
-            dataBytes,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) =>
-                const Icon(Icons.broken_image, color: Colors.grey),
-          ),
         );
       }
     }
@@ -439,18 +497,11 @@ class MediaView extends StatelessWidget {
               ),
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
-                return Center(
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                    ),
-                  ),
+                return CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                      : null,
                 );
               },
             ),
@@ -515,7 +566,7 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
         return null; // Invalid SVG
       }
 
-      return bytes;
+      return _sanitizeSvgData(bytes);
     } catch (e) {
       debugPrint('Error loading SVG: $e');
       return null;
@@ -538,11 +589,21 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
+            final w =
+                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            final h =
+                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
             return Center(
               child: SvgPicture.memory(
                 snapshot.data!,
+                width: w,
+                height: h,
                 fit: widget.fit,
                 placeholderBuilder: widget.placeholderBuilder,
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('SVG Render Error (network): $error');
+                  return const Icon(Icons.broken_image, color: Colors.grey);
+                },
               ),
             );
           },

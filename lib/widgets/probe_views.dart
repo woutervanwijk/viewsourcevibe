@@ -2,16 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
-import 'package:view_source_vibe/models/settings.dart';
-import '../utils/format_utils.dart';
+import 'package:view_source_vibe/utils/format_utils.dart';
 
 abstract class ProbeViewBase extends StatelessWidget {
   const ProbeViewBase({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<HtmlService, AppSettings>(
-        builder: (context, htmlService, settings, child) {
+    return Consumer<HtmlService>(builder: (context, htmlService, child) {
       final result = htmlService.probeResult;
 
       // Show spinner only if we don't have results yet
@@ -45,8 +43,7 @@ abstract class ProbeViewBase extends StatelessWidget {
 
       return Stack(
         children: [
-          Positioned.fill(
-              child: buildContent(context, htmlService, result, settings)),
+          Positioned.fill(child: buildContent(context, htmlService, result)),
           if (htmlService.isProbing)
             const Positioned(
               top: 0,
@@ -60,29 +57,23 @@ abstract class ProbeViewBase extends StatelessWidget {
   }
 
   Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result, AppSettings settings);
+      Map<String, dynamic> result);
 
-  Widget _buildDetailRow(String label, String value, AppSettings settings) {
+  Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 128,
             child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(
-            child: SelectableText(
-              value,
-              style: TextStyle(fontSize: 12, fontFamily: settings.fontFamily),
-            ),
+            child: SelectableText(FormatUtils.formatHumanData(value)),
           ),
         ],
       ),
@@ -94,114 +85,258 @@ class ProbeGeneralView extends ProbeViewBase {
   const ProbeGeneralView({super.key});
 
   @override
+  @override
   Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result, AppSettings settings) {
+      Map<String, dynamic> result) {
     // Check if we have browser probe results
     final browserResult = htmlService.browserProbeResult;
     final hasBrowserProbe = browserResult != null && browserResult.isNotEmpty;
 
     return ListView(
-      primary: true,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(24),
+      primary: false,
+      padding: const EdgeInsets.all(16),
       children: [
         if (hasBrowserProbe) ...[
-          _buildSectionHeader('Browser Analysis (Client-side)'),
-          _buildBrowserInfoCard(browserResult, settings),
-          const SizedBox(height: 24),
+          // Section Header for CURL Probe
+          Text(
+            'Curl Probe (Server-Side)',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
         ],
-        _buildSectionHeader('Basic Network Info (Server-side)'),
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            side:
-                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-            borderRadius: BorderRadius.circular(12),
+        _buildStatusCard(context, htmlService, result),
+        const SizedBox(height: 16),
+        _buildNetworkInfoCard(context, result),
+        if (hasBrowserProbe) ...[
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 16),
+          Text(
+            'Browser Probe (Client-Side)',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _buildDetailRow(
-                    'URL', result['url']?.toString() ?? 'N/A', settings),
-                _buildDetailRow('Final URL',
-                    result['finalUrl']?.toString() ?? 'N/A', settings),
-                _buildDetailRow('Status',
-                    result['statusCode']?.toString() ?? 'N/A', settings),
-                _buildDetailRow(
-                    'IP Address', result['ip']?.toString() ?? 'N/A', settings),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        if (result['timing'] != null) ...[
-          _buildSectionHeader('Timing'),
-          _buildTimingCard(result['timing'] as Map<String, dynamic>, settings),
+          const SizedBox(height: 8),
+          _buildBrowserProbeCard(context, browserResult),
         ],
       ],
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, left: 4),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-          color: Colors.grey,
-        ),
-      ),
-    );
-  }
+  Widget _buildBrowserProbeCard(
+      BuildContext context, Map<String, dynamic> result) {
+    final pageWeight = result['pageWeight'] as Map<String, dynamic>? ?? {};
+    final totalTx = pageWeight['totalTransfer'] as int? ?? 0;
+    final totalDec = pageWeight['totalDecoded'] as int? ?? 0;
+    final mainDocTx = pageWeight['mainDocumentTransfer'] as int? ?? 0;
+    final mainDocDec = pageWeight['mainDocumentDecoded'] as int? ?? 0;
+    final resourceCount = result['resourceCount'] as int? ?? 0;
+    final url = result['url'] as String? ?? 'N/A';
+    final statusCode = result['serverStatusCode'];
 
-  Widget _buildBrowserInfoCard(
-      Map<String, dynamic> info, AppSettings settings) {
     return Card(
       elevation: 0,
-      color: Colors.blue.withValues(alpha: 0.05),
+      color: Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.3),
       shape: RoundedRectangleBorder(
-        side: BorderSide(color: Colors.blue.withValues(alpha: 0.2)),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildDetailRow('Effective URL', url),
+            if (statusCode != null)
+              _buildDetailRow('HTTP Status', statusCode.toString()),
+            const SizedBox(height: 8),
+            const Divider(),
+            const SizedBox(height: 8),
             _buildDetailRow(
-                'Browser', info['browser']?.toString() ?? 'N/A', settings),
-            _buildDetailRow('OS', info['os']?.toString() ?? 'N/A', settings),
+                'Document Size',
+                mainDocDec > 0
+                    ? FormatUtils.formatBytesWithTransfer(
+                        {'decoded': mainDocDec, 'transfer': mainDocTx})
+                    : 'N/A'),
+            const Divider(),
+            _buildDetailRow('Total Resources', '$resourceCount requests'),
             _buildDetailRow(
-                'Device', info['device']?.toString() ?? 'N/A', settings),
-            if (info['engine'] != null)
-              _buildDetailRow('Engine', info['engine'].toString(), settings),
+                'Total Size',
+                totalDec > 0
+                    ? FormatUtils.formatBytesWithTransfer(
+                        {'decoded': totalDec, 'transfer': totalTx})
+                    : 'N/A'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTimingCard(Map<String, dynamic> timing, AppSettings settings) {
+  Widget _buildStatusCard(BuildContext context, HtmlService htmlService,
+      Map<String, dynamic> result) {
+    final status = result['statusCode'];
+    final reason = result['reasonPhrase'];
+    final isRedirect = result['isRedirect'] == true;
+
+    Color statusColor = Colors.green;
+    if (status != null) {
+      if (status >= 300 && status < 400) statusColor = Colors.orange;
+      if (status >= 400) statusColor = Colors.red;
+    }
+
     return Card(
       elevation: 0,
+      color: Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.3),
       shape: RoundedRectangleBorder(
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          children: timing.entries.map((e) {
-            String label = e.key[0].toUpperCase() + e.key.substring(1);
-            String value = e.value.toString();
-            if (e.value is int || e.value is double) {
-              value = '${e.value} ms';
-            }
-            return _buildDetailRow(label, value, settings);
-          }).toList(),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusColor),
+                  ),
+                  child: Text(
+                    '$status $reason'.trim(),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (isRedirect)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.blue),
+                    ),
+                    child: const Text(
+                      'Redirect',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (result['headers']?['content-type'] != null)
+              _buildDetailRow(
+                  'Content-Type', result['headers']['content-type']),
+            _buildDetailRow('Final URL', result['finalUrl'] ?? 'N/A'),
+            if (isRedirect && result['redirectLocation'] != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(
+                      width: 128,
+                      child: Text(
+                        'Redirect to:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          // Load the redirect URL
+                          final redirectUrl = result['redirectLocation'];
+                          Provider.of<HtmlService>(context, listen: false)
+                              .loadFromUrl(redirectUrl);
+                          Provider.of<HtmlService>(context, listen: false)
+                              .probeUrl(redirectUrl)
+                              .ignore();
+                        },
+                        child: Text(
+                          result['redirectLocation'],
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (result['contentLength'] != null ||
+                (htmlService.currentFile?.content.isNotEmpty ?? false))
+              _buildDetailRow(
+                'Content Length',
+                () {
+                  final probeLength = result['contentLength'] ?? 0;
+                  final fileLength =
+                      htmlService.currentFile?.content.length ?? 0;
+                  if (fileLength > 0) {
+                    return '$probeLength ($fileLength bytes loaded)';
+                  }
+                  return '$probeLength bytes';
+                }(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNetworkInfoCard(
+      BuildContext context, Map<String, dynamic> result) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Network & Performance',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            if (result['ipAddress'] != null)
+              _buildDetailRow('Server IP', result['ipAddress']),
+            if (result['responseTime'] != null)
+              _buildDetailRow('Response Time', '${result['responseTime']} ms'),
+            if (result['headers']?['server'] != null)
+              _buildDetailRow('Server Software', result['headers']['server']),
+            if (result['headers']?['via'] != null)
+              _buildDetailRow('Proxy/Via', result['headers']['via']),
+          ],
         ),
       ),
     );
@@ -213,52 +348,68 @@ class ProbeHeadersView extends ProbeViewBase {
 
   @override
   Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result, AppSettings settings) {
+      Map<String, dynamic> result) {
     final Map<String, dynamic> headers = result['headers'] ?? {};
     final sortedKeys = headers.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
-    return ListView.separated(
-      primary: true,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(24),
-      itemCount: sortedKeys.length,
-      separatorBuilder: (context, index) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final key = sortedKeys[index];
-        final value = headers[key];
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ListTile(
-                title: Text(
-                  key,
-                  style: TextStyle(
-                      fontFamily: settings.fontFamily,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold),
-                ),
-                subtitle: SelectableText(
-                  FormatUtils.formatHumanData(value),
-                  style:
-                      TextStyle(fontFamily: settings.fontFamily, fontSize: 13),
-                ),
-                dense: true,
-                onTap: () {
-                  Clipboard.setData(
-                      ClipboardData(text: '$key: ${value.toString()}'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Header copied to clipboard')),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'All Response Headers',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListView.separated(
+                primary: false,
+                itemCount: sortedKeys.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final key = sortedKeys[index];
+                  final value = headers[key]!;
+                  return ListTile(
+                    title: Text(
+                      key,
+                      style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      FormatUtils.formatHumanData(value),
+                      style: const TextStyle(
+                          fontFamily: 'monospace', fontSize: 13),
+                    ),
+                    dense: true,
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: '$key: $value'));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Header copied to clipboard'),
+                            duration: Duration(milliseconds: 500)),
+                      );
+                    },
                   );
                 },
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -268,87 +419,79 @@ class ProbeSecurityView extends ProbeViewBase {
 
   @override
   Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result, AppSettings settings) {
+      Map<String, dynamic> result) {
     final Map<String, dynamic> security = result['security'] ?? {};
 
     return ListView(
-      primary: true,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(24),
+      primary: false,
+      padding: const EdgeInsets.all(16),
       children: [
-        _buildSectionHeader('Security Headers'),
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            side:
-                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: security.entries.map((e) {
-              final isLast = security.entries.last.key == e.key;
-              final isPresent = e.value != null;
-              return Column(
-                children: [
-                  ListTile(
-                    leading: Icon(
-                      isPresent ? Icons.check_circle : Icons.warning,
-                      color: isPresent ? Colors.green : Colors.orange,
-                    ),
-                    title: Text(e.key,
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: settings.fontFamily)),
-                    subtitle: Text(
-                      isPresent
-                          ? FormatUtils.formatHumanData(e.value!)
-                          : 'Not implementation / Missing',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontFamily: settings.fontFamily,
-                        color: isPresent ? null : Colors.orange[700],
-                      ),
-                    ),
-                    dense: true,
-                  ),
-                  if (!isLast) const Divider(height: 1),
-                ],
-              );
-            }).toList(),
-          ),
-        ),
-        const SizedBox(height: 32),
         Text(
-          'SSL Certificate'.toUpperCase(),
+          'Security Header Audit',
           style: Theme.of(context)
               .textTheme
-              .labelLarge
+              .titleSmall
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        _buildCertificateCard(context, result['certificate'], settings),
+        ...(() {
+          final sortedSecurity = security.entries.toList()
+            ..sort(
+                (a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
+          return sortedSecurity.map((e) {
+            final isPresent = e.value != null;
+            return Card(
+              elevation: 0,
+              margin: const EdgeInsets.only(bottom: 8),
+              shape: RoundedRectangleBorder(
+                side: BorderSide(
+                  color: isPresent
+                      ? Colors.green.withValues(alpha: 0.3)
+                      : Colors.orange.withValues(alpha: 0.3),
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ListTile(
+                leading: Icon(
+                  isPresent
+                      ? Icons.check_circle_outline
+                      : Icons.warning_amber_rounded,
+                  color: isPresent ? Colors.green : Colors.orange,
+                ),
+                title: Text(e.key,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                  isPresent
+                      ? FormatUtils.formatHumanData(e.value!)
+                      : 'Missing Header',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: isPresent ? null : Colors.orange[700],
+                  ),
+                ),
+                dense: true,
+              ),
+            );
+          }).toList();
+        }()),
+        const SizedBox(height: 24),
+        Text(
+          'SSL Certificate',
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        _buildCertificateCard(context, result['certificate']),
       ],
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, left: 4),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-          color: Colors.grey,
-        ),
-      ),
-    );
-  }
-
   Widget _buildCertificateCard(
-      BuildContext context, Map<String, dynamic>? cert, AppSettings settings) {
+      BuildContext context, Map<String, dynamic>? cert) {
     if (cert == null) {
       return Card(
         elevation: 0,
@@ -357,14 +500,22 @@ class ProbeSecurityView extends ProbeViewBase {
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('No SSL certificate information available.'),
+          padding: EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Icon(Icons.no_encryption_gmailerrorred, color: Colors.orange),
+              SizedBox(width: 12),
+              Text('No certificate information available'),
+            ],
+          ),
         ),
       );
     }
 
-    final subjectParsed = cert['subjectParsed'] as Map<String, dynamic>?;
-    final issuerParsed = cert['issuerParsed'] as Map<String, dynamic>?;
+    final Map<String, dynamic>? subjectParsed = cert['subjectParsed'];
+    final Map<String, dynamic>? issuerParsed = cert['issuerParsed'];
+    final String start = cert['startValidity'] ?? '';
+    final String end = cert['endValidity'] ?? '';
 
     return Card(
       elevation: 0,
@@ -373,21 +524,20 @@ class ProbeSecurityView extends ProbeViewBase {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Subject',
+              'Subject (Owner)',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.primary,
-                letterSpacing: 1.1,
               ),
             ),
             const SizedBox(height: 8),
-            _buildParsedInfo(context, subjectParsed, cert['subject'], settings),
+            _buildParsedInfo(context, subjectParsed, cert['subject']),
             const Divider(height: 24),
             Text(
               'Issuer',
@@ -395,38 +545,111 @@ class ProbeSecurityView extends ProbeViewBase {
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.primary,
-                letterSpacing: 1.1,
               ),
             ),
             const SizedBox(height: 8),
-            _buildParsedInfo(context, issuerParsed, cert['issuer'], settings),
+            _buildParsedInfo(context, issuerParsed, cert['issuer']),
             const Divider(height: 24),
-            _buildDetailRow(
-                'Valid From', cert['validFrom']?.toString() ?? 'N/A', settings),
-            _buildDetailRow(
-                'Valid To', cert['validTo']?.toString() ?? 'N/A', settings),
-            _buildDetailRow(
-                'Protocol', cert['protocol']?.toString() ?? 'N/A', settings),
+            Row(
+              children: [
+                Expanded(
+                    child: _buildCertDetail(
+                        context, 'Valid From', _formatDate(start))),
+                Expanded(
+                    child: _buildCertDetail(
+                        context, 'Valid Until', _formatDate(end))),
+              ],
+            ),
+            if (cert['pem'] != null) ...[
+              const Divider(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: const Text('Copy PEM Certificate'),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: cert['pem']));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Certificate copied')),
+                    );
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildParsedInfo(BuildContext context, Map<String, dynamic>? parsed,
-      dynamic raw, AppSettings settings) {
+  Widget _buildParsedInfo(
+      BuildContext context, Map<String, dynamic>? parsed, String? raw) {
     if (parsed == null || parsed.isEmpty) {
       return SelectableText(
-        raw?.toString() ?? 'N/A',
-        style: TextStyle(fontSize: 12, fontFamily: settings.fontFamily),
+        raw ?? 'Unknown',
+        style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
       );
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: parsed.entries.map((e) {
-        return _buildDetailRow(e.key, e.value.toString(), settings);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 120,
+                child: Text(
+                  '${e.key}:',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+              Expanded(
+                child: SelectableText(
+                  e.value.toString(),
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        );
       }).toList(),
     );
+  }
+
+  Widget _buildCertDetail(BuildContext context, String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        SelectableText(
+          value,
+          style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(String isoString) {
+    try {
+      if (isoString.isEmpty) return 'Unknown';
+      final date = DateTime.parse(isoString);
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
+          '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return isoString;
+    }
   }
 }
 
@@ -435,164 +658,228 @@ class ProbeCookiesView extends ProbeViewBase {
 
   @override
   Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result, AppSettings settings) {
-    var cookies = result['analyzedCookies'] as List<dynamic>? ?? [];
+      Map<String, dynamic> result) {
+    // Prefer analyzed cookies if available (merged Server + Browser + Categories)
+    final List<dynamic>? analyzedCookies = result['analyzedCookies'];
 
-    // Fallback if analyzedCookies is empty but raw cookies exist (e.g. during a transition)
-    if (cookies.isEmpty && result['cookies'] != null) {
-      final raw = result['cookies'] as List;
-      if (raw.isNotEmpty && raw[0] is Map) {
-        cookies = raw;
-      }
+    if (analyzedCookies != null && analyzedCookies.isNotEmpty) {
+      final sortedCookies = List<Map<String, dynamic>>.from(analyzedCookies);
+      sortedCookies.sort((a, b) {
+        final categoryA = a['category'] as String? ?? 'unknown';
+        final categoryB = b['category'] as String? ?? 'unknown';
+
+        // Known cookies first (essential, analytics, advertising, social)
+        bool isKnown(String cat) => cat != 'unknown';
+        final aKnown = isKnown(categoryA);
+        final bKnown = isKnown(categoryB);
+
+        if (aKnown != bKnown) {
+          return aKnown ? -1 : 1;
+        }
+
+        // If known, sort by provider name first, then cookie name
+        if (aKnown) {
+          final providerA = (a['provider'] as String? ?? '').toLowerCase();
+          final providerB = (b['provider'] as String? ?? '').toLowerCase();
+          if (providerA != providerB) {
+            return providerA.compareTo(providerB);
+          }
+        }
+
+        // Default: sort by name
+        final nameA = (a['name'] as String? ?? '').toLowerCase();
+        final nameB = (b['name'] as String? ?? '').toLowerCase();
+        return nameA.compareTo(nameB);
+      });
+
+      return ListView.builder(
+        primary: false,
+        padding: const EdgeInsets.all(16),
+        itemCount: sortedCookies.length,
+        itemBuilder: (context, index) {
+          final cookie = sortedCookies[index];
+          final name = cookie['name'] as String? ?? 'Unknown';
+          final value = cookie['value'] as String? ?? '';
+          final category = cookie['category'] as String? ?? 'unknown';
+          final provider = cookie['provider'] as String?;
+          final source = cookie['source'] as String? ?? 'Unknown';
+
+          Color badgeColor;
+          switch (category) {
+            case 'essential':
+              badgeColor = Colors.green;
+              break;
+            case 'analytics':
+              badgeColor = Colors.blue;
+              break;
+            case 'advertising':
+              badgeColor = Colors.orange;
+              break;
+            case 'social':
+              badgeColor = Colors.purple;
+              break;
+            default:
+              badgeColor = Colors.grey;
+          }
+
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'monospace'),
+                    ),
+                  ),
+                  if (provider != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                            color: badgeColor.withValues(alpha: 0.5)),
+                      ),
+                      child: Text(
+                        provider,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: badgeColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        color: Colors.grey),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.category, size: 12, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        category.toUpperCase(),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(
+                          source == 'Browser'
+                              ? Icons.web
+                              : source == 'Server'
+                                  ? Icons.dns
+                                  : Icons.merge_type,
+                          size: 12,
+                          color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        source,
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.copy, size: 18),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: '$name=$value'));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Cookie copied'),
+                        duration: Duration(milliseconds: 500)),
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      );
     }
 
+    // Fallback to basic list if no analysis available
+    final List<String> cookies =
+        (result['cookies'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    cookies.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
     if (cookies.isEmpty) {
-      return const Center(child: Text('No cookies detected.'));
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cookie_outlined, size: 48, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('No cookies detected.'),
+            Text('(Try reloading the browser)',
+                style: TextStyle(color: Colors.grey, fontSize: 12)),
+          ],
+        ),
+      );
     }
 
     return ListView.builder(
-      primary: true,
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(24),
+      primary: false,
+      padding: const EdgeInsets.all(16),
       itemCount: cookies.length,
       itemBuilder: (context, index) {
-        final cookie = cookies[index] as Map<String, dynamic>;
-        return _buildCookieCard(context, cookie, settings);
+        final cookie = cookies[index];
+        final parts = cookie.split(';');
+        final nameValue = parts[0];
+        final attributes = parts.length > 1 ? parts.sublist(1).join(';') : '';
+
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(
+            side:
+                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            title: Text(nameValue,
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            subtitle: Text(FormatUtils.formatHumanData(attributes.trim()),
+                style: const TextStyle(fontSize: 12)),
+            trailing: IconButton(
+              icon: const Icon(Icons.copy, size: 18),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: cookie));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Cookie copied'),
+                      duration: Duration(milliseconds: 500)),
+                );
+              },
+            ),
+          ),
+        );
       },
-    );
-  }
-
-  Widget _buildCookieCard(
-      BuildContext context, Map<String, dynamic> cookie, AppSettings settings) {
-    final name = cookie['name']?.toString() ?? 'N/A';
-    final value = cookie['value']?.toString() ?? 'N/A';
-    final domain = cookie['domain']?.toString() ?? 'N/A';
-    final expires = cookie['expires']?.toString() ?? 'Session';
-    final isSecure = cookie['secure'] == true;
-    final isHttpOnly = cookie['httpOnly'] == true;
-
-    // Enhanced look for identified cookies
-    final category = cookie['category']?.toString();
-    final description = cookie['description']?.toString();
-    final provider = cookie['provider']?.toString();
-
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(
-            color: category != null
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
-                : Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: SelectableText(
-                    name,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: settings.fontFamily),
-                  ),
-                ),
-                if (provider != null) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      provider,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            if (category != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                category.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ],
-            if (description != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                description,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-            const Divider(height: 24),
-            _buildCookieRow('Value', value, settings),
-            _buildCookieRow('Domain', domain, settings),
-            _buildCookieRow('Expires', expires, settings),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                if (isSecure) _buildBadge('Secure', Colors.green),
-                if (isHttpOnly) _buildBadge('HttpOnly', Colors.blue),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCookieRow(String label, String value, AppSettings settings) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
-          ),
-          const SizedBox(height: 4),
-          SelectableText(
-            value,
-            style: TextStyle(fontSize: 13, fontFamily: settings.fontFamily),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBadge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style:
-            TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
-      ),
     );
   }
 }

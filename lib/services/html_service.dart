@@ -1593,7 +1593,8 @@ class HtmlService with ChangeNotifier {
 
     // Restore probe result if available
     if (file.probeResult != null) {
-      _probeResult = file.probeResult;
+      _probeResult = Map<String, dynamic>.from(file.probeResult!);
+      _updateAnalyzedCookies();
     }
 
     // Try to determine content type from probe result
@@ -2080,12 +2081,16 @@ class HtmlService with ChangeNotifier {
         'headers': respHeaders,
         'isRedirect': finalUrl != url,
         'contentLength': contentLength,
+        'url': url,
         'finalUrl': finalUrl,
-        'responseTime': stopwatch.elapsedMilliseconds,
-        'ipAddress': ipAddress,
+        'timing': {
+          'total': stopwatch.elapsedMilliseconds,
+        },
+        'ip': ipAddress,
         'security': securityHeaders,
         'cookies': cookies,
         'certificate': certInfo,
+        'analyzedCookies': <Map<String, dynamic>>[],
       };
 
       if (finalUrl != url) {
@@ -4133,8 +4138,8 @@ Technical details: $e''';
         'subjectParsed': _parseX509String(cert.subject),
         'issuer': cert.issuer,
         'issuerParsed': _parseX509String(cert.issuer),
-        'startValidity': cert.startValidity.toIso8601String(),
-        'endValidity': cert.endValidity.toIso8601String(),
+        'validFrom': cert.startValidity.toIso8601String(),
+        'validTo': cert.endValidity.toIso8601String(),
         'der': base64Encode(cert.der),
         'pem': _convertToPem(cert.der),
       };
@@ -4413,6 +4418,13 @@ Technical details: $e''';
 
             // Populate Browser Probe Result
             _browserProbeResult = {
+              'browser': 'InAppWebView',
+              'os': Platform.operatingSystem,
+              'device': Platform.isAndroid
+                  ? 'Android'
+                  : Platform.isIOS
+                      ? 'iOS'
+                      : 'Desktop',
               'date': DateTime.now().toIso8601String(),
               'url': url,
               'title': _pageMetadata?['title'],
