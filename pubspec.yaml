@@ -58,6 +58,7 @@ dependencies:
   xml: ^6.5.0
   code_forge: ^9.1.0
   re_highlight: ^0.0.3
+  url_launcher: ^6.3.2
   
 dev_dependencies:
   flutter_test:
