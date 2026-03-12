@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
+import 'package:universal_io/io.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -55,22 +56,25 @@ class AboutScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            UnifiedSharingService.shareText(
-                                'Check out View Source Vibe! 🚀 The ultimate web inspector and source code viewer for mobile. Analyze HTML, CSS, JS, and tech stacks on the go.\n\nGet it here: https://github.com/woutervanwijk/viewsourcevibe');
-                          },
-                          icon: const Icon(Icons.share),
-                          label: const Text('Share App'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primaryContainer,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
+                        if (Platform.isIOS || Platform.isAndroid) ...[
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              UnifiedSharingService.shareText(
+                                  'Check out View Source Vibe! 🚀 The ultimate web inspector and source code viewer for mobile. Analyze HTML, CSS, JS, and tech stacks on the go.\n\nGet it here: https://github.com/woutervanwijk/viewsourcevibe');
+                            },
+                            icon: const Icon(Icons.share),
+                            label: const Text('Share App'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
+                              foregroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
+                          const SizedBox(width: 12),
+                        ],
                         OutlinedButton.icon(
                           onPressed: () async {
                             await InAppBrowser.openWithSystemBrowser(

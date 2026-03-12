@@ -6,7 +6,7 @@ import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/screens/settings_screen.dart';
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'package:flutter/services.dart';
 
 class Toolbar extends StatelessWidget {
@@ -229,14 +229,15 @@ class Toolbar extends StatelessWidget {
               tooltip: 'Open File',
               onPressed: () => _pickFile(context),
             ),
-            IconButton(
-              icon: Icon(
-                Platform.isIOS ? CupertinoIcons.share : Icons.share,
-                size: 24,
+            if (Platform.isIOS || Platform.isAndroid)
+              IconButton(
+                icon: Icon(
+                  Platform.isIOS ? CupertinoIcons.share : Icons.share,
+                  size: 24,
+                ),
+                tooltip: 'Share',
+                onPressed: () => _shareCurrentFile(context),
               ),
-              tooltip: 'Share',
-              onPressed: () => _shareCurrentFile(context),
-            ),
             IconButton(
               icon: const Icon(Icons.settings),
               tooltip: 'Settings',
