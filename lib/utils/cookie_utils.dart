@@ -155,6 +155,9 @@ class CookieUtils {
       'prov': 'Hotjar'
     },
 
+    // --- Heap Analytics ---
+    '_hp5_': {'cat': CookieCategory.analytics, 'prov': 'Heap Analytics'},
+
     // --- Shopify ---
     '_s_id': {'cat': CookieCategory.analytics, 'prov': 'Shopify'},
     '_s_session': {'cat': CookieCategory.essential, 'prov': 'Shopify'},
@@ -208,6 +211,10 @@ class CookieUtils {
     'ckns_explicit': {
       'cat': CookieCategory.essential,
       'prov': 'Consent Manager'
+    },
+    'tcf20_purposes': {
+      'cat': CookieCategory.essential,
+      'prov': 'TCF Consent Manager'
     },
     'CookieConsent': {'cat': CookieCategory.essential, 'prov': 'Cookiebot'},
     'CookieConsentBulkTicket': {
@@ -279,6 +286,7 @@ class CookieUtils {
     // --- Prebid / Common ID ---
     '_pubcid': {'cat': CookieCategory.advertising, 'prov': 'Prebid'},
     '_pubcid_cst': {'cat': CookieCategory.advertising, 'prov': 'Prebid'},
+    'shd_uid': {'cat': CookieCategory.advertising, 'prov': 'SharedID'},
 
     // --- Advertising & Tracking (General) ---
     '__qca': {'cat': CookieCategory.advertising, 'prov': 'Quantcast'},
@@ -297,6 +305,8 @@ class CookieUtils {
     '__aim_hls': {'cat': CookieCategory.analytics, 'prov': 'AudiencePlus'},
     '__eoi': {'cat': CookieCategory.advertising, 'prov': 'Google Ad Manager'},
     '_cto_bidid': {'cat': CookieCategory.advertising, 'prov': 'Criteo'},
+    'cto_bidid': {'cat': CookieCategory.advertising, 'prov': 'Criteo'},
+    'cto_': {'cat': CookieCategory.advertising, 'prov': 'Criteo'},
     '_pcid': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
     '_cc_id': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
     '_cc_cc': {'cat': CookieCategory.advertising, 'prov': 'Lotame'},
