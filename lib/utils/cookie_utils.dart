@@ -78,6 +78,16 @@ class CookieUtils {
       'prov': 'Google Tag Manager'
     },
     'td': {'cat': CookieCategory.analytics, 'prov': 'Google Tag Manager'},
+    '_td': {'cat': CookieCategory.analytics, 'prov': 'Treasure Data'},
+    'gtm_pageview_count': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Google Tag Manager'
+    },
+    'gtm_session_start': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Google Tag Manager'
+    },
+    'gtm_': {'cat': CookieCategory.analytics, 'prov': 'Google Tag Manager'},
 
     // --- Meta / Facebook ---
     '_fbp': {'cat': CookieCategory.advertising, 'prov': 'Meta Pixel'},
@@ -108,6 +118,7 @@ class CookieUtils {
     '_uetvid': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
     'MUID': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
     'MUIDB': {'cat': CookieCategory.advertising, 'prov': 'Microsoft Ads'},
+    '__msid': {'cat': CookieCategory.analytics, 'prov': 'Microsoft'},
     'ARRAffinity': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'ARRAffinitySameSite': {'cat': CookieCategory.essential, 'prov': 'Azure'},
     'TiPMix': {'cat': CookieCategory.essential, 'prov': 'Azure'},
@@ -153,6 +164,26 @@ class CookieUtils {
     'cart_sig': {'cat': CookieCategory.essential, 'prov': 'Shopify'},
     'keep_alive': {'cat': CookieCategory.essential, 'prov': 'Shopify'},
 
+    // --- Billy Grace ---
+    '__BillyPix_session_id': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Billy Grace'
+    },
+    '__BillyPix_sid': {'cat': CookieCategory.analytics, 'prov': 'Billy Grace'},
+    '__BillyPix_uid': {'cat': CookieCategory.analytics, 'prov': 'Billy Grace'},
+
+    // --- Zephr ---
+    'zephr_AWSALB': {'cat': CookieCategory.functional, 'prov': 'Zephr (AWS)'},
+    'zephr_AWSALBCORS': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zephr (AWS)'
+    },
+    'gtm_temptation_template_id': {
+      'cat': CookieCategory.functional,
+      'prov': 'Zephr'
+    },
+    'temptationTrackingId': {'cat': CookieCategory.analytics, 'prov': 'Zephr'},
+
     // --- Segment ---
     'ajs_anonymous_id': {'cat': CookieCategory.analytics, 'prov': 'Segment'},
     'ajs_user_id': {'cat': CookieCategory.analytics, 'prov': 'Segment'},
@@ -171,7 +202,9 @@ class CookieUtils {
     'euconsent-v2': {'cat': CookieCategory.essential, 'prov': 'IAB Consent'},
     'Cookieyes-consent': {'cat': CookieCategory.essential, 'prov': 'CookieYes'},
     'cookieyes-': {'cat': CookieCategory.essential, 'prov': 'CookieYes'},
+    'didomi_dcs': {'cat': CookieCategory.essential, 'prov': 'Didomi'},
     '_cs_c': {'cat': CookieCategory.essential, 'prov': 'Contentsquare'},
+    'cs_fpid': {'cat': CookieCategory.analytics, 'prov': 'Contentsquare'},
     'ckns_explicit': {
       'cat': CookieCategory.essential,
       'prov': 'Consent Manager'
@@ -241,6 +274,11 @@ class CookieUtils {
     '_chartbeat2': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
     '_cb_ls': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
     '_cb_cp': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
+    '_cb_svref': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
+
+    // --- Prebid / Common ID ---
+    '_pubcid': {'cat': CookieCategory.advertising, 'prov': 'Prebid'},
+    '_pubcid_cst': {'cat': CookieCategory.advertising, 'prov': 'Prebid'},
 
     // --- Advertising & Tracking (General) ---
     '__qca': {'cat': CookieCategory.advertising, 'prov': 'Quantcast'},
@@ -278,6 +316,11 @@ class CookieUtils {
     },
     'cX_G': {'cat': CookieCategory.analytics, 'prov': 'Piano (Cxense)'},
     'cx_P': {'cat': CookieCategory.analytics, 'prov': 'Piano (Cxense)'},
+    'fig_firstparty': {
+      'cat': CookieCategory.analytics,
+      'prov': 'Piano (Cxense)'
+    },
+    'fig_': {'cat': CookieCategory.analytics, 'prov': 'Piano (Cxense)'},
     'xbc': {'cat': CookieCategory.analytics, 'prov': 'Piano Analytics'},
     'permutive-id': {'cat': CookieCategory.analytics, 'prov': 'Permutive'},
     'ecos.dt': {'cat': CookieCategory.analytics, 'prov': 'Dynatrace'},
@@ -322,6 +365,7 @@ class CookieUtils {
     '__ar_v4': {'cat': CookieCategory.advertising, 'prov': 'AdRoll'},
     'gg_id': {'cat': CookieCategory.advertising, 'prov': 'GumGum'},
     'idl': {'cat': CookieCategory.advertising, 'prov': 'LiveRamp'},
+    '_lr_': {'cat': CookieCategory.advertising, 'prov': 'LiveRamp'},
     '_sh_id': {'cat': CookieCategory.advertising, 'prov': 'SteelHouse'},
     'tluid': {'cat': CookieCategory.advertising, 'prov': 'TripleLift'},
     '_cb_sv': {'cat': CookieCategory.analytics, 'prov': 'Chartbeat'},
@@ -348,6 +392,13 @@ class CookieUtils {
     '_vis_opt_': {'cat': CookieCategory.analytics, 'prov': 'VWO'},
     '_ga_exp': {'cat': CookieCategory.analytics, 'prov': 'Google Optimize'},
 
+    // --- Nielsen / NetRatings ---
+    '__nrbi': {'cat': CookieCategory.analytics, 'prov': 'Nielsen'},
+    '__nrbic': {'cat': CookieCategory.analytics, 'prov': 'Nielsen'},
+
+    // --- Wysistat ---
+    'Wysistat': {'cat': CookieCategory.analytics, 'prov': 'Wysistat'},
+
     // --- Server / CMS / Tech ---
     'eviivo': {'cat': CookieCategory.essential, 'prov': 'eviivo'},
     'PHPSESSID': {'cat': CookieCategory.essential, 'prov': 'PHP'},
@@ -367,12 +418,17 @@ class CookieUtils {
     'XSRF-TOKEN': {'cat': CookieCategory.essential, 'prov': 'Security/CSRF'},
     '__Secure-PHPSESSID': {'cat': CookieCategory.essential, 'prov': 'PHP'},
     'csrftoken': {'cat': CookieCategory.essential, 'prov': 'Django/Security'},
+    'authId': {'cat': CookieCategory.essential, 'prov': 'Authentication'},
+    'dsy-color-mode': {'cat': CookieCategory.functional, 'prov': 'UI Preference'},
+    'uhz': {'cat': CookieCategory.functional, 'prov': 'Internal Identifier'},
 
     // --- Security & Bot Management ---
     'ak_bmsc': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
     'bm_sv': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
     'bm_sz': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
     'bm_mi': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
+    'bm_lso': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
+    'bm_s': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
     '_abck': {'cat': CookieCategory.essential, 'prov': 'Akamai Bot Manager'},
 
     // --- Consent Management (Mozilla Rules) ---
