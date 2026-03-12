@@ -153,6 +153,7 @@ class HtmlService extends ChangeNotifier {
   bool get canGoBack => _navigationStack.isNotEmpty;
   String? get probeError => _probeError;
   bool get isLoading => _isLoading;
+  bool get isExtractingMetadata => _isExtractingMetadata;
   String? get pendingUrl => _pendingUrl;
   String? get currentInputText => _currentInputText;
 

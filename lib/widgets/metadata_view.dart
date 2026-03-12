@@ -16,6 +16,11 @@ class MetadataView extends StatelessWidget {
     final metadata = htmlService.pageMetadata;
 
     if (metadata == null) {
+      if (htmlService.isLoading ||
+          htmlService.isWebViewLoading ||
+          htmlService.isExtractingMetadata) {
+        return const Center(child: CircularProgressIndicator());
+      }
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

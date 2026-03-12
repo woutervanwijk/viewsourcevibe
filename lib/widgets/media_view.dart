@@ -70,6 +70,11 @@ class MediaView extends StatelessWidget {
     final metadata = htmlService.pageMetadata;
 
     if (metadata == null || metadata['media'] == null) {
+      if (htmlService.isLoading ||
+          htmlService.isWebViewLoading ||
+          htmlService.isExtractingMetadata) {
+        return const Center(child: CircularProgressIndicator());
+      }
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -138,6 +143,11 @@ class MediaView extends StatelessWidget {
       });
 
     if (images.isEmpty && videos.isEmpty) {
+      if (htmlService.isLoading ||
+          htmlService.isWebViewLoading ||
+          htmlService.isExtractingMetadata) {
+        return const Center(child: CircularProgressIndicator());
+      }
       return ConstrainedBox(
         constraints: BoxConstraints(
           minHeight: MediaQuery.of(context).size.height * 0.6,

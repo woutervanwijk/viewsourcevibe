@@ -12,8 +12,12 @@ abstract class ProbeViewBase extends StatelessWidget {
     return Consumer<HtmlService>(builder: (context, htmlService, child) {
       final result = htmlService.probeResult;
 
-      // Show spinner only if we don't have results yet
-      if ((htmlService.isProbing || htmlService.isLoading) && result == null) {
+      // Show spinner if we are in any loading/parsing phase and don't have results yet
+      if ((htmlService.isProbing ||
+              htmlService.isLoading ||
+              htmlService.isWebViewLoading ||
+              htmlService.isExtractingMetadata) &&
+          result == null) {
         return const Center(child: CircularProgressIndicator());
       }
       if (htmlService.probeError != null && result == null) {
@@ -110,7 +114,7 @@ class ProbeGeneralView extends ProbeViewBase {
         _buildStatusCard(context, htmlService, result),
         const SizedBox(height: 16),
         _buildNetworkInfoCard(context, result),
-        if (hasBrowserProbe) ...[
+        if (hasBrowserProbe || htmlService.isWebViewLoading) ...[
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 16),
@@ -122,7 +126,15 @@ class ProbeGeneralView extends ProbeViewBase {
                 ),
           ),
           const SizedBox(height: 8),
-          _buildBrowserProbeCard(context, browserResult),
+          if (hasBrowserProbe)
+            _buildBrowserProbeCard(context, browserResult)
+          else
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: CircularProgressIndicator(),
+              ),
+            ),
         ],
       ],
     );
@@ -828,6 +840,12 @@ class ProbeCookiesView extends ProbeViewBase {
     cookies.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     if (cookies.isEmpty) {
+      if (htmlService.isLoading ||
+          htmlService.isProbing ||
+          htmlService.isWebViewLoading ||
+          htmlService.isExtractingMetadata) {
+        return const Center(child: CircularProgressIndicator());
+      }
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

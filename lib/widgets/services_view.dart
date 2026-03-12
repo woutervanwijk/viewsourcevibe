@@ -14,6 +14,11 @@ class ServicesView extends StatelessWidget {
         metadata?['detectedServices'] as Map<String, List<String>>?;
 
     if (services == null || services.isEmpty) {
+      if (htmlService.isLoading ||
+          htmlService.isWebViewLoading ||
+          htmlService.isExtractingMetadata) {
+        return const Center(child: CircularProgressIndicator());
+      }
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

@@ -181,6 +181,11 @@ class _DomTreeViewState extends State<DomTreeView> {
     }
 
     if (content.isEmpty) {
+      if (htmlService.isLoading ||
+          htmlService.isWebViewLoading ||
+          htmlService.isExtractingMetadata) {
+        return const Center(child: CircularProgressIndicator());
+      }
       return const Center(child: Text('No content to parse'));
     }
 
