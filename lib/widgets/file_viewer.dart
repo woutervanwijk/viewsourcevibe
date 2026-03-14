@@ -500,59 +500,52 @@ class FileViewer extends StatelessWidget {
                   return MediaBrowser(file: file);
                 }
 
-                if (data.isBeautifyEnabled) {
-                  return FutureBuilder<String>(
-                    // Key ensures rebuild when content or type changes
-                    key: ValueKey(
-                        'beautify_${file.path}_${data.selectedContentType ?? file.extension}'),
-                    future: htmlService.getBeautifiedContent(file.content,
-                        data.selectedContentType ?? file.extension),
-                    builder: (context, snapshot) {
-                      final bool isLoading =
-                          snapshot.connectionState != ConnectionState.done ||
-                              !snapshot.hasData; // || snapshot.data == null?
+                return FutureBuilder<String>(
+                  // Stable key for the future builder itself
+                  key: ValueKey('editor_body_${file.path}'),
+                  future: data.isBeautifyEnabled
+                      ? htmlService.getBeautifiedContent(file.content,
+                          data.selectedContentType ?? file.extension)
+                      : Future.value(file.content),
+                  builder: (context, snapshot) {
+                    final bool isLoading = data.isBeautifyEnabled &&
+                        snapshot.connectionState != ConnectionState.done;
 
-                      // Use current data if available, or fallback to file content (old content)
-                      // This keeps the editor mounted with *some* content while loading
-                      String displayContent = snapshot.data ?? file.content;
+                    // Fallback to original content while loading or if error
+                    final String displayContent = snapshot.data ?? file.content;
 
-                      return Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          _buildEditorWithFuture(
-                            context,
-                            htmlService,
-                            displayContent,
-                            settings,
-                            file,
-                            data.selectedContentType,
-                          ),
-                          if (isLoading)
-                            Container(
-                              color: Theme.of(context)
-                                  .scaffoldBackgroundColor
-                                  .withValues(alpha: 0.8),
-                              child: const Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    CircularProgressIndicator(),
-                                    SizedBox(height: 16),
-                                    Text('Beautifying code...',
-                                        style: TextStyle(color: Colors.grey)),
-                                  ],
-                                ),
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _buildEditorWithFuture(
+                          context,
+                          htmlService,
+                          displayContent,
+                          settings,
+                          file,
+                          data.selectedContentType,
+                        ),
+                        if (isLoading)
+                          Container(
+                            color: Theme.of(context)
+                                .scaffoldBackgroundColor
+                                .withValues(alpha: 0.8),
+                            child: const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 16),
+                                  Text('Beautifying code...',
+                                      style: TextStyle(color: Colors.grey)),
+                                ],
                               ),
                             ),
-                        ],
-                      );
-                    },
-                  );
-                }
-
-                // Default content if beautify is disabled
-                return _buildEditorWithFuture(context, htmlService,
-                    file.content, settings, file, data.selectedContentType);
+                          ),
+                      ],
+                    );
+                  },
+                );
               },
             ),
           ),

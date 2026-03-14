@@ -18,13 +18,11 @@ import 'package:re_highlight/styles/tokyo-night-light.dart';
 import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 
-
 class SourceView {
   static final Map<String, CodeForgeController> _cachedControllers = {};
-  static final Map<String, GlobalKey> _cachedGlobalKeys = {};
-  static final Map<String, Widget> _cachedWidgets = {};
-
-  static List<String> getAvailableLanguages() => builtinAllLanguages.keys.toList();
+  
+  static List<String> getAvailableLanguages() =>
+      builtinAllLanguages.keys.toList();
 
   static String getLanguageForExtension(String extension) {
     switch (extension.toLowerCase()) {
@@ -215,8 +213,9 @@ class SourceView {
     bool showLineNumbers = true,
   }) {
     final languageName = getLanguageForExtension(extension);
-    final mode = getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
-    
+    final mode =
+        getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
+
     // Performance optimization for large files
     String processedContent = content;
     final contentSize = content.length;
@@ -229,35 +228,32 @@ class SourceView {
     }
 
     // We need a unique key for the controller to avoid collisions
-    // Using a more robust key combining extension, content sample hash and length
-    final contentHash = content.isEmpty ? 0 : (content.length ^ content.codeUnitAt(0));
+    // Combine length, first 100 chars hash, and extension
+    final int contentHash = content.isEmpty
+        ? 0
+        : (content.length ^
+            (content.isNotEmpty ? content.codeUnitAt(0) : 0) ^
+            (content.length > 10 ? content.codeUnitAt(content.length - 1) : 0));
     final controllerKey = '${extension}_${contentHash}_${content.length}';
-    
-    // Key for the widget includes UI settings and controller identity
-    final widgetKey = '${controllerKey}_${themeName}_${fontSize}_${wrapText}_${showLineNumbers}_${verticalController.hashCode}';
 
-    // Return cached widget if available to prevent any rebuild logic during scroll
-    if (_cachedWidgets.containsKey(widgetKey)) {
-      return _cachedWidgets[widgetKey]!;
-    }
-
-    final controller = _cachedControllers.putIfAbsent(controllerKey, () => CodeForgeController()..text = processedContent);
-    final key = _cachedGlobalKeys.putIfAbsent(controllerKey, () => GlobalKey());
+    final controller = _cachedControllers.putIfAbsent(
+        controllerKey, () => CodeForgeController()..text = processedContent);
 
     // Enforce cache limits
     if (_cachedControllers.length > 5) {
       final firstKey = _cachedControllers.keys.first;
       if (firstKey != controllerKey) {
         _cachedControllers.remove(firstKey)?.dispose();
-        _cachedGlobalKeys.remove(firstKey);
-        // Clear related widgets
-        _cachedWidgets.removeWhere((k, v) => k.startsWith(firstKey));
       }
     }
 
-    final editorWidget = SizedBox.expand(
+    // We don't use a ValueKey on CodeForge itself anymore to prevent the 'ScrollController attached to multiple scroll views' 
+    // error during transitions (like toggling Beautify). By using the same widget type in the same tree position 
+    // without a key that changes with content, Flutter will perform an 'update' instead of a 'swap', 
+    // which gracefully handles the transition of the shared ScrollController.
+    
+    return SizedBox.expand(
       child: CodeForge(
-        key: key,
         controller: controller,
         readOnly: true,
         lineWrap: wrapText,
@@ -289,9 +285,6 @@ class SourceView {
         },
       ),
     );
-
-    _cachedWidgets[widgetKey] = editorWidget;
-    return editorWidget;
   }
 
   static void clearCache() {
@@ -299,7 +292,5 @@ class SourceView {
       controller.dispose();
     }
     _cachedControllers.clear();
-    _cachedGlobalKeys.clear();
-    _cachedWidgets.clear();
   }
 }

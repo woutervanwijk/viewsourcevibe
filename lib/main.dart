@@ -318,8 +318,11 @@ void main() async {
 
   // Perform non-essential initialization after the app has started
   // This reduces the time the user spends on the splash screen
-  _performDelayedInitialization(
-      htmlService, appStateService, urlHistoryService);
+  // Delay until after the first frame to ensure services are initialized
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _performDelayedInitialization(
+        htmlService, appStateService, urlHistoryService);
+  });
 }
 
 /// Performs non-essential asynchronous operations after app startup

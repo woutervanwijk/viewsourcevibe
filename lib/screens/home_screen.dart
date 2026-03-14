@@ -213,8 +213,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final sourceView = currentFile != null
         ? KeepAliveWrapper(
+            key: const ValueKey('tab_source'),
             child: _buildRefreshable(
               FileViewer(
+                key: const ValueKey('file_viewer_source'),
                 file: currentFile,
               ),
               'source',
@@ -222,6 +224,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           )
         : _buildScrollableRefreshable(
             Center(
+                key: const ValueKey('tab_source_empty'),
                 child: htmlService.isLoading
                     ? const CircularProgressIndicator()
                     : const Text('No File')),
@@ -229,6 +232,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           );
 
     final browserView = TabPageWrapper(
+      key: const ValueKey('tab_browser'),
       tag: 'browser',
       isBrowserTab: true,
       child: KeepAliveWrapper(
@@ -239,6 +243,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           useBrowserByDefault)) ||
                   htmlService.shouldShowBrowserTab
               ? BrowserView(
+                  key: const ValueKey('browser_view'),
                   file: currentFile,
                   gestureRecognizers: {
                     Factory<VerticalDragGestureRecognizer>(
@@ -290,34 +295,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // 2. DOM Tree (Conditional)
       if (isHtmlOrXml)
         KeepAliveWrapper(
+            key: const ValueKey('tab_dom_tree'),
             child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
 
       // 3. Metadata (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
+            key: const ValueKey('tab_metadata'),
             child: _buildRefreshable(const MetadataView(), 'metadata')),
 
       // 4. Services (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
+            key: const ValueKey('tab_services'),
             child: _buildRefreshable(const ServicesView(), 'services')),
 
       // 5. Media (Conditional)
       if (showMetadataTabs)
-        KeepAliveWrapper(child: _buildRefreshable(const MediaView(), 'media')),
+        KeepAliveWrapper(
+            key: const ValueKey('tab_media'),
+            child: _buildRefreshable(const MediaView(), 'media')),
 
       // 6. Probe: Cookies
       if (showServerTabs)
         KeepAliveWrapper(
+            key: const ValueKey('tab_cookies'),
             child: _buildRefreshable(const ProbeCookiesView(), 'cookies')),
 
       // 7-9. Probe: General, Headers, Security
       if (showServerTabs) ...[
         KeepAliveWrapper(
+            key: const ValueKey('tab_probe'),
             child: _buildRefreshable(const ProbeGeneralView(), 'probe')),
         KeepAliveWrapper(
+            key: const ValueKey('tab_headers'),
             child: _buildRefreshable(const ProbeHeadersView(), 'headers')),
         KeepAliveWrapper(
+            key: const ValueKey('tab_security'),
             child: _buildRefreshable(const ProbeSecurityView(), 'security')),
       ],
 

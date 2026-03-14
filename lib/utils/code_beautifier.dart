@@ -20,50 +20,69 @@ class CodeBeautifier {
   static String beautify(String content, String type) {
     if (content.isEmpty) return content;
 
+    String result;
     switch (type.toLowerCase()) {
       case 'html':
       case 'xml':
       case 'xhtml':
-        return _beautifyHtml(content);
+        result = _beautifyHtml(content);
+        break;
       case 'css':
-        return _beautifyCss(content);
+        result = _beautifyCss(content);
+        break;
       case 'javascript':
       case 'js':
       case 'json':
-        return _beautifyJs(content);
+        result = _beautifyJs(content);
+        break;
       default:
         return content;
     }
+
+    // Fallback: if beautification failed for any reason and returned empty, 
+    // but the original wasn't empty, return the original.
+    return result.isEmpty ? content : result;
   }
 
   static String _beautifyHtml(String html) {
+    if (html.isEmpty) return html;
     final buffer = StringBuffer();
     var indent = 0;
-    final tokens = RegExp(r'(<[^>]+>|[^<]+)').allMatches(html);
+    
+    // More robust regex: 
+    // 1. Matches tags: <...>
+    // 2. Matches text: everything until next <
+    // 3. Matches a stray < if it's not starting a tag (though tags part usually catches it)
+    final tokens = RegExp(r'(<[^>]*>|[^<]+|<)').allMatches(html);
 
     for (final token in tokens) {
       final value = token.group(0)!;
       if (value.startsWith('</')) {
-        indent--;
-        buffer.write('\n${'  ' * indent}$value');
+        indent = (indent - 1).clamp(0, 50);
+        if (buffer.isNotEmpty) buffer.write('\n');
+        buffer.write('${'  ' * indent}$value');
       } else if (value.startsWith('<') &&
           !value.endsWith('/>') &&
           !value.startsWith('<!') &&
+          !value.startsWith('<!--') &&
           !value.startsWith('<?')) {
-        // Basic check for self-closing tags (not exhaustive)
-        final tagName =
-            RegExp(r'<(\w+)').firstMatch(value)?.group(1)?.toLowerCase();
+        
+        final tagNameMatch = RegExp(r'<([a-zA-Z0-9]+)').firstMatch(value);
+        final tagName = tagNameMatch?.group(1)?.toLowerCase();
         final selfClosing =
-            {'br', 'hr', 'img', 'input', 'link', 'meta'}.contains(tagName);
+            {'br', 'hr', 'img', 'input', 'link', 'meta', 'area', 'base', 'col', 'embed', 'keygen', 'param', 'source', 'track', 'wbr'}.contains(tagName);
 
-        buffer.write('\n${'  ' * indent}$value');
-        if (!selfClosing) indent++;
+        if (buffer.isNotEmpty) buffer.write('\n');
+        buffer.write('${'  ' * indent}$value');
+        if (!selfClosing && tagName != null) indent++;
       } else if (value.startsWith('<')) {
-        buffer.write('\n${'  ' * indent}$value');
+        if (buffer.isNotEmpty) buffer.write('\n');
+        buffer.write('${'  ' * indent}$value');
       } else {
         final text = value.trim();
         if (text.isNotEmpty) {
-          buffer.write('\n${'  ' * indent}$text');
+          if (buffer.isNotEmpty) buffer.write('\n');
+          buffer.write('${'  ' * indent}$text');
         }
       }
     }
@@ -71,9 +90,11 @@ class CodeBeautifier {
   }
 
   static String _beautifyCss(String css) {
+    if (css.isEmpty) return css;
     final buffer = StringBuffer();
     var indent = 0;
-    // Remove existing newlines and extra spaces to normalize
+    
+    // Simple normalization: collapse whitespace but keep content
     final normalized = css.replaceAll(RegExp(r'\s+'), ' ');
 
     for (var i = 0; i < normalized.length; i++) {
@@ -82,11 +103,9 @@ class CodeBeautifier {
         buffer.write(' {\n${'  ' * (indent + 1)}');
         indent++;
       } else if (char == '}') {
-        indent--;
-        // Trim trailing whitespace from buffer before closing brace
-        final current = buffer.toString().trimRight();
-        buffer.clear();
-        buffer.write('$current\n${'  ' * indent}}\n${'  ' * indent}');
+        indent = (indent - 1).clamp(0, 50);
+        // Add newline and indent before the brace, but don't clear the buffer
+        buffer.write('\n${'  ' * indent}}');
       } else if (char == ';') {
         buffer.write(';\n${'  ' * indent}');
       } else {
@@ -97,7 +116,7 @@ class CodeBeautifier {
   }
 
   static String _beautifyJs(String js) {
-    // Very basic JS beautifier focused on braces and semicolons
+    if (js.isEmpty) return js;
     final buffer = StringBuffer();
     var indent = 0;
     var inString = false;
@@ -126,17 +145,8 @@ class CodeBeautifier {
         buffer.write(' {\n${'  ' * (indent + 1)}');
         indent++;
       } else if (char == '}') {
-        indent--;
-        final current = buffer.toString().trimRight();
-        buffer.clear();
-        buffer.write('$current\n${'  ' * indent}}');
-        // Add newline if next char isn't a semicolon or something similar
-        if (i + 1 < js.length &&
-            js[i + 1] != ';' &&
-            js[i + 1] != ',' &&
-            js[i + 1] != ')') {
-          buffer.write('\n${'  ' * indent}');
-        }
+        indent = (indent - 1).clamp(0, 50);
+        buffer.write('\n${'  ' * indent}}');
       } else if (char == ';') {
         buffer.write(';\n${'  ' * indent}');
       } else {
