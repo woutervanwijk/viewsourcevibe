@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import Dispatch
 
 // Sharing Service for handling native sharing functionality
 class SharingService: NSObject {
@@ -274,12 +275,13 @@ class SharedContentHandler {
   }
 
   private func handleURLScheme(url: URL) {
+    // Handle URL scheme calls from the share extension or Safari
     guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
-      return
+        return
     }
 
     // Handle viewsourcevibe://open?url=... scheme
-    if components.scheme == "viewsourcevibe", 
+    if components.scheme == "viewsourcevibe",
        let host = components.host,
        let queryItems = components.queryItems {
       
@@ -287,7 +289,7 @@ class SharedContentHandler {
       
       switch host {
       case "open":
-        if let urlItem = queryItems.first(where: { $0.name == "url" }), 
+        if let urlItem = queryItems.first(where: { $0.name == "url" }),
            let urlValue = urlItem.value {
           // Decode the URL value
           if let decodedUrl = urlValue.removingPercentEncoding {
@@ -298,7 +300,7 @@ class SharedContentHandler {
           }
         }
       case "text":
-        if let contentItem = queryItems.first(where: { $0.name == "content" }), 
+        if let contentItem = queryItems.first(where: { $0.name == "content" }),
            let contentValue = contentItem.value {
           // Decode the content value
           if let decodedContent = contentValue.removingPercentEncoding {
@@ -309,7 +311,7 @@ class SharedContentHandler {
           }
         }
       case "file":
-        if let pathItem = queryItems.first(where: { $0.name == "path" }), 
+        if let pathItem = queryItems.first(where: { $0.name == "path" }),
            let pathValue = pathItem.value {
           // Decode the path value and handle file URLs properly
           if let decodedPath = pathValue.removingPercentEncoding {
@@ -337,6 +339,14 @@ class SharedContentHandler {
         SharedContentHandler.shared.setSharedContent(sharedData)
       }
     }
+    // Handle direct HTTP/HTTPS URLs from Safari share sheet
+    else if components.scheme == "http" || components.scheme == "https" {
+        let sharedData: [String: Any] = [
+            "type": "url",
+            "content": url.absoluteString
+        ]
+        SharedContentHandler.shared.setSharedContent(sharedData)
+    }
   }
 }
 
@@ -362,8 +372,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             appDelegate.setupServices(with: controller)
         }
         
+        // Finalize window setup
+        window.makeKeyAndVisible()
+        
         // CRITICAL: Handle URL from share extension or deep link
         // This handles both cold launch and hot launch scenarios
+        // Moved after window setup and service initialization to ensure SharedContentHandler is ready
         if let urlContext = connectionOptions.urlContexts.first {
             let url = urlContext.url
             print("SceneDelegate: Received URL from connectionOptions: \(url)")
@@ -375,9 +389,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 handleIncomingURL(url)
             }
         }
-        
-        // Finalize window setup
-        window.makeKeyAndVisible()
     }
     
     // Handle URL when app is already running (foreground)

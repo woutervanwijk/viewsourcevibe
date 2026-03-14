@@ -27,39 +27,41 @@ class MainActivity : FlutterActivity() {
             }
         }
         
-        // CRITICAL: Forward initial intent to Flutter after engine is ready
-        // This ensures deep links work when app is launched from cold state
-        sharedIntent?.let { intent ->
-            println("MainActivity: configureFlutterEngine - Forwarding stored intent to Flutter")
-            val sharedData = extractSharedData(intent)
-            if (sharedData != null) {
+    // CRITICAL: Forward initial intent to Flutter after engine is ready
+    // This ensures deep links work when app is launched from cold state
+    sharedIntent?.let { intent ->
+        println("MainActivity: configureFlutterEngine - Forwarding stored intent to Flutter")
+        val sharedData = extractSharedData(intent)
+        if (sharedData != null) {
+            try {
+                val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARED_CONTENT_CHANNEL)
+                channel.invokeMethod("handleNewSharedContent", sharedData)
+                println("MainActivity: Successfully sent initial intent to Flutter")
+                sharedIntent = null // Clear after sending
+            } catch (e: Exception) {
+                println("MainActivity: Error forwarding initial intent: ${e.message}")
+                // Don't clear sharedIntent here - let Flutter retrieve it via getSharedContent when ready
+            }
+        } else if (intent.data != null) {
+            // If extractSharedData returned null but we have data (e.g., http/https URL)
+            // Send it as a URL type
+            val dataString = intent.data.toString()
+            if (dataString.startsWith("http://") || dataString.startsWith("https://")) {
                 try {
                     val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARED_CONTENT_CHANNEL)
-                    channel.invokeMethod("handleNewSharedContent", sharedData)
-                    println("MainActivity: Successfully sent initial intent to Flutter")
-                    sharedIntent = null // Clear after sending
+                    channel.invokeMethod("handleNewSharedContent", mapOf(
+                        "type" to "url",
+                        "content" to dataString
+                    ))
+                    println("MainActivity: Sent HTTP/HTTPS URL to Flutter: $dataString")
+                    sharedIntent = null
                 } catch (e: Exception) {
-                    println("MainActivity: Error forwarding initial intent: ${e.message}")
-                }
-            } else if (intent.data != null) {
-                // If extractSharedData returned null but we have data (e.g., http/https URL)
-                // Send it as a URL type
-                val dataString = intent.data.toString()
-                if (dataString.startsWith("http://") || dataString.startsWith("https://")) {
-                    try {
-                        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARED_CONTENT_CHANNEL)
-                        channel.invokeMethod("handleNewSharedContent", mapOf(
-                            "type" to "url",
-                            "content" to dataString
-                        ))
-                        println("MainActivity: Sent HTTP/HTTPS URL to Flutter: $dataString")
-                        sharedIntent = null
-                    } catch (e: Exception) {
-                        println("MainActivity: Error forwarding HTTP URL: ${e.message}")
-                    }
+                    println("MainActivity: Error forwarding HTTP URL: ${e.message}")
+                    // Don't clear sharedIntent here - let Flutter retrieve it via getSharedContent when ready
                 }
             }
         }
+    }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -143,12 +145,14 @@ class MainActivity : FlutterActivity() {
         if (Intent.ACTION_SEND == action) {
             if (type?.startsWith("text/plain") == true) {
                 val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return null
+                println("MainActivity: extractSharedData - SEND text/plain, sharedText: $sharedText")
                 return mapOf(
                     "type" to "text",
                     "content" to sharedText
                 )
             } else if (type?.startsWith("image/") == true) {
                 val streamUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return null
+                println("MainActivity: extractSharedData - SEND image/, streamUri: $streamUri")
                 return mapOf(
                     "type" to "image",
                     "uri" to streamUri.toString()
@@ -158,6 +162,7 @@ class MainActivity : FlutterActivity() {
                 val streamUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
                 
                 if (streamUri != null) {
+                    println("MainActivity: extractSharedData - SEND with streamUri: $streamUri")
                      // Try to get the actual file path from the content URI
                     val filePath = getRealPathFromURI(streamUri)
                     val fileName = getFileNameFromUri(streamUri)
@@ -179,6 +184,7 @@ class MainActivity : FlutterActivity() {
                     )
                 } else {
                     // Fallback for any type (including text/html, */*, or null) that has EXTRA_TEXT
+                    println("MainActivity: extractSharedData - SEND falling back to EXTRA_TEXT")
                      val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
                      if (sharedText != null) {
                          return mapOf(
@@ -191,9 +197,11 @@ class MainActivity : FlutterActivity() {
         } else if (Intent.ACTION_VIEW == action) {
             if (data != null) {
                 val dataString = data.toString()
+                println("MainActivity: extractSharedData - VIEW action, dataString: $dataString")
                 
                 // Content URI
                 if (dataString.startsWith("content://")) {
+                    println("MainActivity: extractSharedData - VIEW content://")
                      val fileName = getFileNameFromUri(data) ?: "shared_file.html"
                     val filePath = getRealPathFromURI(data) ?: dataString
                     
@@ -214,10 +222,12 @@ class MainActivity : FlutterActivity() {
                 // HTTP/HTTPS URL - Let the system handling (AppLinks) take care of this
                 // We don't want to double-handle it here which causes the "double load" issue
                 else if (dataString.startsWith("http://") || dataString.startsWith("https://")) {
+                    println("MainActivity: extractSharedData - VIEW http/https, returning null (let AppLinks handle)")
                     return null
                 }
                 // File URI or other
                 else {
+                    println("MainActivity: extractSharedData - VIEW file/other")
                     return mapOf(
                         "type" to "url", // Treat as URL/path to be handled by app logic
                         "content" to dataString
@@ -226,6 +236,7 @@ class MainActivity : FlutterActivity() {
             }
         }
         
+        println("MainActivity: extractSharedData - returning null")
         return null
     }
 
