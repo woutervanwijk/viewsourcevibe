@@ -20,10 +20,14 @@ class MainActivity : FlutterActivity() {
         
         // Setup channel for handling shared content
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARED_CONTENT_CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "getSharedContent") {
-                handleSharedIntent(result)
-            } else {
-                result.notImplemented()
+            when (call.method) {
+                "getSharedContent" -> handleSharedIntent(result)
+                "hasSharedContent" -> {
+                    // Non-destructive peek: does NOT clear the intent
+                    val hasContent = sharedIntent != null && extractSharedData(sharedIntent!!) != null
+                    result.success(hasContent)
+                }
+                else -> result.notImplemented()
             }
         }
         
@@ -219,11 +223,14 @@ class MainActivity : FlutterActivity() {
                         "uri" to dataString
                     )
                 } 
-                // HTTP/HTTPS URL - Let the system handling (AppLinks) take care of this
-                // We don't want to double-handle it here which causes the "double load" issue
+                // HTTP/HTTPS URL — store it so getSharedContent can return it.
+                // AppLinks may also fire, but the isShowingShareDialog guard in Dart prevents double-loading.
                 else if (dataString.startsWith("http://") || dataString.startsWith("https://")) {
-                    println("MainActivity: extractSharedData - VIEW http/https, returning null (let AppLinks handle)")
-                    return null
+                    println("MainActivity: extractSharedData - VIEW http/https, returning as url type")
+                    return mapOf(
+                        "type" to "url",
+                        "content" to dataString
+                    )
                 }
                 // File URI or other
                 else {

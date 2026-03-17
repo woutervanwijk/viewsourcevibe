@@ -123,14 +123,67 @@ class UnifiedSharingService {
   }
 
   /// Check if there is pending shared content available from the platform
-  /// This is used during app startup to decide whether to skip session restoration
+  /// This is used during app startup to decide whether to skip session restoration.
+  /// Uses 'hasSharedContent' (non-destructive peek) so the content is NOT consumed
+  /// and is still available for actual handling by SharedContentWrapper.
   static Future<bool> hasPendingSharedContent() async {
     try {
       final result =
-          await _sharedContentChannel.invokeMethod('getSharedContent');
-      return result != null && result is Map && result.isNotEmpty;
+          await _sharedContentChannel.invokeMethod('hasSharedContent');
+      return result == true;
     } catch (e) {
       debugPrint('UnifiedSharingService: Error checking pending content: $e');
+      return false;
+    }
+  }
+
+  /// Retrieve and handle any pending shared content directly via HtmlService,
+  /// without requiring a BuildContext. Used during cold start in
+  /// _performDelayedInitialization to avoid timing/race conditions with
+  /// SharedContentWrapper. Returns true if content was found and handled.
+  static Future<bool> handlePendingSharedContent(
+      HtmlService htmlService) async {
+    try {
+      final result =
+          await _sharedContentChannel.invokeMethod('getSharedContent');
+      if (result == null || result is! Map || result.isEmpty) return false;
+
+      final sharedData = Map<String, dynamic>.from(result);
+      final type = sharedData['type'] as String?;
+      final content = sharedData['content'] as String?;
+
+      debugPrint(
+          'UnifiedSharingService: handlePendingSharedContent type=$type content=${content?.substring(0, content.length > 80 ? 80 : content.length)}');
+
+      if (type == 'url' && content != null && content.isNotEmpty) {
+        await htmlService.loadFromUrl(content);
+        return true;
+      } else if (type == 'text' && content != null && content.isNotEmpty) {
+        // Check if it's actually a URL
+        final trimmed = content.trim();
+        final uri = Uri.tryParse(trimmed);
+        if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+          await htmlService.loadFromUrl(trimmed);
+          return true;
+        }
+        // Otherwise use the navigator context for full handling
+        final navContext = MyApp.navigatorKey.currentContext;
+        if (navContext != null && navContext.mounted) {
+          await handleSharedContent(navContext, sharedData);
+          return true;
+        }
+      } else {
+        // For files/other content, we need a context — use navigator key
+        final navContext = MyApp.navigatorKey.currentContext;
+        if (navContext != null && navContext.mounted) {
+          await handleSharedContent(navContext, sharedData);
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      debugPrint(
+          'UnifiedSharingService: Error handling pending shared content: $e');
       return false;
     }
   }

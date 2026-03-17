@@ -360,10 +360,24 @@ Future<void> _performDelayedInitialization(
       hasSharedContent = await UnifiedSharingService.hasPendingSharedContent();
       if (hasSharedContent) {
         debugPrint(
-            '🚀 Pending shared content detected, skipping session restoration');
+            '🚀 Pending shared content detected, handling directly from cold start');
       }
     } catch (e) {
       debugPrint('⚠️ Error checking for shared content: $e');
+    }
+
+    // If there's shared content, handle it directly here (doesn't rely on
+    // SharedContentWrapper timing, which can race with this function on cold start)
+    if (hasSharedContent) {
+      try {
+        final handled = await UnifiedSharingService.handlePendingSharedContent(
+            htmlService);
+        debugPrint(handled
+            ? '✅ Cold start shared content handled successfully'
+            : '⚠️ Cold start shared content not handled (empty or context unavailable)');
+      } catch (e) {
+        debugPrint('⚠️ Error handling shared content on cold start: $e');
+      }
     }
 
     // No deep link and no shared content, restore previous session
