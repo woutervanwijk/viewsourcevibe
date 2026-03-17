@@ -1,6 +1,5 @@
 import Flutter
 import UIKit
-import Dispatch
 
 // Sharing Service for handling native sharing functionality
 class SharingService: NSObject {
@@ -191,6 +190,9 @@ class SharedContentHandler {
         switch call.method {
         case "getSharedContent":
             handleGetSharedContent(result: result)
+        case "hasSharedContent":
+            // Non-destructive peek: returns true if content is pending, without consuming it
+            result(sharedContent != nil)
         case "clearSharedContent":
             handleClearSharedContent(result: result)
         default:
@@ -231,22 +233,11 @@ class SharedContentHandler {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // Legacy support for iOS < 13
-    if #available(iOS 13.0, *) {
-        // Setup will happen in SceneDelegate
-    } else {
-        GeneratedPluginRegistrant.register(with: self)
-        if let controller = window?.rootViewController as? FlutterViewController {
-            setupServices(with: controller)
-        }
+    GeneratedPluginRegistrant.register(with: self)
+    if let controller = window?.rootViewController as? FlutterViewController {
+        setupServices(with: controller)
     }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  // MARK: - UISceneSession Lifecycle
-  @available(iOS 13.0, *)
-  override func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-      return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
   }
 
   /// Sets up custom services for the given FlutterViewController
@@ -260,7 +251,6 @@ class SharedContentHandler {
       name: "info.wouter.sourceviewer/shared_content",
       binaryMessenger: controller.binaryMessenger
     )
-    
     SharedContentHandler.shared.setup(methodChannel: channel)
   }
 
@@ -269,67 +259,53 @@ class SharedContentHandler {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
   ) -> Bool {
-    // Handle URL scheme calls from the share extension
+    // Handle URL scheme calls from the share extension or Safari.
+    // NOTE: With no UIApplicationSceneManifest in Info.plist, iOS routes URL
+    // opens through this AppDelegate method (not SceneDelegate), so app_links'
+    // application(_:open:options:) delegate fires correctly for cold starts.
     handleURLScheme(url: url)
-    return true
+    return super.application(app, open: url, options: options)
   }
 
   private func handleURLScheme(url: URL) {
-    // Handle URL scheme calls from the share extension or Safari
     guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
         return
     }
 
-    // Handle viewsourcevibe://open?url=... scheme
     if components.scheme == "viewsourcevibe",
        let host = components.host,
        let queryItems = components.queryItems {
-      
+
       var sharedData: [String: Any] = [:]
-      
+
       switch host {
       case "open":
         if let urlItem = queryItems.first(where: { $0.name == "url" }),
-           let urlValue = urlItem.value {
-          // Decode the URL value
-          if let decodedUrl = urlValue.removingPercentEncoding {
-            sharedData = [
-              "type": "url",
-              "content": decodedUrl
-            ]
-          }
+           let urlValue = urlItem.value,
+           let decodedUrl = urlValue.removingPercentEncoding {
+          sharedData = ["type": "url", "content": decodedUrl]
         }
       case "text":
         if let contentItem = queryItems.first(where: { $0.name == "content" }),
-           let contentValue = contentItem.value {
-          // Decode the content value
-          if let decodedContent = contentValue.removingPercentEncoding {
-            sharedData = [
-              "type": "text",
-              "content": decodedContent
-            ]
-          }
+           let contentValue = contentItem.value,
+           let decodedContent = contentValue.removingPercentEncoding {
+          sharedData = ["type": "text", "content": decodedContent]
         }
       case "file":
         if let pathItem = queryItems.first(where: { $0.name == "path" }),
-           let pathValue = pathItem.value {
-          // Decode the path value and handle file URLs properly
-          if let decodedPath = pathValue.removingPercentEncoding {
-            var filePath = decodedPath
-            
-            // Handle file:// URLs by converting to proper paths
-            if filePath.hasPrefix("file:///") {
-                filePath = String(filePath.dropFirst(7)) // Remove "file:///"
-            } else if filePath.hasPrefix("file://") {
-                filePath = String(filePath.dropFirst(6)) // Remove "file://"
-            }
-            
-            sharedData = [
-              "type": "file",
-              "filePath": filePath,
-              "fileName": URL(fileURLWithPath: filePath).lastPathComponent
-            ]
+           let pathValue = pathItem.value,
+           let decodedPath = pathValue.removingPercentEncoding {
+          var filePath = decodedPath
+          if filePath.hasPrefix("file:///") {
+              filePath = String(filePath.dropFirst(7))
+          } else if filePath.hasPrefix("file://") {
+              filePath = String(filePath.dropFirst(6))
           }
+          sharedData = [
+            "type": "file",
+            "filePath": filePath,
+            "fileName": URL(fileURLWithPath: filePath).lastPathComponent
+          ]
         }
       default:
         break
@@ -338,141 +314,11 @@ class SharedContentHandler {
       if !sharedData.isEmpty {
         SharedContentHandler.shared.setSharedContent(sharedData)
       }
-    }
-    // Handle direct HTTP/HTTPS URLs from Safari share sheet
-    else if components.scheme == "http" || components.scheme == "https" {
-        let sharedData: [String: Any] = [
+    } else if components.scheme == "http" || components.scheme == "https" {
+        SharedContentHandler.shared.setSharedContent([
             "type": "url",
             "content": url.absoluteString
-        ]
-        SharedContentHandler.shared.setSharedContent(sharedData)
+        ])
     }
   }
-}
-
-class SceneDelegate: UIResponder, UIWindowSceneDelegate {
-    var window: UIWindow?
-
-    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard let windowScene = (scene as? UIWindowScene) else { return }
-        
-        // Create a new UIWindow and link it to the scene
-        let window = UIWindow(windowScene: windowScene)
-        self.window = window
-        
-        // Create the FlutterViewController
-        let controller = FlutterViewController(project: nil, initialRoute: nil, nibName: nil, bundle: nil)
-        window.rootViewController = controller
-        
-        // Setup services and plugins
-        if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
-            appDelegate.window = window
-            // IMPORTANT: Register plugins with the controller, not just the engine
-            GeneratedPluginRegistrant.register(with: controller)
-            appDelegate.setupServices(with: controller)
-        }
-        
-        // Finalize window setup
-        window.makeKeyAndVisible()
-        
-        // CRITICAL: Handle URL from share extension or deep link
-        // This handles both cold launch and hot launch scenarios
-        // Moved after window setup and service initialization to ensure SharedContentHandler is ready
-        if let urlContext = connectionOptions.urlContexts.first {
-            let url = urlContext.url
-            print("SceneDelegate: Received URL from connectionOptions: \(url)")
-            handleIncomingURL(url)
-        } else if let userActivity = connectionOptions.userActivities.first {
-            print("SceneDelegate: Received userActivity: \(userActivity.activityType)")
-            if let url = userActivity.webpageURL {
-                print("SceneDelegate: URL from userActivity: \(url)")
-                handleIncomingURL(url)
-            }
-        }
-    }
-    
-    // Handle URL when app is already running (foreground)
-    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        guard let urlContext = URLContexts.first else { return }
-        let url = urlContext.url
-        print("SceneDelegate: Received URL from openURLContexts: \(url)")
-        handleIncomingURL(url)
-    }
-    
-    // Central handler for incoming URLs
-    private func handleIncomingURL(_ url: URL) {
-        // Handle URL scheme calls from the share extension or Safari
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
-            return
-        }
-
-        // Handle viewsourcevibe://open?url=... scheme
-        if components.scheme == "viewsourcevibe", 
-           let host = components.host,
-           let queryItems = components.queryItems {
-          
-          var sharedData: [String: Any] = [:]
-          
-          switch host {
-          case "open":
-            if let urlItem = queryItems.first(where: { $0.name == "url" }), 
-               let urlValue = urlItem.value {
-              // Decode the URL value
-              if let decodedUrl = urlValue.removingPercentEncoding {
-                sharedData = [
-                  "type": "url",
-                  "content": decodedUrl
-                ]
-              }
-            }
-          case "text":
-            if let contentItem = queryItems.first(where: { $0.name == "content" }), 
-               let contentValue = contentItem.value {
-              // Decode the content value
-              if let decodedContent = contentValue.removingPercentEncoding {
-                sharedData = [
-                  "type": "text",
-                  "content": decodedContent
-                ]
-              }
-            }
-          case "file":
-            if let pathItem = queryItems.first(where: { $0.name == "path" }), 
-               let pathValue = pathItem.value {
-              // Decode the path value and handle file URLs properly
-              if let decodedPath = pathValue.removingPercentEncoding {
-                var filePath = decodedPath
-                
-                // Handle file:// URLs by converting to proper paths
-                if filePath.hasPrefix("file:///") {
-                    filePath = String(filePath.dropFirst(7)) // Remove "file:///"
-                } else if filePath.hasPrefix("file://") {
-                    filePath = String(filePath.dropFirst(6)) // Remove "file://"
-                }
-                
-                sharedData = [
-                  "type": "file",
-                  "filePath": filePath,
-                  "fileName": URL(fileURLWithPath: filePath).lastPathComponent
-                ]
-              }
-            }
-          default:
-            break
-          }
-
-          if !sharedData.isEmpty {
-            SharedContentHandler.shared.setSharedContent(sharedData)
-          }
-        }
-        // Handle direct HTTP/HTTPS URLs from Safari share sheet
-        else if components.scheme == "http" || components.scheme == "https" {
-            let sharedData: [String: Any] = [
-                "type": "url",
-                "content": url.absoluteString
-            ]
-            SharedContentHandler.shared.setSharedContent(sharedData)
-            print("SceneDelegate: Sent HTTP/HTTPS URL to Flutter: \(url.absoluteString)")
-        }
-    }
 }
