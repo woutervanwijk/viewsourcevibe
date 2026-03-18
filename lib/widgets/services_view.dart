@@ -13,10 +13,15 @@ class ServicesView extends StatelessWidget {
     final services =
         metadata?['detectedServices'] as Map<String, List<String>>?;
 
+    // Show loading indicator only if we're extracting metadata
+    if (htmlService.isExtractingMetadata) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Show message if no services detected
     if (services == null || services.isEmpty) {
-      if (htmlService.isLoading ||
-          htmlService.isWebViewLoading ||
-          htmlService.isExtractingMetadata) {
+      // Only show "no services" if we're not still loading the page
+      if (htmlService.isLoading || htmlService.isWebViewLoading) {
         return const Center(child: CircularProgressIndicator());
       }
       return Center(

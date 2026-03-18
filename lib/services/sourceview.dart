@@ -252,38 +252,47 @@ class SourceView {
     // without a key that changes with content, Flutter will perform an 'update' instead of a 'swap', 
     // which gracefully handles the transition of the shared ScrollController.
     
-    return SizedBox.expand(
-      child: CodeForge(
-        controller: controller,
-        readOnly: true,
-        lineWrap: wrapText,
-        innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
-        verticalScrollController: verticalController,
-        horizontalScrollController: horizontalController,
-        editorTheme: getThemeByName(themeName),
-        language: mode,
-        textStyle: TextStyle(
-          fontSize: fontSize,
-          fontFamily: fontFamily,
-          fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
-          height: 1.2,
-        ),
-        enableGutter: showLineNumbers,
-        finderBuilder: (context, finderController) {
-          // Only update if it ACTUALLY changed to avoid rebuild loops
-          if (activeFindController != finderController) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Use LayoutBuilder to ensure we have proper constraints before rendering CodeForge
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Only render CodeForge if we have valid constraints
+        if (constraints.maxWidth > 0 && constraints.maxHeight > 0) {
+          return CodeForge(
+            controller: controller,
+            readOnly: true,
+            lineWrap: wrapText,
+            innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
+            verticalScrollController: verticalController,
+            horizontalScrollController: horizontalController,
+            editorTheme: getThemeByName(themeName),
+            language: mode,
+            textStyle: TextStyle(
+              fontSize: fontSize,
+              fontFamily: fontFamily,
+              fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
+              height: 1.2,
+            ),
+            enableGutter: showLineNumbers,
+            finderBuilder: (context, finderController) {
+              // Only update if it ACTUALLY changed to avoid rebuild loops
               if (activeFindController != finderController) {
-                onFindControllerChanged(finderController);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (activeFindController != finderController) {
+                    onFindControllerChanged(finderController);
+                  }
+                });
               }
-            });
-          }
-          return const PreferredSize(
-            preferredSize: Size.zero,
-            child: SizedBox.shrink(),
+              return const PreferredSize(
+                preferredSize: Size.zero,
+                child: SizedBox.shrink(),
+              );
+            },
           );
-        },
-      ),
+        }
+        
+        // If constraints are not valid yet, show a loading indicator
+        return const Center(child: CircularProgressIndicator());
+      }
     );
   }
 

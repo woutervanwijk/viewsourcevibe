@@ -69,10 +69,15 @@ class MediaView extends StatelessWidget {
     final htmlService = Provider.of<HtmlService>(context);
     final metadata = htmlService.pageMetadata;
 
+    // Show loading indicator only if we're extracting metadata
+    if (htmlService.isExtractingMetadata) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Show message if no media detected
     if (metadata == null || metadata['media'] == null) {
-      if (htmlService.isLoading ||
-          htmlService.isWebViewLoading ||
-          htmlService.isExtractingMetadata) {
+      // Only show "no media" if we're not still loading the page
+      if (htmlService.isLoading || htmlService.isWebViewLoading) {
         return const Center(child: CircularProgressIndicator());
       }
       return Center(

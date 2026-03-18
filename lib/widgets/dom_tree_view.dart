@@ -180,17 +180,18 @@ class _DomTreeViewState extends State<DomTreeView> {
       });
     }
 
+    // Show loading while tree is being built
+    if (_treeController.roots.isEmpty && content.isNotEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Show message if no content to parse
     if (content.isEmpty) {
-      if (htmlService.isLoading ||
-          htmlService.isWebViewLoading ||
-          htmlService.isExtractingMetadata) {
+      // Only show "no content" if we're not still loading the page
+      if (htmlService.isLoading || htmlService.isWebViewLoading) {
         return const Center(child: CircularProgressIndicator());
       }
       return const Center(child: Text('No content to parse'));
-    }
-
-    if (_treeController.roots.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
     }
 
     return TreeView<DomTreeNode>(

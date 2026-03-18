@@ -354,6 +354,8 @@ class HtmlService extends ChangeNotifier {
     if (_isLoading) return;
 
     _isLoading = true;
+    // Also set webViewLoading to false since we're loading source
+    _isWebViewLoading = false;
     notifyListeners();
 
     try {
@@ -368,6 +370,7 @@ class HtmlService extends ChangeNotifier {
       _probeError = e.toString();
     } finally {
       _isLoading = false;
+      _isWebViewLoading = false;
       notifyListeners();
     }
   }
@@ -548,7 +551,16 @@ class HtmlService extends ChangeNotifier {
         );
       }
 
-      // We don't fetch HTML here. Source will be lazy loaded when tab is clicked.
+      // We don't fetch HTML here in Browser-First mode.
+      // However, we MUST fetch the HTML for tabs (Metadata, Services, etc.) to work
+      // even if the user stays on the Source tab. We'll fetch it in the background.
+      // This ensures all tabs can populate their data.
+      _loadSourceOnly(url).catchError((e) {
+        debugPrint('Error loading source in background: $e');
+        _isWebViewLoading = false;
+        _isLoading = false;
+        notifyListeners();
+      });
     } else {
       // Source-First Flow:
       // - HTML is fetched immediately
@@ -1684,25 +1696,8 @@ class HtmlService extends ChangeNotifier {
     _autoSave();
     await scrollToZero();
 
-    // Extract metadata if it's HTML or XML
-    if (_currentFile != null &&
-        (selectedContentType == 'html' ||
-            selectedContentType == 'xml' ||
-            _currentFile!.name.endsWith('.html') ||
-            _currentFile!.name.endsWith('.xml') ||
-            _currentFile!.name.endsWith('.xhtml'))) {
-      // Metadata extraction will call notifyListeners when done
-      _extractMetadata(isPartial: isPartial);
-    } else {
-      // If content type changed to something without metadata, clear it
-      // But don't clear it just because we are loading - wait for detection
-      if (_pageMetadata != null &&
-          !(selectedContentType == 'html' || selectedContentType == 'xml')) {
-        _pageMetadata = null;
-      }
-      // Notify once at the end if we're not extracting metadata
-      notifyListeners();
-    }
+    // Update all tab data consistently
+    await _updateAllTabData(isPartial: isPartial);
 
     // Note: State saving is handled by the AppLifecycleObserver
     // We don't save state here to avoid excessive writes during normal usage
@@ -2419,6 +2414,12 @@ Technical details: $e''';
         }
 
         debugPrint('Probe successful for $url');
+        
+        // Update all tab data when probe completes
+        if (_currentFile != null && areUrlsEqual(_currentFile!.path, url)) {
+          _updateAllTabData().ignore();
+        }
+        
         return _probeResult!;
       } else {
         debugPrint(
@@ -2444,7 +2445,6 @@ Technical details: $e''';
       if (_currentlyProbingUrl == url) {
         _isProbing = false;
         _currentlyProbingUrl = null;
-        notifyListeners();
         _autoSave();
       }
     }
@@ -3049,6 +3049,32 @@ Technical details: $e''';
     notifyListeners();
   }
 
+  /// Unified method to update all tab data consistently
+  /// This ensures all tabs (Metadata, Services, Cookies, etc.) are updated together
+  Future<void> _updateAllTabData({bool isPartial = false}) async {
+    if (_currentFile == null) return;
+
+    // Update analyzed cookies first (depends on probeResult)
+    _updateAnalyzedCookies();
+
+    // Extract metadata if needed
+    if ((_currentFile!.content.isNotEmpty && (selectedContentType == 'html' ||
+        selectedContentType == 'xml' ||
+        _currentFile!.name.endsWith('.html') ||
+        _currentFile!.name.endsWith('.xml') ||
+        _currentFile!.name.endsWith('.xhtml'))) ||
+        isPartial) {
+      await _extractMetadata(isPartial: isPartial);
+    }
+
+    // Ensure probe result is properly set in current file
+    if (_probeResult != null && _currentFile != null) {
+      _currentFile = _currentFile!.copyWith(probeResult: _probeResult);
+    }
+
+    notifyListeners();
+  }
+
   /// Extract metadata from the current file content
   Future<void> _extractMetadata({bool isPartial = false}) async {
     if (_currentFile == null || _isExtractingMetadata) return;
@@ -3083,7 +3109,6 @@ Technical details: $e''';
       _pageMetadata = null;
     } finally {
       _isExtractingMetadata = false;
-      notifyListeners();
     }
   }
 
@@ -3868,8 +3893,8 @@ Technical details: $e''';
       if (!isPartial) {
         _isLoading = false;
       }
-      // Always notify listeners so that tabs (like Cookies) can update even for partial syncs
-      notifyListeners();
+      // Update all tab data to ensure consistency
+      await _updateAllTabData(isPartial: isPartial);
     }
   }
 

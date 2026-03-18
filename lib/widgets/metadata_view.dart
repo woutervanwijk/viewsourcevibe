@@ -15,10 +15,16 @@ class MetadataView extends StatelessWidget {
     final settings = Provider.of<AppSettings>(context);
     final metadata = htmlService.pageMetadata;
 
+    // Show loading indicator only if we're extracting metadata
+    // (not for general loading states which might be WebView loading)
+    if (htmlService.isExtractingMetadata) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Show message if no metadata available
     if (metadata == null) {
-      if (htmlService.isLoading ||
-          htmlService.isWebViewLoading ||
-          htmlService.isExtractingMetadata) {
+      // Only show "no metadata" if we're not still loading the page
+      if (htmlService.isLoading || htmlService.isWebViewLoading) {
         return const Center(child: CircularProgressIndicator());
       }
       return Center(
