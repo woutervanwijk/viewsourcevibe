@@ -252,42 +252,124 @@ class SourceView {
     // without a key that changes with content, Flutter will perform an 'update' instead of a 'swap', 
     // which gracefully handles the transition of the shared ScrollController.
     
-    // Use LayoutBuilder to ensure we have proper constraints before rendering CodeForge
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Only render CodeForge if we have valid constraints
-        if (constraints.maxWidth > 0 && constraints.maxHeight > 0) {
-          return CodeForge(
-            controller: controller,
-            readOnly: true,
-            lineWrap: wrapText,
-            innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
-            verticalScrollController: verticalController,
-            horizontalScrollController: horizontalController,
-            editorTheme: getThemeByName(themeName),
-            language: mode,
-            textStyle: TextStyle(
+    // For very large files, use a simpler fallback to avoid scroll controller issues
+    if (content.length > 100000) { // 100KB threshold
+      debugPrint('CodeForge: Large file detected (${content.length} chars), using fallback renderer');
+      return SingleChildScrollView(
+        controller: verticalController,
+        scrollDirection: Axis.vertical,
+        child: SingleChildScrollView(
+          controller: horizontalController,
+          scrollDirection: Axis.horizontal,
+          child: SelectableText(
+            content,
+            style: TextStyle(
               fontSize: fontSize,
               fontFamily: fontFamily,
               fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
               height: 1.2,
             ),
-            enableGutter: showLineNumbers,
-            finderBuilder: (context, finderController) {
-              // Only update if it ACTUALLY changed to avoid rebuild loops
-              if (activeFindController != finderController) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (activeFindController != finderController) {
-                    onFindControllerChanged(finderController);
-                  }
-                });
-              }
-              return const PreferredSize(
-                preferredSize: Size.zero,
-                child: SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
+    
+    // Use LayoutBuilder to ensure we have proper constraints before rendering CodeForge
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Debug log constraints to help diagnose empty editor issues
+        if (constraints.maxWidth <= 0 || constraints.maxHeight <= 0) {
+          debugPrint('CodeForge: Waiting for valid constraints - w: ${constraints.maxWidth}, h: ${constraints.maxHeight}');
+        } else {
+          debugPrint('CodeForge: Rendering with constraints - w: ${constraints.maxWidth}, h: ${constraints.maxHeight}, content length: ${content.length}');
+        }
+        
+        // Only render CodeForge if we have valid constraints
+        if (constraints.maxWidth > 0 && constraints.maxHeight > 0) {
+          try {
+            // Additional check: don't render if content is empty
+            if (content.isEmpty) {
+              debugPrint('CodeForge: Content is empty, showing empty state');
+              return const Center(
+                child: Text('No content to display', style: TextStyle(color: Colors.grey)),
               );
-            },
-          );
+            }
+            
+            // For large files, check if we should use CodeForge or fallback
+            // CodeForge has issues with very large files and scroll controller management
+            if (content.length > 50000) { // 50KB threshold for CodeForge
+              debugPrint('CodeForge: Medium-large file (${content.length} chars), using fallback for stability');
+              return SingleChildScrollView(
+                controller: verticalController,
+                scrollDirection: Axis.vertical,
+                child: SingleChildScrollView(
+                  controller: horizontalController,
+                  scrollDirection: Axis.horizontal,
+                  child: SelectableText(
+                    content,
+                    style: TextStyle(
+                      fontSize: fontSize,
+                      fontFamily: fontFamily,
+                      fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+              );
+            }
+            
+            return CodeForge(
+              controller: controller,
+              readOnly: true,
+              lineWrap: wrapText,
+              innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
+              verticalScrollController: verticalController,
+              horizontalScrollController: horizontalController,
+              editorTheme: getThemeByName(themeName),
+              language: mode,
+              textStyle: TextStyle(
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
+                height: 1.2,
+              ),
+              enableGutter: showLineNumbers,
+              finderBuilder: (context, finderController) {
+                // Only update if it ACTUALLY changed to avoid rebuild loops
+                if (activeFindController != finderController) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (activeFindController != finderController) {
+                      onFindControllerChanged(finderController);
+                    }
+                  });
+                }
+                return const PreferredSize(
+                  preferredSize: Size.zero,
+                  child: SizedBox.shrink(),
+                );
+              },
+            );
+          } catch (e, stackTrace) {
+            debugPrint('Error rendering CodeForge editor: $e\n$stackTrace');
+            // If CodeForge fails to render, show a fallback with the raw content
+            return SingleChildScrollView(
+              controller: verticalController,
+              scrollDirection: Axis.vertical,
+              child: SingleChildScrollView(
+                controller: horizontalController,
+                scrollDirection: Axis.horizontal,
+                child: SelectableText(
+                  content,
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    fontFamily: fontFamily,
+                    fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            );
+          }
         }
         
         // If constraints are not valid yet, show a loading indicator
