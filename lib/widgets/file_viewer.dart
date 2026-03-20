@@ -507,7 +507,7 @@ class FileViewer extends StatelessWidget {
       selectedContentType ?? file.extension,
       context,
       fontSize: settings.fontSize,
-      fontFamily: settings.effectiveFontFamily,
+      fontFamily: 'Courier',
       themeName: settings.themeName,
       wrapText: settings.wrapText,
       showLineNumbers: settings.showLineNumbers,
