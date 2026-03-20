@@ -266,7 +266,7 @@ class MetadataView extends StatelessWidget {
                     title: Text(
                       url.toString(),
                       style: TextStyle(
-                          fontSize: 12, fontFamily: settings.fontFamily),
+                          fontSize: 12, fontFamily: settings.effectiveFontFamily),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -302,7 +302,7 @@ class MetadataView extends StatelessWidget {
           avatar: Icon(Icons.code,
               size: 16, color: Theme.of(context).colorScheme.primary),
           label: Text('${e.key}: ${e.value}',
-              style: TextStyle(fontFamily: settings.fontFamily)),
+              style: TextStyle(fontFamily: settings.effectiveFontFamily)),
           backgroundColor: Theme.of(context)
               .colorScheme
               .primaryContainer
@@ -364,7 +364,7 @@ class MetadataView extends StatelessWidget {
                   e.key,
                   style: TextStyle(
                     fontSize: 12,
-                    fontFamily: settings.fontFamily,
+                    fontFamily: settings.effectiveFontFamily,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
@@ -372,7 +372,7 @@ class MetadataView extends StatelessWidget {
                   value,
                   style: TextStyle(
                     fontSize: 12,
-                    fontFamily: settings.fontFamily,
+                    fontFamily: settings.effectiveFontFamily,
                     color: isUrl ? Theme.of(context).colorScheme.primary : null,
                     decoration: isUrl ? TextDecoration.underline : null,
                   ),
@@ -465,7 +465,7 @@ class MetadataView extends StatelessWidget {
             child: ListTile(
               title: Text(
                 url,
-                style: TextStyle(fontSize: 13, fontFamily: settings.fontFamily),
+                style: TextStyle(fontSize: 13, fontFamily: settings.effectiveFontFamily),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -561,7 +561,7 @@ class MetadataView extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      fontFamily: settings.fontFamily,
+                      fontFamily: settings.effectiveFontFamily,
                     ),
                     textAlign: TextAlign.end,
                   ),
@@ -609,7 +609,7 @@ class MetadataView extends StatelessWidget {
               'decoded': data['decoded'] as int? ?? 0,
               'transfer': data['transfer'] as int? ?? 0,
             }),
-            style: TextStyle(fontSize: 12, fontFamily: settings.fontFamily),
+            style: TextStyle(fontSize: 12, fontFamily: settings.effectiveFontFamily),
           ),
         ],
       ),

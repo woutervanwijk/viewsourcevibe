@@ -85,7 +85,7 @@ class SettingsScreen extends StatelessWidget {
                       // Font Family
                       ListTile(
                         title: const Text('Font Family'),
-                        subtitle: Text(settings.fontFamily),
+                        subtitle: Text(settings.effectiveFontFamily),
                         trailing: const Icon(Icons.arrow_forward_ios),
                         onTap: () => _showFontFamilyDialog(context, settings),
                       ),
@@ -447,7 +447,7 @@ class SettingsScreen extends StatelessWidget {
                         family,
                         style: TextStyle(fontFamily: family),
                       ),
-                      trailing: settings.fontFamily == family
+                      trailing: settings.effectiveFontFamily == family
                           ? const Icon(Icons.check, color: Colors.blue)
                           : null,
                       onTap: () {

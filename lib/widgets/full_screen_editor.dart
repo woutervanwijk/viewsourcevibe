@@ -137,7 +137,7 @@ class FullScreenEditor extends StatelessWidget {
                 // No need to update in full screen mode as it's a separate instance
               },
               fontSize: settings.fontSize,
-              fontFamily: settings.fontFamily,
+              fontFamily: settings.effectiveFontFamily,
               themeName: settings.themeName,
               wrapText: settings.wrapText,
               showLineNumbers: settings.showLineNumbers,

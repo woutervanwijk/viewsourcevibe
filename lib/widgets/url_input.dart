@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
+import 'dart:io';
+import 'package:view_source_vibe/models/html_file.dart';
 
 class UrlInput extends StatefulWidget {
   const UrlInput({super.key});
@@ -83,6 +85,51 @@ class _UrlInputState extends State<UrlInput> {
           !htmlService.currentFile!.isUrl &&
           url == htmlService.currentFile!.name) {
         await htmlService.reloadCurrentFile();
+      } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        // Handle local file paths - try to find the full path from history
+        final historyService = Provider.of<UrlHistoryService?>(context, listen: false);
+        final history = historyService?.history ?? [];
+        
+        // Find the full path that matches this filename
+        String? fullPath;
+        for (final entry in history) {
+          if (!entry.startsWith('http://') && !entry.startsWith('https://')) {
+            final parts = entry.split(RegExp(r'[/\\]'));
+            if (parts.isNotEmpty && parts.last == url) {
+              fullPath = entry;
+              break;
+            }
+          }
+        }
+        
+        if (fullPath != null) {
+          // Load the file using the full path
+          try {
+            final file = File(fullPath);
+            if (await file.exists()) {
+              final content = await file.readAsString();
+              final htmlFile = HtmlFile(
+                name: url,
+                path: fullPath,
+                content: content,
+                lastModified: await file.lastModified(),
+                size: await file.length(),
+                isUrl: false,
+              );
+              await htmlService.loadFile(htmlFile, switchToTab: switchToTab ?? 0);
+              return;
+            }
+          } catch (e) {
+            debugPrint('Error loading local file: $e');
+          }
+        }
+        
+        // If we can't find the file, fall back to URL loading
+        await htmlService.loadFromUrl(
+          url,
+          switchToTab: switchToTab ?? 0,
+          forceReload: true,
+        );
       } else {
         await htmlService.loadFromUrl(
           url,
@@ -177,7 +224,9 @@ class _UrlInputState extends State<UrlInput> {
                         });
                       },
                       onSelected: (String selection) {
-                        _urlController.text = selection;
+                        // For local files, use just the filename in the URL bar
+                        final isUrl = selection.startsWith('http://') || selection.startsWith('https://');
+                        _urlController.text = isUrl ? selection : selection.split(RegExp(r'[/\\]')).last;
                         // Hide keyboard on mobile after selection
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (mounted) {

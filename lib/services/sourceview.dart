@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:code_forge/code_forge.dart';
+import 'package:provider/provider.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/styles/vs.dart';
@@ -17,6 +18,7 @@ import 'package:re_highlight/styles/tokyo-night-dark.dart';
 import 'package:re_highlight/styles/tokyo-night-light.dart';
 import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
+import 'package:view_source_vibe/models/settings.dart';
 
 class SourceView {
   static final Map<String, CodeForgeController> _cachedControllers = {};
@@ -318,8 +320,17 @@ class SourceView {
             language: mode,
             textStyle: TextStyle(
               fontSize: fontSize,
-              fontFamily: fontFamily,
-              fontFamilyFallback: const ['monospace', 'Courier New', 'SF Mono'],
+              fontFamily: 'Courier',
+              fontFamilyFallback: const [
+                'monospace',
+                'Courier New',
+                'Monaco',
+                'Courier',
+                'Consolas',
+                'Menlo',
+                'mono',
+                'SF Mono'
+              ],
               height: 1.2,
             ),
             enableGutter: showLineNumbers,
@@ -344,10 +355,13 @@ class SourceView {
                 content,
                 style: TextStyle(
                   fontSize: fontSize,
-                  fontFamily: fontFamily,
+                  fontFamily: Provider.of<AppSettings>(context).fontFamily,
                   fontFamilyFallback: const [
                     'monospace',
                     'Courier New',
+                    'Courier',
+                    'Monaco',
+                    'mono',
                     'SF Mono'
                   ],
                   height: 1.2,

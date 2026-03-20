@@ -293,6 +293,14 @@ class AppSettings with ChangeNotifier {
     _themeName = _prefs!.getString(_prefsThemeName) ?? 'github';
     _fontSize = _prefs!.getDouble(_prefsFontSize) ?? 16.0;
     _fontFamily = _prefs!.getString(_prefsFontFamily) ?? 'Courier';
+    
+    // Migrate to available fonts if user has selected a font that's no longer available
+    if (!availableFontFamilies.contains(_fontFamily)) {
+      debugPrint('Migrating font family from $_fontFamily to Courier (not in available list)');
+      _fontFamily = 'Courier';
+      await _saveSetting(_prefsFontFamily, _fontFamily);
+    }
+    
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
     _useBrowserByDefault = _prefs!.getBool(_prefsUseBrowserByDefault) ?? true;
@@ -499,14 +507,21 @@ class AppSettings with ChangeNotifier {
       [10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0];
 
   // Available font families (monospace)
+  // Ordered by availability and platform support
   static List<String> get availableFontFamilies => [
-        'Courier',
-        'Menlo',
-        'Monaco',
-        'SF Mono',
-        'Roboto Mono',
-        'Fira Code',
-        'JetBrains Mono',
-        'monospace',
+        'Courier',      // Widely available on all platforms
+        'Menlo',        // macOS, iOS
+        'Monaco',       // macOS (older)
+        'Consolas',     // Windows
+        'monospace',   // Generic fallback (uses system monospace font)
+        // Note: SF Mono, Roboto Mono, Fira Code, JetBrains Mono are not included
+        // as they require bundling or are platform-specific
       ];
+
+  // Get the actual font family to use, with fallback to monospace
+  String get effectiveFontFamily {
+    // If the selected font is available, use it
+    // If not, fall back to monospace
+    return availableFontFamilies.contains(_fontFamily) ? _fontFamily : 'monospace';
+  }
 }
