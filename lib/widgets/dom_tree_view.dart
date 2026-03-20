@@ -65,12 +65,29 @@ class _DomTreeViewState extends State<DomTreeView> {
             .whereType<DomTreeNode>()
             .toList();
       } catch (e) {
-        // Fallback to HTML parser if XML parsing fails
-        debugPrint('DomTreeView: XML parsing failed, falling back to HTML: $e');
-        final doc = html_parser.parse(content);
-        if (doc.documentElement != null) {
-          final root = _buildFromHtml(doc.documentElement!);
-          if (root != null) roots = [root];
+        debugPrint('DomTreeView: XML parsing failed: $e');
+        // For XML content, if parsing fails, try to parse as raw text
+        // instead of falling back to HTML parser which would add html/body tags
+        try {
+          // For XML content that failed initial parsing, try to parse as raw XML
+          // without falling back to HTML parser which would add html/body tags
+          final contentDoc = xml.XmlDocument.parse(content);
+          roots = contentDoc.children
+              .map((node) => _buildFromXml(node))
+              .whereType<DomTreeNode>()
+              .toList();
+        } catch (e) {
+          debugPrint('DomTreeView: Raw XML parsing also failed: $e');
+          // If all else fails, show the raw content as a text node
+          roots = [
+            DomTreeNode(
+              label: 'rss',
+              content: content,
+              attributes: {},
+              children: [],
+              isElement: true,
+            )
+          ];
         }
       }
     } else {

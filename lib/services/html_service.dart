@@ -188,21 +188,39 @@ class HtmlService extends ChangeNotifier {
     // Tertiary check: If we are midway through loading a URL and probe/file are not ready,
     // guess from the input text (URL) to keep UI stable.
     final String url = (_currentInputText ?? '').toLowerCase();
-    return url.contains('.html') ||
+    
+    // Check for explicit HTML extensions
+    if (url.contains('.html') ||
         url.contains('.htm') ||
-        url.contains('.xhtml') ||
-        (url.startsWith('http') &&
-            // Exclude known non-HTML extensions to be safe, but default to true for generic URLs (like domains)
-            !url.endsWith('.rss') &&
-            !url.endsWith('.xml') &&
-            !url.endsWith('.json') &&
-            !url.endsWith('.pdf') &&
-            !url.endsWith('.zip') &&
-            !url.endsWith('.png') &&
-            !url.endsWith('.jpg') &&
-            !url.endsWith('.jpeg') &&
-            !url.endsWith('.gif') &&
-            !url.endsWith('.svg'));
+        url.contains('.xhtml')) {
+      return true;
+    }
+    
+    // For HTTP URLs, be more conservative - only return true if it looks like HTML content
+    // Exclude known non-HTML extensions to prevent false positives
+    if (url.startsWith('http')) {
+      // List of common non-HTML extensions that should not show DOM tree
+      final nonHtmlExtensions = [
+        '.rss', '.xml', '.json', '.pdf', '.zip',
+        '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.tiff', '.ico',
+        '.css', '.js', '.txt', '.csv', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+        '.mp3', '.mp4', '.avi', '.mov', '.wav', '.ogg', '.webm', '.m4a', '.aac',
+        '.zip', '.tar', '.gz', '.rar', '.7z', '.iso', '.dmg', '.exe', '.msi',
+        '.apk', '.ipa', '.pdf', '.epub', '.mobi', '.azw3'
+      ];
+      
+      // If URL ends with any known non-HTML extension, it's not HTML
+      if (nonHtmlExtensions.any((ext) => url.endsWith(ext))) {
+        return false;
+      }
+      
+      // For generic URLs (like domains), we can't be sure, so default to false
+      // to avoid showing DOM tree for non-HTML content
+      // This is more conservative but prevents false positives
+      return false;
+    }
+    
+    return false;
   }
 
   bool get isSvg {
