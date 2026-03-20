@@ -211,6 +211,8 @@ class SourceView {
     String themeName = 'github',
     bool wrapText = false,
     bool showLineNumbers = true,
+    bool isBeautified = false,
+    bool forceCodeForge = false, // Force CodeForge even for large files
   }) {
     final languageName = getLanguageForExtension(extension);
     final mode =
@@ -228,13 +230,14 @@ class SourceView {
     }
 
     // We need a unique key for the controller to avoid collisions
-    // Combine length, first 100 chars hash, and extension
+    // Combine length, first 100 chars hash, extension, and beautification state
     final int contentHash = content.isEmpty
         ? 0
         : (content.length ^
             (content.isNotEmpty ? content.codeUnitAt(0) : 0) ^
             (content.length > 10 ? content.codeUnitAt(content.length - 1) : 0));
-    final controllerKey = '${extension}_${contentHash}_${content.length}';
+    final controllerKey =
+        '${extension}_${contentHash}_${content.length}_${isBeautified ? 'beautified' : 'raw'}';
 
     final controller = _cachedControllers.putIfAbsent(
         controllerKey, () => CodeForgeController()..text = processedContent);
@@ -277,10 +280,10 @@ class SourceView {
 
           // For large files, check if we should use CodeForge or fallback
           // CodeForge has issues with very large files and scroll controller management
-          // if (content.length > 500000) {
-          //   // 50KB threshold for CodeForge
+          // if (content.length > 500000 && !forceCodeForge) {
+          //   // 500KB threshold for CodeForge (only applies when forceCodeForge is false)
           //   debugPrint(
-          //       'CodeForge: Medium-large file (${content.length} chars), using fallback for stability');
+          //       'CodeForge: Large file (${content.length} chars), using fallback for stability');
           //   return SingleChildScrollView(
           //     controller: verticalController,
           //     scrollDirection: Axis.vertical,
@@ -311,8 +314,8 @@ class SourceView {
             innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
             verticalScrollController: verticalController,
             horizontalScrollController: horizontalController,
-            // editorTheme: getThemeByName(themeName),
-            // language: mode,
+            editorTheme: getThemeByName(themeName),
+            language: mode,
             textStyle: TextStyle(
               fontSize: fontSize,
               fontFamily: fontFamily,
@@ -320,15 +323,8 @@ class SourceView {
               height: 1.2,
             ),
             enableGutter: showLineNumbers,
+            // Simplify finder builder to reduce complexity and improve performance
             finderBuilder: (context, finderController) {
-              // Only update if it ACTUALLY changed to avoid rebuild loops
-              if (activeFindController != finderController) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (activeFindController != finderController) {
-                    onFindControllerChanged(finderController);
-                  }
-                });
-              }
               return const PreferredSize(
                 preferredSize: Size.zero,
                 child: SizedBox.shrink(),

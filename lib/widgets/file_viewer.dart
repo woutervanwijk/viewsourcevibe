@@ -6,6 +6,7 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
+import 'package:view_source_vibe/widgets/full_screen_editor.dart';
 
 class FileViewer extends StatelessWidget {
   final HtmlFile file;
@@ -327,40 +328,6 @@ class FileViewer extends StatelessWidget {
                             },
                           ),
                           const SizedBox(width: 2),
-                          // Font Family picker
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.font_download_outlined,
-                                size: 20),
-                            padding: const EdgeInsets.all(2),
-                            constraints: const BoxConstraints(),
-                            tooltip: 'Font Family',
-                            onSelected: (String family) {
-                              settings.fontFamily = family;
-                            },
-                            itemBuilder: (BuildContext context) {
-                              return AppSettings.availableFontFamilies
-                                  .map((family) {
-                                return PopupMenuItem<String>(
-                                  value: family,
-                                  child: Row(
-                                    children: [
-                                      Text(family,
-                                          style: TextStyle(fontFamily: family)),
-                                      if (settings.fontFamily == family) ...[
-                                        const Spacer(),
-                                        Icon(Icons.check,
-                                            size: 16,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary),
-                                      ],
-                                    ],
-                                  ),
-                                );
-                              }).toList();
-                            },
-                          ),
-                          const SizedBox(width: 2),
                           // Word Wrap button
                           Container(
                             decoration: BoxDecoration(
@@ -393,46 +360,56 @@ class FileViewer extends StatelessWidget {
                           ),
                           const SizedBox(width: 2),
                           // Beautify Toggle button
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Provider.of<HtmlService>(context,
-                                          listen: false)
-                                      .isBeautifyEnabled
-                                  ? Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withAlpha(40)
-                                  : null,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                Provider.of<HtmlService>(context, listen: false)
-                                        .isBeautifyEnabled
-                                    ? Icons.format_indent_increase
-                                    : Icons.format_indent_increase_outlined,
-                                size: 20,
-                                color: Provider.of<HtmlService>(context,
-                                            listen: false)
-                                        .isBeautifyEnabled
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
-                              ),
-                              padding: const EdgeInsets.all(2),
-                              constraints: const BoxConstraints(),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () {
-                                final htmlService = Provider.of<HtmlService>(
-                                    context,
-                                    listen: false);
-                                htmlService.toggleIsBeautifyEnabled();
-                              },
-                              tooltip: Provider.of<HtmlService>(context,
-                                          listen: false)
-                                      .isBeautifyEnabled
-                                  ? 'Show Raw'
-                                  : 'Beautify Code',
-                            ),
+                          Consumer<HtmlService>(
+                            builder: (context, htmlService, child) {
+                              return Row(
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: htmlService.isBeautifyEnabled
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                              .withAlpha(40)
+                                          : null,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: IconButton(
+                                      icon: Icon(
+                                        htmlService.isBeautifyEnabled
+                                            ? Icons.format_indent_increase
+                                            : Icons.format_indent_increase_outlined,
+                                        size: 20,
+                                        color: htmlService.isBeautifyEnabled
+                                            ? Theme.of(context).colorScheme.primary
+                                            : null,
+                                      ),
+                                      padding: const EdgeInsets.all(2),
+                                      constraints: const BoxConstraints(),
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: () {
+                                        htmlService.toggleIsBeautifyEnabled();
+                                      },
+                                      tooltip: htmlService.isBeautifyEnabled
+                                          ? 'Show Raw'
+                                          : 'Beautify Code',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  // Open in Full Screen Editor button
+                                  IconButton(
+                                    icon: const Icon(Icons.fullscreen, size: 20),
+                                    padding: const EdgeInsets.all(2),
+                                    constraints: const BoxConstraints(),
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () {
+                                      _openFullScreenEditor(context, file, settings, htmlService);
+                                    },
+                                    tooltip: 'Open in Full Screen Editor',
+                                  ),
+                                ],
+                              );
+                            }
                           ),
                           const SizedBox(width: 2),
                         ],
@@ -500,51 +477,13 @@ class FileViewer extends StatelessWidget {
                   return MediaBrowser(file: file);
                 }
 
-                return FutureBuilder<String>(
-                  // Stable key for the future builder itself
-                  key: ValueKey('editor_body_${file.path}'),
-                  future: data.isBeautifyEnabled
-                      ? htmlService.getBeautifiedContent(file.content,
-                          data.selectedContentType ?? file.extension)
-                      : Future.value(file.content),
-                  builder: (context, snapshot) {
-                    final bool isLoading = data.isBeautifyEnabled &&
-                        snapshot.connectionState != ConnectionState.done;
-
-                    // Fallback to original content while loading or if error
-                    final String displayContent = snapshot.data ?? file.content;
-
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _buildEditorWithFuture(
-                          context,
-                          htmlService,
-                          displayContent,
-                          settings,
-                          file,
-                          data.selectedContentType,
-                        ),
-                        if (isLoading)
-                          Container(
-                            color: Theme.of(context)
-                                .scaffoldBackgroundColor
-                                .withValues(alpha: 0.8),
-                            child: const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  CircularProgressIndicator(),
-                                  SizedBox(height: 16),
-                                  Text('Beautifying code...',
-                                      style: TextStyle(color: Colors.grey)),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
+                return _buildEditorWithFuture(
+                  context,
+                  htmlService,
+                  file.content,
+                  settings,
+                  file,
+                  data.selectedContentType,
                 );
               },
             ),
@@ -557,14 +496,14 @@ class FileViewer extends StatelessWidget {
   Widget _buildEditorWithFuture(
       BuildContext context,
       HtmlService htmlService,
-      String displayContent,
+      String content,
       AppSettings settings,
       HtmlFile file,
       String? selectedContentType) {
     // Build the editor, handling both cached (sync) and new (async) states
     // explicitly to prevent flickering and crashes.
     final result = htmlService.buildEditor(
-      displayContent,
+      content,
       selectedContentType ?? file.extension,
       context,
       fontSize: settings.fontSize,
@@ -572,6 +511,7 @@ class FileViewer extends StatelessWidget {
       themeName: settings.themeName,
       wrapText: settings.wrapText,
       showLineNumbers: settings.showLineNumbers,
+      isBeautified: true, // Always pass true to enable beautification handling in HtmlService
     );
 
     // If cached, return immediately (no flicker)
@@ -583,7 +523,7 @@ class FileViewer extends StatelessWidget {
     return FutureBuilder<Widget>(
       // Use key to force rebuild when content changes
       key: ValueKey(
-          '${htmlService.currentFile?.path}_${htmlService.selectedContentType}_${displayContent.length}'),
+          '${htmlService.currentFile?.path}_${htmlService.selectedContentType}_${content.length}_${htmlService.isBeautifyEnabled}'),
       future: result,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done &&
@@ -649,6 +589,24 @@ class SearchHighlightPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+/// Open the current file in a full-screen CodeForge editor
+void _openFullScreenEditor(
+  BuildContext context,
+  HtmlFile file,
+  AppSettings settings,
+  HtmlService htmlService,
+) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => FullScreenEditor(
+        file: file,
+        settings: settings,
+        htmlService: htmlService,
+      ),
+    ),
+  );
 }
 
 /// Helper classes for FileViewer Selector

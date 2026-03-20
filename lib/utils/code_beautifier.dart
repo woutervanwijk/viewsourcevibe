@@ -14,7 +14,10 @@ String _beautifyEntry(BeautifyRequest request) {
 
 class CodeBeautifier {
   static Future<String> beautifyAsync(String content, String type) async {
-    return compute(_beautifyEntry, BeautifyRequest(content, type));
+    debugPrint('CodeBeautifier: Starting beautification for ${type.toUpperCase()}, content length: ${content.length}');
+    final result = await compute(_beautifyEntry, BeautifyRequest(content, type));
+    debugPrint('CodeBeautifier: Completed beautification for ${type.toUpperCase()}, result length: ${result.length}');
+    return result;
   }
 
   static String beautify(String content, String type) {

@@ -1743,8 +1743,8 @@ class HtmlService extends ChangeNotifier {
     _isBeautifyToggling = true;
 
     try {
-      await _prepareForEditorReset();
-
+      // Don't clear cache for beautify toggle - we want to preserve scroll position
+      // and just update the content
       _isBeautifyEnabled = !_isBeautifyEnabled;
       notifyListeners();
     } finally {
@@ -2971,16 +2971,72 @@ Technical details: $e''';
     String themeName = 'github',
     bool wrapText = false,
     bool showLineNumbers = true,
+    bool isBeautified = false,
   }) {
-    _verticalScrollController ??= ScrollController();
-    _activeHorizontalScrollController ??= ScrollController();
+    // Dispose of old controllers to prevent memory leaks and performance issues
+    _verticalScrollController?.dispose();
+    _activeHorizontalScrollController?.dispose();
+    
+    // Create new scroll controllers for each content to avoid scroll position conflicts
+    // and performance issues between different files/content
+    final verticalController = ScrollController();
+    final horizontalController = ScrollController();
+    
+    // Store references for external access (e.g., scroll-to-top functionality)
+    _verticalScrollController = verticalController;
+    _activeHorizontalScrollController = horizontalController;
+
+    // Handle beautification if enabled
+    if (_isBeautifyEnabled && isBeautified) {
+      debugPrint('HtmlService: Beautification enabled, processing content of length ${content.length}');
+      // Return a Future that will resolve with beautified content
+      return FutureBuilder<String>(
+        future: getBeautifiedContent(content, extension).then((beautified) {
+          debugPrint('HtmlService: Beautification completed. Original: ${content.length} chars, Beautified: ${beautified.length} chars');
+          return beautified;
+        }),
+        builder: (context, snapshot) {
+          // Only show editor when beautified content is ready
+          if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+            return SourceView.buildEditor(
+              content: snapshot.data!,
+              extension: extension,
+              context: context,
+              verticalController: verticalController,
+              horizontalController: horizontalController,
+              activeFindController: _activeFindController,
+              onFindControllerChanged: _updateActiveFindController,
+              fontSize: fontSize,
+              fontFamily: fontFamily,
+              themeName: themeName,
+              wrapText: wrapText,
+              showLineNumbers: showLineNumbers,
+              isBeautified: _isBeautifyEnabled,
+              forceCodeForge: false, // Use normal behavior (fallback for large files)
+            );
+          }
+          
+          // Show loading indicator while beautifying
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Beautifying code...', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          );
+        },
+      );
+    }
 
     return SourceView.buildEditor(
       content: content,
       extension: extension,
       context: context,
-      verticalController: _verticalScrollController!,
-      horizontalController: _activeHorizontalScrollController,
+      verticalController: verticalController,
+      horizontalController: horizontalController,
       activeFindController: _activeFindController,
       onFindControllerChanged: _updateActiveFindController,
       fontSize: fontSize,
@@ -2988,6 +3044,8 @@ Technical details: $e''';
       themeName: themeName,
       wrapText: wrapText,
       showLineNumbers: showLineNumbers,
+      isBeautified: _isBeautifyEnabled,
+      forceCodeForge: false, // Use normal behavior (fallback for large files)
     );
   }
 

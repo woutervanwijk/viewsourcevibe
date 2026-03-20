@@ -540,7 +540,8 @@ class MetadataView extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(
               children: [
-                Expanded(
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 50),
                   child: Text(
                     'Total Page Size',
                     style: TextStyle(
@@ -551,15 +552,18 @@ class MetadataView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  FormatUtils.formatBytesWithTransfer({
-                    'decoded': weight['decoded'] as int? ?? 0,
-                    'transfer': weight['transfer'] as int? ?? 0,
-                  }),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: settings.fontFamily,
+                Expanded(
+                  child: Text(
+                    FormatUtils.formatBytesWithTransfer({
+                      'decoded': weight['decoded'] as int? ?? 0,
+                      'transfer': weight['transfer'] as int? ?? 0,
+                    }),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: settings.fontFamily,
+                    ),
+                    textAlign: TextAlign.end,
                   ),
                 ),
               ],
