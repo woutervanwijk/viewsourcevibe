@@ -2972,19 +2972,24 @@ Technical details: $e''';
     bool wrapText = false,
     bool showLineNumbers = true,
     bool isBeautified = false,
+    ScrollController? verticalController,
+    ScrollController? horizontalController,
   }) {
-    // Dispose of old controllers to prevent memory leaks and performance issues
-    _verticalScrollController?.dispose();
-    _activeHorizontalScrollController?.dispose();
+    // Use provided scroll controllers if available, otherwise create new ones
+    final effectiveVerticalController = verticalController ?? ScrollController();
+    final effectiveHorizontalController = horizontalController ?? ScrollController();
     
-    // Create new scroll controllers for each content to avoid scroll position conflicts
-    // and performance issues between different files/content
-    final verticalController = ScrollController();
-    final horizontalController = ScrollController();
+    // Dispose of old controllers to prevent memory leaks and performance issues
+    if (verticalController == null) {
+      _verticalScrollController?.dispose();
+    }
+    if (horizontalController == null) {
+      _activeHorizontalScrollController?.dispose();
+    }
     
     // Store references for external access (e.g., scroll-to-top functionality)
-    _verticalScrollController = verticalController;
-    _activeHorizontalScrollController = horizontalController;
+    _verticalScrollController = effectiveVerticalController;
+    _activeHorizontalScrollController = effectiveHorizontalController;
 
     // Handle beautification if enabled
     if (_isBeautifyEnabled && isBeautified) {
@@ -3002,8 +3007,8 @@ Technical details: $e''';
               content: snapshot.data!,
               extension: extension,
               context: context,
-              verticalController: verticalController,
-              horizontalController: horizontalController,
+              verticalController: effectiveVerticalController,
+              horizontalController: effectiveHorizontalController,
               activeFindController: _activeFindController,
               onFindControllerChanged: _updateActiveFindController,
               fontSize: fontSize,
@@ -3035,8 +3040,8 @@ Technical details: $e''';
       content: content,
       extension: extension,
       context: context,
-      verticalController: verticalController,
-      horizontalController: horizontalController,
+      verticalController: effectiveVerticalController,
+      horizontalController: effectiveHorizontalController,
       activeFindController: _activeFindController,
       onFindControllerChanged: _updateActiveFindController,
       fontSize: fontSize,

@@ -8,10 +8,51 @@ import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
 import 'package:view_source_vibe/widgets/full_screen_editor.dart';
 
-class FileViewer extends StatelessWidget {
+class FileViewer extends StatefulWidget {
   final HtmlFile file;
 
   const FileViewer({super.key, required this.file});
+
+  @override
+  State<FileViewer> createState() => _FileViewerState();
+}
+
+class _FileViewerState extends State<FileViewer> {
+  final ScrollController _verticalController = ScrollController();
+  bool _showScrollToTopFab = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _verticalController.addListener(_scrollListener);
+  }
+
+  @override
+  void dispose() {
+    _verticalController.removeListener(_scrollListener);
+    _verticalController.dispose();
+    super.dispose();
+  }
+
+  void _scrollListener() {
+    if (_verticalController.hasClients) {
+      if (_verticalController.offset > 200 && !_showScrollToTopFab) {
+        setState(() => _showScrollToTopFab = true);
+      } else if (_verticalController.offset <= 200 && _showScrollToTopFab) {
+        setState(() => _showScrollToTopFab = false);
+      }
+    }
+  }
+
+  void _scrollToTop() {
+    if (_verticalController.hasClients) {
+      _verticalController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
 
   void _showContentTypeMenu(BuildContext context) {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
@@ -196,172 +237,178 @@ class FileViewer extends StatelessWidget {
     final settings = Provider.of<AppSettings>(context);
 
     // Add null safety checks
-    final fileName = file.name;
-    final fileContent = file.content;
+    final fileName = widget.file.name;
+    final fileContent = widget.file.content;
     final lines = fileContent.split('\n');
-    final fileExtension =
-        fileName.isNotEmpty ? file.name.split('.').last.toLowerCase() : '';
+    final fileExtension = fileName.isNotEmpty
+        ? widget.file.name.split('.').last.toLowerCase()
+        : '';
     final isHtmlFile = fileExtension == 'html' || fileExtension == 'htm';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Selector<HtmlService, _FileViewerHeaderData>(
-          selector: (context, service) => _FileViewerHeaderData(
-            isSearchActive: service.isSearchActive,
-            activeFindController: service.activeFindController,
-            isMedia: service.isMedia,
-            selectedContentType: service.selectedContentType,
-          ),
-          builder: (context, data, child) {
-            if (data.isSearchActive && data.activeFindController != null) {
-              return GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: () {
-                  FocusScope.of(context).unfocus();
-                },
-                child: Container(
-                  color: Theme.of(context).cardColor,
-                  child: CodeFindPanelView(
-                    controller: data.activeFindController!,
-                    readOnly: false,
-                    margin: const EdgeInsets.symmetric(
-                        horizontal: 8.0,
-                        vertical: 6.0), // Match UrlInput margin
+
+    return Stack(children: [
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Selector<HtmlService, _FileViewerHeaderData>(
+            selector: (context, service) => _FileViewerHeaderData(
+              isSearchActive: service.isSearchActive,
+              activeFindController: service.activeFindController,
+              isMedia: service.isMedia,
+              selectedContentType: service.selectedContentType,
+            ),
+            builder: (context, data, child) {
+              if (data.isSearchActive && data.activeFindController != null) {
+                return GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    FocusScope.of(context).unfocus();
+                  },
+                  child: Container(
+                    color: Theme.of(context).cardColor,
+                    child: CodeFindPanelView(
+                      controller: data.activeFindController!,
+                      readOnly: false,
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 8.0,
+                          vertical: 6.0), // Match UrlInput margin
+                    ),
                   ),
-                ),
-              );
-            }
+                );
+              }
 
-            final isTapEnabled = !data.isMedia && file.isTextBased;
+              final isTapEnabled = !data.isMedia && widget.file.isTextBased;
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                GestureDetector(
-                  onTap:
-                      isTapEnabled ? () => _showContentTypeMenu(context) : null,
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isHtmlFile ? Icons.html : Icons.text_snippet,
-                          size: 16,
-                          color: isTapEnabled
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _getDisplayNameForContentType(
-                                    data.selectedContentType ?? file.extension),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: isTapEnabled ? null : Colors.grey,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                '${_formatNumber(lines.length)} lines • ${_formatNumber(file.size)} bytes',
-                                style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withAlpha(153),
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  GestureDetector(
+                    onTap: isTapEnabled
+                        ? () => _showContentTypeMenu(context)
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isHtmlFile ? Icons.html : Icons.text_snippet,
+                            size: 16,
+                            color: isTapEnabled
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey,
                           ),
-                        ),
-                        if (!data.isMedia) ...[
-                          // Find button
-                          IconButton(
-                            icon: const Icon(Icons.search, size: 20),
-                            padding: const EdgeInsets.all(2),
-                            constraints: const BoxConstraints(),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () {
-                              final htmlService = Provider.of<HtmlService>(
-                                  context,
-                                  listen: false);
-                              htmlService.toggleSearch();
-                            },
-                            tooltip: 'Find',
-                          ),
-                          const SizedBox(width: 2),
-                          // Font Size picker
-                          PopupMenuButton<double>(
-                            icon: const Icon(Icons.format_size, size: 20),
-                            padding: const EdgeInsets.all(2),
-                            constraints: const BoxConstraints(),
-                            tooltip: 'Font Size',
-                            onSelected: (double size) {
-                              settings.fontSize = size;
-                            },
-                            itemBuilder: (BuildContext context) {
-                              return AppSettings.availableFontSizes.map((size) {
-                                return PopupMenuItem<double>(
-                                  value: size,
-                                  child: Row(
-                                    children: [
-                                      Text('${size.toInt()} px'),
-                                      if (settings.fontSize == size) ...[
-                                        const Spacer(),
-                                        Icon(Icons.check,
-                                            size: 16,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary),
-                                      ],
-                                    ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _getDisplayNameForContentType(
+                                      data.selectedContentType ??
+                                          widget.file.extension),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: isTapEnabled ? null : Colors.grey,
                                   ),
-                                );
-                              }).toList();
-                            },
-                          ),
-                          const SizedBox(width: 2),
-                          // Word Wrap button
-                          Container(
-                            decoration: BoxDecoration(
-                              color: settings.wrapText
-                                  ? Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withAlpha(40)
-                                  : null,
-                              borderRadius: BorderRadius.circular(4),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '${_formatNumber(lines.length)} lines • ${_formatNumber(widget.file.size)} bytes',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withAlpha(153),
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
                             ),
-                            child: IconButton(
-                              icon: Icon(
-                                settings.wrapText
-                                    ? Icons.wrap_text
-                                    : Icons.wrap_text_outlined,
-                                size: 20,
-                                color: settings.wrapText
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
-                              ),
+                          ),
+                          if (!data.isMedia) ...[
+                            // Find button
+                            IconButton(
+                              icon: const Icon(Icons.search, size: 20),
                               padding: const EdgeInsets.all(2),
                               constraints: const BoxConstraints(),
                               visualDensity: VisualDensity.compact,
                               onPressed: () {
-                                settings.wrapText = !settings.wrapText;
+                                final htmlService = Provider.of<HtmlService>(
+                                    context,
+                                    listen: false);
+                                htmlService.toggleSearch();
                               },
-                              tooltip: 'Word Wrap',
+                              tooltip: 'Find',
                             ),
-                          ),
-                          const SizedBox(width: 2),
-                          // Beautify Toggle button
-                          Consumer<HtmlService>(
-                            builder: (context, htmlService, child) {
+                            const SizedBox(width: 2),
+                            // Font Size picker
+                            PopupMenuButton<double>(
+                              icon: const Icon(Icons.format_size, size: 20),
+                              padding: const EdgeInsets.all(2),
+                              constraints: const BoxConstraints(),
+                              tooltip: 'Font Size',
+                              onSelected: (double size) {
+                                settings.fontSize = size;
+                              },
+                              itemBuilder: (BuildContext context) {
+                                return AppSettings.availableFontSizes
+                                    .map((size) {
+                                  return PopupMenuItem<double>(
+                                    value: size,
+                                    child: Row(
+                                      children: [
+                                        Text('${size.toInt()} px'),
+                                        if (settings.fontSize == size) ...[
+                                          const Spacer(),
+                                          Icon(Icons.check,
+                                              size: 16,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary),
+                                        ],
+                                      ],
+                                    ),
+                                  );
+                                }).toList();
+                              },
+                            ),
+                            const SizedBox(width: 2),
+                            // Word Wrap button
+                            Container(
+                              decoration: BoxDecoration(
+                                color: settings.wrapText
+                                    ? Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withAlpha(40)
+                                    : null,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  settings.wrapText
+                                      ? Icons.wrap_text
+                                      : Icons.wrap_text_outlined,
+                                  size: 20,
+                                  color: settings.wrapText
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                                padding: const EdgeInsets.all(2),
+                                constraints: const BoxConstraints(),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () {
+                                  settings.wrapText = !settings.wrapText;
+                                },
+                                tooltip: 'Word Wrap',
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            // Beautify Toggle button
+                            Consumer<HtmlService>(
+                                builder: (context, htmlService, child) {
                               return Row(
                                 children: [
                                   Container(
@@ -378,10 +425,13 @@ class FileViewer extends StatelessWidget {
                                       icon: Icon(
                                         htmlService.isBeautifyEnabled
                                             ? Icons.format_indent_increase
-                                            : Icons.format_indent_increase_outlined,
+                                            : Icons
+                                                .format_indent_increase_outlined,
                                         size: 20,
                                         color: htmlService.isBeautifyEnabled
-                                            ? Theme.of(context).colorScheme.primary
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
                                             : null,
                                       ),
                                       padding: const EdgeInsets.all(2),
@@ -398,99 +448,114 @@ class FileViewer extends StatelessWidget {
                                   const SizedBox(width: 2),
                                   // Open in Full Screen Editor button
                                   IconButton(
-                                    icon: const Icon(Icons.fullscreen, size: 20),
+                                    icon:
+                                        const Icon(Icons.fullscreen, size: 20),
                                     padding: const EdgeInsets.all(2),
                                     constraints: const BoxConstraints(),
                                     visualDensity: VisualDensity.compact,
                                     onPressed: () {
-                                      _openFullScreenEditor(context, file, settings, htmlService);
+                                      _openFullScreenEditor(context,
+                                          widget.file, settings, htmlService);
                                     },
                                     tooltip: 'Open in Full Screen Editor',
                                   ),
                                 ],
                               );
-                            }
-                          ),
-                          const SizedBox(width: 2),
+                            }),
+                            const SizedBox(width: 2),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
-        ),
-        const Divider(height: 1),
+                ],
+              );
+            },
+          ),
+          const Divider(height: 1),
 
-        // File content with built-in syntax highlighting and line numbers
-        Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              // On iOS, tapping the status bar triggers a scroll to top.
-              // We detect this by checking for a scroll update with no drag details
-              // that reaches the top boundary.
-              if (Theme.of(context).platform == TargetPlatform.iOS &&
-                  notification is ScrollUpdateNotification &&
-                  notification.metrics.axis == Axis.vertical &&
-                  notification.dragDetails == null &&
-                  notification.metrics.pixels >= -50 &&
-                  notification.metrics.pixels <= 10) {
-                final htmlService =
-                    Provider.of<HtmlService>(context, listen: false);
+          // File content with built-in syntax highlighting and line numbers
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                // On iOS, tapping the status bar triggers a scroll to top.
+                // We detect this by checking for a scroll update with no drag details
+                // that reaches the top boundary.
+                if (Theme.of(context).platform == TargetPlatform.iOS &&
+                    notification is ScrollUpdateNotification &&
+                    notification.metrics.axis == Axis.vertical &&
+                    notification.dragDetails == null &&
+                    notification.metrics.pixels >= -50 &&
+                    notification.metrics.pixels <= 10) {
+                  final htmlService =
+                      Provider.of<HtmlService>(context, listen: false);
 
-                // Target the PrimaryScrollController (associated with editor)
-                final vController = PrimaryScrollController.of(context);
+                  // Target the PrimaryScrollController (associated with editor)
+                  final vController = PrimaryScrollController.of(context);
 
-                if (vController.hasClients && vController.offset > 10) {
-                  vController.animateTo(
-                    0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
-
-                  // Also scroll horizontal to start for better UX
-                  final hController = htmlService.horizontalScrollController;
-                  if (hController != null &&
-                      hController.hasClients &&
-                      hController.offset > 0) {
-                    hController.animateTo(
+                  if (vController.hasClients && vController.offset > 10) {
+                    vController.animateTo(
                       0,
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeOut,
                     );
+
+                    // Also scroll horizontal to start for better UX
+                    final hController = htmlService.horizontalScrollController;
+                    if (hController != null &&
+                        hController.hasClients &&
+                        hController.offset > 0) {
+                      hController.animateTo(
+                        0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                      );
+                    }
                   }
                 }
-              }
-              return false;
-            },
-            child: Selector<HtmlService, _FileViewerBodyData>(
-              selector: (context, service) => _FileViewerBodyData(
-                isMedia: service.isMedia,
-                isBeautifyEnabled: service.isBeautifyEnabled,
-                selectedContentType: service.selectedContentType,
-              ),
-              builder: (context, data, child) {
-                final htmlService =
-                    Provider.of<HtmlService>(context, listen: false);
-                if (data.isMedia) {
-                  return MediaBrowser(file: file);
-                }
-
-                return _buildEditorWithFuture(
-                  context,
-                  htmlService,
-                  file.content,
-                  settings,
-                  file,
-                  data.selectedContentType,
-                );
+                return false;
               },
+              child: Selector<HtmlService, _FileViewerBodyData>(
+                selector: (context, service) => _FileViewerBodyData(
+                  isMedia: service.isMedia,
+                  isBeautifyEnabled: service.isBeautifyEnabled,
+                  selectedContentType: service.selectedContentType,
+                ),
+                builder: (context, data, child) {
+                  final htmlService =
+                      Provider.of<HtmlService>(context, listen: false);
+                  if (data.isMedia) {
+                    return MediaBrowser(file: widget.file);
+                  }
+
+                  return _buildEditorWithFuture(
+                    context,
+                    htmlService,
+                    widget.file.content,
+                    settings,
+                    widget.file,
+                    data.selectedContentType,
+                  );
+                },
+              ),
             ),
           ),
+        ],
+      ),
+      if (_showScrollToTopFab)
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            heroTag: 'scroll-to-top-source',
+            mini: true,
+            onPressed: _scrollToTop,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            child: const Icon(Icons.arrow_upward),
+          ),
         ),
-      ],
-    );
+    ]);
   }
 
   Widget _buildEditorWithFuture(
@@ -504,14 +569,18 @@ class FileViewer extends StatelessWidget {
     // explicitly to prevent flickering and crashes.
     final result = htmlService.buildEditor(
       content,
-      selectedContentType ?? file.extension,
+      selectedContentType ?? widget.file.extension,
       context,
       fontSize: settings.fontSize,
       fontFamily: 'Courier',
       themeName: settings.themeName,
       wrapText: settings.wrapText,
       showLineNumbers: settings.showLineNumbers,
-      isBeautified: true, // Always pass true to enable beautification handling in HtmlService
+      isBeautified:
+          true, // Always pass true to enable beautification handling in HtmlService
+      verticalController: _verticalController,
+      horizontalController:
+          ScrollController(), // Create a new horizontal controller
     );
 
     // If cached, return immediately (no flicker)
