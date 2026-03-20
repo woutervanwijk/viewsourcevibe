@@ -136,11 +136,24 @@ class _UrlInputState extends State<UrlInput> {
           }
         }
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            // Hide keyboard on mobile when tapping outside the text field
+            if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || 
+                        defaultTargetPlatform == TargetPlatform.android)) {
+              SystemChannels.textInput.invokeMethod('TextInput.hide');
+            }
+            // Also unfocus for consistency
+            if (!_focusNode.hasFocus) {
+              FocusScope.of(context).unfocus();
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               Row(
                 children: [
                   Expanded(
@@ -165,6 +178,16 @@ class _UrlInputState extends State<UrlInput> {
                       },
                       onSelected: (String selection) {
                         _urlController.text = selection;
+                        // Hide keyboard on mobile after selection
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || 
+                                        defaultTargetPlatform == TargetPlatform.android)) {
+                              SystemChannels.textInput.invokeMethod('TextInput.hide');
+                            }
+                            FocusScope.of(context).unfocus();
+                          }
+                        });
                       },
                       fieldViewBuilder:
                           (context, controller, focusNode, onFieldSubmitted) {
@@ -274,9 +297,10 @@ class _UrlInputState extends State<UrlInput> {
               ],
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
   }
 }
 
