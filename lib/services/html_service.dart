@@ -2631,6 +2631,8 @@ Technical details: $e''';
       case 'xsd':
       case 'xsl':
       case 'svg':
+      case 'rss':
+      case 'atom':
         return 'xml';
       case 'yaml':
       case 'yml':
@@ -3338,6 +3340,7 @@ Technical details: $e''';
       _pageMetadata = null;
     } finally {
       _isExtractingMetadata = false;
+      notifyListeners();
     }
   }
 
@@ -4125,6 +4128,10 @@ Technical details: $e''';
       }
       // Update all tab data to ensure consistency
       await _updateAllTabData(isPartial: isPartial);
+      // Ensure webview loading state is reset when sync completes
+      _isWebViewLoading = false;
+      _webViewLoadingUrl = null;
+      notifyListeners();
     }
   }
 

@@ -69,12 +69,12 @@ class MediaView extends StatelessWidget {
     final htmlService = Provider.of<HtmlService>(context);
     final metadata = htmlService.pageMetadata;
 
-    // Show loading indicator only if we're extracting metadata
-    if (htmlService.isExtractingMetadata) {
+    // Show loading indicator only if we're still loading or extracting metadata
+    if (htmlService.isLoading || htmlService.isWebViewLoading || htmlService.isExtractingMetadata) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Show message if no media detected
+    // Show message if no media detected or metadata is not available
     if (metadata == null || metadata['media'] == null) {
       // For XML files, we should never show progress - they don't have media
       if (htmlService.isXml) {
@@ -94,10 +94,6 @@ class MediaView extends StatelessWidget {
         );
       }
       
-      // Only show "no media" if we're not still loading the page
-      if (htmlService.isLoading || htmlService.isWebViewLoading) {
-        return const Center(child: CircularProgressIndicator());
-      }
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -166,11 +162,8 @@ class MediaView extends StatelessWidget {
       });
 
     if (images.isEmpty && videos.isEmpty) {
-      if (htmlService.isLoading ||
-          htmlService.isWebViewLoading ||
-          htmlService.isExtractingMetadata) {
-        return const Center(child: CircularProgressIndicator());
-      }
+      // Since we already checked for loading states at the beginning,
+      // we can directly show the empty state message
       return ConstrainedBox(
         constraints: BoxConstraints(
           minHeight: MediaQuery.of(context).size.height * 0.6,

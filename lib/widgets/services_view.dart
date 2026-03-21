@@ -13,13 +13,13 @@ class ServicesView extends StatelessWidget {
     final services =
         metadata?['detectedServices'] as Map<String, List<String>>?;
 
-    // Show loading indicator only if we're extracting metadata
-    if (htmlService.isExtractingMetadata) {
+    // Show loading indicator only if we're still loading or extracting metadata
+    if (htmlService.isLoading || htmlService.isWebViewLoading || htmlService.isExtractingMetadata) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Show message if no services detected
-    if (services == null || services.isEmpty) {
+    // Show message if no services detected or metadata is not available
+    if (metadata == null || services == null || services.isEmpty) {
       // For XML files, we should never show progress - they don't have services
       if (htmlService.isXml) {
         return Center(
@@ -39,10 +39,6 @@ class ServicesView extends StatelessWidget {
         );
       }
       
-      // Only show "no services" if we're not still loading the page
-      if (htmlService.isLoading || htmlService.isWebViewLoading) {
-        return const Center(child: CircularProgressIndicator());
-      }
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -80,8 +76,8 @@ class ServicesView extends StatelessWidget {
             ...sortedEntries.map((entry) {
               return _buildServiceCategory(context, entry.key, entry.value);
             }),
-            if (metadata?['analyzedCookies'] != null &&
-                (metadata!['analyzedCookies'] as List).isNotEmpty)
+            if (metadata['analyzedCookies'] != null &&
+                (metadata['analyzedCookies'] as List).isNotEmpty)
               ..._buildCookieSection(
                   context, metadata['analyzedCookies'] as List),
             const Divider(height: 48),
@@ -95,8 +91,8 @@ class ServicesView extends StatelessWidget {
                 context,
                 'Scripts (JS)',
                 [
-                  ...(metadata?['jsLinks'] ?? []),
-                  ...(metadata?['externalJsLinks'] ?? [])
+                  ...(metadata['jsLinks'] ?? []),
+                  ...(metadata['externalJsLinks'] ?? [])
                 ],
                 Icons.javascript),
             const SizedBox(height: 16),
@@ -104,8 +100,8 @@ class ServicesView extends StatelessWidget {
                 context,
                 'Stylesheets (CSS)',
                 [
-                  ...(metadata?['cssLinks'] ?? []),
-                  ...(metadata?['externalCssLinks'] ?? [])
+                  ...(metadata['cssLinks'] ?? []),
+                  ...(metadata['externalCssLinks'] ?? [])
                 ],
                 Icons.css),
             const SizedBox(height: 16),
@@ -113,8 +109,8 @@ class ServicesView extends StatelessWidget {
                 context,
                 'Iframes (HTML)',
                 [
-                  ...(metadata?['iframeLinks'] ?? []),
-                  ...(metadata?['externalIframeLinks'] ?? [])
+                  ...(metadata['iframeLinks'] ?? []),
+                  ...(metadata['externalIframeLinks'] ?? [])
                 ],
                 Icons.web_asset),
             const SizedBox(height: 80),
