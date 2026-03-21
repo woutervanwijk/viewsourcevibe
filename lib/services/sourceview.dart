@@ -231,17 +231,28 @@ class SourceView {
     }
 
     // We need a unique key for the controller to avoid collisions
-    // Combine length, first 100 chars hash, extension, and beautification state
-    final int contentHash = content.isEmpty
-        ? 0
-        : (content.length ^
-            (content.isNotEmpty ? content.codeUnitAt(0) : 0) ^
-            (content.length > 10 ? content.codeUnitAt(content.length - 1) : 0));
+    // Use the actual content hash to ensure uniqueness
+    final contentHash = content.hashCode;
     final controllerKey =
         '${extension}_${contentHash}_${content.length}_${isBeautified ? 'beautified' : 'raw'}';
 
-    final controller = _cachedControllers.putIfAbsent(
-        controllerKey, () => CodeForgeController()..text = processedContent);
+    // Check if we need to create a fresh controller due to content changes
+    final existingController = _cachedControllers[controllerKey];
+    final needFreshController = existingController == null || 
+        existingController.text != processedContent;
+    
+    if (needFreshController) {
+      // Dispose old controller if it exists
+      existingController?.dispose();
+      
+      // Create fresh controller with new content
+      final controller = CodeForgeController()..text = processedContent;
+      _cachedControllers[controllerKey] = controller;
+      
+      debugPrint('SourceView: Created fresh controller for key: $controllerKey');
+    }
+    
+    final controller = _cachedControllers[controllerKey]!;
 
     // Enforce cache limits
     if (_cachedControllers.length > 5) {

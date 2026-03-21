@@ -76,6 +76,24 @@ class MediaView extends StatelessWidget {
 
     // Show message if no media detected
     if (metadata == null || metadata['media'] == null) {
+      // For XML files, we should never show progress - they don't have media
+      if (htmlService.isXml) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.perm_media_outlined,
+                  size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+              const SizedBox(height: 16),
+              const Text('No Media Detected'),
+              const SizedBox(height: 8),
+              const Text('Media is not available for XML content.',
+                  style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        );
+      }
+      
       // Only show "no media" if we're not still loading the page
       if (htmlService.isLoading || htmlService.isWebViewLoading) {
         return const Center(child: CircularProgressIndicator());

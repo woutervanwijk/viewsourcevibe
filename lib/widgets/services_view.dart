@@ -20,6 +20,25 @@ class ServicesView extends StatelessWidget {
 
     // Show message if no services detected
     if (services == null || services.isEmpty) {
+      // For XML files, we should never show progress - they don't have services
+      if (htmlService.isXml) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.layers_clear_outlined,
+                  size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+              const SizedBox(height: 16),
+              const Text('No Services Detected'),
+              const SizedBox(height: 8),
+              const Text('Services are not available for XML content.',
+                  style: TextStyle(color: Colors.grey),
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        );
+      }
+      
       // Only show "no services" if we're not still loading the page
       if (htmlService.isLoading || htmlService.isWebViewLoading) {
         return const Center(child: CircularProgressIndicator());

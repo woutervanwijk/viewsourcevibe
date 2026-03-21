@@ -184,7 +184,7 @@ class _DomTreeViewState extends State<DomTreeView> {
       // Try to extract tag-like structures using regex
       final tagRegex = RegExp(r'<(/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>');
       final matches = tagRegex.allMatches(content);
-      
+
       if (matches.isEmpty) {
         // No tags found, show as raw text
         return [
@@ -212,7 +212,7 @@ class _DomTreeViewState extends State<DomTreeView> {
         final isClosing = match.group(1) == '/';
         final tagName = match.group(2) ?? 'unknown';
         final attributesStr = match.group(3) ?? '';
-        
+
         if (!isClosing) {
           // For corrupt XML, skip complex attribute parsing
           // Just show the tag with its raw attributes string
@@ -372,7 +372,7 @@ class DomTreeTile extends StatelessWidget {
         icons.add(Icons.brush);
         break;
       case 'link':
-        icons.add(Icons.link_off); // Or generic link icon
+        icons.add(Icons.link); // Or generic link icon
         break;
       case 'meta':
         icons.add(Icons.info_outline);

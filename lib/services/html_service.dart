@@ -271,11 +271,11 @@ class HtmlService extends ChangeNotifier {
           !trimmedContent.startsWith('<!DOCTYPE html') &&
           !trimmedContent.startsWith('<html') &&
           !trimmedContent.startsWith('<HTML') &&
-          (trimmedContent.contains('<Channel>') || 
-           trimmedContent.contains('<rss') || 
-           trimmedContent.contains('<feed') ||
-           trimmedContent.contains('<xml'));
-      
+          (trimmedContent.contains('<Channel>') ||
+              trimmedContent.contains('<rss') ||
+              trimmedContent.contains('<feed') ||
+              trimmedContent.contains('<xml'));
+
       if (looksLikeXmlContent) return false;
     }
 
@@ -352,18 +352,18 @@ class HtmlService extends ChangeNotifier {
   /// Try to detect if content looks like XML
   bool _tryDetectXmlContent(String content) {
     if (content.isEmpty) return false;
-    
+
     final trimmed = content.trim();
     // Must start with a tag
     if (!trimmed.startsWith('<')) return false;
-    
+
     // Must not start with HTML-specific tags
     if (trimmed.startsWith('<!DOCTYPE html') ||
         trimmed.startsWith('<html') ||
         trimmed.startsWith('<HTML')) {
       return false;
     }
-    
+
     // Check for XML-specific patterns
     final hasXmlTags = trimmed.contains('<Channel>') ||
         trimmed.contains('<rss') ||
@@ -372,7 +372,7 @@ class HtmlService extends ChangeNotifier {
         trimmed.contains('<Channel') ||
         trimmed.contains('<item') ||
         trimmed.contains('<entry');
-    
+
     return hasXmlTags;
   }
 
