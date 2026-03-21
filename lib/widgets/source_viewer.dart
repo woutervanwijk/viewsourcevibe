@@ -18,30 +18,68 @@ class SourceViewer extends StatefulWidget {
 }
 
 class _SourceViewerState extends State<SourceViewer> {
-  final ScrollController _verticalController = ScrollController();
-  bool _showScrollToTopFab = false;
+  late ScrollController _verticalController;
+  final ValueNotifier<bool> _showScrollToTopFab = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
+    _verticalController = ScrollController();
     _verticalController.addListener(_scrollListener);
+    
+    // Listen for beautify toggle changes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final htmlService = Provider.of<HtmlService>(context, listen: false);
+      htmlService.addListener(_onHtmlServiceChanged);
+    });
   }
 
   @override
   void dispose() {
     _verticalController.removeListener(_scrollListener);
     _verticalController.dispose();
+    _showScrollToTopFab.dispose();
+    
+    // Remove listener from HtmlService
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    htmlService.removeListener(_onHtmlServiceChanged);
+    
     super.dispose();
   }
 
   void _scrollListener() {
     if (_verticalController.hasClients) {
-      if (_verticalController.offset > 200 && !_showScrollToTopFab) {
-        setState(() => _showScrollToTopFab = true);
-      } else if (_verticalController.offset <= 200 && _showScrollToTopFab) {
-        setState(() => _showScrollToTopFab = false);
+      final shouldShow = _verticalController.offset > 200;
+      if (shouldShow != _showScrollToTopFab.value) {
+        _showScrollToTopFab.value = shouldShow;
       }
     }
+  }
+
+  void _onHtmlServiceChanged() {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    // Check if beautify state changed
+    if (htmlService.beautifyStateChanged) {
+      _handleBeautifyToggle();
+      htmlService.resetBeautifyStateChanged();
+    }
+  }
+
+  void _handleBeautifyToggle() {
+    // When beautification is toggled, we need to recreate the scroll controller
+    // to avoid "ScrollController attached to multiple scroll views" error
+    final newController = ScrollController();
+    newController.addListener(_scrollListener);
+    
+    // Dispose old controller
+    _verticalController.removeListener(_scrollListener);
+    _verticalController.dispose();
+    
+    // Update to new controller
+    _verticalController = newController;
+    
+    // Force rebuild to use new controller
+    setState(() {});
   }
 
   void _scrollToTop() {
@@ -542,19 +580,27 @@ class _SourceViewerState extends State<SourceViewer> {
           ),
         ],
       ),
-      if (_showScrollToTopFab)
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton(
-            heroTag: 'scroll-to-top-source',
-            mini: true,
-            onPressed: _scrollToTop,
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-            child: const Icon(Icons.arrow_upward),
-          ),
-        ),
+      ValueListenableBuilder<bool>(
+        valueListenable: _showScrollToTopFab,
+        builder: (context, showFab, child) {
+          if (showFab) {
+            return Positioned(
+              right: 16,
+              bottom: 16,
+              child: FloatingActionButton(
+                heroTag: 'scroll-to-top-source',
+                mini: true,
+                onPressed: _scrollToTop,
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                foregroundColor:
+                    Theme.of(context).colorScheme.onPrimaryContainer,
+                child: const Icon(Icons.arrow_upward),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        },
+      ),
     ]);
   }
 
@@ -576,11 +622,8 @@ class _SourceViewerState extends State<SourceViewer> {
       themeName: settings.themeName,
       wrapText: settings.wrapText,
       showLineNumbers: settings.showLineNumbers,
-      isBeautified:
-          true, // Always pass true to enable beautification handling in HtmlService
+      isBeautified: htmlService.isBeautifyEnabled,
       verticalController: _verticalController,
-      horizontalController:
-          ScrollController(), // Create a new horizontal controller
     );
 
     // If cached, return immediately (no flicker)

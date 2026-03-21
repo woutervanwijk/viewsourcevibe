@@ -291,30 +291,6 @@ class SourceViewerEditor {
             );
           }
 
-          // For large files, check if we should use CodeForge or fallback
-          // CodeForge has issues with very large files and scroll controller management
-          // if (content.length > 500000 && !forceCodeForge) {
-          //   // 500KB threshold for CodeForge (only applies when forceCodeForge is false)
-          //   debugPrint(
-          //       'CodeForge: Large file (${content.length} chars), using fallback for stability');
-          //   return SingleChildScrollView(
-          //     controller: verticalController,
-          //     scrollDirection: Axis.vertical,
-          //     child: SingleChildScrollView(
-          //       controller: horizontalController,
-          //       scrollDirection: Axis.horizontal,
-          //       child: SelectableText(
-          //         content,
-          //         style: TextStyle(
-          //           fontSize: fontSize,
-          //           fontFamily: fontFamily,
-          //           height: 1.2,
-          //         ),
-          //       ),
-          //     ),
-          //   );
-          // }
-
           return CodeForge(
             controller: controller,
             enableSuggestions: false,
@@ -326,7 +302,6 @@ class SourceViewerEditor {
             lineWrap: wrapText,
             innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
             verticalScrollController: verticalController,
-            horizontalScrollController: horizontalController,
             editorTheme: getThemeByName(themeName),
             language: mode,
             textStyle: TextStyle(

@@ -44,6 +44,10 @@ class HtmlService extends ChangeNotifier {
   Timer? _disposalTimer;
   final List<dynamic> _disposalQueue = [];
   Timer? _highlightDebounceTimer;
+  
+  // Beautify state tracking
+  bool _beautifyStateChanged = false;
+  bool get beautifyStateChanged => _beautifyStateChanged;
 
   // Navigation stack for "Back" functionality
   final List<HtmlFile> _navigationStack = [];
@@ -1859,12 +1863,22 @@ class HtmlService extends ChangeNotifier {
       // Don't clear cache for beautify toggle - we want to preserve scroll position
       // and just update the content
       _isBeautifyEnabled = !_isBeautifyEnabled;
+      _beautifyStateChanged = true;
       notifyListeners();
     } finally {
       // Allow toggling again after a short cooling period
       await Future.delayed(const Duration(milliseconds: 200));
       _isBeautifyToggling = false;
     }
+  }
+
+  void resetBeautifyStateChanged() {
+    _beautifyStateChanged = false;
+  }
+
+  String? getBeautifiedContentSync(String content, String type) {
+    final key = '${content.hashCode}_$type';
+    return _beautifiedCache[key];
   }
 
   Future<String> getBeautifiedContent(String content, String type) async {

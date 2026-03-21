@@ -34,7 +34,9 @@ class FullScreenEditor extends StatelessWidget {
           // Editor content (full screen, no toolbar)
           Expanded(
             child: SourceViewerEditor.buildEditor(
-              content: file.content,
+              content: htmlService.isBeautifyEnabled
+                  ? (htmlService.getBeautifiedContentSync(file.content, file.extension) ?? file.content)
+                  : file.content,
               extension: file.extension,
               context: context,
               verticalController: ScrollController(),
