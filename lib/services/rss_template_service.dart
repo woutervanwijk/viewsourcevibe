@@ -56,14 +56,26 @@ class RssTemplateService {
 
   static bool _isRssFeedInternal(String content) {
     try {
+      // Safety check for extremely large content
+      if (content.length > 10 * 1024 * 1024) { // 10MB
+        debugPrint('RssTemplateService: Content too large for XML parsing (${content.length} chars)');
+        return false;
+      }
+      
       final doc = XmlDocument.parse(content);
       return doc.findElements('rss').isNotEmpty ||
           doc.findAllElements('channel').isNotEmpty ||
           doc.findElements('feed').isNotEmpty ||
           doc.findElements('rdf:RDF').isNotEmpty;
     } catch (e) {
+      debugPrint('RssTemplateService: XML parsing failed for feed detection: $e');
       // If it looks like a feed but doesn't parse as XML, it might be malformed but we still try
-      return true;
+      // Only return true if it actually contains feed-like tags
+      return content.contains('<rss') || 
+          content.contains('<feed') || 
+          content.contains('<rdf:RDF') ||
+          content.contains('<channel') ||
+          content.contains('<item');
     }
   }
 
@@ -82,26 +94,47 @@ class RssTemplateService {
     final feedUrl = args['url']!;
 
     try {
-      final document = XmlDocument.parse(xmlContent.trim());
+      // Safety check for extremely large content
+      if (xmlContent.length > 10 * 1024 * 1024) { // 10MB
+        debugPrint('RssTemplateService: Content too large for RSS conversion (${xmlContent.length} chars)');
+        return _renderError('Feed content is too large to process');
+      }
+      
+      // Safety check for empty content
+      final trimmedContent = xmlContent.trim();
+      if (trimmedContent.isEmpty) {
+        debugPrint('RssTemplateService: Empty content provided');
+        return _renderError('Feed content is empty');
+      }
+      
+      try {
+        final document = XmlDocument.parse(trimmedContent);
 
-      // Detect feed type
-      final rssElement = document.findElements('rss').firstOrNull;
-      final feedElement = document.findElements('feed').firstOrNull; // Atom
-      final rdfElement =
-          document.findElements('rdf:RDF').firstOrNull; // RSS 1.0
+        // Detect feed type
+        final rssElement = document.findElements('rss').firstOrNull;
+        final feedElement = document.findElements('feed').firstOrNull; // Atom
+        final rdfElement =
+            document.findElements('rdf:RDF').firstOrNull; // RSS 1.0
 
-      if (rssElement != null || rdfElement != null) {
-        return _renderRss(document, feedUrl);
-      } else if (feedElement != null) {
-        return _renderAtom(document, feedUrl);
-      } else {
-        // Try regex fallback even if XML parse succeeded but structure wasn't found
-        // (Unlikely, but possible for some weird XML)
+        if (rssElement != null || rdfElement != null) {
+          return _renderRss(document, feedUrl);
+        } else if (feedElement != null) {
+          return _renderAtom(document, feedUrl);
+        } else {
+          // Try regex fallback even if XML parse succeeded but structure wasn't found
+          // (Unlikely, but possible for some weird XML)
+          debugPrint('RssTemplateService: No feed structure found in parsed XML, using regex fallback');
+          return _parseWithRegex(xmlContent, feedUrl);
+        }
+      } catch (e) {
+        debugPrint('RssTemplateService: XML parsing failed for feed conversion: $e');
+        // XML Parse failed, use Regex Fallback
         return _parseWithRegex(xmlContent, feedUrl);
       }
-    } catch (e) {
-      // XML Parse failed, use Regex Fallback
-      return _parseWithRegex(xmlContent, feedUrl);
+    } catch (e, stackTrace) {
+      debugPrint('RssTemplateService: Unexpected error in feed conversion: $e\n$stackTrace');
+      // Final fallback for any unexpected errors
+      return _renderError('Failed to process feed: ${e.toString()}');
     }
   }
 
@@ -285,142 +318,189 @@ class RssTemplateService {
   // REGEX FALLBACK PARSER
   // --------------------------------------------------------------------------
   static String _parseWithRegex(String content, String feedUrl) {
-    // 1. Basic Metadata
-    final titleMatch =
-        RegExp(r'<title[^>]*>(.*?)</title>', dotAll: true).firstMatch(content);
-
-    // Link: Find all link tags, pick the best one
-    String link = feedUrl;
-    final linkMatches =
-        RegExp(r'<link([^>]+)>', dotAll: true).allMatches(content);
-    for (final m in linkMatches) {
-      final attrs = m.group(1) ?? '';
-      final href = _extractAttribute(attrs, 'href');
-      final rel = _extractAttribute(attrs, 'rel');
-      // Prefer alternate or no rel (RSS content)
-      if (href != null && (rel == null || rel == 'alternate')) {
-        link = href;
-        break;
+    try {
+      // Safety check for extremely large content
+      if (content.length > 10 * 1024 * 1024) { // 10MB
+        debugPrint('RssTemplateService: Content too large for regex parsing (${content.length} chars)');
+        return _renderError('Feed content is too large to process');
       }
-      // Fallback for RSS <link>url</link>
-      if (href == null && !attrs.contains('=')) {
-        // Maybe it's <link>url</link> style which the RegExp didn't fully capture in group 1 if > was limit?
-        // Actually my regex <link([^>]+)> captures attributes.
-        // RSS <link>url</link> is different.
+
+      // 1. Basic Metadata
+      final titleMatch =
+          RegExp(r'<title[^>]*>(.*?)</title>', dotAll: true).firstMatch(content);
+
+      // Link: Find all link tags, pick the best one
+      String link = feedUrl;
+      final linkMatches =
+          RegExp(r'<link([^>]+)>', dotAll: true).allMatches(content);
+      for (final m in linkMatches) {
+        final attrs = m.group(1) ?? '';
+        final href = _extractAttribute(attrs, 'href');
+        final rel = _extractAttribute(attrs, 'rel');
+        // Prefer alternate or no rel (RSS content)
+        if (href != null && (rel == null || rel == 'alternate')) {
+          link = href;
+          break;
+        }
+        // Fallback for RSS <link>url</link>
+        if (href == null && !attrs.contains('=')) {
+          // Maybe it's <link>url</link> style which the RegExp didn't fully capture in group 1 if > was limit?
+          // Actually my regex <link([^>]+)> captures attributes.
+          // RSS <link>url</link> is different.
+        }
       }
+      // RSS Link fallback
+      if (link == feedUrl) {
+        final rssLinkMatch =
+            RegExp(r'<link>(.*?)</link>', dotAll: true).firstMatch(content);
+        if (rssLinkMatch != null) link = rssLinkMatch.group(1)!.trim();
+      }
+
+      // feed description or subtitle
+      final descMatch =
+          RegExp(r'<(description|subtitle)[^>]*>(.*?)</\1>', dotAll: true)
+              .firstMatch(content);
+
+      final title = titleMatch?.group(1) != null
+          ? _cleanXmlText(titleMatch!.group(1)!)
+          : 'Untitled Feed';
+      final description =
+          descMatch?.group(2) != null ? _cleanXmlText(descMatch!.group(2)!) : '';
+
+      // Logo/Icon
+      final imageMatch = RegExp(r'<(logo|icon|url)[^>]*>(.*?)</\1>', dotAll: true)
+          .firstMatch(content);
+      final image = imageMatch?.group(2)?.trim();
+
+      // 2. Identify Item Blocks (item or entry)
+      final items = <Map<String, String>>[];
+
+      // Match <entry>...</entry> OR <item>...</item>
+      final itemRegex = RegExp(r'<(item|entry)[^>]*>(.*?)</\1>', dotAll: true);
+      final matches = itemRegex.allMatches(content);
+
+      // Limit number of items to prevent memory issues
+      const maxItems = 1000;
+      var itemCount = 0;
+      for (final match in matches) {
+        if (itemCount >= maxItems) {
+          debugPrint('RssTemplateService: Too many items ($itemCount), limiting to $maxItems');
+          break;
+        }
+        
+        final itemContent = match.group(2) ?? '';
+        items.add(_parseItemRegex(itemContent));
+        itemCount++;
+      }
+
+      // Use lowercase check for type
+      final type = content.toLowerCase().contains('<feed') ||
+              content.contains('http://www.w3.org/2005/Atom')
+          ? 'Atom (Fallback)'
+          : 'RSS (Fallback)';
+
+      return _generateHtml(title, description, link, image, items, type);
+    } catch (e, stackTrace) {
+      debugPrint('RssTemplateService: Error in regex parsing fallback: $e\n$stackTrace');
+      return _renderError('Failed to parse feed: ${e.toString()}');
     }
-    // RSS Link fallback
-    if (link == feedUrl) {
-      final rssLinkMatch =
-          RegExp(r'<link>(.*?)</link>', dotAll: true).firstMatch(content);
-      if (rssLinkMatch != null) link = rssLinkMatch.group(1)!.trim();
-    }
-
-    // feed description or subtitle
-    final descMatch =
-        RegExp(r'<(description|subtitle)[^>]*>(.*?)</\1>', dotAll: true)
-            .firstMatch(content);
-
-    final title = titleMatch?.group(1) != null
-        ? _cleanXmlText(titleMatch!.group(1)!)
-        : 'Untitled Feed';
-    final description =
-        descMatch?.group(2) != null ? _cleanXmlText(descMatch!.group(2)!) : '';
-
-    // Logo/Icon
-    final imageMatch = RegExp(r'<(logo|icon|url)[^>]*>(.*?)</\1>', dotAll: true)
-        .firstMatch(content);
-    final image = imageMatch?.group(2)?.trim();
-
-    // 2. Identify Item Blocks (item or entry)
-    final items = <Map<String, String>>[];
-
-    // Match <entry>...</entry> OR <item>...</item>
-    final itemRegex = RegExp(r'<(item|entry)[^>]*>(.*?)</\1>', dotAll: true);
-    final matches = itemRegex.allMatches(content);
-
-    for (final match in matches) {
-      final itemContent = match.group(2) ?? '';
-      items.add(_parseItemRegex(itemContent));
-    }
-
-    // Use lowercase check for type
-    final type = content.toLowerCase().contains('<feed') ||
-            content.contains('http://www.w3.org/2005/Atom')
-        ? 'Atom (Fallback)'
-        : 'RSS (Fallback)';
-
-    return _generateHtml(title, description, link, image, items, type);
   }
 
   static Map<String, String> _parseItemRegex(String content) {
-    final title = _extractRegex(content, r'<title[^>]*>(.*?)</title>');
-
-    // Link: Robust attribute parsing
-    String? link;
-    final linkMatches =
-        RegExp(r'<link([^>]+)>', dotAll: true).allMatches(content);
-    for (final m in linkMatches) {
-      final attrs = m.group(1) ?? '';
-      final href = _extractAttribute(attrs, 'href');
-      final rel = _extractAttribute(attrs, 'rel');
-      if (href != null && (rel == null || rel == 'alternate')) {
-        link = href;
-        break;
+    try {
+      // Safety check for extremely large item content
+      if (content.length > 1 * 1024 * 1024) { // 1MB per item
+        debugPrint('RssTemplateService: Item content too large (${content.length} chars)');
+        return {
+          'title': 'Item content too large',
+          'link': '#',
+          'description': '',
+          'content': '',
+          'date': '',
+          'author': '',
+          'image': '',
+        };
       }
-    }
-    // RSS style link
-    link ??= _extractRegex(content, r'<link>(.*?)</link>');
 
-    final description =
-        _extractRegex(content, r'<description[^>]*>(.*?)</description>') ??
-            _extractRegex(content, r'<summary[^>]*>(.*?)</summary>');
+      final title = _extractRegex(content, r'<title[^>]*>(.*?)</title>');
 
-    final contentText = _extractRegex(
-            content, r'<content:encoded[^>]*>(.*?)</content:encoded>') ??
-        _extractRegex(content, r'<content[^>]*>(.*?)</content>');
+      // Link: Robust attribute parsing
+      String? link;
+      final linkMatches =
+          RegExp(r'<link([^>]+)>', dotAll: true).allMatches(content);
+      for (final m in linkMatches) {
+        final attrs = m.group(1) ?? '';
+        final href = _extractAttribute(attrs, 'href');
+        final rel = _extractAttribute(attrs, 'rel');
+        if (href != null && (rel == null || rel == 'alternate')) {
+          link = href;
+          break;
+        }
+      }
+      // RSS style link
+      link ??= _extractRegex(content, r'<link>(.*?)</link>');
 
-    final rawDate =
-        _extractRegex(content, r'<(pubDate|published|updated)>(.*?)</\1>');
-    final author = _extractRegex(content,
-        r'<(author|dc:creator)>(.*?)</\1>'); // naive, author might be nested
+      final description =
+          _extractRegex(content, r'<description[^>]*>(.*?)</description>') ??
+              _extractRegex(content, r'<summary[^>]*>(.*?)</summary>');
 
-    // Image extraction
-    String? image;
-    // Enclosure
-    final enclosureMatch = RegExp(
-                r'<enclosure[^>]+url="([^"]+)"[^>]*type="image',
-                caseSensitive: false)
-            .firstMatch(content) ??
-        RegExp(r'<enclosure[^>]+type="image[^"]+"[^>]*url="([^"]+)"',
-                caseSensitive: false)
+      final contentText = _extractRegex(
+              content, r'<content:encoded[^>]*>(.*?)</content:encoded>') ??
+          _extractRegex(content, r'<content[^>]*>(.*?)</content>');
+
+      final rawDate =
+          _extractRegex(content, r'<(pubDate|published|updated)>(.*?)</\1>');
+      final author = _extractRegex(content,
+          r'<(author|dc:creator)>(.*?)</\1>'); // naive, author might be nested
+
+      // Image extraction
+      String? image;
+      // Enclosure
+      final enclosureMatch = RegExp(
+                  r'<enclosure[^>]+url="([^"]+)"[^>]*type="image',
+                  caseSensitive: false)
+              .firstMatch(content) ??
+          RegExp(r'<enclosure[^>]+type="image[^"]+"[^>]*url="([^"]+)"',
+                  caseSensitive: false)
+              .firstMatch(content);
+
+      if (enclosureMatch != null) image = enclosureMatch.group(1);
+
+      // Media thumbnail/content
+      if (image == null) {
+        final mediaMatch = RegExp(r'<media:(content|thumbnail)[^>]+url="([^"]+)"')
             .firstMatch(content);
+        if (mediaMatch != null) image = mediaMatch.group(2);
+      }
 
-    if (enclosureMatch != null) image = enclosureMatch.group(1);
+      // HTML image fallback
+      if (image == null) {
+        final fullText = (contentText ?? '') + (description ?? '');
+        final imgMatch = RegExp(r'<img[^>]+src="([^">]+)"').firstMatch(fullText);
+        if (imgMatch != null) image = imgMatch.group(1);
+      }
 
-    // Media thumbnail/content
-    if (image == null) {
-      final mediaMatch = RegExp(r'<media:(content|thumbnail)[^>]+url="([^"]+)"')
-          .firstMatch(content);
-      if (mediaMatch != null) image = mediaMatch.group(2);
+      return {
+        'title': title != null ? _cleanXmlText(title) : 'Untitled',
+        'link': link ?? '#',
+        'description': description != null ? _cleanXmlText(description) : '',
+        'content': contentText ?? description ?? '',
+        'date': _formatDate(rawDate),
+        'author': author != null ? _cleanXmlText(author) : '',
+        'image': image ?? '',
+      };
+    } catch (e) {
+      debugPrint('RssTemplateService: Error parsing item: $e');
+      return {
+        'title': 'Error parsing item',
+        'link': '#',
+        'description': 'Failed to parse item: ${e.toString()}',
+        'content': '',
+        'date': '',
+        'author': '',
+        'image': '',
+      };
     }
-
-    // HTML image fallback
-    if (image == null) {
-      final fullText = (contentText ?? '') + (description ?? '');
-      final imgMatch = RegExp(r'<img[^>]+src="([^">]+)"').firstMatch(fullText);
-      if (imgMatch != null) image = imgMatch.group(1);
-    }
-
-    return {
-      'title': title != null ? _cleanXmlText(title) : 'Untitled',
-      'link': link ?? '#',
-      'description': description != null ? _cleanXmlText(description) : '',
-      'content': contentText ?? description ?? '',
-      'date': _formatDate(rawDate),
-      'author': author != null ? _cleanXmlText(author) : '',
-      'image': image ?? '',
-    };
   }
 
   static String? _extractRegex(String source, String pattern) {

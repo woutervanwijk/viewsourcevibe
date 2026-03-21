@@ -57,39 +57,38 @@ class _DomTreeViewState extends State<DomTreeView> {
     // RSS, ATOM, SVG, XML should use the XML parser for better accuracy
     final isStrictXml = htmlService.isXml || htmlService.isSvg;
 
-    if (isStrictXml) {
+    // Additional check: if content looks like XML but wasn't detected as such
+    final looksLikeXmlContent = content.trim().startsWith('<') &&
+        !content.trim().startsWith('<!DOCTYPE html') &&
+        !content.trim().startsWith('<html') &&
+        !content.trim().startsWith('<HTML');
+
+    final shouldUseXmlParser = isStrictXml || looksLikeXmlContent;
+
+    if (shouldUseXmlParser) {
       try {
+        // First try strict XML parsing
         final doc = xml.XmlDocument.parse(content);
         roots = doc.children
             .map((node) => _buildFromXml(node))
             .whereType<DomTreeNode>()
             .toList();
       } catch (e) {
-        debugPrint('DomTreeView: XML parsing failed: $e');
-        // For XML content, if parsing fails, try to parse as raw text
-        // instead of falling back to HTML parser which would add html/body tags
-        try {
-          // For XML content that failed initial parsing, try to parse as raw XML
-          // without falling back to HTML parser which would add html/body tags
-          final contentDoc = xml.XmlDocument.parse(content);
-          roots = contentDoc.children
-              .map((node) => _buildFromXml(node))
-              .whereType<DomTreeNode>()
-              .toList();
-        } catch (e) {
-          debugPrint('DomTreeView: Raw XML parsing also failed: $e');
-          // If all else fails, show the raw content as a text node
-          roots = [
-            DomTreeNode(
-              label: 'rss',
-              content: content,
-              attributes: {},
-              children: [],
-              isElement: true,
-            )
-          ];
-        }
+        debugPrint('DomTreeView: Strict XML parsing failed: $e');
+        // If strict parsing fails, try to parse as corrupt XML by showing raw structure
+        roots = _parseCorruptXml(content);
       }
+    } else if (shouldUseXmlParser) {
+      // If we determined it should be XML but parsing failed, show error
+      roots = [
+        DomTreeNode(
+          label: 'error',
+          content: 'Failed to parse XML content',
+          attributes: {},
+          children: [],
+          isElement: false,
+        )
+      ];
     } else {
       final doc = html_parser.parse(content);
       if (doc.documentElement != null) {
@@ -177,6 +176,75 @@ class _DomTreeViewState extends State<DomTreeView> {
       );
     }
     return null;
+  }
+
+  /// Attempt to parse corrupt XML by showing its raw structure
+  List<DomTreeNode> _parseCorruptXml(String content) {
+    try {
+      // Try to extract tag-like structures using regex
+      final tagRegex = RegExp(r'<(/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>');
+      final matches = tagRegex.allMatches(content);
+      
+      if (matches.isEmpty) {
+        // No tags found, show as raw text
+        return [
+          DomTreeNode(
+            label: 'corrupt-xml',
+            content: content,
+            attributes: {},
+            children: [],
+            isElement: false,
+          )
+        ];
+      }
+
+      // Build a tree structure from the tags we found
+      final root = DomTreeNode(
+        label: 'corrupt-xml',
+        content: '(malformed XML)',
+        attributes: {},
+        children: [],
+        isElement: true,
+      );
+
+      // Simple approach: show each opening tag as a child node
+      for (final match in matches) {
+        final isClosing = match.group(1) == '/';
+        final tagName = match.group(2) ?? 'unknown';
+        final attributesStr = match.group(3) ?? '';
+        
+        if (!isClosing) {
+          // For corrupt XML, skip complex attribute parsing
+          // Just show the tag with its raw attributes string
+          final attrs = <String, String>{};
+          if (attributesStr.isNotEmpty) {
+            attrs['attributes'] = attributesStr;
+          }
+
+          root.children.add(DomTreeNode(
+            label: tagName,
+            content: '(corrupt)',
+            attributes: attrs,
+            children: [],
+            isElement: true,
+          ));
+        }
+      }
+
+      return [root];
+    } catch (e) {
+      debugPrint('DomTreeView: Corrupt XML parsing also failed: $e');
+      // Final fallback - show as raw text
+      return [
+        DomTreeNode(
+          label: 'corrupt-xml',
+          content: content,
+          attributes: {},
+          children: [],
+          isElement: false,
+        )
+      ];
+    }
   }
 
   @override

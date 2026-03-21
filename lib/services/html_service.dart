@@ -17,7 +17,8 @@ import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart' hide X509Certificate;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart'
+    hide X509Certificate;
 import 'package:xml/xml.dart' as xml;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -188,38 +189,96 @@ class HtmlService extends ChangeNotifier {
     // Tertiary check: If we are midway through loading a URL and probe/file are not ready,
     // guess from the input text (URL) to keep UI stable.
     final String url = (_currentInputText ?? '').toLowerCase();
-    
+
     // Check for explicit HTML extensions
     if (url.contains('.html') ||
         url.contains('.htm') ||
         url.contains('.xhtml')) {
       return true;
     }
-    
+
     // For HTTP URLs, be more conservative - only return true if it looks like HTML content
     // Exclude known non-HTML extensions to prevent false positives
     if (url.startsWith('http')) {
       // List of common non-HTML extensions that should not show DOM tree
       final nonHtmlExtensions = [
-        '.rss', '.xml', '.json', '.pdf', '.zip',
-        '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.tiff', '.ico',
-        '.css', '.js', '.txt', '.csv', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-        '.mp3', '.mp4', '.avi', '.mov', '.wav', '.ogg', '.webm', '.m4a', '.aac',
-        '.zip', '.tar', '.gz', '.rar', '.7z', '.iso', '.dmg', '.exe', '.msi',
-        '.apk', '.ipa', '.pdf', '.epub', '.mobi', '.azw3'
+        '.rss',
+        '.xml',
+        '.json',
+        '.pdf',
+        '.zip',
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.gif',
+        '.svg',
+        '.webp',
+        '.bmp',
+        '.tiff',
+        '.ico',
+        '.css',
+        '.js',
+        '.txt',
+        '.csv',
+        '.doc',
+        '.docx',
+        '.xls',
+        '.xlsx',
+        '.ppt',
+        '.pptx',
+        '.mp3',
+        '.mp4',
+        '.avi',
+        '.mov',
+        '.wav',
+        '.ogg',
+        '.webm',
+        '.m4a',
+        '.aac',
+        '.zip',
+        '.tar',
+        '.gz',
+        '.rar',
+        '.7z',
+        '.iso',
+        '.dmg',
+        '.exe',
+        '.msi',
+        '.apk',
+        '.ipa',
+        '.pdf',
+        '.epub',
+        '.mobi',
+        '.azw3'
       ];
-      
+
       // If URL ends with any known non-HTML extension, it's not HTML
       if (nonHtmlExtensions.any((ext) => url.endsWith(ext))) {
         return false;
       }
-      
+
       // For generic URLs (like domains), we can't be sure, so default to false
       // to avoid showing DOM tree for non-HTML content
       // This is more conservative but prevents false positives
       return false;
     }
-    
+
+    // Content-based override: if we have content that looks like XML but was detected as HTML,
+    // override the detection based on actual content
+    if (_currentFile?.content.isNotEmpty ?? false) {
+      final trimmedContent = _currentFile!.content.trim();
+      final looksLikeXmlContent = trimmedContent.startsWith('<') &&
+          !trimmedContent.startsWith('<!DOCTYPE html') &&
+          !trimmedContent.startsWith('<html') &&
+          !trimmedContent.startsWith('<HTML') &&
+          (trimmedContent.contains('<Channel>') || 
+           trimmedContent.contains('<rss') || 
+           trimmedContent.contains('<feed') ||
+           trimmedContent.contains('<xml'));
+      
+      if (looksLikeXmlContent) return false;
+    }
+
     return false;
   }
 
@@ -269,7 +328,7 @@ class HtmlService extends ChangeNotifier {
   bool get _isStrictXml => isXml && !isHtml && !isSvg;
 
   /// Metadata/Services/Media extraction is only useful for full web pages
-  bool get showMetadataTabs => isHtml;
+  bool get showMetadataTabs => isHtml && !isXml;
 
   /// Whether to show the Browser tab. This is deliberately stable — it stays
   /// true whenever a URL is in ANY loading phase so that the tab never
@@ -288,6 +347,33 @@ class HtmlService extends ChangeNotifier {
     // isWebViewLoading alias (redundant but safe)
     if (_webViewLoadingUrl != null) return true;
     return false;
+  }
+
+  /// Try to detect if content looks like XML
+  bool _tryDetectXmlContent(String content) {
+    if (content.isEmpty) return false;
+    
+    final trimmed = content.trim();
+    // Must start with a tag
+    if (!trimmed.startsWith('<')) return false;
+    
+    // Must not start with HTML-specific tags
+    if (trimmed.startsWith('<!DOCTYPE html') ||
+        trimmed.startsWith('<html') ||
+        trimmed.startsWith('<HTML')) {
+      return false;
+    }
+    
+    // Check for XML-specific patterns
+    final hasXmlTags = trimmed.contains('<Channel>') ||
+        trimmed.contains('<rss') ||
+        trimmed.contains('<feed') ||
+        trimmed.contains('<xml') ||
+        trimmed.contains('<Channel') ||
+        trimmed.contains('<item') ||
+        trimmed.contains('<entry');
+    
+    return hasXmlTags;
   }
 
   /// DOM Tree and Probe tabs are useful for any structured markup
@@ -536,7 +622,9 @@ class HtmlService extends ChangeNotifier {
 
       // If Browser isn't selected, request switch (unless already switching somewhere else or in Source-First mode)
       bool isCurrentlyOnBrowser = _activeTabIndex == browserTabIndex;
-      if (!isCurrentlyOnBrowser && switchToTab == null && _useBrowserByDefault) {
+      if (!isCurrentlyOnBrowser &&
+          switchToTab == null &&
+          _useBrowserByDefault) {
         _requestedTabIndex = browserTabIndex;
       }
 
@@ -667,10 +755,16 @@ class HtmlService extends ChangeNotifier {
     };
 
     final filename = generateDescriptiveFilename(Uri.parse(url), html);
+    // Determine appropriate content type based on actual content
+    String determinedContentType = 'text/html'; // default
+    if (_tryDetectXmlContent(html)) {
+      determinedContentType = 'application/xml';
+    }
+
     final processedFilename = await detectFileTypeAndGenerateFilename(
       filename,
       html,
-      contentType: 'text/html',
+      contentType: determinedContentType,
     );
 
     final file = HtmlFile(
@@ -1572,11 +1666,12 @@ class HtmlService extends ChangeNotifier {
     }
 
     final String? previousLoadingUrl = _webViewLoadingUrl;
-    
+
     // Only clear everything if it's NOT a partial update AND it's a different URL
     // This prevents "flipping" and flickering when the same page updates or finishes sync
-    bool isSameUrl = _currentFile != null && areUrlsEqual(_currentFile!.path, file.path);
-    
+    bool isSameUrl =
+        _currentFile != null && areUrlsEqual(_currentFile!.path, file.path);
+
     if (!isPartial && !isSameUrl) {
       await clearFile(clearProbe: clearProbe, newUrl: file.path);
     }
@@ -1837,6 +1932,7 @@ class HtmlService extends ChangeNotifier {
     final commonTypes = [
       'html',
       'xml',
+      'plaintext',
       'css',
       'javascript',
       'typescript',
@@ -1855,7 +1951,6 @@ class HtmlService extends ChangeNotifier {
       'go',
       'rust',
       'sql',
-      'plaintext',
     ];
 
     final result = <String>['automatic'];
@@ -2019,7 +2114,8 @@ class HtmlService extends ChangeNotifier {
       Map<String, dynamic>? certInfo;
       try {
         if (hResponse.certificate != null) {
-          certInfo = ProbeService.extractCertificateInfo(hResponse.certificate!);
+          certInfo =
+              ProbeService.extractCertificateInfo(hResponse.certificate!);
         }
       } catch (e) {
         debugPrint(
@@ -2432,12 +2528,12 @@ Technical details: $e''';
         }
 
         debugPrint('Probe successful for $url');
-        
+
         // Update all tab data when probe completes
         if (_currentFile != null && areUrlsEqual(_currentFile!.path, url)) {
           _updateAllTabData().ignore();
         }
-        
+
         return _probeResult!;
       } else {
         debugPrint(
@@ -2993,82 +3089,123 @@ Technical details: $e''';
     ScrollController? verticalController,
     ScrollController? horizontalController,
   }) {
-    // Use provided scroll controllers if available, otherwise create new ones
-    final effectiveVerticalController = verticalController ?? ScrollController();
-    final effectiveHorizontalController = horizontalController ?? ScrollController();
-    
-    // Dispose of old controllers to prevent memory leaks and performance issues
-    if (verticalController == null) {
-      _verticalScrollController?.dispose();
+    // Safety checks for extremely large content
+    const maxSafeContentLength = 50 * 1024 * 1024; // 50MB
+    if (content.length > maxSafeContentLength) {
+      debugPrint(
+          'HtmlService: Content too large (${content.length} chars), using fallback viewer');
+      return _buildFallbackViewer(content, fontSize, fontFamily);
     }
-    if (horizontalController == null) {
-      _activeHorizontalScrollController?.dispose();
-    }
-    
-    // Store references for external access (e.g., scroll-to-top functionality)
-    _verticalScrollController = effectiveVerticalController;
-    _activeHorizontalScrollController = effectiveHorizontalController;
 
-    // Handle beautification if enabled
-    if (_isBeautifyEnabled && isBeautified) {
-      debugPrint('HtmlService: Beautification enabled, processing content of length ${content.length}');
-      // Return a Future that will resolve with beautified content
-      return FutureBuilder<String>(
-        future: getBeautifiedContent(content, extension).then((beautified) {
-          debugPrint('HtmlService: Beautification completed. Original: ${content.length} chars, Beautified: ${beautified.length} chars');
-          return beautified;
-        }),
-        builder: (context, snapshot) {
-          // Only show editor when beautified content is ready
-          if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
-            return SourceView.buildEditor(
-              content: snapshot.data!,
-              extension: extension,
-              context: context,
-              verticalController: effectiveVerticalController,
-              horizontalController: effectiveHorizontalController,
-              activeFindController: _activeFindController,
-              onFindControllerChanged: _updateActiveFindController,
-              fontSize: fontSize,
-              fontFamily: fontFamily,
-              themeName: themeName,
-              wrapText: wrapText,
-              showLineNumbers: showLineNumbers,
-              isBeautified: _isBeautifyEnabled,
-              forceCodeForge: false, // Use normal behavior (fallback for large files)
+    try {
+      // Use provided scroll controllers if available, otherwise create new ones
+      final effectiveVerticalController =
+          verticalController ?? ScrollController();
+      final effectiveHorizontalController =
+          horizontalController ?? ScrollController();
+
+      // Dispose of old controllers to prevent memory leaks and performance issues
+      if (verticalController == null) {
+        _verticalScrollController?.dispose();
+      }
+      if (horizontalController == null) {
+        _activeHorizontalScrollController?.dispose();
+      }
+
+      // Store references for external access (e.g., scroll-to-top functionality)
+      _verticalScrollController = effectiveVerticalController;
+      _activeHorizontalScrollController = effectiveHorizontalController;
+
+      // Handle beautification if enabled
+      if (_isBeautifyEnabled && isBeautified) {
+        debugPrint(
+            'HtmlService: Beautification enabled, processing content of length ${content.length}');
+        // Return a Future that will resolve with beautified content
+        return FutureBuilder<String>(
+          future: getBeautifiedContent(content, extension).then((beautified) {
+            debugPrint(
+                'HtmlService: Beautification completed. Original: ${content.length} chars, Beautified: ${beautified.length} chars');
+            return beautified;
+          }).catchError((e) {
+            debugPrint('HtmlService: Beautification failed: $e');
+            return content; // Return original content if beautification fails
+          }),
+          builder: (context, snapshot) {
+            // Only show editor when beautified content is ready
+            if (snapshot.connectionState == ConnectionState.done &&
+                snapshot.hasData) {
+              return SourceView.buildEditor(
+                content: snapshot.data!,
+                extension: extension,
+                context: context,
+                verticalController: effectiveVerticalController,
+                horizontalController: effectiveHorizontalController,
+                activeFindController: _activeFindController,
+                onFindControllerChanged: _updateActiveFindController,
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                themeName: themeName,
+                wrapText: wrapText,
+                showLineNumbers: showLineNumbers,
+                isBeautified: _isBeautifyEnabled,
+                forceCodeForge:
+                    false, // Use normal behavior (fallback for large files)
+              );
+            }
+
+            // Show loading indicator while beautifying
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Beautifying code...',
+                      style: TextStyle(color: Colors.grey)),
+                ],
+              ),
             );
-          }
-          
-          // Show loading indicator while beautifying
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Beautifying code...', style: TextStyle(color: Colors.grey)),
-              ],
-            ),
-          );
-        },
-      );
-    }
+          },
+        );
+      }
 
-    return SourceView.buildEditor(
-      content: content,
-      extension: extension,
-      context: context,
-      verticalController: effectiveVerticalController,
-      horizontalController: effectiveHorizontalController,
-      activeFindController: _activeFindController,
-      onFindControllerChanged: _updateActiveFindController,
-      fontSize: fontSize,
-      fontFamily: fontFamily,
-      themeName: themeName,
-      wrapText: wrapText,
-      showLineNumbers: showLineNumbers,
-      isBeautified: _isBeautifyEnabled,
-      forceCodeForge: false, // Use normal behavior (fallback for large files)
+      return SourceView.buildEditor(
+        content: content,
+        extension: extension,
+        context: context,
+        verticalController: effectiveVerticalController,
+        horizontalController: effectiveHorizontalController,
+        activeFindController: _activeFindController,
+        onFindControllerChanged: _updateActiveFindController,
+        fontSize: fontSize,
+        fontFamily: fontFamily,
+        themeName: themeName,
+        wrapText: wrapText,
+        showLineNumbers: showLineNumbers,
+        isBeautified: _isBeautifyEnabled,
+        forceCodeForge: false, // Use normal behavior (fallback for large files)
+      );
+    } catch (e, stackTrace) {
+      debugPrint('HtmlService: Error building editor: $e\n$stackTrace');
+      return _buildFallbackViewer(content, fontSize, fontFamily);
+    }
+  }
+
+  /// Fallback viewer for when the main editor fails
+  Widget _buildFallbackViewer(
+      String content, double fontSize, String fontFamily) {
+    return SingleChildScrollView(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SelectableText(
+          content,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontFamily: fontFamily,
+            height: 1.2,
+          ),
+        ),
+      ),
     );
   }
 
@@ -3100,8 +3237,18 @@ Technical details: $e''';
 
   /// Toggle the search panel for the current editor
   void toggleSearch() {
+    debugPrint(
+        'HtmlService.toggleSearch called, activeFindController: ${_activeFindController != null}');
+
+    // Ensure we have a find controller - CodeForge should create one and pass it back
+    // via onFindControllerChanged, but if not, we need to handle this case
     if (_activeFindController != null) {
+      debugPrint('Toggling search active state');
       _activeFindController!.toggleActive();
+      notifyListeners(); // Ensure UI updates
+    } else {
+      debugPrint('WARNING: activeFindController is null, cannot toggle search');
+      // In this case, we might need to trigger a rebuild or ensure CodeForge creates the controller
     }
   }
 
@@ -3139,11 +3286,12 @@ Technical details: $e''';
     _updateAnalyzedCookies();
 
     // Extract metadata if needed
-    if ((_currentFile!.content.isNotEmpty && (selectedContentType == 'html' ||
-        selectedContentType == 'xml' ||
-        _currentFile!.name.endsWith('.html') ||
-        _currentFile!.name.endsWith('.xml') ||
-        _currentFile!.name.endsWith('.xhtml'))) ||
+    if ((_currentFile!.content.isNotEmpty &&
+            (selectedContentType == 'html' ||
+                selectedContentType == 'xml' ||
+                _currentFile!.name.endsWith('.html') ||
+                _currentFile!.name.endsWith('.xml') ||
+                _currentFile!.name.endsWith('.xhtml'))) ||
         isPartial) {
       await _extractMetadata(isPartial: isPartial);
     }
@@ -3589,8 +3737,6 @@ Technical details: $e''';
     }
   }
 
-
-
   String _unquoteHtml(String html) {
     if (html.startsWith('"') && html.endsWith('"')) {
       try {
@@ -3775,7 +3921,8 @@ Technical details: $e''';
 
             // Extract cookies via native CookieManager (captures HttpOnly cookies unlike JS document.cookie)
             try {
-              final nativeCookiesList = await CookieManager.instance().getCookies(url: WebUri(url));
+              final nativeCookiesList =
+                  await CookieManager.instance().getCookies(url: WebUri(url));
               String nativeCookies = nativeCookiesList
                   .where((c) => c.name.isNotEmpty)
                   .map((c) => '${c.name}=${c.value}')
@@ -3788,7 +3935,8 @@ Technical details: $e''';
                 try {
                   final uri = Uri.parse(url);
                   final originUrl = '${uri.scheme}://${uri.host}/';
-                  final originCookiesList = await CookieManager.instance().getCookies(url: WebUri(originUrl));
+                  final originCookiesList = await CookieManager.instance()
+                      .getCookies(url: WebUri(originUrl));
                   nativeCookies = originCookiesList
                       .where((c) => c.name.isNotEmpty)
                       .map((c) => '${c.name}=${c.value}')
@@ -3842,7 +3990,8 @@ Technical details: $e''';
                 final int mDec = (r['decoded'] as num? ?? 0).toInt();
 
                 final type = _categorizeResource(name, url.toLowerCase());
-                final bool isInline = name.startsWith('data:') || name.startsWith('<svg');
+                final bool isInline =
+                    name.startsWith('data:') || name.startsWith('<svg');
 
                 switch (type) {
                   case 'script':

@@ -28,6 +28,27 @@ class _UrlInputState extends State<UrlInput> {
     _focusNode.addListener(_handleFocusChange);
   }
 
+  /// Extract just the filename from a file path for display
+  String _getDisplayNameForPath(String path) {
+    // Handle file:// URLs
+    if (path.startsWith('file://')) {
+      path = path.replaceFirst('file://', '');
+    }
+    
+    // Handle Windows paths (C:\path\to\file)
+    if (path.contains('\\') || path.contains(':\\')) {
+      return path.split(RegExp(r'[\\/]')).last;
+    }
+    
+    // Handle Unix paths (/path/to/file)
+    if (path.startsWith('/')) {
+      return path.split('/').last;
+    }
+    
+    // If it's already just a filename, return as-is
+    return path;
+  }
+
   void _onUrlChanged() {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     htmlService.currentInputText = _urlController.text;
@@ -49,9 +70,12 @@ class _UrlInputState extends State<UrlInput> {
         if (mounted && _urlController.text.isEmpty && !_focusNode.hasFocus) {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
           if (htmlService.currentFile != null) {
-            _urlController.text = htmlService.currentFile!.isUrl
-                ? htmlService.currentFile!.path
-                : htmlService.currentFile!.name;
+            if (htmlService.currentFile!.isUrl) {
+              _urlController.text = htmlService.currentFile!.path;
+            } else {
+              // For local files, show only the filename without the full path
+              _urlController.text = _getDisplayNameForPath(htmlService.currentFile!.name);
+            }
           }
         }
       });
@@ -264,7 +288,7 @@ class _UrlInputState extends State<UrlInput> {
                                       structure.currentFile!.isUrl
                                   ? ''
                                   : structure.currentFile != null
-                                      ? 'Local file loaded: ${structure.currentFile!.name}'
+                                      ? 'Local file loaded: ${_getDisplayNameForPath(structure.currentFile!.name)}'
                                       : '',
                               prefixIcon: IconButton(
                                 icon: const Icon(Icons.link, size: 20),

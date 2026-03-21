@@ -130,12 +130,23 @@ class _BrowserViewState extends State<BrowserView> {
     }
 
     if (isRssOrXml && (widget.file?.content.isNotEmpty ?? false)) {
-      final html = await RssTemplateService.convertRssToHtml(
-          widget.file!.content, targetUrl);
-      if (html.isNotEmpty) {
-        _controller!.loadData(data: html, baseUrl: WebUri(targetUrl));
+      try {
+        final html = await RssTemplateService.convertRssToHtml(
+            widget.file!.content, targetUrl);
+        if (html.isNotEmpty) {
+          _controller!.loadData(data: html, baseUrl: WebUri(targetUrl));
+        }
+        _currentRssUrl = targetUrl;
+      } catch (e, stackTrace) {
+        debugPrint('BrowserView: RSS conversion/loading failed: $e\n$stackTrace');
+        // Fallback to loading raw content if RSS processing fails
+        _currentRssUrl = null;
+        if (widget.file?.content.isNotEmpty ?? false) {
+          _controller!.loadData(
+              data: widget.file!.content,
+              baseUrl: WebUri(targetUrl));
+        }
       }
-      _currentRssUrl = targetUrl;
     } else {
       _currentRssUrl = null;
       if (currentUrl == targetUrl && targetUrl.isNotEmpty) return;

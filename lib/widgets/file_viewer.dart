@@ -182,6 +182,8 @@ class _FileViewerState extends State<FileViewer> {
         return 'Automatic (Detected)';
       case 'html':
         return 'HTML';
+      case 'plaintext':
+        return 'Plain Text';
       case 'css':
         return 'CSS';
       case 'javascript':
@@ -220,8 +222,6 @@ class _FileViewerState extends State<FileViewer> {
         return 'Rust';
       case 'sql':
         return 'SQL';
-      case 'plaintext':
-        return 'Plain Text';
       default:
         return contentType.replaceAll('_', ' ').replaceAll('\\', ' ');
     }

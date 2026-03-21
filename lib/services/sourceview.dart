@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:code_forge/code_forge.dart';
 import 'package:re_highlight/re_highlight.dart';
+import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/styles/vs.dart';
 import 'package:re_highlight/styles/github.dart';
@@ -304,7 +305,12 @@ class SourceView {
 
           return CodeForge(
             controller: controller,
+            enableSuggestions: false,
+            autoFocus: false,
+            enableKeyboardSuggestions: false,
             readOnly: true,
+            enableGutterDivider: false,
+            enableGuideLines: false,
             lineWrap: wrapText,
             innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
             verticalScrollController: verticalController,
@@ -317,11 +323,19 @@ class SourceView {
               height: 1.2,
             ),
             enableGutter: showLineNumbers,
-            // Simplify finder builder to reduce complexity and improve performance
+            // Show the finder UI for search functionality
             finderBuilder: (context, finderController) {
-              return const PreferredSize(
-                preferredSize: Size.zero,
-                child: SizedBox.shrink(),
+              // Only update if it ACTUALLY changed to avoid rebuild loops
+              if (activeFindController != finderController) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (activeFindController != finderController) {
+                    onFindControllerChanged(finderController);
+                  }
+                });
+              }
+              return CodeFindPanelView(
+                controller: finderController,
+                readOnly: true,
               );
             },
           );
