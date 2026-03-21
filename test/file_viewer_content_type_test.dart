@@ -1,13 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:view_source_vibe/widgets/file_viewer.dart';
+import 'package:view_source_vibe/widgets/source_viewer.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('FileViewer shows content type menu when tapped', (WidgetTester tester) async {
+  testWidgets('FileViewer shows content type menu when tapped',
+      (WidgetTester tester) async {
     // Create a sample file
     final sampleFile = HtmlFile(
       name: 'test.html',
@@ -34,7 +35,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: FileViewer(file: sampleFile),
+            body: SourceViewer(file: sampleFile),
           ),
         ),
       ),
@@ -56,7 +57,8 @@ void main() {
     expect(find.text('HTML'), findsOneWidget);
   });
 
-  testWidgets('FileViewer updates content type when selected', (WidgetTester tester) async {
+  testWidgets('FileViewer updates content type when selected',
+      (WidgetTester tester) async {
     // Create a sample file
     final sampleFile = HtmlFile(
       name: 'test.html',
@@ -83,7 +85,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: FileViewer(file: sampleFile),
+            body: SourceViewer(file: sampleFile),
           ),
         ),
       ),

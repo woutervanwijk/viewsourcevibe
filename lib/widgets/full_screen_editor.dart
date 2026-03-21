@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/html_service.dart';
-import 'package:view_source_vibe/services/sourceview.dart';
+import 'package:view_source_vibe/services/source_viewer_editor.dart';
 
 class FullScreenEditor extends StatelessWidget {
   final HtmlFile file;
@@ -33,7 +33,7 @@ class FullScreenEditor extends StatelessWidget {
         children: [
           // Editor content (full screen, no toolbar)
           Expanded(
-            child: SourceView.buildEditor(
+            child: SourceViewerEditor.buildEditor(
               content: file.content,
               extension: file.extension,
               context: context,

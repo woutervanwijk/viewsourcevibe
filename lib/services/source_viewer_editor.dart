@@ -19,7 +19,7 @@ import 'package:re_highlight/styles/tokyo-night-light.dart';
 import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
 
-class SourceView {
+class SourceViewerEditor {
   static final Map<String, CodeForgeController> _cachedControllers = {};
 
   static List<String> getAvailableLanguages() =>
@@ -238,20 +238,21 @@ class SourceView {
 
     // Check if we need to create a fresh controller due to content changes
     final existingController = _cachedControllers[controllerKey];
-    final needFreshController = existingController == null || 
+    final needFreshController = existingController == null ||
         existingController.text != processedContent;
-    
+
     if (needFreshController) {
       // Dispose old controller if it exists
       existingController?.dispose();
-      
+
       // Create fresh controller with new content
       final controller = CodeForgeController()..text = processedContent;
       _cachedControllers[controllerKey] = controller;
-      
-      debugPrint('SourceView: Created fresh controller for key: $controllerKey');
+
+      debugPrint(
+          'SourceView: Created fresh controller for key: $controllerKey');
     }
-    
+
     final controller = _cachedControllers[controllerKey]!;
 
     // Enforce cache limits

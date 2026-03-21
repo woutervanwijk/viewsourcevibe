@@ -10,7 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:view_source_vibe/utils/cookie_utils.dart';
-import 'package:view_source_vibe/services/sourceview.dart';
+import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
@@ -1926,7 +1926,7 @@ class HtmlService extends ChangeNotifier {
   /// Get a list of available content types for syntax highlighting
   List<String> getAvailableContentTypes() {
     // Get all available language keys from SourceView
-    final availableLanguages = SourceView.getAvailableLanguages();
+    final availableLanguages = SourceViewerEditor.getAvailableLanguages();
 
     // Filter and sort the list to show most common types first
     final commonTypes = [
@@ -3136,7 +3136,7 @@ Technical details: $e''';
             // Only show editor when beautified content is ready
             if (snapshot.connectionState == ConnectionState.done &&
                 snapshot.hasData) {
-              return SourceView.buildEditor(
+              return SourceViewerEditor.buildEditor(
                 content: snapshot.data!,
                 extension: extension,
                 context: context,
@@ -3171,7 +3171,7 @@ Technical details: $e''';
         );
       }
 
-      return SourceView.buildEditor(
+      return SourceViewerEditor.buildEditor(
         content: content,
         extension: extension,
         context: context,
@@ -3218,7 +3218,7 @@ Technical details: $e''';
 
   /// Reset the editor cache
   void clearHighlightCache() {
-    SourceView.clearCache();
+    SourceViewerEditor.clearCache();
     _verticalScrollController = null;
     _activeHorizontalScrollController = null;
     notifyListeners();
@@ -3226,8 +3226,8 @@ Technical details: $e''';
 
   /// Proxy for tests and internal usage
   Mode? getReHighlightModeForExtension(String extension) {
-    final languageName = SourceView.getLanguageForExtension(extension);
-    return SourceView.getReHighlightMode(languageName);
+    final languageName = SourceViewerEditor.getLanguageForExtension(extension);
+    return SourceViewerEditor.getReHighlightMode(languageName);
   }
 
   /// Prepare the editor for a reset by unfocusing and clearing cache

@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
-import 'package:view_source_vibe/widgets/file_viewer.dart';
+import 'package:view_source_vibe/widgets/source_viewer.dart';
 import 'package:view_source_vibe/widgets/toolbar.dart';
 import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/widgets/metadata_view.dart';
@@ -215,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ? KeepAliveWrapper(
             key: const ValueKey('tab_source'),
             child: _buildRefreshable(
-              FileViewer(
+              SourceViewer(
                 key: const ValueKey('file_viewer_source'),
                 file: currentFile,
               ),

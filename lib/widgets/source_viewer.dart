@@ -8,16 +8,16 @@ import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
 import 'package:view_source_vibe/widgets/full_screen_editor.dart';
 
-class FileViewer extends StatefulWidget {
+class SourceViewer extends StatefulWidget {
   final HtmlFile file;
 
-  const FileViewer({super.key, required this.file});
+  const SourceViewer({super.key, required this.file});
 
   @override
-  State<FileViewer> createState() => _FileViewerState();
+  State<SourceViewer> createState() => _SourceViewerState();
 }
 
-class _FileViewerState extends State<FileViewer> {
+class _SourceViewerState extends State<SourceViewer> {
   final ScrollController _verticalController = ScrollController();
   bool _showScrollToTopFab = false;
 
