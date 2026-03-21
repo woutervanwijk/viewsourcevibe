@@ -324,6 +324,10 @@ class CookieUtils {
       'cat': CookieCategory.essential,
       'prov': 'Piano Analytics (Privacy)'
     },
+    'pa_privacy': {
+      'cat': CookieCategory.essential,
+      'prov': 'Piano Analytics (Privacy)'
+    },
     'cX_G': {'cat': CookieCategory.analytics, 'prov': 'Piano (Cxense)'},
     'cx_P': {'cat': CookieCategory.analytics, 'prov': 'Piano (Cxense)'},
     'fig_firstparty': {
@@ -4322,6 +4326,14 @@ class CookieUtils {
           break;
         }
       }
+    }
+
+    // Wildcard consent detection - check if cookie name contains 'consent'
+    if (knownData == null && name.toLowerCase().contains('consent')) {
+      knownData = {
+        'cat': CookieCategory.essential,
+        'prov': 'Consent Manager'
+      };
     }
 
     final known = knownData ?? {};
