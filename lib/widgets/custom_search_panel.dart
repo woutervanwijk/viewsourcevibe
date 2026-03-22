@@ -14,8 +14,9 @@ const double _kFindResultFontSize = 12;
 
 class CustomSearchPanel extends StatelessWidget implements PreferredSizeWidget {
   final FindController controller;
+  final VoidCallback? onClose;
 
-  const CustomSearchPanel({super.key, required this.controller});
+  const CustomSearchPanel({super.key, required this.controller, this.onClose});
 
   @override
   Size get preferredSize => Size(
@@ -168,7 +169,10 @@ class CustomSearchPanel extends StatelessWidget implements PreferredSizeWidget {
               _buildIconButton(
                 icon: Icons.close,
                 tooltip: 'Close',
-                onPressed: controller.toggleActive,
+                onPressed: () {
+                  controller.isActive = false;
+                  onClose?.call();
+                },
               ),
               const SizedBox(width: 6),
             ],

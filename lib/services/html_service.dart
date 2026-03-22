@@ -3306,9 +3306,7 @@ Technical details: $e''';
       _activeFindController!.addListener(_onSearchStateChanged);
     }
 
-    // Notify listeners of the change
-    debugPrint('=== Calling notifyListeners() ===');
-    notifyListeners();
+    debugPrint('=== Find controller updated (not calling notifyListeners to avoid double notification) ===');
   }
 
   /// Create a temporary find controller for immediate use
@@ -3320,6 +3318,8 @@ Technical details: $e''';
       // This allows the search panel to show immediately
       final tempController = CodeForgeController();
       final findController = FindController(tempController);
+      // Activate the controller immediately so the search panel shows
+      findController.isActive = true;
       updateActiveFindController(findController);
     }
   }

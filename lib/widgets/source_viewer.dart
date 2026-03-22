@@ -325,7 +325,16 @@ class _SourceViewerState extends State<SourceViewer> {
                       },
                       child: Container(
                         color: Theme.of(context).cardColor,
-                        child: CustomSearchPanel(controller: data.activeFindController ?? FindController(CodeForgeController())),
+                        child: CustomSearchPanel(
+                          controller: data.activeFindController ?? FindController(CodeForgeController()),
+                          onClose: () {
+                            // Get the HtmlService from context and toggle search off
+                            final htmlService = Provider.of<HtmlService>(context, listen: false);
+                            if (htmlService.isSearchEnabled) {
+                              htmlService.toggleSearch();
+                            }
+                          },
+                        ),
                       ),
                     ),
                     const Divider(height: 1),
