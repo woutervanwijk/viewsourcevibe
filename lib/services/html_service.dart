@@ -3111,6 +3111,7 @@ Technical details: $e''';
     bool showLineNumbers = true,
     bool isBeautified = false,
     bool isSearchEnabled = false,
+    VoidCallback? onSearchClosed,
     ScrollController? verticalController,
     ScrollController? horizontalController,
   }) {
@@ -3167,6 +3168,7 @@ Technical details: $e''';
                 horizontalController: effectiveHorizontalController,
                 activeFindController: _activeFindController,
                 onFindControllerChanged: updateActiveFindController,
+                onSearchClosed: onSearchClosed,
                 fontSize: fontSize,
                 fontFamily: fontFamily,
                 themeName: themeName,
@@ -3203,6 +3205,7 @@ Technical details: $e''';
         horizontalController: effectiveHorizontalController,
         activeFindController: _activeFindController,
         onFindControllerChanged: updateActiveFindController,
+        onSearchClosed: onSearchClosed,
         fontSize: fontSize,
         fontFamily: fontFamily,
         themeName: themeName,
@@ -3264,20 +3267,15 @@ Technical details: $e''';
 
   /// Toggle the search panel for the current editor
   void toggleSearch() {
-    debugPrint('=== toggleSearch() called ===');
-    debugPrint('Current _isSearchEnabled: $_isSearchEnabled');
-    
-    // Toggle the search state
     _isSearchEnabled = !_isSearchEnabled;
-    debugPrint('New _isSearchEnabled: $_isSearchEnabled');
     
-    // Create a temporary find controller if search is enabled and we don't have one
-    if (_isSearchEnabled) {
-      _createTemporaryFindController();
+    if (_activeFindController != null) {
+      _activeFindController!.isActive = _isSearchEnabled;
+      if (_isSearchEnabled) {
+        _activeFindController!.findInputFocusNode.requestFocus();
+      }
     }
-
-    notifyListeners(); // This will force the editor to rebuild with the new search state
-    debugPrint('notifyListeners() called');
+    notifyListeners();
   }
 
   /// Update the active find controller and manage listeners
@@ -3309,24 +3307,14 @@ Technical details: $e''';
     debugPrint('=== Find controller updated (not calling notifyListeners to avoid double notification) ===');
   }
 
-  /// Create a temporary find controller for immediate use
-  /// This will be replaced by the real one from CodeForge when available
-  void _createTemporaryFindController() {
-    debugPrint('=== Creating temporary find controller ===');
-    if (_activeFindController == null) {
-      // Create a temporary controller with a dummy CodeForgeController
-      // This allows the search panel to show immediately
-      final tempController = CodeForgeController();
-      final findController = FindController(tempController);
-      // Activate the controller immediately so the search panel shows
-      findController.isActive = true;
-      updateActiveFindController(findController);
-    }
-  }
-
   /// Callback when the search state changes
   void _onSearchStateChanged() {
-    notifyListeners();
+    if (_activeFindController != null) {
+      if (_isSearchEnabled != _activeFindController!.isActive) {
+        _isSearchEnabled = _activeFindController!.isActive;
+        notifyListeners();
+      }
+    }
   }
 
 

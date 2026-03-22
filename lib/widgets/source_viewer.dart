@@ -8,7 +8,6 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
 import 'package:view_source_vibe/widgets/full_screen_editor.dart';
-import 'package:view_source_vibe/widgets/custom_search_panel.dart';
 
 class SourceViewer extends StatefulWidget {
   final HtmlFile file;
@@ -302,50 +301,16 @@ class _SourceViewerState extends State<SourceViewer> {
               debugPrint('isSearchEnabled: ${data.isSearchEnabled}');
               debugPrint('isSearchActive: ${data.isSearchActive}');
 
-              // Show search panel when search is enabled
+              // Activate the find controller when search is enabled
               if (data.isSearchEnabled) {
-                debugPrint('=== SHOWING SEARCH PANEL ===');
-                debugPrint(
-                    'activeFindController available: ${data.activeFindController != null}');
-
-                // Activate the find controller when search is enabled
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (data.activeFindController != null &&
                       !data.activeFindController!.isActive) {
                     debugPrint('=== Activating find controller ===');
                     data.activeFindController!.isActive = true;
-                    data.activeFindController!.findInputFocusNode
-                        .requestFocus();
+                    data.activeFindController!.findInputFocusNode.requestFocus();
                   }
                 });
-
-                return Column(
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: () {
-                        FocusScope.of(context).unfocus();
-                      },
-                      child: Container(
-                        color: Theme.of(context).cardColor,
-                        child: CustomSearchPanel(
-                          controller: data.activeFindController ??
-                              FindController(CodeForgeController()),
-                          onClose: () {
-                            // Get the HtmlService from context and toggle search off
-                            final htmlService = Provider.of<HtmlService>(
-                                context,
-                                listen: false);
-                            if (htmlService.isSearchEnabled) {
-                              htmlService.toggleSearch();
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                  ],
-                );
               }
 
               final isTapEnabled = !data.isMedia && widget.file.isTextBased;
@@ -676,6 +641,11 @@ class _SourceViewerState extends State<SourceViewer> {
       showLineNumbers: settings.showLineNumbers,
       isBeautified: htmlService.isBeautifyEnabled,
       isSearchEnabled: isSearchEnabled,
+      onSearchClosed: () {
+        if (htmlService.isSearchEnabled) {
+          htmlService.toggleSearch();
+        }
+      },
       verticalController: _verticalController,
     );
 

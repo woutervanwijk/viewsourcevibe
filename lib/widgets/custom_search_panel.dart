@@ -47,6 +47,7 @@ class CustomSearchPanel extends StatelessWidget implements PreferredSizeWidget {
           onKeyEvent: (n, e) {
             if (e.logicalKey == LogicalKeyboardKey.escape) {
               controller.toggleActive();
+              onClose?.call();
               return KeyEventResult.handled;
             }
             if (e.logicalKey == LogicalKeyboardKey.tab &&

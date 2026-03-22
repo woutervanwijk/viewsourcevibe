@@ -21,6 +21,7 @@ import 'package:re_highlight/styles/lightfair.dart';
 
 class SourceViewerEditor {
   static final Map<String, CodeForgeController> _cachedControllers = {};
+  static final Map<String, FindController> _cachedFindControllers = {};
 
   static List<String> getAvailableLanguages() =>
       builtinAllLanguages.keys.toList();
@@ -207,6 +208,7 @@ class SourceViewerEditor {
     ScrollController? horizontalController,
     required FindController? activeFindController,
     required Function(FindController) onFindControllerChanged,
+    VoidCallback? onSearchClosed,
     double fontSize = 16.0,
     String fontFamily = 'Courier',
     String themeName = 'github',
@@ -249,24 +251,48 @@ class SourceViewerEditor {
     if (needFreshController) {
       // Dispose old controller if it exists
       existingController?.dispose();
+      _cachedFindControllers[controllerKey]?.dispose();
 
       // Create fresh controller with new content
       final controller = CodeForgeController()..text = processedContent;
       _cachedControllers[controllerKey] = controller;
+      
+      final findController = FindController(controller);
+      if (isSearchEnabled) {
+        findController.isActive = true;
+      }
+      _cachedFindControllers[controllerKey] = findController;
 
       debugPrint(
           'SourceView: Created fresh controller for key: $controllerKey');
     }
 
     final controller = _cachedControllers[controllerKey]!;
+    final findController = _cachedFindControllers[controllerKey]!;
 
     // Enforce cache limits
     if (_cachedControllers.length > 5) {
       final firstKey = _cachedControllers.keys.first;
       if (firstKey != controllerKey) {
         _cachedControllers.remove(firstKey)?.dispose();
+        _cachedFindControllers.remove(firstKey)?.dispose();
       }
     }
+
+    // Always ensure the parent service has the active controller
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (activeFindController != findController) {
+        onFindControllerChanged(findController);
+      }
+      
+      // Ensure the controller matches the requested state from toggleSearch
+      if (isSearchEnabled && !findController.isActive) {
+        findController.isActive = true;
+        findController.findInputFocusNode.requestFocus();
+      } else if (!isSearchEnabled && findController.isActive) {
+        findController.isActive = false;
+      }
+    });
 
     // We don't use a ValueKey on CodeForge itself anymore to prevent the 'ScrollController attached to multiple scroll views'
     // error during transitions (like toggling Beautify). By using the same widget type in the same tree position
@@ -298,6 +324,7 @@ class SourceViewerEditor {
 
           return CodeForge(
             controller: controller,
+            findController: findController,
             enableSuggestions: false,
             autoFocus: false,
             enableKeyboardSuggestions: false,
@@ -319,23 +346,9 @@ class SourceViewerEditor {
 
             // Show the finder UI for search functionality
             finderBuilder: (context, finderController) {
-              debugPrint('=== SourceViewerEditor.finderBuilder called ===');
-              debugPrint('finderController: ${finderController.hashCode}');
-              debugPrint('activeFindController: ${activeFindController?.hashCode}');
-              
-              // Always update the active find controller
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (activeFindController != finderController) {
-                  debugPrint('=== Calling onFindControllerChanged ===');
-                  onFindControllerChanged(finderController);
-                } else {
-                  debugPrint('=== Find controller unchanged, skipping callback ===');
-                }
-              });
-              
-              debugPrint('=== Returning CustomSearchPanel ===');
               return CustomSearchPanel(
                 controller: finderController,
+                onClose: onSearchClosed,
               );
             },
           );
@@ -370,6 +383,10 @@ class SourceViewerEditor {
     for (final controller in _cachedControllers.values) {
       controller.dispose();
     }
+    for (final controller in _cachedFindControllers.values) {
+      controller.dispose();
+    }
     _cachedControllers.clear();
+    _cachedFindControllers.clear();
   }
 }
