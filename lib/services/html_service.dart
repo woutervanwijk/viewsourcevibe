@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/models/html_file.dart';
-import 'package:code_forge/code_forge.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
@@ -40,14 +39,18 @@ class HtmlService extends ChangeNotifier {
   // Editor state
   ScrollController? _verticalScrollController;
   ScrollController? _activeHorizontalScrollController;
-  FindController? _activeFindController;
   Timer? _disposalTimer;
   final List<dynamic> _disposalQueue = [];
   Timer? _highlightDebounceTimer;
   
+  // Search state
+  bool _isSearchEnabled = false;
+  
   // Beautify state tracking
   bool _beautifyStateChanged = false;
   bool get beautifyStateChanged => _beautifyStateChanged;
+  
+
 
   // Navigation stack for "Back" functionality
   final List<HtmlFile> _navigationStack = [];
@@ -170,8 +173,9 @@ class HtmlService extends ChangeNotifier {
   }
 
   // Expose search state
-  FindController? get activeFindController => _activeFindController;
-  bool get isSearchActive => _activeFindController?.isActive ?? false;
+
+  bool get isSearchActive => _isSearchEnabled;
+  bool get isSearchEnabled => _isSearchEnabled;
 
   bool get isHtml {
     final contentType =
@@ -3102,6 +3106,7 @@ Technical details: $e''';
     bool wrapText = false,
     bool showLineNumbers = true,
     bool isBeautified = false,
+    bool isSearchEnabled = false,
     ScrollController? verticalController,
     ScrollController? horizontalController,
   }) {
@@ -3156,14 +3161,13 @@ Technical details: $e''';
                 context: context,
                 verticalController: effectiveVerticalController,
                 horizontalController: effectiveHorizontalController,
-                activeFindController: _activeFindController,
-                onFindControllerChanged: _updateActiveFindController,
                 fontSize: fontSize,
                 fontFamily: fontFamily,
                 themeName: themeName,
                 wrapText: wrapText,
                 showLineNumbers: showLineNumbers,
                 isBeautified: _isBeautifyEnabled,
+                isSearchEnabled: _isSearchEnabled,
                 forceCodeForge:
                     false, // Use normal behavior (fallback for large files)
               );
@@ -3191,14 +3195,13 @@ Technical details: $e''';
         context: context,
         verticalController: effectiveVerticalController,
         horizontalController: effectiveHorizontalController,
-        activeFindController: _activeFindController,
-        onFindControllerChanged: _updateActiveFindController,
         fontSize: fontSize,
         fontFamily: fontFamily,
         themeName: themeName,
         wrapText: wrapText,
         showLineNumbers: showLineNumbers,
         isBeautified: _isBeautifyEnabled,
+        isSearchEnabled: _isSearchEnabled,
         forceCodeForge: false, // Use normal behavior (fallback for large files)
       );
     } catch (e, stackTrace) {
@@ -3253,45 +3256,20 @@ Technical details: $e''';
 
   /// Toggle the search panel for the current editor
   void toggleSearch() {
-    debugPrint(
-        'HtmlService.toggleSearch called, activeFindController: ${_activeFindController != null}');
+    debugPrint('=== toggleSearch() called ===');
+    debugPrint('Current _isSearchEnabled: $_isSearchEnabled');
+    
+    // Toggle the search state
+    _isSearchEnabled = !_isSearchEnabled;
+    debugPrint('New _isSearchEnabled: $_isSearchEnabled');
+    
 
-    // Ensure we have a find controller - CodeForge should create one and pass it back
-    // via onFindControllerChanged, but if not, we need to handle this case
-    if (_activeFindController != null) {
-      debugPrint('Toggling search active state');
-      _activeFindController!.toggleActive();
-      notifyListeners(); // Ensure UI updates
-    } else {
-      debugPrint('WARNING: activeFindController is null, cannot toggle search');
-      // In this case, we might need to trigger a rebuild or ensure CodeForge creates the controller
-    }
+    
+    notifyListeners(); // This will force the editor to rebuild with the new search state
+    debugPrint('notifyListeners() called');
   }
 
-  /// Update the active find controller and manage listeners
-  void _updateActiveFindController(FindController? newController) {
-    if (_activeFindController == newController) return;
 
-    // Remove listener from old controller
-    if (_activeFindController != null) {
-      _activeFindController!.removeListener(_onSearchStateChanged);
-    }
-
-    _activeFindController = newController;
-
-    // Add listener to new controller
-    if (_activeFindController != null) {
-      _activeFindController!.addListener(_onSearchStateChanged);
-    }
-
-    // Notify listeners of the change
-    notifyListeners();
-  }
-
-  /// Callback when the search state changes
-  void _onSearchStateChanged() {
-    notifyListeners();
-  }
 
   /// Unified method to update all tab data consistently
   /// This ensures all tabs (Metadata, Services, Cookies, etc.) are updated together

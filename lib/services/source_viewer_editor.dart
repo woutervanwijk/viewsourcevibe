@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:code_forge/code_forge.dart';
 import 'package:re_highlight/re_highlight.dart';
-import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/styles/vs.dart';
 import 'package:re_highlight/styles/github.dart';
@@ -205,16 +204,18 @@ class SourceViewerEditor {
     required BuildContext context,
     required ScrollController verticalController,
     ScrollController? horizontalController,
-    required FindController? activeFindController,
-    required Function(FindController) onFindControllerChanged,
     double fontSize = 16.0,
     String fontFamily = 'Courier',
     String themeName = 'github',
     bool wrapText = false,
     bool showLineNumbers = true,
     bool isBeautified = false,
+    bool isSearchEnabled = false,
     bool forceCodeForge = false, // Force CodeForge even for large files
   }) {
+    debugPrint('=== SourceViewerEditor.buildEditor called ===');
+    debugPrint('isSearchEnabled: $isSearchEnabled');
+    
     final languageName = getLanguageForExtension(extension);
     final mode =
         getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
@@ -310,21 +311,8 @@ class SourceViewerEditor {
               height: 1.2,
             ),
             enableGutter: showLineNumbers,
-            // Show the finder UI for search functionality
-            finderBuilder: (context, finderController) {
-              // Only update if it ACTUALLY changed to avoid rebuild loops
-              if (activeFindController != finderController) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (activeFindController != finderController) {
-                    onFindControllerChanged(finderController);
-                  }
-                });
-              }
-              return CodeFindPanelView(
-                controller: finderController,
-                readOnly: true,
-              );
-            },
+
+
           );
         } catch (e, stackTrace) {
           debugPrint('Error rendering CodeForge editor: $e\n$stackTrace');

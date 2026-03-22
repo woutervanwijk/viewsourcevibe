@@ -43,10 +43,6 @@ class FullScreenEditor extends StatelessWidget {
               horizontalController: htmlService.isBeautifyEnabled
                   ? htmlService.horizontalScrollController
                   : null,
-              activeFindController: htmlService.activeFindController,
-              onFindControllerChanged: (controller) {
-                // No need to update in full screen mode as it's a separate instance
-              },
               fontSize: settings.fontSize,
               fontFamily: 'Courier',
               themeName: settings.themeName,

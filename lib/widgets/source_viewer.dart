@@ -1,10 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:code_forge/code_forge.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
-import 'package:view_source_vibe/widgets/code_find_panel.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
 import 'package:view_source_vibe/widgets/full_screen_editor.dart';
 
@@ -26,7 +26,7 @@ class _SourceViewerState extends State<SourceViewer> {
     super.initState();
     _verticalController = ScrollController();
     _verticalController.addListener(_scrollListener);
-    
+
     // Listen for beautify toggle changes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final htmlService = Provider.of<HtmlService>(context, listen: false);
@@ -39,11 +39,11 @@ class _SourceViewerState extends State<SourceViewer> {
     _verticalController.removeListener(_scrollListener);
     _verticalController.dispose();
     _showScrollToTopFab.dispose();
-    
+
     // Remove listener from HtmlService
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     htmlService.removeListener(_onHtmlServiceChanged);
-    
+
     super.dispose();
   }
 
@@ -70,14 +70,14 @@ class _SourceViewerState extends State<SourceViewer> {
     // to avoid "ScrollController attached to multiple scroll views" error
     final newController = ScrollController();
     newController.addListener(_scrollListener);
-    
+
     // Dispose old controller
     _verticalController.removeListener(_scrollListener);
     _verticalController.dispose();
-    
+
     // Update to new controller
     _verticalController = newController;
-    
+
     // Force rebuild to use new controller
     setState(() {});
   }
@@ -290,29 +290,45 @@ class _SourceViewerState extends State<SourceViewer> {
           Selector<HtmlService, _FileViewerHeaderData>(
             selector: (context, service) => _FileViewerHeaderData(
               isSearchActive: service.isSearchActive,
-              activeFindController: service.activeFindController,
+              isSearchEnabled: service.isSearchEnabled,
               isMedia: service.isMedia,
               selectedContentType: service.selectedContentType,
             ),
             builder: (context, data, child) {
-              if (data.isSearchActive && data.activeFindController != null) {
-                return GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    FocusScope.of(context).unfocus();
-                  },
-                  child: Container(
-                    color: Theme.of(context).cardColor,
-                    child: CodeFindPanelView(
-                      controller: data.activeFindController!,
-                      readOnly: false,
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 8.0,
-                          vertical: 6.0), // Match UrlInput margin
+              debugPrint('=== SourceViewer header builder called ===');
+              debugPrint('isSearchEnabled: ${data.isSearchEnabled}');
+              debugPrint('isSearchActive: ${data.isSearchActive}');
+              
+              // Show search panel when search is enabled
+              if (data.isSearchEnabled) {
+                debugPrint('=== SHOWING SEARCH PANEL ===');
+                
+                return Column(
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () {
+                        FocusScope.of(context).unfocus();
+                      },
+                      child: Container(
+                        color: Theme.of(context).cardColor,
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12.0),
+                          child: Center(
+                            child: Text(
+                              'Search activated - initializing...',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const Divider(height: 1),
+                  ],
                 );
               }
+              
+              debugPrint('=== NOT SHOWING SEARCH PANEL ===');
 
               final isTapEnabled = !data.isMedia && widget.file.isTextBased;
 
@@ -557,6 +573,7 @@ class _SourceViewerState extends State<SourceViewer> {
                 selector: (context, service) => _FileViewerBodyData(
                   isMedia: service.isMedia,
                   isBeautifyEnabled: service.isBeautifyEnabled,
+                  isSearchEnabled: service.isSearchEnabled,
                   selectedContentType: service.selectedContentType,
                 ),
                 builder: (context, data, child) {
@@ -566,14 +583,30 @@ class _SourceViewerState extends State<SourceViewer> {
                     return MediaBrowser(file: widget.file);
                   }
 
-                  return _buildEditorWithFuture(
+                  final editorResult = _buildEditorWithFuture(
                     context,
                     htmlService,
                     widget.file.content,
                     settings,
                     widget.file,
                     data.selectedContentType,
+                    data.isSearchEnabled,
                   );
+
+                  if (editorResult is Widget) {
+                    return editorResult;
+                  } else {
+                    return FutureBuilder<Widget>(
+                      future: editorResult,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.done &&
+                            snapshot.hasData) {
+                          return snapshot.data!;
+                        }
+                        return const Center(child: CircularProgressIndicator());
+                      },
+                    );
+                  }
                 },
               ),
             ),
@@ -604,13 +637,14 @@ class _SourceViewerState extends State<SourceViewer> {
     ]);
   }
 
-  Widget _buildEditorWithFuture(
+  FutureOr<Widget> _buildEditorWithFuture(
       BuildContext context,
       HtmlService htmlService,
       String content,
       AppSettings settings,
       HtmlFile file,
-      String? selectedContentType) {
+      String? selectedContentType,
+      bool isSearchEnabled) {
     // Build the editor, handling both cached (sync) and new (async) states
     // explicitly to prevent flickering and crashes.
     final result = htmlService.buildEditor(
@@ -623,6 +657,7 @@ class _SourceViewerState extends State<SourceViewer> {
       wrapText: settings.wrapText,
       showLineNumbers: settings.showLineNumbers,
       isBeautified: htmlService.isBeautifyEnabled,
+      isSearchEnabled: isSearchEnabled,
       verticalController: _verticalController,
     );
 
@@ -725,13 +760,13 @@ void _openFullScreenEditor(
 @immutable
 class _FileViewerHeaderData {
   final bool isSearchActive;
-  final FindController? activeFindController;
+  final bool isSearchEnabled;
   final bool isMedia;
   final String? selectedContentType;
 
   const _FileViewerHeaderData({
     required this.isSearchActive,
-    this.activeFindController,
+    required this.isSearchEnabled,
     required this.isMedia,
     this.selectedContentType,
   });
@@ -742,14 +777,14 @@ class _FileViewerHeaderData {
       other is _FileViewerHeaderData &&
           runtimeType == other.runtimeType &&
           isSearchActive == other.isSearchActive &&
-          activeFindController == other.activeFindController &&
+          isSearchEnabled == other.isSearchEnabled &&
           isMedia == other.isMedia &&
           selectedContentType == other.selectedContentType;
 
   @override
   int get hashCode =>
       isSearchActive.hashCode ^
-      activeFindController.hashCode ^
+      isSearchEnabled.hashCode ^
       isMedia.hashCode ^
       selectedContentType.hashCode;
 }
@@ -758,11 +793,13 @@ class _FileViewerHeaderData {
 class _FileViewerBodyData {
   final bool isMedia;
   final bool isBeautifyEnabled;
+  final bool isSearchEnabled;
   final String? selectedContentType;
 
   const _FileViewerBodyData({
     required this.isMedia,
     required this.isBeautifyEnabled,
+    required this.isSearchEnabled,
     this.selectedContentType,
   });
 
@@ -773,11 +810,13 @@ class _FileViewerBodyData {
           runtimeType == other.runtimeType &&
           isMedia == other.isMedia &&
           isBeautifyEnabled == other.isBeautifyEnabled &&
+          isSearchEnabled == other.isSearchEnabled &&
           selectedContentType == other.selectedContentType;
 
   @override
   int get hashCode =>
       isMedia.hashCode ^
       isBeautifyEnabled.hashCode ^
+      isSearchEnabled.hashCode ^
       selectedContentType.hashCode;
 }
