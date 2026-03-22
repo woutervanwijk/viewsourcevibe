@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:code_forge/code_forge.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
 import 'package:view_source_vibe/widgets/full_screen_editor.dart';
+import 'package:view_source_vibe/widgets/custom_search_panel.dart';
 
 class SourceViewer extends StatefulWidget {
   final HtmlFile file;
@@ -293,6 +295,7 @@ class _SourceViewerState extends State<SourceViewer> {
               isSearchEnabled: service.isSearchEnabled,
               isMedia: service.isMedia,
               selectedContentType: service.selectedContentType,
+              activeFindController: service.activeFindController,
             ),
             builder: (context, data, child) {
               debugPrint('=== SourceViewer header builder called ===');
@@ -302,6 +305,16 @@ class _SourceViewerState extends State<SourceViewer> {
               // Show search panel when search is enabled
               if (data.isSearchEnabled) {
                 debugPrint('=== SHOWING SEARCH PANEL ===');
+                debugPrint('activeFindController available: ${data.activeFindController != null}');
+                
+                // Activate the find controller when search is enabled
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (data.activeFindController != null && !data.activeFindController!.isActive) {
+                    debugPrint('=== Activating find controller ===');
+                    data.activeFindController!.isActive = true;
+                    data.activeFindController!.findInputFocusNode.requestFocus();
+                  }
+                });
                 
                 return Column(
                   children: [
@@ -312,15 +325,7 @@ class _SourceViewerState extends State<SourceViewer> {
                       },
                       child: Container(
                         color: Theme.of(context).cardColor,
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12.0),
-                          child: Center(
-                            child: Text(
-                              'Search activated - initializing...',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
-                        ),
+                        child: CustomSearchPanel(controller: data.activeFindController ?? FindController(CodeForgeController())),
                       ),
                     ),
                     const Divider(height: 1),
@@ -763,12 +768,14 @@ class _FileViewerHeaderData {
   final bool isSearchEnabled;
   final bool isMedia;
   final String? selectedContentType;
+  final FindController? activeFindController;
 
   const _FileViewerHeaderData({
     required this.isSearchActive,
     required this.isSearchEnabled,
     required this.isMedia,
     this.selectedContentType,
+    this.activeFindController,
   });
 
   @override
@@ -779,14 +786,16 @@ class _FileViewerHeaderData {
           isSearchActive == other.isSearchActive &&
           isSearchEnabled == other.isSearchEnabled &&
           isMedia == other.isMedia &&
-          selectedContentType == other.selectedContentType;
+          selectedContentType == other.selectedContentType &&
+          activeFindController == other.activeFindController;
 
   @override
   int get hashCode =>
       isSearchActive.hashCode ^
       isSearchEnabled.hashCode ^
       isMedia.hashCode ^
-      selectedContentType.hashCode;
+      selectedContentType.hashCode ^
+      activeFindController.hashCode;
 }
 
 @immutable

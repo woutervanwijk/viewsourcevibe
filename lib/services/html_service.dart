@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
+import 'package:code_forge/code_forge.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'dart:io';
@@ -45,6 +46,7 @@ class HtmlService extends ChangeNotifier {
   
   // Search state
   bool _isSearchEnabled = false;
+  FindController? _activeFindController;
   
   // Beautify state tracking
   bool _beautifyStateChanged = false;
@@ -176,6 +178,8 @@ class HtmlService extends ChangeNotifier {
 
   bool get isSearchActive => _isSearchEnabled;
   bool get isSearchEnabled => _isSearchEnabled;
+  FindController? get activeFindController => _activeFindController;
+
 
   bool get isHtml {
     final contentType =
@@ -3161,6 +3165,8 @@ Technical details: $e''';
                 context: context,
                 verticalController: effectiveVerticalController,
                 horizontalController: effectiveHorizontalController,
+                activeFindController: _activeFindController,
+                onFindControllerChanged: updateActiveFindController,
                 fontSize: fontSize,
                 fontFamily: fontFamily,
                 themeName: themeName,
@@ -3195,6 +3201,8 @@ Technical details: $e''';
         context: context,
         verticalController: effectiveVerticalController,
         horizontalController: effectiveHorizontalController,
+        activeFindController: _activeFindController,
+        onFindControllerChanged: updateActiveFindController,
         fontSize: fontSize,
         fontFamily: fontFamily,
         themeName: themeName,
@@ -3263,10 +3271,62 @@ Technical details: $e''';
     _isSearchEnabled = !_isSearchEnabled;
     debugPrint('New _isSearchEnabled: $_isSearchEnabled');
     
+    // Create a temporary find controller if search is enabled and we don't have one
+    if (_isSearchEnabled) {
+      _createTemporaryFindController();
+    }
 
-    
     notifyListeners(); // This will force the editor to rebuild with the new search state
     debugPrint('notifyListeners() called');
+  }
+
+  /// Update the active find controller and manage listeners
+  void updateActiveFindController(FindController? newController) {
+    debugPrint('=== updateActiveFindController called ===');
+    debugPrint('newController: ${newController != null}');
+    debugPrint('current _activeFindController: ${_activeFindController != null}');
+    
+    if (_activeFindController == newController) {
+      debugPrint('=== Find controller unchanged, returning early ===');
+      return;
+    }
+
+    // Remove listener from old controller
+    if (_activeFindController != null) {
+      debugPrint('=== Removing listener from old controller ===');
+      _activeFindController!.removeListener(_onSearchStateChanged);
+    }
+
+    _activeFindController = newController;
+    debugPrint('=== Updated _activeFindController ===');
+
+    // Add listener to new controller
+    if (_activeFindController != null) {
+      debugPrint('=== Adding listener to new controller ===');
+      _activeFindController!.addListener(_onSearchStateChanged);
+    }
+
+    // Notify listeners of the change
+    debugPrint('=== Calling notifyListeners() ===');
+    notifyListeners();
+  }
+
+  /// Create a temporary find controller for immediate use
+  /// This will be replaced by the real one from CodeForge when available
+  void _createTemporaryFindController() {
+    debugPrint('=== Creating temporary find controller ===');
+    if (_activeFindController == null) {
+      // Create a temporary controller with a dummy CodeForgeController
+      // This allows the search panel to show immediately
+      final tempController = CodeForgeController();
+      final findController = FindController(tempController);
+      updateActiveFindController(findController);
+    }
+  }
+
+  /// Callback when the search state changes
+  void _onSearchStateChanged() {
+    notifyListeners();
   }
 
 

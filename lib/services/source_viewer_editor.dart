@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:code_forge/code_forge.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/languages/all.dart';
+import 'package:view_source_vibe/widgets/custom_search_panel.dart';
 import 'package:re_highlight/styles/vs.dart';
 import 'package:re_highlight/styles/github.dart';
 import 'package:re_highlight/styles/github-dark.dart';
@@ -204,6 +205,8 @@ class SourceViewerEditor {
     required BuildContext context,
     required ScrollController verticalController,
     ScrollController? horizontalController,
+    required FindController? activeFindController,
+    required Function(FindController) onFindControllerChanged,
     double fontSize = 16.0,
     String fontFamily = 'Courier',
     String themeName = 'github',
@@ -215,6 +218,7 @@ class SourceViewerEditor {
   }) {
     debugPrint('=== SourceViewerEditor.buildEditor called ===');
     debugPrint('isSearchEnabled: $isSearchEnabled');
+    debugPrint('activeFindController: ${activeFindController != null}');
     
     final languageName = getLanguageForExtension(extension);
     final mode =
@@ -313,6 +317,27 @@ class SourceViewerEditor {
             enableGutter: showLineNumbers,
 
 
+            // Show the finder UI for search functionality
+            finderBuilder: (context, finderController) {
+              debugPrint('=== SourceViewerEditor.finderBuilder called ===');
+              debugPrint('finderController: ${finderController.hashCode}');
+              debugPrint('activeFindController: ${activeFindController?.hashCode}');
+              
+              // Always update the active find controller
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (activeFindController != finderController) {
+                  debugPrint('=== Calling onFindControllerChanged ===');
+                  onFindControllerChanged(finderController);
+                } else {
+                  debugPrint('=== Find controller unchanged, skipping callback ===');
+                }
+              });
+              
+              debugPrint('=== Returning CustomSearchPanel ===');
+              return CustomSearchPanel(
+                controller: finderController,
+              );
+            },
           );
         } catch (e, stackTrace) {
           debugPrint('Error rendering CodeForge editor: $e\n$stackTrace');
