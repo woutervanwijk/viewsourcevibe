@@ -417,7 +417,7 @@ class DomTreeTile extends StatelessWidget {
     final baseFontSize = settings.fontSize;
     // Adjust tag font size slightly smaller to compensate for bold weight
     // making it appear larger than normal text
-    final tagFontSize = baseFontSize * 0.95;
+    final tagFontSize = baseFontSize * 0.8;
     final attrFontSize = baseFontSize;
     final textFontSize = baseFontSize;
 
