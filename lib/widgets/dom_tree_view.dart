@@ -414,10 +414,10 @@ class DomTreeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
-    final baseFontSize = settings.fontSize;
+    final baseFontSize = settings.fontSize * 0.8;
     // Adjust tag font size slightly smaller to compensate for bold weight
     // making it appear larger than normal text
-    final tagFontSize = baseFontSize * 0.8;
+    final tagFontSize = baseFontSize;
     final attrFontSize = baseFontSize;
     final textFontSize = baseFontSize;
 
