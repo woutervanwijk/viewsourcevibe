@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:html/parser.dart' as html_parser;
@@ -414,7 +416,8 @@ class DomTreeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
-    final baseFontSize = settings.fontSize * 0.8;
+    final baseFontSize =
+        Platform.isIOS ? settings.fontSize * 0.8 : settings.fontSize;
     // Adjust tag font size slightly smaller to compensate for bold weight
     // making it appear larger than normal text
     final tagFontSize = baseFontSize;
