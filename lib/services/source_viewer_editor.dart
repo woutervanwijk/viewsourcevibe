@@ -228,14 +228,6 @@ class SourceViewerEditor {
 
     // Performance optimization for large files
     String processedContent = content;
-    final contentSize = content.length;
-
-    if (contentSize > 512 * 1024) {
-      final maxHighlightLength = 512 * 1024;
-      if (content.length > maxHighlightLength) {
-        processedContent = content.substring(0, maxHighlightLength);
-      }
-    }
 
     // We need a unique key for the controller to avoid collisions
     // Use the actual content hash to ensure uniqueness

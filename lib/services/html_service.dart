@@ -3115,13 +3115,6 @@ Technical details: $e''';
     ScrollController? verticalController,
     ScrollController? horizontalController,
   }) {
-    // Safety checks for extremely large content
-    const maxSafeContentLength = 50 * 1024 * 1024; // 50MB
-    if (content.length > maxSafeContentLength) {
-      debugPrint(
-          'HtmlService: Content too large (${content.length} chars), using fallback viewer');
-      return _buildFallbackViewer(content, fontSize, fontFamily);
-    }
 
     try {
       // Use provided scroll controllers if available, otherwise create new ones
