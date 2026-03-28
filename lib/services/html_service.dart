@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
-import 'package:code_forge/code_forge.dart';
+import 'package:view_source_vibe/services/find_controller.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'dart:io';

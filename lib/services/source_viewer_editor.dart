@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:code_forge/code_forge.dart';
-import 'package:re_highlight/re_highlight.dart';
+import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:re_highlight/languages/all.dart';
-import 'package:view_source_vibe/widgets/custom_search_panel.dart';
+import 'package:re_highlight/styles/github-dark.dart';
 import 'package:re_highlight/styles/vs.dart';
 import 'package:re_highlight/styles/github.dart';
-import 'package:re_highlight/styles/github-dark.dart';
 import 'package:re_highlight/styles/github-dark-dimmed.dart';
 import 'package:re_highlight/styles/androidstudio.dart';
 import 'package:re_highlight/styles/atom-one-dark.dart';
@@ -18,10 +16,16 @@ import 'package:re_highlight/styles/tokyo-night-dark.dart';
 import 'package:re_highlight/styles/tokyo-night-light.dart';
 import 'package:re_highlight/styles/dark.dart';
 import 'package:re_highlight/styles/lightfair.dart';
+import 'package:re_highlight/re_highlight.dart';
+import 'package:view_source_vibe/services/find_controller.dart';
 
 class SourceViewerEditor {
-  static final Map<String, CodeForgeController> _cachedControllers = {};
+  static final Map<String, CodeController> _cachedControllers = {};
   static final Map<String, FindController> _cachedFindControllers = {};
+  
+  FindController? activeFindController;
+  Function(FindController)? onFindControllerChanged;
+  Function()? onSearchClosed;
 
   static List<String> getAvailableLanguages() =>
       builtinAllLanguages.keys.toList();
@@ -206,9 +210,6 @@ class SourceViewerEditor {
     required BuildContext context,
     required ScrollController verticalController,
     ScrollController? horizontalController,
-    required FindController? activeFindController,
-    required Function(FindController) onFindControllerChanged,
-    VoidCallback? onSearchClosed,
     double fontSize = 16.0,
     String fontFamily = 'Courier',
     String themeName = 'github',
@@ -217,14 +218,26 @@ class SourceViewerEditor {
     bool isBeautified = false,
     bool isSearchEnabled = false,
     bool forceCodeForge = false, // Force CodeForge even for large files
+    FindController? activeFindController,
+    Function(FindController)? onFindControllerChanged,
+    Function()? onSearchClosed,
   }) {
+    // Update the instance variables if provided
+    if (activeFindController != null) {
+      SourceViewerEditor().activeFindController = activeFindController;
+    }
+    if (onFindControllerChanged != null) {
+      SourceViewerEditor().onFindControllerChanged = onFindControllerChanged;
+    }
+    if (onSearchClosed != null) {
+      SourceViewerEditor().onSearchClosed = onSearchClosed;
+    }
     debugPrint('=== SourceViewerEditor.buildEditor called ===');
     debugPrint('isSearchEnabled: $isSearchEnabled');
     debugPrint('activeFindController: ${activeFindController != null}');
     
     final languageName = getLanguageForExtension(extension);
-    final mode =
-        getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
+    getReHighlightMode(languageName) ?? builtinAllLanguages['plaintext']!;
 
     // Performance optimization for large files
     String processedContent = content;
@@ -246,7 +259,7 @@ class SourceViewerEditor {
       _cachedFindControllers[controllerKey]?.dispose();
 
       // Create fresh controller with new content
-      final controller = CodeForgeController()..text = processedContent;
+      final controller = CodeController(text: processedContent);
       _cachedControllers[controllerKey] = controller;
       
       final findController = FindController(controller);
@@ -273,7 +286,7 @@ class SourceViewerEditor {
 
     // Always ensure the parent service has the active controller
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (activeFindController != findController) {
+      if (activeFindController != findController && onFindControllerChanged != null) {
         onFindControllerChanged(findController);
       }
       
@@ -286,12 +299,12 @@ class SourceViewerEditor {
       }
     });
 
-    // We don't use a ValueKey on CodeForge itself anymore to prevent the 'ScrollController attached to multiple scroll views'
+    // We don't use a ValueKey on CodeField itself anymore to prevent the 'ScrollController attached to multiple scroll views'
     // error during transitions (like toggling Beautify). By using the same widget type in the same tree position
     // without a key that changes with content, Flutter will perform an 'update' instead of a 'swap',
     // which gracefully handles the transition of the shared ScrollController.
 
-    // Use LayoutBuilder to ensure we have proper constraints before rendering CodeForge
+    // Use LayoutBuilder to ensure we have proper constraints before rendering CodeField
     return LayoutBuilder(builder: (context, constraints) {
       // Debug log constraints to help diagnose empty editor issues
       if (constraints.maxWidth <= 0 || constraints.maxHeight <= 0) {
@@ -307,42 +320,32 @@ class SourceViewerEditor {
         try {
           // Additional check: don't render if content is empty
           if (content.isEmpty) {
-            debugPrint('CodeForge: Content is empty, showing empty state');
+            debugPrint('CodeField: Content is empty, showing empty state');
             return const Center(
               child: Text('No content to display',
                   style: TextStyle(color: Colors.grey)),
             );
           }
 
-          return CodeForge(
-            controller: controller,
-            findController: findController,
-            enableSuggestions: false,
-            autoFocus: false,
-            enableKeyboardSuggestions: false,
-            readOnly: true,
-            enableGutterDivider: false,
-            enableGuideLines: false,
-            lineWrap: wrapText,
-            innerPadding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
-            verticalScrollController: verticalController,
-            editorTheme: getThemeByName(themeName),
-            language: mode,
-            textStyle: TextStyle(
-              fontSize: fontSize,
-              fontFamily: 'Courier',
-              height: 1.2,
+          return CodeTheme(
+            data: CodeThemeData(styles: getThemeByName(themeName)),
+            child: SingleChildScrollView(
+              controller: verticalController,
+              child: CodeField(
+                controller: controller,
+                gutterStyle: GutterStyle(
+                  showLineNumbers: showLineNumbers,
+                ),
+                textStyle: TextStyle(
+                  fontSize: fontSize,
+                  fontFamily: 'Courier',
+                  height: 1.2,
+                ),
+                readOnly: true,
+                wrap: wrapText,
+                padding: const EdgeInsets.fromLTRB(4, 8, 24, 48),
+              ),
             ),
-            enableGutter: showLineNumbers,
-
-
-            // Show the finder UI for search functionality
-            finderBuilder: (context, finderController) {
-              return CustomSearchPanel(
-                controller: finderController,
-                onClose: onSearchClosed,
-              );
-            },
           );
         } catch (e, stackTrace) {
           debugPrint('Error rendering CodeForge editor: $e\n$stackTrace');

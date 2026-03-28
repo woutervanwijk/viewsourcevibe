@@ -1,6 +1,6 @@
-import 'package:code_forge/code_forge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:view_source_vibe/services/find_controller.dart';
 
 const EdgeInsetsGeometry _kFindMargin = EdgeInsets.only(right: 10);
 const double _kFindPanelWidth = 360;
