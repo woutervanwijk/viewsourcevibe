@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/html_service.dart';
-import 'package:view_source_vibe/services/source_viewer_editor.dart';
+import 'package:view_source_vibe/services/monaco_source_viewer_editor.dart';
 
 class FullScreenEditor extends StatelessWidget {
   final HtmlFile file;
@@ -33,27 +33,48 @@ class FullScreenEditor extends StatelessWidget {
         children: [
           // Editor content (full screen, no toolbar)
           Expanded(
-            child: SourceViewerEditor.buildEditor(
-              content: htmlService.isBeautifyEnabled
-                  ? (htmlService.getBeautifiedContentSync(file.content, file.extension) ?? file.content)
-                  : file.content,
-              extension: file.extension,
-              context: context,
-              verticalController: ScrollController(),
-              horizontalController: htmlService.isBeautifyEnabled
-                  ? htmlService.horizontalScrollController
-                  : null,
-              activeFindController: htmlService.activeFindController,
-              onFindControllerChanged: (controller) {
-                // No need to update in full screen mode as it's a separate instance
+            child: FutureBuilder<Widget>(
+              future: MonacoSourceViewerEditor.buildEditor(
+                content: htmlService.isBeautifyEnabled
+                    ? (htmlService.getBeautifiedContentSync(
+                            file.content, file.extension) ??
+                        file.content)
+                    : file.content,
+                extension: file.extension,
+                context: context,
+                verticalController: ScrollController(),
+                horizontalController: htmlService.isBeautifyEnabled
+                    ? htmlService.horizontalScrollController
+                    : null,
+                activeFindController: htmlService.activeFindController,
+                onFindControllerChanged: (controller) {
+                  // No need to update in full screen mode as it's a separate instance
+                },
+                fontSize: settings.fontSize,
+                fontFamily: 'Courier',
+                themeName: settings.themeName,
+                wrapText: settings.wrapText,
+                showLineNumbers: settings.showLineNumbers,
+                isBeautified: htmlService.isBeautifyEnabled,
+                forceCodeForge: true, // Always use CodeForge in fullscreen mode
+                isSearchEnabled: htmlService.isSearchEnabled,
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done &&
+                    snapshot.hasData) {
+                  return snapshot.data!;
+                }
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Loading...', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                );
               },
-              fontSize: settings.fontSize,
-              fontFamily: 'Courier',
-              themeName: settings.themeName,
-              wrapText: settings.wrapText,
-              showLineNumbers: settings.showLineNumbers,
-              isBeautified: htmlService.isBeautifyEnabled,
-              forceCodeForge: true, // Always use CodeForge in fullscreen mode
             ),
           ),
         ],

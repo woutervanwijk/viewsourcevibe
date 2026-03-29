@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/find_controller.dart';
@@ -8,6 +6,7 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
 import 'package:view_source_vibe/widgets/full_screen_editor.dart';
+import 'package:view_source_vibe/widgets/editor_tab.dart';
 
 class SourceViewer extends StatefulWidget {
   final HtmlFile file;
@@ -308,7 +307,8 @@ class _SourceViewerState extends State<SourceViewer> {
                       !data.activeFindController!.isActive) {
                     debugPrint('=== Activating find controller ===');
                     data.activeFindController!.isActive = true;
-                    data.activeFindController!.findInputFocusNode.requestFocus();
+                    data.activeFindController!.findInputFocusNode
+                        .requestFocus();
                   }
                 });
               }
@@ -566,30 +566,12 @@ class _SourceViewerState extends State<SourceViewer> {
                     return MediaBrowser(file: widget.file);
                   }
 
-                  final editorResult = _buildEditorWithFuture(
-                    context,
-                    htmlService,
-                    widget.file.content,
-                    settings,
-                    widget.file,
-                    data.selectedContentType,
-                    data.isSearchEnabled,
+                  // Use EditorTab widget which has built-in caching to prevent flashing
+                  return EditorTab(
+                    file: widget.file,
+                    settings: settings,
+                    htmlService: htmlService,
                   );
-
-                  if (editorResult is Widget) {
-                    return editorResult;
-                  } else {
-                    return FutureBuilder<Widget>(
-                      future: editorResult,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.done &&
-                            snapshot.hasData) {
-                          return snapshot.data!;
-                        }
-                        return const Center(child: CircularProgressIndicator());
-                      },
-                    );
-                  }
                 },
               ),
             ),
@@ -620,67 +602,7 @@ class _SourceViewerState extends State<SourceViewer> {
     ]);
   }
 
-  FutureOr<Widget> _buildEditorWithFuture(
-      BuildContext context,
-      HtmlService htmlService,
-      String content,
-      AppSettings settings,
-      HtmlFile file,
-      String? selectedContentType,
-      bool isSearchEnabled) {
-    // Build the editor, handling both cached (sync) and new (async) states
-    // explicitly to prevent flickering and crashes.
-    final result = htmlService.buildEditor(
-      content,
-      selectedContentType ?? widget.file.extension,
-      context,
-      fontSize: settings.fontSize,
-      fontFamily: 'Courier',
-      themeName: settings.themeName,
-      wrapText: settings.wrapText,
-      showLineNumbers: settings.showLineNumbers,
-      isBeautified: htmlService.isBeautifyEnabled,
-      isSearchEnabled: isSearchEnabled,
-      onSearchClosed: () {
-        if (htmlService.isSearchEnabled) {
-          htmlService.toggleSearch();
-        }
-      },
-      verticalController: _verticalController,
-    );
 
-    // If cached, return immediately (no flicker)
-    if (result is Widget) {
-      return result;
-    }
-
-    // If async, show loading indicator
-    return FutureBuilder<Widget>(
-      // Use key to force rebuild when content changes
-      key: ValueKey(
-          '${htmlService.currentFile?.path}_${htmlService.selectedContentType}_${content.length}_${htmlService.isBeautifyEnabled}'),
-      future: result,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done &&
-            snapshot.hasData) {
-          return snapshot.data!;
-        }
-
-        // Show loading indicator
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Processing syntax highlighting...',
-                  style: TextStyle(color: Colors.grey)),
-            ],
-          ),
-        );
-      },
-    );
-  }
 }
 
 class SearchHighlightPainter extends CustomPainter {

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_code_editor/flutter_code_editor.dart';
 
 class FindController with ChangeNotifier {
   bool _isActive = false;
@@ -15,7 +14,8 @@ class FindController with ChangeNotifier {
   final FocusNode findInputFocusNode = FocusNode();
   final FocusNode replaceInputFocusNode = FocusNode();
   
-  final CodeController? codeController;
+  // Note: codeController is not used with Monaco editor
+  // final CodeController? codeController;
   
   bool get isActive => _isActive;
   bool get isReplaceMode => _isReplaceMode;
@@ -35,7 +35,7 @@ class FindController with ChangeNotifier {
     notifyListeners();
   }
   
-  FindController([this.codeController]);
+  FindController();
   
   void toggleMatchWholeWord() {
     _matchWholeWord = !_matchWholeWord;

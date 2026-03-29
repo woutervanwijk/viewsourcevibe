@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:view_source_vibe/services/find_controller.dart';
+import 'package:view_source_vibe/services/monaco_source_viewer_editor.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'dart:io';
@@ -10,7 +11,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:view_source_vibe/utils/cookie_utils.dart';
-import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
@@ -43,16 +43,14 @@ class HtmlService extends ChangeNotifier {
   Timer? _disposalTimer;
   final List<dynamic> _disposalQueue = [];
   Timer? _highlightDebounceTimer;
-  
+
   // Search state
   bool _isSearchEnabled = false;
   FindController? _activeFindController;
-  
+
   // Beautify state tracking
   bool _beautifyStateChanged = false;
   bool get beautifyStateChanged => _beautifyStateChanged;
-  
-
 
   // Navigation stack for "Back" functionality
   final List<HtmlFile> _navigationStack = [];
@@ -179,7 +177,6 @@ class HtmlService extends ChangeNotifier {
   bool get isSearchActive => _isSearchEnabled;
   bool get isSearchEnabled => _isSearchEnabled;
   FindController? get activeFindController => _activeFindController;
-
 
   bool get isHtml {
     final contentType =
@@ -1948,7 +1945,7 @@ class HtmlService extends ChangeNotifier {
   /// Get a list of available content types for syntax highlighting
   List<String> getAvailableContentTypes() {
     // Get all available language keys from SourceView
-    final availableLanguages = SourceViewerEditor.getAvailableLanguages();
+    final availableLanguages = MonacoSourceViewerEditor.getAvailableLanguages();
 
     // Filter and sort the list to show most common types first
     final commonTypes = [
@@ -3115,7 +3112,6 @@ Technical details: $e''';
     ScrollController? verticalController,
     ScrollController? horizontalController,
   }) {
-
     try {
       // Use provided scroll controllers if available, otherwise create new ones
       final effectiveVerticalController =
@@ -3153,24 +3149,43 @@ Technical details: $e''';
             // Only show editor when beautified content is ready
             if (snapshot.connectionState == ConnectionState.done &&
                 snapshot.hasData) {
-              return SourceViewerEditor.buildEditor(
-                content: snapshot.data!,
-                extension: extension,
-                context: context,
-                verticalController: effectiveVerticalController,
-                horizontalController: effectiveHorizontalController,
-                activeFindController: _activeFindController,
-                onFindControllerChanged: updateActiveFindController,
-                onSearchClosed: onSearchClosed,
-                fontSize: fontSize,
-                fontFamily: fontFamily,
-                themeName: themeName,
-                wrapText: wrapText,
-                showLineNumbers: showLineNumbers,
-                isBeautified: _isBeautifyEnabled,
-                isSearchEnabled: _isSearchEnabled,
-                forceCodeForge:
-                    false, // Use normal behavior (fallback for large files)
+              return FutureBuilder<Widget>(
+                future: MonacoSourceViewerEditor.buildEditor(
+                  content: snapshot.data!,
+                  extension: extension,
+                  context: context,
+                  verticalController: effectiveVerticalController,
+                  horizontalController: effectiveHorizontalController,
+                  activeFindController: _activeFindController,
+                  onFindControllerChanged: updateActiveFindController,
+                  onSearchClosed: onSearchClosed,
+                  fontSize: fontSize,
+                  fontFamily: fontFamily,
+                  themeName: themeName,
+                  wrapText: wrapText,
+                  showLineNumbers: showLineNumbers,
+                  isBeautified: _isBeautifyEnabled,
+                  isSearchEnabled: _isSearchEnabled,
+                  forceCodeForge:
+                      false, // Use normal behavior (fallback for large files)
+                ),
+                builder: (context, editorSnapshot) {
+                  if (editorSnapshot.connectionState == ConnectionState.done &&
+                      editorSnapshot.hasData) {
+                    return editorSnapshot.data!;
+                  }
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Loading...',
+                            style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                },
               );
             }
 
@@ -3190,23 +3205,42 @@ Technical details: $e''';
         );
       }
 
-      return SourceViewerEditor.buildEditor(
-        content: content,
-        extension: extension,
-        context: context,
-        verticalController: effectiveVerticalController,
-        horizontalController: effectiveHorizontalController,
-        activeFindController: _activeFindController,
-        onFindControllerChanged: updateActiveFindController,
-        onSearchClosed: onSearchClosed,
-        fontSize: fontSize,
-        fontFamily: fontFamily,
-        themeName: themeName,
-        wrapText: wrapText,
-        showLineNumbers: showLineNumbers,
-        isBeautified: _isBeautifyEnabled,
-        isSearchEnabled: _isSearchEnabled,
-        forceCodeForge: false, // Use normal behavior (fallback for large files)
+      return FutureBuilder<Widget>(
+        future: MonacoSourceViewerEditor.buildEditor(
+          content: content,
+          extension: extension,
+          context: context,
+          verticalController: effectiveVerticalController,
+          horizontalController: effectiveHorizontalController,
+          activeFindController: _activeFindController,
+          onFindControllerChanged: updateActiveFindController,
+          onSearchClosed: onSearchClosed,
+          fontSize: fontSize,
+          fontFamily: fontFamily,
+          themeName: themeName,
+          wrapText: wrapText,
+          showLineNumbers: showLineNumbers,
+          isBeautified: _isBeautifyEnabled,
+          isSearchEnabled: _isSearchEnabled,
+          forceCodeForge:
+              false, // Use normal behavior (fallback for large files)
+        ),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.done &&
+              snapshot.hasData) {
+            return snapshot.data!;
+          }
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Loading...', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          );
+        },
       );
     } catch (e, stackTrace) {
       debugPrint('HtmlService: Error building editor: $e\n$stackTrace');
@@ -3239,7 +3273,7 @@ Technical details: $e''';
 
   /// Reset the editor cache
   void clearHighlightCache() {
-    SourceViewerEditor.clearCache();
+    MonacoSourceViewerEditor.clearCache();
     _verticalScrollController = null;
     _activeHorizontalScrollController = null;
     notifyListeners();
@@ -3247,8 +3281,8 @@ Technical details: $e''';
 
   /// Proxy for tests and internal usage
   Mode? getReHighlightModeForExtension(String extension) {
-    final languageName = SourceViewerEditor.getLanguageForExtension(extension);
-    return SourceViewerEditor.getReHighlightMode(languageName);
+    // Note: Monaco doesn't use re_highlight modes, but we keep this for compatibility
+    return null;
   }
 
   /// Prepare the editor for a reset by unfocusing and clearing cache
@@ -3261,7 +3295,7 @@ Technical details: $e''';
   /// Toggle the search panel for the current editor
   void toggleSearch() {
     _isSearchEnabled = !_isSearchEnabled;
-    
+
     if (_activeFindController != null) {
       _activeFindController!.isActive = _isSearchEnabled;
       if (_isSearchEnabled) {
@@ -3275,8 +3309,9 @@ Technical details: $e''';
   void updateActiveFindController(FindController? newController) {
     debugPrint('=== updateActiveFindController called ===');
     debugPrint('newController: ${newController != null}');
-    debugPrint('current _activeFindController: ${_activeFindController != null}');
-    
+    debugPrint(
+        'current _activeFindController: ${_activeFindController != null}');
+
     if (_activeFindController == newController) {
       debugPrint('=== Find controller unchanged, returning early ===');
       return;
@@ -3297,7 +3332,8 @@ Technical details: $e''';
       _activeFindController!.addListener(_onSearchStateChanged);
     }
 
-    debugPrint('=== Find controller updated (not calling notifyListeners to avoid double notification) ===');
+    debugPrint(
+        '=== Find controller updated (not calling notifyListeners to avoid double notification) ===');
   }
 
   /// Callback when the search state changes
@@ -3309,8 +3345,6 @@ Technical details: $e''';
       }
     }
   }
-
-
 
   /// Unified method to update all tab data consistently
   /// This ensures all tabs (Metadata, Services, Cookies, etc.) are updated together
