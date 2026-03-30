@@ -85,7 +85,7 @@ class _EditorTabState extends State<EditorTab>
         onFindControllerChanged: (controller) =>
             widget.htmlService.updateActiveFindController(controller),
         onSearchClosed: widget.htmlService.toggleSearch,
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        backgroundColor: Theme.of(context).canvasColor,
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done &&

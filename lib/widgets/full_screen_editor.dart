@@ -57,7 +57,7 @@ class FullScreenEditor extends StatelessWidget {
                 showLineNumbers: settings.showLineNumbers,
                 isBeautified: htmlService.isBeautifyEnabled,
                 isSearchEnabled: htmlService.isSearchEnabled,
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                backgroundColor: Theme.of(context).canvasColor,
               ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.done &&

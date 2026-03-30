@@ -240,7 +240,7 @@ class MonacoSourceViewerEditor {
         automaticLayout: true,
         minimap: false,
       ),
-      backgroundColor: Colors.black,
+      backgroundColor: backgroundColor,
     );
   }
 

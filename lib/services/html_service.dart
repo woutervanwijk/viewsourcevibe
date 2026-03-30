@@ -1868,13 +1868,16 @@ class HtmlService extends ChangeNotifier {
       // Toggle the beautification state
       _isBeautifyEnabled = !_isBeautifyEnabled;
       _beautifyStateChanged = true;
-      
+
       // If we're enabling beautification and the current file exists,
       // pre-beautify its content so it's available immediately
-      if (_isBeautifyEnabled && _currentFile != null && _currentFile!.content.isNotEmpty) {
-        await getBeautifiedContent(_currentFile!.content, _currentFile!.extension);
+      if (_isBeautifyEnabled &&
+          _currentFile != null &&
+          _currentFile!.content.isNotEmpty) {
+        await getBeautifiedContent(
+            _currentFile!.content, _currentFile!.extension);
       }
-      
+
       notifyListeners();
     } finally {
       // Allow toggling again after a short cooling period
@@ -3172,8 +3175,7 @@ Technical details: $e''';
                   showLineNumbers: showLineNumbers,
                   isBeautified: _isBeautifyEnabled,
                   isSearchEnabled: _isSearchEnabled,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primaryContainer,
+                  backgroundColor: Theme.of(context).canvasColor,
                 ),
                 builder: (context, editorSnapshot) {
                   if (editorSnapshot.connectionState == ConnectionState.done &&
@@ -3228,7 +3230,7 @@ Technical details: $e''';
           showLineNumbers: showLineNumbers,
           isBeautified: _isBeautifyEnabled,
           isSearchEnabled: _isSearchEnabled,
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+          backgroundColor: Theme.of(context).canvasColor,
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done &&
