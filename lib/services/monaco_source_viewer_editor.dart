@@ -92,6 +92,34 @@ class MonacoSourceViewerEditor {
   static List<String> getAvailableLanguages() =>
       builtinAllLanguages.keys.toList();
 
+  /// Centralized function to create EditorOptions with consistent settings
+  static EditorOptions createEditorOptions({
+    required String languageName,
+    required String themeName,
+    required double fontSize,
+    required String fontFamily,
+    required bool wrapText,
+    required bool showLineNumbers,
+    bool readOnly = true,
+  }) {
+    return EditorOptions(
+      language: _getMonacoLanguage(languageName),
+      theme: getMonacoThemeByName(themeName),
+      fontSize: fontSize,
+      smoothScrolling: false,
+      parameterHints: false,
+      quickSuggestions: false,
+      disableLayerHinting: true,
+      disableMonospaceOptimizations: true,
+      fontFamily: fontFamily,
+      wordWrap: wrapText,
+      lineNumbers: showLineNumbers,
+      readOnly: readOnly,
+      automaticLayout: false,
+      minimap: false,
+    );
+  }
+
   static MonacoTheme getMonacoThemeByName(String themeName) {
     switch (themeName.toLowerCase()) {
       case 'vs':
@@ -145,19 +173,16 @@ class MonacoSourceViewerEditor {
     final languageName = getLanguageForExtension(extension);
 
     // Use the actual content hash to ensure uniqueness
-    // Include font size and other options in the key so changes force controller recreation
+    // Only include content-related factors in the key to minimize controller recreations
+    // Font size, theme, and other options can be updated on existing controllers
     final controllerKey = [
       extension,
       content.hashCode,
       content.length,
-      isBeautified ? 'beautified' : 'raw',
-      fontSize,
-      themeName,
-      wrapText,
-      showLineNumbers
+      isBeautified ? 'beautified' : 'raw'
     ].join('_');
 
-    // Check if we need to create a fresh controller due to content or option changes
+    // Check if we need to create a fresh controller due to content changes
     final existingController = _cachedControllers[controllerKey];
     final needFreshController = existingController == null;
 
@@ -170,14 +195,17 @@ class MonacoSourceViewerEditor {
       _cachedFindControllers[controllerKey]?.dispose();
 
       try {
-        // Create Monaco controller with minimal options
-        controller = await MonacoController.create(
-          options: EditorOptions(
-            language: _getMonacoLanguage(languageName),
-            theme: getMonacoThemeByName(themeName),
-            automaticLayout: true,
-          ),
+        // Create Monaco controller with centralized options
+        final editorOptions = createEditorOptions(
+          languageName: languageName,
+          themeName: themeName,
+          fontSize: fontSize,
+          fontFamily: fontFamily,
+          wrapText: wrapText,
+          showLineNumbers: showLineNumbers,
         );
+        
+        controller = await MonacoController.create(options: editorOptions);
 
         // Set the content
         await controller.setValue(content);
@@ -206,6 +234,22 @@ class MonacoSourceViewerEditor {
       } catch (e) {
         debugPrint('Error updating content: $e');
       }
+
+      // Update controller options if they've changed
+      // This is more efficient than recreating the controller
+      try {
+        final updatedOptions = createEditorOptions(
+          languageName: languageName,
+          themeName: themeName,
+          fontSize: fontSize,
+          fontFamily: fontFamily,
+          wrapText: wrapText,
+          showLineNumbers: showLineNumbers,
+        );
+        await controller.updateOptions(updatedOptions);
+      } catch (e) {
+        debugPrint('Error updating controller options: $e');
+      }
     }
 
     // Enforce cache limits
@@ -227,19 +271,18 @@ class MonacoSourceViewerEditor {
     if (Platform.isIOS) {
       fontSize *= 2.0;
     }
+    final finalOptions = createEditorOptions(
+      languageName: languageName,
+      themeName: themeName,
+      fontSize: fontSize,
+      fontFamily: fontFamily,
+      wrapText: wrapText,
+      showLineNumbers: showLineNumbers,
+    );
+    
     return MonacoEditor(
       controller: controller,
-      options: EditorOptions(
-        language: _getMonacoLanguage(languageName),
-        theme: getMonacoThemeByName(themeName),
-        fontSize: fontSize,
-        fontFamily: fontFamily,
-        wordWrap: wrapText,
-        lineNumbers: showLineNumbers,
-        readOnly: true,
-        automaticLayout: true,
-        minimap: false,
-      ),
+      options: finalOptions,
       backgroundColor: backgroundColor,
     );
   }
