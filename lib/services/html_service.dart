@@ -1865,10 +1865,16 @@ class HtmlService extends ChangeNotifier {
     _isBeautifyToggling = true;
 
     try {
-      // Don't clear cache for beautify toggle - we want to preserve scroll position
-      // and just update the content
+      // Toggle the beautification state
       _isBeautifyEnabled = !_isBeautifyEnabled;
       _beautifyStateChanged = true;
+      
+      // If we're enabling beautification and the current file exists,
+      // pre-beautify its content so it's available immediately
+      if (_isBeautifyEnabled && _currentFile != null && _currentFile!.content.isNotEmpty) {
+        await getBeautifiedContent(_currentFile!.content, _currentFile!.extension);
+      }
+      
       notifyListeners();
     } finally {
       // Allow toggling again after a short cooling period

@@ -39,7 +39,9 @@ class _EditorTabState extends State<EditorTab>
     if (oldWidget.settings.fontSize != widget.settings.fontSize ||
         oldWidget.settings.themeName != widget.settings.themeName ||
         oldWidget.settings.wrapText != widget.settings.wrapText ||
-        oldWidget.settings.showLineNumbers != widget.settings.showLineNumbers) {
+        oldWidget.settings.showLineNumbers != widget.settings.showLineNumbers ||
+        oldWidget.htmlService.isBeautifyEnabled !=
+            widget.htmlService.isBeautifyEnabled) {
       _cachedEditor = null;
       _cachedContentHash = null;
     }
