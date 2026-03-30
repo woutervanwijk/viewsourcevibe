@@ -56,8 +56,8 @@ class FullScreenEditor extends StatelessWidget {
                 wrapText: settings.wrapText,
                 showLineNumbers: settings.showLineNumbers,
                 isBeautified: htmlService.isBeautifyEnabled,
-                forceCodeForge: true, // Always use CodeForge in fullscreen mode
                 isSearchEnabled: htmlService.isSearchEnabled,
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.done &&

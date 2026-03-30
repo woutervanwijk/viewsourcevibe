@@ -3166,8 +3166,8 @@ Technical details: $e''';
                   showLineNumbers: showLineNumbers,
                   isBeautified: _isBeautifyEnabled,
                   isSearchEnabled: _isSearchEnabled,
-                  forceCodeForge:
-                      false, // Use normal behavior (fallback for large files)
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
                 ),
                 builder: (context, editorSnapshot) {
                   if (editorSnapshot.connectionState == ConnectionState.done &&
@@ -3222,8 +3222,7 @@ Technical details: $e''';
           showLineNumbers: showLineNumbers,
           isBeautified: _isBeautifyEnabled,
           isSearchEnabled: _isSearchEnabled,
-          forceCodeForge:
-              false, // Use normal behavior (fallback for large files)
+          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done &&

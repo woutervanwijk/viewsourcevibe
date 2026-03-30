@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:re_highlight/languages/all.dart';
@@ -6,7 +8,7 @@ import 'package:view_source_vibe/services/find_controller.dart';
 class MonacoSourceViewerEditor {
   static final Map<String, MonacoController> _cachedControllers = {};
   static final Map<String, FindController> _cachedFindControllers = {};
-  
+
   FindController? activeFindController;
   Function(FindController)? onFindControllerChanged;
   Function()? onSearchClosed;
@@ -111,7 +113,7 @@ class MonacoSourceViewerEditor {
     required String content,
     required String extension,
     required BuildContext context,
-    required ScrollController verticalController,
+    ScrollController? verticalController,
     ScrollController? horizontalController,
     double fontSize = 16.0,
     String fontFamily = 'Courier',
@@ -120,11 +122,14 @@ class MonacoSourceViewerEditor {
     bool showLineNumbers = true,
     bool isBeautified = false,
     bool isSearchEnabled = false,
-    bool forceCodeForge = false,
     FindController? activeFindController,
     Function(FindController)? onFindControllerChanged,
     Function()? onSearchClosed,
+    Color backgroundColor = Colors.black,
   }) async {
+    // For Monaco editor, we don't use external scroll controllers
+    // as it handles scrolling internally for smooth performance
+    // Ignore the passed scroll controllers
     // Update the instance variables if provided
     final editor = MonacoSourceViewerEditor();
     if (activeFindController != null) {
@@ -138,13 +143,21 @@ class MonacoSourceViewerEditor {
     }
 
     final languageName = getLanguageForExtension(extension);
-    
-    // Use the actual content hash to ensure uniqueness
-    final contentHash = content.hashCode;
-    final controllerKey =
-        '${extension}_${contentHash}_${content.length}_${isBeautified ? 'beautified' : 'raw'}';
 
-    // Check if we need to create a fresh controller due to content changes
+    // Use the actual content hash to ensure uniqueness
+    // Include font size and other options in the key so changes force controller recreation
+    final controllerKey = [
+      extension,
+      content.hashCode,
+      content.length,
+      isBeautified ? 'beautified' : 'raw',
+      fontSize,
+      themeName,
+      wrapText,
+      showLineNumbers
+    ].join('_');
+
+    // Check if we need to create a fresh controller due to content or option changes
     final existingController = _cachedControllers[controllerKey];
     final needFreshController = existingController == null;
 
@@ -183,7 +196,7 @@ class MonacoSourceViewerEditor {
     } else {
       controller = existingController;
       findController = _cachedFindControllers[controllerKey];
-      
+
       // Update content if changed
       try {
         final currentValue = await controller.getValue();
@@ -207,10 +220,13 @@ class MonacoSourceViewerEditor {
     // Simple return - directly return the MonacoEditor
     if (content.isEmpty) {
       return const Center(
-        child: Text('No content to display', style: TextStyle(color: Colors.grey)),
+        child:
+            Text('No content to display', style: TextStyle(color: Colors.grey)),
       );
     }
-
+    if (Platform.isIOS) {
+      fontSize *= 2.0;
+    }
     return MonacoEditor(
       controller: controller,
       options: EditorOptions(
@@ -224,6 +240,7 @@ class MonacoSourceViewerEditor {
         automaticLayout: true,
         minimap: false,
       ),
+      backgroundColor: Colors.black,
     );
   }
 

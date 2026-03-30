@@ -601,8 +601,6 @@ class _SourceViewerState extends State<SourceViewer> {
       ),
     ]);
   }
-
-
 }
 
 class SearchHighlightPainter extends CustomPainter {
@@ -648,7 +646,6 @@ class SearchHighlightPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-/// Open the current file in a full-screen CodeForge editor
 void _openFullScreenEditor(
   BuildContext context,
   HtmlFile file,
