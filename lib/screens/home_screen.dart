@@ -483,6 +483,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 ))
                             : TabBarView(
                                 controller: _tabController,
+                                physics: const NeverScrollableScrollPhysics(), // Disable swipe gestures
                                 children: _getTabViews(
                                     htmlService, structure.currentFile),
                               ),
