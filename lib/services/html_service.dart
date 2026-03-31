@@ -205,7 +205,9 @@ class HtmlService extends ChangeNotifier {
     // Check for explicit HTML extensions
     if (url.contains('.html') ||
         url.contains('.htm') ||
-        url.contains('.xhtml')) {
+        url.contains('.xhtml') ||
+        url.contains('.php') ||
+        url.contains('.asp')) {
       return true;
     }
 
@@ -321,6 +323,7 @@ class HtmlService extends ChangeNotifier {
     final bool looksLikeXml = selectedContentType == 'xml' ||
         isSvg ||
         (_currentFile?.name.toLowerCase().endsWith('.xml') ?? false) ||
+        (_currentFile?.name.toLowerCase().endsWith('.opml') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.rss') ?? false) ||
         (_currentFile?.name.toLowerCase().endsWith('.atom') ?? false);
 
@@ -329,9 +332,11 @@ class HtmlService extends ChangeNotifier {
     // Tertiary check: URL guessing for transition stability
     final String url = (_currentInputText ?? '').toLowerCase();
     return url.endsWith('.xml') ||
+        url.endsWith('.opml') ||
         url.endsWith('.rss') ||
         url.endsWith('.atom') ||
         url.contains('.xml?') ||
+        url.contains('.opml?') ||
         url.contains('.rss?') ||
         url.contains('.atom?');
   }
@@ -393,13 +398,18 @@ class HtmlService extends ChangeNotifier {
 
   /// Server-dependent tabs (Probe, Headers, Security, Cookies) only for URLs
   bool get showServerTabs {
+    // Priority 1: Current file is a URL
     if (_currentFile?.isUrl ?? false) return true;
-    // Show during loading of a URL
+
+    // Priority 2: Not a URL file, but actively loading a URL (before _currentFile is updated)
     if (_isLoading &&
         _currentInputText != null &&
         (_currentInputText!.startsWith('http') ||
             _currentInputText!.contains('://'))) {
-      return true;
+      // Safety check: if we already have a current local file, trust its type over the input text
+      if (_currentFile == null || _currentFile!.isUrl) {
+        return true;
+      }
     }
     return false;
   }
@@ -1815,8 +1825,13 @@ class HtmlService extends ChangeNotifier {
       selectedContentType = null;
     }
 
-    // For local files, show the name in the URL bar instead of the full path
-    _currentInputText = file.isUrl ? file.path : file.name;
+    // For local files, show the name (filename) in the URL bar instead of the full path
+    String displayName = file.name;
+    if (!file.isUrl) {
+      // Split by both forward and backward slashes to be safe across platforms
+      displayName = displayName.split('/').last.split('\\').last;
+    }
+    _currentInputText = file.isUrl ? file.path : displayName;
     // Don't notify here - we'll notify once at the end after metadata extraction
     _autoSave();
     await scrollToZero();
@@ -2228,12 +2243,18 @@ class HtmlService extends ChangeNotifier {
           contentType: contentType,
         );
 
+        // Update _lastPageWeight from probe as a baseline fallback
+        _lastPageWeight = {
+          'transfer': contentLength ?? content.length,
+          'decoded': content.length,
+        };
+
         return HtmlFile(
           name: processedFilename,
           path: finalUrl,
           content: content,
           lastModified: DateTime.now(),
-          size: content.length,
+          size: content.length, // Initial probe size
           isUrl: true,
           probeResult: currentProbeResult,
         );
@@ -4144,12 +4165,17 @@ Technical details: $e''';
         filename = generateDescriptiveFilename(Uri.parse(url), content);
       } catch (_) {}
 
+      // Use browser-reported main document size for the file size if available,
+      // as it represents the official network response size. 
+      // Fallback to content.length (the length of the extracted DOM string).
+      final int browserDocSize = (_browserProbeResult?['pageWeight']?['mainDocumentDecoded'] as num? ?? 0).toInt();
+
       final file = HtmlFile(
         name: filename,
         path: url,
         content: content,
         lastModified: DateTime.now(),
-        size: content.length,
+        size: browserDocSize > 0 ? browserDocSize : content.length,
         isUrl: true,
         probeResult: _probeResult,
       );

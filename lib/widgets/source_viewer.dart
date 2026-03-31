@@ -274,12 +274,12 @@ class _SourceViewerState extends State<SourceViewer> {
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
 
-    // Add null safety checks
-    final fileName = widget.file.name;
+    // Add null safety and path cleanup
+    final fileName = widget.file.name.split('/').last.split('\\').last;
     final fileContent = widget.file.content;
     final lines = fileContent.split('\n');
     final fileExtension = fileName.isNotEmpty
-        ? widget.file.name.split('.').last.toLowerCase()
+        ? fileName.split('.').last.toLowerCase()
         : '';
     final isHtmlFile = fileExtension == 'html' || fileExtension == 'htm';
 

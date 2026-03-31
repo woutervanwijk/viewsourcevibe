@@ -84,7 +84,7 @@ class Toolbar extends StatelessWidget {
         }
 
         final htmlFile = HtmlFile(
-          name: file.name.isNotEmpty ? file.name : '',
+          name: file.name.isNotEmpty ? file.name.split('/').last.split('\\').last : '',
           path: file.path ?? '',
           content: content,
           lastModified: DateTime.now(),
