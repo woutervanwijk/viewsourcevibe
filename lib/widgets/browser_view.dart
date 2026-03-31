@@ -9,7 +9,6 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
 import 'dart:io';
 import 'dart:collection';
-import 'dart:async';
 
 class BrowserView extends StatefulWidget {
   final HtmlFile? file;
@@ -30,8 +29,6 @@ class _BrowserViewState extends State<BrowserView> {
   String? _currentRssUrl;
   HtmlService? _htmlService; // cached to use safely in dispose()
   String? _lastSyncedUrl; // track last early-synced URL to avoid duplicates
-  Timer? _performancePollTimer;
-  int _pollCount = 0;
 
   @override
   void didChangeDependencies() {
@@ -47,7 +44,6 @@ class _BrowserViewState extends State<BrowserView> {
 
   @override
   void dispose() {
-    _performancePollTimer?.cancel();
     // Use the cached reference — Provider.of is NOT safe here
     // because the widget's element is already deactivated.
     _htmlService?.clearWebViewController();
@@ -93,31 +89,6 @@ class _BrowserViewState extends State<BrowserView> {
     if (htmlService.activeTabIndex == htmlService.browserTabIndex) {
       _loadContent();
     }
-  }
-
-  void _startPerformancePolling(InAppWebViewController controller, String urlString) {
-    _performancePollTimer?.cancel();
-    _pollCount = 0;
-    
-    // Poll every 2 seconds for a maximum of 10 seconds (5 polls) to capture deferred resources
-    _performancePollTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      _pollCount++;
-      if (_pollCount > 5) {
-        timer.cancel();
-        return;
-      }
-      
-      final htmlService = Provider.of<HtmlService>(context, listen: false);
-      if (htmlService.currentFile?.path == urlString || htmlService.webViewLoadingUrl == urlString) {
-        htmlService.syncWebViewState(urlString, isPartial: true);
-      } else {
-        timer.cancel(); // URL changed, stop polling
-      }
-    });
   }
 
   Future<void> _loadContent() async {
@@ -167,13 +138,13 @@ class _BrowserViewState extends State<BrowserView> {
         }
         _currentRssUrl = targetUrl;
       } catch (e, stackTrace) {
-        debugPrint('BrowserView: RSS conversion/loading failed: $e\n$stackTrace');
+        debugPrint(
+            'BrowserView: RSS conversion/loading failed: $e\n$stackTrace');
         // Fallback to loading raw content if RSS processing fails
         _currentRssUrl = null;
         if (widget.file?.content.isNotEmpty ?? false) {
-          _controller!.loadData(
-              data: widget.file!.content,
-              baseUrl: WebUri(targetUrl));
+          _controller!
+              .loadData(data: widget.file!.content, baseUrl: WebUri(targetUrl));
         }
       }
     } else {
@@ -244,7 +215,6 @@ class _BrowserViewState extends State<BrowserView> {
       },
       onLoadStart: (controller, url) {
         _lastSyncedUrl = null;
-        _performancePollTimer?.cancel();
       },
       onLoadStop: (controller, url) async {
         if (mounted && url != null) {
@@ -267,8 +237,6 @@ class _BrowserViewState extends State<BrowserView> {
           htmlService.syncWebViewState(urlString, isPartial: false);
           _lastSyncedUrl = urlString;
           htmlService.updateWebViewLoadingProgress(1.0);
-
-          _startPerformancePolling(controller, urlString);
         }
       },
       onProgressChanged: (controller, progress) async {
