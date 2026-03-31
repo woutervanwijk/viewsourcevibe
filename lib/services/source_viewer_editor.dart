@@ -234,26 +234,97 @@ class SourceViewerEditor {
         existingController.text != processedContent;
 
     if (needFreshController) {
-      existingController?.dispose();
-      _cachedFindControllers[controllerKey]?.dispose();
+      return FutureBuilder<bool>(
+        // Delay parsing slightly so the loading indicator can render first
+        future: Future.delayed(const Duration(milliseconds: 50), () => true),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Parsing code...', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            );
+          }
 
-      final controller = CodeLineEditingController.fromText(processedContent);
-      _cachedControllers[controllerKey] = controller;
+          existingController?.dispose();
+          _cachedFindControllers[controllerKey]?.dispose();
 
-      final findController = CodeFindController(controller);
-      _cachedFindControllers[controllerKey] = findController;
+          final controller = CodeLineEditingController.fromText(processedContent);
+          _cachedControllers[controllerKey] = controller;
+
+          final findController = CodeFindController(controller);
+          _cachedFindControllers[controllerKey] = findController;
+
+          if (_cachedControllers.length > 5) {
+            final firstKey = _cachedControllers.keys.first;
+            if (firstKey != controllerKey) {
+              _cachedControllers.remove(firstKey)?.dispose();
+              _cachedFindControllers.remove(firstKey)?.dispose();
+            }
+          }
+
+          return _buildEditorWidget(
+            controller,
+            findController,
+            wrapText,
+            fontSize,
+            languageName,
+            mode,
+            themeName,
+            showLineNumbers,
+            verticalController,
+            horizontalController,
+            activeFindController,
+            onFindControllerChanged,
+            isSearchEnabled,
+            content,
+          );
+        },
+      );
     }
 
     final controller = _cachedControllers[controllerKey]!;
     final findController = _cachedFindControllers[controllerKey]!;
 
-    if (_cachedControllers.length > 5) {
-      final firstKey = _cachedControllers.keys.first;
-      if (firstKey != controllerKey) {
-        _cachedControllers.remove(firstKey)?.dispose();
-        _cachedFindControllers.remove(firstKey)?.dispose();
-      }
-    }
+    return _buildEditorWidget(
+      controller,
+      findController,
+      wrapText,
+      fontSize,
+      languageName,
+      mode,
+      themeName,
+      showLineNumbers,
+      verticalController,
+      horizontalController,
+      activeFindController,
+      onFindControllerChanged,
+      isSearchEnabled,
+      content,
+    );
+  }
+
+  static Widget _buildEditorWidget(
+    CodeLineEditingController controller,
+    CodeFindController findController,
+    bool wrapText,
+    double fontSize,
+    String languageName,
+    Mode mode,
+    String themeName,
+    bool showLineNumbers,
+    ScrollController verticalController,
+    ScrollController? horizontalController,
+    CodeFindController? activeFindController,
+    Function(CodeFindController) onFindControllerChanged,
+    bool isSearchEnabled,
+    String content,
+  ) {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (activeFindController != findController) {
