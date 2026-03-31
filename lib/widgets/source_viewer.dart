@@ -7,7 +7,6 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
-import 'package:view_source_vibe/widgets/full_screen_editor.dart';
 
 class SourceViewer extends StatefulWidget {
   final HtmlFile file;
@@ -308,7 +307,8 @@ class _SourceViewerState extends State<SourceViewer> {
                       data.activeFindController!.value == null) {
                     debugPrint('=== Activating find controller ===');
                     data.activeFindController!.findMode();
-                    data.activeFindController!.findInputFocusNode.requestFocus();
+                    data.activeFindController!.findInputFocusNode
+                        .requestFocus();
                   }
                 });
               }
@@ -481,20 +481,6 @@ class _SourceViewerState extends State<SourceViewer> {
                                           ? 'Show Raw'
                                           : 'Beautify Code',
                                     ),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  // Open in Full Screen Editor button
-                                  IconButton(
-                                    icon:
-                                        const Icon(Icons.fullscreen, size: 20),
-                                    padding: const EdgeInsets.all(2),
-                                    constraints: const BoxConstraints(),
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () {
-                                      _openFullScreenEditor(context,
-                                          widget.file, settings, htmlService);
-                                    },
-                                    tooltip: 'Open in Full Screen Editor',
                                   ),
                                 ],
                               );
@@ -724,24 +710,6 @@ class SearchHighlightPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
-/// Open the current file in a full-screen CodeForge editor
-void _openFullScreenEditor(
-  BuildContext context,
-  HtmlFile file,
-  AppSettings settings,
-  HtmlService htmlService,
-) {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (context) => FullScreenEditor(
-        file: file,
-        settings: settings,
-        htmlService: htmlService,
-      ),
-    ),
-  );
 }
 
 /// Helper classes for SourceViewer Selector

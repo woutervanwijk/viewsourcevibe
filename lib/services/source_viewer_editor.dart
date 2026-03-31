@@ -285,6 +285,7 @@ class SourceViewerEditor {
             controller: controller,
             findController: findController,
             wordWrap: wrapText,
+            readOnly: true,
             style: CodeEditorStyle(
               fontSize: fontSize,
               fontFamily: 'Courier',
