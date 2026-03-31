@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
-import 'package:code_forge/code_forge.dart';
+import 'package:re_editor/re_editor.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'dart:io';
@@ -46,7 +46,7 @@ class HtmlService extends ChangeNotifier {
   
   // Search state
   bool _isSearchEnabled = false;
-  FindController? _activeFindController;
+  CodeFindController? _activeFindController;
   
   // Beautify state tracking
   bool _beautifyStateChanged = false;
@@ -178,7 +178,7 @@ class HtmlService extends ChangeNotifier {
 
   bool get isSearchActive => _isSearchEnabled;
   bool get isSearchEnabled => _isSearchEnabled;
-  FindController? get activeFindController => _activeFindController;
+  CodeFindController? get activeFindController => _activeFindController;
 
 
   bool get isHtml {
@@ -3263,16 +3263,18 @@ Technical details: $e''';
     _isSearchEnabled = !_isSearchEnabled;
     
     if (_activeFindController != null) {
-      _activeFindController!.isActive = _isSearchEnabled;
       if (_isSearchEnabled) {
+        _activeFindController!.findMode();
         _activeFindController!.findInputFocusNode.requestFocus();
+      } else {
+        _activeFindController!.close();
       }
     }
     notifyListeners();
   }
 
   /// Update the active find controller and manage listeners
-  void updateActiveFindController(FindController? newController) {
+  void updateActiveFindController(CodeFindController? newController) {
     debugPrint('=== updateActiveFindController called ===');
     debugPrint('newController: ${newController != null}');
     debugPrint('current _activeFindController: ${_activeFindController != null}');
@@ -3303,8 +3305,8 @@ Technical details: $e''';
   /// Callback when the search state changes
   void _onSearchStateChanged() {
     if (_activeFindController != null) {
-      if (_isSearchEnabled != _activeFindController!.isActive) {
-        _isSearchEnabled = _activeFindController!.isActive;
+      if (_isSearchEnabled != (_activeFindController!.value != null)) {
+        _isSearchEnabled = _activeFindController!.value != null;
         notifyListeners();
       }
     }

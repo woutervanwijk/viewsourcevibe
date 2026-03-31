@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:code_forge/code_forge.dart';
+import 'package:re_editor/re_editor.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -305,9 +305,9 @@ class _SourceViewerState extends State<SourceViewer> {
               if (data.isSearchEnabled) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (data.activeFindController != null &&
-                      !data.activeFindController!.isActive) {
+                      data.activeFindController!.value == null) {
                     debugPrint('=== Activating find controller ===');
-                    data.activeFindController!.isActive = true;
+                    data.activeFindController!.findMode();
                     data.activeFindController!.findInputFocusNode.requestFocus();
                   }
                 });
@@ -751,7 +751,7 @@ class _SourceViewerHeaderData {
   final bool isSearchEnabled;
   final bool isMedia;
   final String? selectedContentType;
-  final FindController? activeFindController;
+  final CodeFindController? activeFindController;
 
   const _SourceViewerHeaderData({
     required this.isSearchActive,
