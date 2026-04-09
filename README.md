@@ -1,5 +1,7 @@
 # View Source Vibe
 
+![iOS Screenshot](assets/vibe/screens/ios/Simulator%20Screenshot%20-%20iPhone%208%20Plus%20-%202026-02-18%20at%2016.46.49.png)
+
 A HTML/JS/CSSView Source & Page Inspector. I wanted to create an app like this for some time, since most View Source apps on mobile were annoying or old. It had to be: 
 - free (open source)
 - open files and urls
@@ -59,6 +61,8 @@ View Source Vibe is a powerful tool to view source code, browse and inspect web 
 
 > [!NOTE]
 > **Disclaimer:** The detection of services, tech stacks, and cookies is currently in beta and may not be 100% reliable yet.
+
+![Android Screenshot](assets/vibe/screens/android/Screenshot_1771434114.png)
 
 ## 🎯 Usage
 
