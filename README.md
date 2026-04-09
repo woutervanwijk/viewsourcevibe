@@ -20,17 +20,17 @@ So I took the chance to experiment with Vibe coding (literally with Mistral Vibe
 - Logs/prompts in the repo
 - Tested a lot to make sure it really works well
 
-===
-
-This is what Vibe wrote itself: 
-
-![View Source Vibe Logo](assets/icon.png)
-
 Get it on the Play Store: 
 https://play.google.com/store/apps/details?id=info.wouter.sourceviewer
 
 Or the App Store:
 https://apps.apple.com/us/app/view-source-vibe/id6759335719
+
+![Android Screenshot](assets/vibe/screens/android/Screenshot_1771434114.png)
+
+===
+
+# This is what Vibe wrote itself: 
 
 **Cross-Platform Source Code Viewer & Page analyzer**
 
@@ -61,8 +61,6 @@ View Source Vibe is a powerful tool to view source code, browse and inspect web 
 
 > [!NOTE]
 > **Disclaimer:** The detection of services, tech stacks, and cookies is currently in beta and may not be 100% reliable yet.
-
-![Android Screenshot](assets/vibe/screens/android/Screenshot_1771434114.png)
 
 ## 🎯 Usage
 
