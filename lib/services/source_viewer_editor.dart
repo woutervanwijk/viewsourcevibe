@@ -23,6 +23,9 @@ import 'package:view_source_vibe/widgets/contextmenu.dart';
 class SourceViewerEditor {
   static final Map<String, CodeLineEditingController> _cachedControllers = {};
   static final Map<String, CodeFindController> _cachedFindControllers = {};
+  // Keyed by verticalScroller identity so CodeEditor gets a stable object
+  // across rebuilds, preventing scroll listener teardown/re-setup jank.
+  static final Map<ScrollController, CodeScrollController> _scrollControllerCache = {};
 
   static List<String> getAvailableLanguages() =>
       builtinAllLanguages.keys.toList();
@@ -326,17 +329,24 @@ class SourceViewerEditor {
     String content,
   ) {
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (activeFindController != findController) {
-        onFindControllerChanged(findController);
-      }
-
-      if (isSearchEnabled && findController.value == null) {
-        findController.findMode();
-      } else if (!isSearchEnabled && findController.value != null) {
-        findController.close();
-      }
-    });
+    // Only register the callback when something actually needs to change,
+    // to avoid queuing work on every rebuild that causes unnecessary jank.
+    final needsFindControllerUpdate = activeFindController != findController;
+    final needsSearchStateUpdate = isSearchEnabled
+        ? findController.value == null
+        : findController.value != null;
+    if (needsFindControllerUpdate || needsSearchStateUpdate) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (activeFindController != findController) {
+          onFindControllerChanged(findController);
+        }
+        if (isSearchEnabled && findController.value == null) {
+          findController.findMode();
+        } else if (!isSearchEnabled && findController.value != null) {
+          findController.close();
+        }
+      });
+    }
 
     return LayoutBuilder(builder: (context, constraints) {
       if (constraints.maxWidth > 0 && constraints.maxHeight > 0) {
@@ -348,11 +358,15 @@ class SourceViewerEditor {
             );
           }
 
-          return CodeEditor(
-            scrollController: CodeScrollController(
+          final scrollController = _scrollControllerCache.putIfAbsent(
+            verticalController,
+            () => CodeScrollController(
               verticalScroller: verticalController,
               horizontalScroller: horizontalController,
             ),
+          );
+          return CodeEditor(
+            scrollController: scrollController,
             controller: controller,
             findController: findController,
             wordWrap: wrapText,
@@ -432,5 +446,6 @@ class SourceViewerEditor {
     }
     _cachedControllers.clear();
     _cachedFindControllers.clear();
+    _scrollControllerCache.clear();
   }
 }
