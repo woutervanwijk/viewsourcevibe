@@ -365,7 +365,8 @@ class SourceViewerEditor {
               horizontalScroller: horizontalController,
             ),
           );
-          return CodeEditor(
+          return RepaintBoundary(
+            child: CodeEditor(
             scrollController: scrollController,
             controller: controller,
             findController: findController,
@@ -410,7 +411,7 @@ class SourceViewerEditor {
             toolbarController: const ContextMenuControllerImpl(),
             findBuilder: (context, controller, readOnly) =>
                 CodeFindPanelView(controller: controller, readOnly: readOnly),
-          );
+          ));
         } catch (e, stackTrace) {
           debugPrint('Error rendering editor: $e\n$stackTrace');
           return SingleChildScrollView(

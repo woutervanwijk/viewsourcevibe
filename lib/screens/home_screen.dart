@@ -46,6 +46,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _handleTabSelection() {
+    // Guard against firing during the animation (indexIsChanging is true mid-swipe).
+    // Only act once the destination tab is settled.
+    if (_tabController.indexIsChanging) return;
+
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     htmlService.setActiveTabIndex(_tabController.index);
 
@@ -53,10 +57,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (_tabController.index == htmlService.browserTabIndex) {
       htmlService.triggerBrowserReload().ignore();
     }
-
-    setState(() {
-      // Rebuild to update FAB visibility based on _tabController.index
-    });
   }
 
   void _updateTabs(HtmlService htmlService, {bool force = false}) {
