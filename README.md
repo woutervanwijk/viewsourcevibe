@@ -1,10 +1,6 @@
 # View Source Vibe
 *Pocket web inspector*
 
-| iOS | Android |
-|-----|---------|
-| ![iOS Screenshot](assets/vibe%20screens/ios/Simulator%20Screenshot%20-%20iPhone%208%20Plus%20-%202026-02-18%20at%2016.46.49.png){: width="300" } | ![Android Screenshot](assets/vibe%20screens/android/pixel%20tablet/Screenshot_1771434114.png){: width="500" } |
-
 A HTML/JS/CSSView Source & Page Inspector. I wanted to create an app like this for some time, since most View Source apps on mobile were annoying or old. It had to be: 
 - free (open source)
 - open files and urls
@@ -15,6 +11,11 @@ A HTML/JS/CSSView Source & Page Inspector. I wanted to create an app like this f
 - line numbers
 - theme support
 - well tested on usability
+
+| iOS | Android |
+|-----|---------|
+| ![iOS Mobile](assets/vibe%20screens/ios/Simulator%20Screenshot%20-%20iPhone%208%20Plus%20-%202026-02-18%20at%2016.46.49.png) | ![Android Tablet](assets/vibe%20screens/android/pixel%20tablet/Screenshot_1771434114.png) |
+
 
 So I took the chance to experiment with Vibe coding (literally with Mistral Vibe). Vibe coding really suits me, because I mostly want the results of a good app, not the coding itself. I used Flutter because I know it already (we coded the Fiper.net app in it). I began with a simple View Source app, and gradually added more and more features, using Vibe and later also Gemini, Opus to help me with the implementation.
 
