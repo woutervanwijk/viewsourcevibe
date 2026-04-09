@@ -1,7 +1,7 @@
 # View Source Vibe
 *Pocket web inspector*
 
-![iOS Screenshot](assets/vibe%20screens/ios/Simulator%20Screenshot%20-%20iPhone%208%20Plus%20-%202026-02-18%20at%2016.46.49.png)
+![iOS Screenshot](assets/vibe%20screens/ios/Simulator%20Screenshot%20-%20iPhone%208%20Plus%20-%202026-02-18%20at%2016.46.49.png){: width="300" }
 
 A HTML/JS/CSSView Source & Page Inspector. I wanted to create an app like this for some time, since most View Source apps on mobile were annoying or old. It had to be: 
 - free (open source)
@@ -27,7 +27,7 @@ https://play.google.com/store/apps/details?id=info.wouter.sourceviewer
 Or the App Store:
 https://apps.apple.com/us/app/view-source-vibe/id6759335719
 
-![Android Screenshot](assets/vibe%20screens/android/pixel%20tablet/Screenshot_1771434114.png)
+![Android Screenshot](assets/vibe%20screens/android/pixel%20tablet/Screenshot_1771434114.png){: width="500" }
 
 ===
 
