@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:re_editor/re_editor.dart';
@@ -19,30 +17,24 @@ class SourceViewer extends StatefulWidget {
 
 class _SourceViewerState extends State<SourceViewer> {
   late ScrollController _verticalController;
+  late ScrollController _horizontalController;
   final ValueNotifier<bool> _showScrollToTopFab = ValueNotifier<bool>(false);
+  bool _wasSearchEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _verticalController = ScrollController();
     _verticalController.addListener(_scrollListener);
-
-    // Listen for beautify toggle changes
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final htmlService = Provider.of<HtmlService>(context, listen: false);
-      htmlService.addListener(_onHtmlServiceChanged);
-    });
+    _horizontalController = ScrollController();
   }
 
   @override
   void dispose() {
     _verticalController.removeListener(_scrollListener);
     _verticalController.dispose();
+    _horizontalController.dispose();
     _showScrollToTopFab.dispose();
-
-    // Remove listener from HtmlService
-    final htmlService = Provider.of<HtmlService>(context, listen: false);
-    htmlService.removeListener(_onHtmlServiceChanged);
 
     super.dispose();
   }
@@ -54,32 +46,6 @@ class _SourceViewerState extends State<SourceViewer> {
         _showScrollToTopFab.value = shouldShow;
       }
     }
-  }
-
-  void _onHtmlServiceChanged() {
-    final htmlService = Provider.of<HtmlService>(context, listen: false);
-    // Check if beautify state changed
-    if (htmlService.beautifyStateChanged) {
-      _handleBeautifyToggle();
-      htmlService.resetBeautifyStateChanged();
-    }
-  }
-
-  void _handleBeautifyToggle() {
-    // When beautification is toggled, we need to recreate the scroll controller
-    // to avoid "ScrollController attached to multiple scroll views" error
-    final newController = ScrollController();
-    newController.addListener(_scrollListener);
-
-    // Dispose old controller
-    _verticalController.removeListener(_scrollListener);
-    _verticalController.dispose();
-
-    // Update to new controller
-    _verticalController = newController;
-
-    // Force rebuild to use new controller
-    setState(() {});
   }
 
   void _scrollToTop() {
@@ -294,23 +260,23 @@ class _SourceViewerState extends State<SourceViewer> {
               isMedia: service.isMedia,
               selectedContentType: service.selectedContentType,
               activeFindController: service.activeFindController,
+              wrapText: settings.wrapText,
             ),
             builder: (context, data, child) {
-              debugPrint('=== SourceViewer header builder called ===');
-              debugPrint('isSearchEnabled: ${data.isSearchEnabled}');
-              debugPrint('isSearchActive: ${data.isSearchActive}');
-
-              // Activate the find controller when search is enabled
-              if (data.isSearchEnabled) {
+              // Activate the find controller only on the false→true transition,
+              // not on every rebuild while search is active.
+              if (data.isSearchEnabled && !_wasSearchEnabled) {
+                _wasSearchEnabled = true;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (data.activeFindController != null &&
                       data.activeFindController!.value == null) {
-                    debugPrint('=== Activating find controller ===');
                     data.activeFindController!.findMode();
                     data.activeFindController!.findInputFocusNode
                         .requestFocus();
                   }
                 });
+              } else if (!data.isSearchEnabled) {
+                _wasSearchEnabled = false;
               }
 
               final isTapEnabled = !data.isMedia && widget.file.isTextBased;
@@ -544,6 +510,10 @@ class _SourceViewerState extends State<SourceViewer> {
                   isBeautifyEnabled: service.isBeautifyEnabled,
                   isSearchEnabled: service.isSearchEnabled,
                   selectedContentType: service.selectedContentType,
+                  fontSize: settings.fontSize,
+                  wrapText: settings.wrapText,
+                  showLineNumbers: settings.showLineNumbers,
+                  themeName: settings.themeName,
                 ),
                 builder: (context, data, child) {
                   final htmlService =
@@ -552,30 +522,12 @@ class _SourceViewerState extends State<SourceViewer> {
                     return MediaBrowser(file: widget.file);
                   }
 
-                  final editorResult = _buildEditorWithFuture(
+                  return _buildEditor(
                     context,
                     htmlService,
                     widget.file.content,
-                    settings,
-                    widget.file,
-                    data.selectedContentType,
-                    data.isSearchEnabled,
+                    data,
                   );
-
-                  if (editorResult is Widget) {
-                    return editorResult;
-                  } else {
-                    return FutureBuilder<Widget>(
-                      future: editorResult,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.done &&
-                            snapshot.hasData) {
-                          return snapshot.data!;
-                        }
-                        return const Center(child: CircularProgressIndicator());
-                      },
-                    );
-                  }
                 },
               ),
             ),
@@ -606,66 +558,30 @@ class _SourceViewerState extends State<SourceViewer> {
     ]);
   }
 
-  FutureOr<Widget> _buildEditorWithFuture(
+  Widget _buildEditor(
       BuildContext context,
       HtmlService htmlService,
       String content,
-      AppSettings settings,
-      HtmlFile file,
-      String? selectedContentType,
-      bool isSearchEnabled) {
-    // Build the editor, handling both cached (sync) and new (async) states
-    // explicitly to prevent flickering and crashes.
-    final result = htmlService.buildEditor(
+      _SourceViewerBodyData data) {
+    return htmlService.buildEditor(
       content,
-      selectedContentType ?? widget.file.extension,
+      data.selectedContentType ?? widget.file.extension,
       context,
-      fontSize: settings.fontSize,
+      fontSize: data.fontSize,
       fontFamily: 'Courier',
-      themeName: settings.themeName,
-      wrapText: settings.wrapText,
-      showLineNumbers: settings.showLineNumbers,
+      themeName: data.themeName,
+      wrapText: data.wrapText,
+      showLineNumbers: data.showLineNumbers,
       isBeautified: htmlService.isBeautifyEnabled,
-      isSearchEnabled: isSearchEnabled,
+      isSearchEnabled: data.isSearchEnabled,
       onSearchClosed: () {
         if (htmlService.isSearchEnabled) {
           htmlService.toggleSearch();
         }
       },
       verticalController: _verticalController,
-    );
-
-    // If cached, return immediately (no flicker)
-    if (result is Widget) {
-      return result;
-    }
-
-    // If async, show loading indicator
-    return FutureBuilder<Widget>(
-      // Use key to force rebuild when content changes
-      key: ValueKey(
-          '${htmlService.currentFile?.path}_${htmlService.selectedContentType}_${content.length}_${htmlService.isBeautifyEnabled}'),
-      future: result,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done &&
-            snapshot.hasData) {
-          return snapshot.data!;
-        }
-
-        // Show loading indicator
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Processing syntax highlighting...',
-                  style: TextStyle(color: Colors.grey)),
-            ],
-          ),
-        );
-      },
-    );
+      horizontalController: _horizontalController,
+    ) as Widget;
   }
 }
 
@@ -720,11 +636,13 @@ class _SourceViewerHeaderData {
   final bool isMedia;
   final String? selectedContentType;
   final CodeFindController? activeFindController;
+  final bool wrapText;
 
   const _SourceViewerHeaderData({
     required this.isSearchActive,
     required this.isSearchEnabled,
     required this.isMedia,
+    required this.wrapText,
     this.selectedContentType,
     this.activeFindController,
   });
@@ -737,6 +655,7 @@ class _SourceViewerHeaderData {
           isSearchActive == other.isSearchActive &&
           isSearchEnabled == other.isSearchEnabled &&
           isMedia == other.isMedia &&
+          wrapText == other.wrapText &&
           selectedContentType == other.selectedContentType &&
           activeFindController == other.activeFindController;
 
@@ -745,6 +664,7 @@ class _SourceViewerHeaderData {
       isSearchActive.hashCode ^
       isSearchEnabled.hashCode ^
       isMedia.hashCode ^
+      wrapText.hashCode ^
       selectedContentType.hashCode ^
       activeFindController.hashCode;
 }
@@ -755,11 +675,19 @@ class _SourceViewerBodyData {
   final bool isBeautifyEnabled;
   final bool isSearchEnabled;
   final String? selectedContentType;
+  final double fontSize;
+  final bool wrapText;
+  final bool showLineNumbers;
+  final String themeName;
 
   const _SourceViewerBodyData({
     required this.isMedia,
     required this.isBeautifyEnabled,
     required this.isSearchEnabled,
+    required this.fontSize,
+    required this.wrapText,
+    required this.showLineNumbers,
+    required this.themeName,
     this.selectedContentType,
   });
 
@@ -771,6 +699,10 @@ class _SourceViewerBodyData {
           isMedia == other.isMedia &&
           isBeautifyEnabled == other.isBeautifyEnabled &&
           isSearchEnabled == other.isSearchEnabled &&
+          fontSize == other.fontSize &&
+          wrapText == other.wrapText &&
+          showLineNumbers == other.showLineNumbers &&
+          themeName == other.themeName &&
           selectedContentType == other.selectedContentType;
 
   @override
@@ -778,5 +710,9 @@ class _SourceViewerBodyData {
       isMedia.hashCode ^
       isBeautifyEnabled.hashCode ^
       isSearchEnabled.hashCode ^
+      fontSize.hashCode ^
+      wrapText.hashCode ^
+      showLineNumbers.hashCode ^
+      themeName.hashCode ^
       selectedContentType.hashCode;
 }

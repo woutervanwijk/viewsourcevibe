@@ -48,10 +48,6 @@ class HtmlService extends ChangeNotifier {
   bool _isSearchEnabled = false;
   CodeFindController? _activeFindController;
   
-  // Beautify state tracking
-  bool _beautifyStateChanged = false;
-  bool get beautifyStateChanged => _beautifyStateChanged;
-  
 
 
   // Navigation stack for "Back" functionality
@@ -1886,17 +1882,12 @@ class HtmlService extends ChangeNotifier {
       // Don't clear cache for beautify toggle - we want to preserve scroll position
       // and just update the content
       _isBeautifyEnabled = !_isBeautifyEnabled;
-      _beautifyStateChanged = true;
       notifyListeners();
     } finally {
       // Allow toggling again after a short cooling period
       await Future.delayed(const Duration(milliseconds: 200));
       _isBeautifyToggling = false;
     }
-  }
-
-  void resetBeautifyStateChanged() {
-    _beautifyStateChanged = false;
   }
 
   String? getBeautifiedContentSync(String content, String type) {
@@ -3158,9 +3149,32 @@ Technical details: $e''';
 
       // Handle beautification if enabled
       if (_isBeautifyEnabled && isBeautified) {
+        // Check sync cache first to avoid FutureBuilder flicker on subsequent toggles
+        final cachedContent = getBeautifiedContentSync(content, extension);
+        if (cachedContent != null) {
+          return SourceViewerEditor.buildEditor(
+            content: cachedContent,
+            extension: extension,
+            context: context,
+            verticalController: effectiveVerticalController,
+            horizontalController: effectiveHorizontalController,
+            activeFindController: _activeFindController,
+            onFindControllerChanged: updateActiveFindController,
+            onSearchClosed: onSearchClosed,
+            fontSize: fontSize,
+            fontFamily: fontFamily,
+            themeName: themeName,
+            wrapText: wrapText,
+            showLineNumbers: showLineNumbers,
+            isBeautified: _isBeautifyEnabled,
+            isSearchEnabled: _isSearchEnabled,
+            forceCodeForge: false,
+          );
+        }
+
         debugPrint(
             'HtmlService: Beautification enabled, processing content of length ${content.length}');
-        // Return a Future that will resolve with beautified content
+        // Not cached yet — use async path with loading indicator
         return FutureBuilder<String>(
           future: getBeautifiedContent(content, extension).then((beautified) {
             debugPrint(
@@ -3168,10 +3182,9 @@ Technical details: $e''';
             return beautified;
           }).catchError((e) {
             debugPrint('HtmlService: Beautification failed: $e');
-            return content; // Return original content if beautification fails
+            return content;
           }),
           builder: (context, snapshot) {
-            // Only show editor when beautified content is ready
             if (snapshot.connectionState == ConnectionState.done &&
                 snapshot.hasData) {
               return SourceViewerEditor.buildEditor(
@@ -3190,12 +3203,10 @@ Technical details: $e''';
                 showLineNumbers: showLineNumbers,
                 isBeautified: _isBeautifyEnabled,
                 isSearchEnabled: _isSearchEnabled,
-                forceCodeForge:
-                    false, // Use normal behavior (fallback for large files)
+                forceCodeForge: false,
               );
             }
 
-            // Show loading indicator while beautifying
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
