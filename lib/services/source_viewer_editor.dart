@@ -237,58 +237,26 @@ class SourceViewerEditor {
         existingController.text != processedContent;
 
     if (needFreshController) {
-      return FutureBuilder<bool>(
-        // Delay parsing slightly so the loading indicator can render first
-        future: Future.delayed(const Duration(milliseconds: 50), () => true),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Parsing code...', style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            );
-          }
+      // CodeLineEditingController.fromText() only splits lines — actual syntax
+      // highlighting is deferred to paint time by re_highlight. Creating it
+      // synchronously avoids the FutureBuilder flash that previously showed a
+      // "Parsing code..." spinner on every new file or tab switch.
+      existingController?.dispose();
+      _cachedFindControllers[controllerKey]?.dispose();
 
-          existingController?.dispose();
-          _cachedFindControllers[controllerKey]?.dispose();
+      final controller = CodeLineEditingController.fromText(processedContent);
+      _cachedControllers[controllerKey] = controller;
 
-          final controller = CodeLineEditingController.fromText(processedContent);
-          _cachedControllers[controllerKey] = controller;
+      final findController = CodeFindController(controller);
+      _cachedFindControllers[controllerKey] = findController;
 
-          final findController = CodeFindController(controller);
-          _cachedFindControllers[controllerKey] = findController;
-
-          if (_cachedControllers.length > 5) {
-            final firstKey = _cachedControllers.keys.first;
-            if (firstKey != controllerKey) {
-              _cachedControllers.remove(firstKey)?.dispose();
-              _cachedFindControllers.remove(firstKey)?.dispose();
-            }
-          }
-
-          return _buildEditorWidget(
-            controller,
-            findController,
-            wrapText,
-            fontSize,
-            languageName,
-            mode,
-            themeName,
-            showLineNumbers,
-            verticalController,
-            horizontalController,
-            activeFindController,
-            onFindControllerChanged,
-            isSearchEnabled,
-            content,
-          );
-        },
-      );
+      if (_cachedControllers.length > 5) {
+        final firstKey = _cachedControllers.keys.first;
+        if (firstKey != controllerKey) {
+          _cachedControllers.remove(firstKey)?.dispose();
+          _cachedFindControllers.remove(firstKey)?.dispose();
+        }
+      }
     }
 
     final controller = _cachedControllers[controllerKey]!;
