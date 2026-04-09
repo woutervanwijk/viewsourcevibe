@@ -1,6 +1,6 @@
 # View Source Vibe
 
-![iOS Screenshot](assets/vibe/screens/ios/Simulator%20Screenshot%20-%20iPhone%208%20Plus%20-%202026-02-18%20at%2016.46.49.png)
+![iOS Screenshot](assets/vibe/screens/ios/Simulator_Screenshot_iPhone_8_Plus_2026-02-18_16.46.49.png)
 
 A HTML/JS/CSSView Source & Page Inspector. I wanted to create an app like this for some time, since most View Source apps on mobile were annoying or old. It had to be: 
 - free (open source)
