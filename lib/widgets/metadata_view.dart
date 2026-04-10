@@ -93,7 +93,8 @@ class MetadataView extends StatelessWidget {
     // Sort sections by title
     dynamicSections.sort((a, b) => a.title.compareTo(b.title));
 
-    return SingleChildScrollView(
+    return Scrollbar(
+      child: SingleChildScrollView(
       primary: true,
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -120,7 +121,7 @@ class MetadataView extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildHeaderSection(BuildContext context,

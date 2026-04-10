@@ -60,7 +60,8 @@ class ServicesView extends StatelessWidget {
     final sortedEntries = services.entries.toList()
       ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
 
-    return SingleChildScrollView(
+    return Scrollbar(
+      child: SingleChildScrollView(
       primary: true,
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -117,7 +118,7 @@ class ServicesView extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildResourceSection(

@@ -96,9 +96,10 @@ class ProbeGeneralView extends ProbeViewBase {
     final browserResult = htmlService.browserProbeResult;
     final hasBrowserProbe = browserResult != null && browserResult.isNotEmpty;
 
-    return ListView(
-      primary: false,
-      padding: const EdgeInsets.all(16),
+    return Scrollbar(
+        child: ListView(
+      primary: true,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
       children: [
         if (hasBrowserProbe) ...[
           // Section Header for CURL Probe
@@ -137,7 +138,7 @@ class ProbeGeneralView extends ProbeViewBase {
             ),
         ],
       ],
-    );
+    ));
   }
 
   Widget _buildBrowserProbeCard(
@@ -365,10 +366,10 @@ class ProbeHeadersView extends ProbeViewBase {
     final sortedKeys = headers.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Scrollbar(
+      child: ListView(
+        primary: true,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
         children: [
           Text(
             'All Response Headers',
@@ -378,46 +379,48 @@ class ProbeHeadersView extends ProbeViewBase {
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Expanded(
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                side: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ListView.separated(
-                primary: false,
-                itemCount: sortedKeys.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final key = sortedKeys[index];
-                  final value = headers[key]!;
-                  return ListTile(
-                    title: Text(
-                      key,
-                      style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold),
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: sortedKeys.asMap().entries.map((entry) {
+                final index = entry.key;
+                final key = entry.value;
+                final value = headers[key]!;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (index > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text(
+                        key,
+                        style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        FormatUtils.formatHumanData(value),
+                        style: const TextStyle(
+                            fontFamily: 'monospace', fontSize: 13),
+                      ),
+                      dense: true,
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: '$key: $value'));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Header copied to clipboard'),
+                              duration: Duration(milliseconds: 500)),
+                        );
+                      },
                     ),
-                    subtitle: Text(
-                      FormatUtils.formatHumanData(value),
-                      style: const TextStyle(
-                          fontFamily: 'monospace', fontSize: 13),
-                    ),
-                    dense: true,
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: '$key: $value'));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Header copied to clipboard'),
-                            duration: Duration(milliseconds: 500)),
-                      );
-                    },
-                  );
-                },
-              ),
+                  ],
+                );
+              }).toList(),
             ),
           ),
         ],
@@ -434,9 +437,10 @@ class ProbeSecurityView extends ProbeViewBase {
       Map<String, dynamic> result) {
     final Map<String, dynamic> security = result['security'] ?? {};
 
-    return ListView(
-      primary: false,
-      padding: const EdgeInsets.all(16),
+    return Scrollbar(
+      child: ListView(
+      primary: true,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
       children: [
         Text(
           'Security Header Audit',
@@ -499,7 +503,7 @@ class ProbeSecurityView extends ProbeViewBase {
         const SizedBox(height: 12),
         _buildCertificateCard(context, result['certificate']),
       ],
-    );
+    ));
   }
 
   Widget _buildCertificateCard(
@@ -704,9 +708,10 @@ class ProbeCookiesView extends ProbeViewBase {
         return nameA.compareTo(nameB);
       });
 
-      return ListView.builder(
-        primary: false,
-        padding: const EdgeInsets.all(16),
+      return Scrollbar(
+        child: ListView.builder(
+        primary: true,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
         itemCount: sortedCookies.length,
         itemBuilder: (context, index) {
           final cookie = sortedCookies[index];
@@ -831,7 +836,7 @@ class ProbeCookiesView extends ProbeViewBase {
             ),
           );
         },
-      );
+      ));
     }
 
     // Fallback to basic list if no analysis available
@@ -860,9 +865,10 @@ class ProbeCookiesView extends ProbeViewBase {
       );
     }
 
-    return ListView.builder(
-      primary: false,
-      padding: const EdgeInsets.all(16),
+    return Scrollbar(
+      child: ListView.builder(
+      primary: true,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
       itemCount: cookies.length,
       itemBuilder: (context, index) {
         final cookie = cookies[index];
@@ -898,6 +904,6 @@ class ProbeCookiesView extends ProbeViewBase {
           ),
         );
       },
-    );
+    ));
   }
 }

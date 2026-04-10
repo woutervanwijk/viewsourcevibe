@@ -183,7 +183,8 @@ class MediaView extends StatelessWidget {
       );
     }
 
-    return SingleChildScrollView(
+    return Scrollbar(
+      child: SingleChildScrollView(
       primary: true,
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -219,7 +220,7 @@ class MediaView extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 
   /// Deduplicate media items based on normalized URLs

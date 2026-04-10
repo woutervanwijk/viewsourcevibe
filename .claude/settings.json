@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -n \"padding\\\\|class TreeView\" /Users/wouter/.pub-cache/hosted/pub.dev/flutter_fancy_tree_view-*/lib/src/*.dart)"
+      "Bash(grep -n \"padding\\\\|class TreeView\" /Users/wouter/.pub-cache/hosted/pub.dev/flutter_fancy_tree_view-*/lib/src/*.dart)",
+      "Bash(grep -n \"^  }$\\\\|^    \\);$\\\\|^  \\);$\" /Users/wouter/code/viewsourcevibe/lib/widgets/services_view.dart)",
+      "Bash(grep -n \"^  }$\\\\|^    \\);$\\\\|^  \\);$\" /Users/wouter/code/viewsourcevibe/lib/widgets/media_view.dart)",
+      "Bash(grep -n \"\\);$\" /Users/wouter/code/viewsourcevibe/lib/widgets/services_view.dart)",
+      "Bash(grep -n \"\\);$\" /Users/wouter/code/viewsourcevibe/lib/widgets/media_view.dart)",
+      "Bash(grep -n \"^      ],\\\\s*$\\\\|^    ];\\\\s*$\\\\|^    \\);\\\\s*$\" /Users/wouter/code/viewsourcevibe/lib/widgets/probe_views.dart)"
     ]
   }
 }
