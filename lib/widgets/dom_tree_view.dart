@@ -281,9 +281,11 @@ class _DomTreeViewState extends State<DomTreeView> {
       return const Center(child: Text('No content to parse'));
     }
 
+    final bottomInset = MediaQuery.of(context).padding.bottom + 50;
     return TreeView<DomTreeNode>(
       primary: true,
       physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.only(bottom: bottomInset),
       treeController: _treeController,
       nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {
         return DomTreeTile(

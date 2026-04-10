@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"padding\\\\|class TreeView\" /Users/wouter/.pub-cache/hosted/pub.dev/flutter_fancy_tree_view-*/lib/src/*.dart)"
+    ]
+  }
+}

@@ -25,7 +25,8 @@ class SourceViewerEditor {
   static final Map<String, CodeFindController> _cachedFindControllers = {};
   // Keyed by verticalScroller identity so CodeEditor gets a stable object
   // across rebuilds, preventing scroll listener teardown/re-setup jank.
-  static final Map<ScrollController, CodeScrollController> _scrollControllerCache = {};
+  static final Map<ScrollController, CodeScrollController>
+      _scrollControllerCache = {};
 
   static List<String> getAvailableLanguages() =>
       builtinAllLanguages.keys.toList();
@@ -296,7 +297,6 @@ class SourceViewerEditor {
     bool isSearchEnabled,
     String content,
   ) {
-
     // Only register the callback when something actually needs to change,
     // to avoid queuing work on every rebuild that causes unnecessary jank.
     final needsFindControllerUpdate = activeFindController != findController;
@@ -333,13 +333,15 @@ class SourceViewerEditor {
               horizontalScroller: horizontalController,
             ),
           );
+          final bottomInset = MediaQuery.of(context).padding.bottom + 50;
           return RepaintBoundary(
-            child: CodeEditor(
+              child: CodeEditor(
             scrollController: scrollController,
             controller: controller,
             findController: findController,
             wordWrap: wrapText,
             readOnly: true,
+            padding: EdgeInsets.only(bottom: bottomInset),
             style: CodeEditorStyle(
               fontSize: fontSize,
               fontFamily: 'Courier',
