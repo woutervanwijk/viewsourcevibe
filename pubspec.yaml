@@ -11,7 +11,7 @@ dependencies:
   
   # Core packages
   cupertino_icons: ^1.0.2
-  web: ^1.1.2
+  web: ^1.1.1
   
 
   
@@ -20,7 +20,7 @@ dependencies:
   path_provider: ^2.1.1
   
   # HTTP requests for URL loading
-  http: ^1.1.2
+  http: ^1.1.1
   
   # State management
   provider: ^6.1.1
