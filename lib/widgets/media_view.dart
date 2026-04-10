@@ -475,10 +475,10 @@ class MediaView extends StatelessWidget {
         }
         return LayoutBuilder(
           builder: (context, constraints) {
-            final w =
-                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            final h =
-                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            double w = constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            double h = constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            if (w.isNaN || w.isInfinite) w = 100.0;
+            if (h.isNaN || h.isInfinite) h = 100.0;
             return Center(
               child: SvgPicture.memory(
                 sanitizedData,
@@ -613,10 +613,10 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final w =
-                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            final h =
-                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            double w = constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            double h = constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            if (w.isNaN || w.isInfinite) w = 100.0;
+            if (h.isNaN || h.isInfinite) h = 100.0;
             return Center(
               child: SvgPicture.memory(
                 snapshot.data!,
