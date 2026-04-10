@@ -99,7 +99,7 @@ class ProbeGeneralView extends ProbeViewBase {
     return Scrollbar(
         child: ListView(
       primary: true,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
         if (hasBrowserProbe) ...[
           // Section Header for CURL Probe
@@ -369,7 +369,7 @@ class ProbeHeadersView extends ProbeViewBase {
     return Scrollbar(
       child: ListView(
         primary: true,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         children: [
           Text(
             'All Response Headers',
@@ -440,7 +440,7 @@ class ProbeSecurityView extends ProbeViewBase {
     return Scrollbar(
       child: ListView(
       primary: true,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
         Text(
           'Security Header Audit',
@@ -711,7 +711,7 @@ class ProbeCookiesView extends ProbeViewBase {
       return Scrollbar(
         child: ListView.builder(
         primary: true,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         itemCount: sortedCookies.length,
         itemBuilder: (context, index) {
           final cookie = sortedCookies[index];
@@ -868,7 +868,7 @@ class ProbeCookiesView extends ProbeViewBase {
     return Scrollbar(
       child: ListView.builder(
       primary: true,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       itemCount: cookies.length,
       itemBuilder: (context, index) {
         final cookie = cookies[index];
