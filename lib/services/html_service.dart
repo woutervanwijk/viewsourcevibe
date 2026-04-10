@@ -43,12 +43,10 @@ class HtmlService extends ChangeNotifier {
   Timer? _disposalTimer;
   final List<dynamic> _disposalQueue = [];
   Timer? _highlightDebounceTimer;
-  
+
   // Search state
   bool _isSearchEnabled = false;
   CodeFindController? _activeFindController;
-  
-
 
   // Navigation stack for "Back" functionality
   final List<HtmlFile> _navigationStack = [];
@@ -175,7 +173,6 @@ class HtmlService extends ChangeNotifier {
   bool get isSearchActive => _isSearchEnabled;
   bool get isSearchEnabled => _isSearchEnabled;
   CodeFindController? get activeFindController => _activeFindController;
-
 
   bool get isHtml {
     final contentType =
@@ -3127,7 +3124,6 @@ Technical details: $e''';
     ScrollController? verticalController,
     ScrollController? horizontalController,
   }) {
-
     try {
       // Use provided scroll controllers if available, otherwise create new ones
       final effectiveVerticalController =
@@ -3293,7 +3289,7 @@ Technical details: $e''';
   /// Toggle the search panel for the current editor
   void toggleSearch() {
     _isSearchEnabled = !_isSearchEnabled;
-    
+
     if (_activeFindController != null) {
       if (_isSearchEnabled) {
         _activeFindController!.findMode();
@@ -3309,8 +3305,9 @@ Technical details: $e''';
   void updateActiveFindController(CodeFindController? newController) {
     debugPrint('=== updateActiveFindController called ===');
     debugPrint('newController: ${newController != null}');
-    debugPrint('current _activeFindController: ${_activeFindController != null}');
-    
+    debugPrint(
+        'current _activeFindController: ${_activeFindController != null}');
+
     if (_activeFindController == newController) {
       debugPrint('=== Find controller unchanged, returning early ===');
       return;
@@ -3331,7 +3328,8 @@ Technical details: $e''';
       _activeFindController!.addListener(_onSearchStateChanged);
     }
 
-    debugPrint('=== Find controller updated (not calling notifyListeners to avoid double notification) ===');
+    debugPrint(
+        '=== Find controller updated (not calling notifyListeners to avoid double notification) ===');
   }
 
   /// Callback when the search state changes
@@ -3343,8 +3341,6 @@ Technical details: $e''';
       }
     }
   }
-
-
 
   /// Unified method to update all tab data consistently
   /// This ensures all tabs (Metadata, Services, Cookies, etc.) are updated together
@@ -3947,21 +3943,24 @@ Technical details: $e''';
       try {
         final weightRaw = await activeWebViewController!.evaluateJavascript(
           source:
-              // JS: Collect performance resource timings. Skip data URIs for global totals
-              // to avoid double counting them since they are literal strings in their parents.
+              // Use the __vsv_res accumulator set up by the injected user script.
+              // It captures ALL resources via PerformanceObserver (including lazy chunks),
+              // then falls back to getEntriesByType for anything missed before observer attached.
               '(function() {'
               ' var tTx=0; var tDec=0;'
-              ' var r=performance.getEntriesByType("resource");'
+              ' var acc=window.__vsv_res||{};'
               ' var list=[]; var seen=new Set();'
+              ' for(var name in acc) {'
+              '   var e=acc[name]; var tx=e.t||0; var dec=e.d||0;'
+              '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
+              '   list.push({n:name,t:tx,d:dec}); seen.add(name);'
+              ' }'
+              ' var r=performance.getEntriesByType("resource");'
               ' for(var i=0;i<r.length;i++) {'
-              '   var name=r[i].name;'
-              '   var tx=r[i].transferSize||0;'
-              '   var dec=r[i].decodedBodySize||0;'
-              '   if(!name.startsWith("data:")) {'
-              '     tTx+=tx; tDec+=dec;'
-              '   }'
-              '   list.push({n:name,t:tx,d:dec});'
-              '   seen.add(name);'
+              '   var name=r[i].name; if(seen.has(name)) continue;'
+              '   var tx=r[i].transferSize||0; var dec=r[i].decodedBodySize||0;'
+              '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
+              '   list.push({n:name,t:tx,d:dec}); seen.add(name);'
               ' }'
               ' var nav=performance.getEntriesByType("navigation")[0];'
               ' var nTx=0; var nDec=0;'
@@ -4177,9 +4176,12 @@ Technical details: $e''';
       } catch (_) {}
 
       // Use browser-reported main document size for the file size if available,
-      // as it represents the official network response size. 
+      // as it represents the official network response size.
       // Fallback to content.length (the length of the extracted DOM string).
-      final int browserDocSize = (_browserProbeResult?['pageWeight']?['mainDocumentDecoded'] as num? ?? 0).toInt();
+      final int browserDocSize =
+          (_browserProbeResult?['pageWeight']?['mainDocumentDecoded'] as num? ??
+                  0)
+              .toInt();
 
       final file = HtmlFile(
         name: filename,
@@ -4192,6 +4194,13 @@ Technical details: $e''';
       );
 
       await loadFile(file, clearProbe: false, isPartial: isPartial);
+
+      // Schedule a delayed re-query to catch deferred/lazy-loaded resources
+      // (analytics scripts, lazy images, etc. that load after onLoadStop).
+      debugPrint('pageWeight: scheduling refresh, isPartial=$isPartial url=$url');
+      if (!isPartial) {
+        _refreshPageWeightAfterDelay(url).ignore();
+      }
     } catch (e) {
       debugPrint('Error syncing WebView state: $e');
     } finally {
@@ -4204,6 +4213,121 @@ Technical details: $e''';
       _isWebViewLoading = false;
       _webViewLoadingUrl = null;
       notifyListeners();
+    }
+  }
+
+  Future<void> _refreshPageWeightAfterDelay(String url) async {
+    // Two passes: catch fast lazy loaders at 4s, slow PWA hydration at 14s.
+    for (final delay in [
+      const Duration(seconds: 4),
+      const Duration(seconds: 10),
+    ]) {
+      await Future.delayed(delay);
+      debugPrint('pageWeight delayed check: controller=${activeWebViewController != null}, currentPath=${_currentFile?.path}, url=$url');
+      if (activeWebViewController == null) return;
+      if (_currentFile?.path != url) return; // user navigated away
+      await _doPageWeightRefresh(url);
+    }
+  }
+
+  static const String _weightQueryJs =
+      '(function() {'
+      ' var tTx=0; var tDec=0;'
+      ' var acc=window.__vsv_res||{};'
+      ' var list=[]; var seen=new Set();'
+      ' for(var name in acc) {'
+      '   var e=acc[name]; var tx=e.t||0; var dec=e.d||0;'
+      '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
+      '   list.push({n:name,t:tx,d:dec}); seen.add(name);'
+      ' }'
+      // Fallback: pick up anything from before the observer was attached
+      ' var r=performance.getEntriesByType("resource");'
+      ' for(var i=0;i<r.length;i++) {'
+      '   var name=r[i].name; if(seen.has(name)) continue;'
+      '   var tx=r[i].transferSize||0; var dec=r[i].decodedBodySize||0;'
+      '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
+      '   list.push({n:name,t:tx,d:dec}); seen.add(name);'
+      ' }'
+      ' var nav=performance.getEntriesByType("navigation")[0];'
+      ' if(nav && !seen.has(nav.name)) {'
+      '   var nTx=nav.transferSize||0; var nDec=nav.decodedBodySize||0;'
+      '   if(nDec===0) nDec=document.documentElement.outerHTML.length;'
+      '   tTx+=nTx; tDec+=nDec;'
+      '   list.push({n:nav.name,t:nTx,d:nDec});'
+      ' }'
+      ' return JSON.stringify({tx:tTx,dec:tDec,list:list});'
+      ' })();';
+
+  Future<void> _doPageWeightRefresh(String url) async {
+    try {
+      final weightRaw = await activeWebViewController!
+          .evaluateJavascript(source: _weightQueryJs);
+
+      String jsonStr = '';
+      if (weightRaw is String) jsonStr = _unquoteHtml(weightRaw);
+      debugPrint('pageWeight _doRefresh: jsonStr empty=${jsonStr.isEmpty}, rawType=${weightRaw.runtimeType}');
+      if (jsonStr.isEmpty) return;
+
+      final dynamic decoded = jsonDecode(jsonStr);
+      if (decoded is! Map) return;
+
+      final newTx = (decoded['tx'] as num? ?? 0).toInt();
+      final newDec = (decoded['dec'] as num? ?? 0).toInt();
+      final newList = decoded['list'];
+      if (newList is! List) return;
+
+      final prevTx = (_lastPageWeight?['transfer'] as num? ?? 0).toInt();
+      final prevDec = (_lastPageWeight?['decoded'] as num? ?? 0).toInt();
+      debugPrint('pageWeight _doRefresh: newTx=$newTx newDec=$newDec prevTx=$prevTx prevDec=$prevDec');
+
+      // SPAs (e.g. Next.js) often call performance.clearResourceTimings() which can
+      // make the new snapshot look smaller than what we already captured. Always merge
+      // the lists so we keep the union of all resources seen across all snapshots.
+      final existing = <String, Map<String, dynamic>>{
+        for (final r in (_resourcePerformanceData ?? []))
+          (r['name'] as String? ?? ''): r,
+      };
+      bool anyNew = false;
+      for (final e in newList) {
+        final name = e['n'] as String? ?? '';
+        if (name.isEmpty) continue;
+        final tx = (e['t'] as num? ?? 0).toInt();
+        final dec = (e['d'] as num? ?? 0).toInt();
+        final prev = existing[name];
+        if (prev == null) {
+          existing[name] = {'name': name, 'transfer': tx, 'decoded': dec};
+          anyNew = true;
+        } else if (dec > (prev['decoded'] as num? ?? 0)) {
+          existing[name] = {'name': name, 'transfer': tx, 'decoded': dec};
+          anyNew = true;
+        }
+      }
+      if (!anyNew) return;
+
+      _resourcePerformanceData = existing.values.toList();
+
+      // Recompute totals from the merged list (never let them go below what we had).
+      int sumTx = 0, sumDec = 0;
+      for (final r in _resourcePerformanceData!) {
+        final name = r['name'] as String? ?? '';
+        if (name.startsWith('data:')) continue;
+        sumTx += (r['transfer'] as num? ?? 0).toInt();
+        sumDec += (r['decoded'] as num? ?? 0).toInt();
+      }
+      final totalTx = sumTx > prevTx ? sumTx : prevTx;
+      final totalDec = sumDec > prevDec ? sumDec : prevDec;
+      if (totalTx == prevTx && totalDec == prevDec) return;
+
+      debugPrint('pageWeight refresh: ${prevTx}B → ${totalTx}B transfer');
+
+      if (_lastPageWeight != null) {
+        _lastPageWeight!['transfer'] = totalTx;
+        _lastPageWeight!['decoded'] = totalDec;
+      }
+
+      await _enrichResourceSizes();
+    } catch (e) {
+      debugPrint('Error in delayed page weight refresh: $e');
     }
   }
 
@@ -4236,12 +4360,10 @@ Technical details: $e''';
             final size = await _fetchResourceSize(url);
             if (size > 0) {
               resource['transfer'] = size;
-              // We can't know decoded size without downloading body, so assume transfer ~= decoded
-              // This is better than 0.
               resource['decoded'] = size;
             }
           } catch (e) {
-            debugPrint('Error fetching size for $resource: $e');
+            // ignore
           }
         }),
       );
@@ -4329,9 +4451,18 @@ Technical details: $e''';
     final totalTransferSize = sumTx > prevTx ? sumTx : prevTx;
     final totalDecodedSize = sumDec > prevDec ? sumDec : prevDec;
 
+    // Detect if any resources have size=0 (cross-origin without Timing-Allow-Origin)
+    final hasUnknownSizes = _resourcePerformanceData!.any((r) {
+      final name = r['name'] as String? ?? '';
+      return !name.startsWith('data:') &&
+          (r['transfer'] as num? ?? 0) == 0 &&
+          (r['decoded'] as num? ?? 0) == 0;
+    });
+
     _lastPageWeight = {
       'transfer': totalTransferSize,
       'decoded': totalDecodedSize,
+      'isPartial': hasUnknownSizes,
       'resources': _resourcePerformanceData,
       'breakdown': {
         'scripts': {

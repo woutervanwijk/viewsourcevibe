@@ -522,6 +522,7 @@ class MetadataView extends StatelessWidget {
     }
 
     final breakdown = weight['breakdown'] as Map<String, dynamic>?;
+    final isPartial = weight['isPartial'] as bool? ?? false;
 
     return Card(
       elevation: 0,
@@ -550,10 +551,10 @@ class MetadataView extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    FormatUtils.formatBytesWithTransfer({
+                    '${isPartial ? '≥ ' : ''}${FormatUtils.formatBytesWithTransfer({
                       'decoded': weight['decoded'] as int? ?? 0,
                       'transfer': weight['transfer'] as int? ?? 0,
-                    }),
+                    })}',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -565,6 +566,18 @@ class MetadataView extends StatelessWidget {
               ],
             ),
           ),
+          if (isPartial)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Text(
+                'Some resources are hosted on third-party CDNs that restrict size reporting. Actual size may be larger.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
           if (breakdown != null) ...[
             const Divider(height: 1),
             _buildWeightRow(

@@ -190,9 +190,72 @@ class _BrowserViewState extends State<BrowserView> {
       initialUserScripts: UnmodifiableListView<UserScript>([
         UserScript(
           source: '''
-              if (window.performance && performance.setResourceTimingBufferSize) {
-                performance.setResourceTimingBufferSize(10000);
-              }
+              (function() {
+                if (!window.performance) return;
+                if (performance.setResourceTimingBufferSize) {
+                  performance.setResourceTimingBufferSize(10000);
+                }
+                // Persist the accumulator across SPA navigations — never reset it.
+                // SPAs call performance.clearResourceTimings() to manage memory, but
+                // we keep our own copy of everything seen since page load.
+                if (!window.__vsv_res) window.__vsv_res = {};
+                function _vsvRecord(name, tx, dec) {
+                  if (!name || name.startsWith('data:')) return;
+                  var prev = window.__vsv_res[name];
+                  if (!prev || dec > (prev.d || 0) || (!prev.d && tx > (prev.t || 0))) {
+                    window.__vsv_res[name] = {t: tx || 0, d: dec || 0};
+                  }
+                }
+                // PerformanceObserver: captures resources where Timing-Allow-Origin is set.
+                function attachObserver() {
+                  try {
+                    var obs = new PerformanceObserver(function(list) {
+                      list.getEntries().forEach(function(e) {
+                        _vsvRecord(e.name, e.transferSize || 0, e.decodedBodySize || 0);
+                      });
+                    });
+                    obs.observe({type: 'resource', buffered: true});
+                  } catch(e) {}
+                }
+                attachObserver();
+                // Re-attach after SPA navigations so new route resources are captured.
+                var _vsv_push = history.pushState;
+                history.pushState = function() {
+                  _vsv_push.apply(this, arguments);
+                  attachObserver();
+                };
+                // Patch fetch to capture API response sizes (cross-origin CDN static
+                // assets block size via TAO, but API endpoints usually allow it).
+                var _vsvFetch = window.fetch;
+                window.fetch = function(input, init) {
+                  var url = typeof input === 'string' ? input :
+                            (input && input.url) ? input.url : String(input);
+                  return _vsvFetch.apply(this, arguments).then(function(resp) {
+                    try {
+                      var cl = resp.headers.get('content-length');
+                      if (cl) { var sz = parseInt(cl, 10); if (sz > 0) _vsvRecord(url, sz, sz); }
+                    } catch(e) {}
+                    return resp;
+                  });
+                };
+                // Patch XHR similarly.
+                var _vsvXhrOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(m, u) {
+                  this._vsvUrl = u;
+                  return _vsvXhrOpen.apply(this, arguments);
+                };
+                var _vsvXhrSend = XMLHttpRequest.prototype.send;
+                XMLHttpRequest.prototype.send = function() {
+                  var xhr = this;
+                  xhr.addEventListener('load', function() {
+                    try {
+                      var cl = xhr.getResponseHeader('content-length');
+                      if (cl && xhr._vsvUrl) { var sz = parseInt(cl,10); if (sz>0) _vsvRecord(xhr._vsvUrl, sz, sz); }
+                    } catch(e) {}
+                  }, {once: true});
+                  return _vsvXhrSend.apply(this, arguments);
+                };
+              })();
             ''',
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
