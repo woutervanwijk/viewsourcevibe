@@ -521,7 +521,7 @@ class ProbeSecurityView extends ProbeViewBase {
             children: [
               Icon(Icons.no_encryption_gmailerrorred, color: Colors.orange),
               SizedBox(width: 12),
-              Text('No certificate information available'),
+              Expanded(child: Text('No certificate information available')),
             ],
           ),
         ),

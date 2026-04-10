@@ -480,21 +480,18 @@ class MediaView extends StatelessWidget {
             final h =
                 constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
             return Center(
-              child: ConstrainedBox(
-                constraints: constraints,
-                child: SvgPicture.memory(
-                  sanitizedData,
-                  width: w,
-                  height: h,
-                  fit: BoxFit.contain,
-                  placeholderBuilder: (context) => const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                  errorBuilder: (context, error, stackTrace) {
-                    debugPrint('SVG Render Error (inline): $error');
-                    return const Icon(Icons.broken_image, color: Colors.grey);
-                  },
+              child: SvgPicture.memory(
+                sanitizedData,
+                width: w,
+                height: h,
+                fit: BoxFit.contain,
+                placeholderBuilder: (context) => const Center(
+                  child: CircularProgressIndicator(),
                 ),
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('SVG Render Error (inline): $error');
+                  return const Icon(Icons.broken_image, color: Colors.grey);
+                },
               ),
             );
           },
