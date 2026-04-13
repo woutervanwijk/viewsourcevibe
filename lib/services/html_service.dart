@@ -1929,9 +1929,19 @@ class HtmlService extends ChangeNotifier {
     await _prepareForEditorReset();
     await scrollToZero(newUrl: newUrl);
     _currentFile = null;
-    _webViewLoadingUrl =
-        null; // Clear any pending webview load url to prevent it from overriding local file
-    _isWebViewLoading = false; // Reset webview loading state
+    // Only reset WebView loading state when loading a local file (no newUrl).
+    // For URL navigations, keep the state so shouldShowBrowserTab stays true
+    // throughout the transition — otherwise the browser tab briefly disappears,
+    // _updateTabs clamps the index, and the wrong tab is selected after load.
+    final isUrlNavigation =
+        newUrl != null && (newUrl.startsWith('http') || newUrl.contains('://'));
+    if (!isUrlNavigation) {
+      _webViewLoadingUrl = null;
+      _isWebViewLoading = false;
+    } else {
+      // Keep the browser tab anchored to the new URL during transition.
+      _webViewLoadingUrl = newUrl;
+    }
     _originalFile = null; // Also clear the original file
     selectedContentType = null; // Reset content type selection
     if (clearProbe) {
