@@ -2,10 +2,9 @@ name: Build Desktop Apps
 
 on:
   push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
-  workflow_dispatch:
+    tags:
+      - 'v*'  # Build on version tags (v1.0.0, v2.1.0, etc.)
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   build-macos:
