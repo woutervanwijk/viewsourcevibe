@@ -6,7 +6,8 @@
       "Bash(grep -n \"^  }$\\\\|^    \\);$\\\\|^  \\);$\" /Users/wouter/code/viewsourcevibe/lib/widgets/media_view.dart)",
       "Bash(grep -n \"\\);$\" /Users/wouter/code/viewsourcevibe/lib/widgets/services_view.dart)",
       "Bash(grep -n \"\\);$\" /Users/wouter/code/viewsourcevibe/lib/widgets/media_view.dart)",
-      "Bash(grep -n \"^      ],\\\\s*$\\\\|^    ];\\\\s*$\\\\|^    \\);\\\\s*$\" /Users/wouter/code/viewsourcevibe/lib/widgets/probe_views.dart)"
+      "Bash(grep -n \"^      ],\\\\s*$\\\\|^    ];\\\\s*$\\\\|^    \\);\\\\s*$\" /Users/wouter/code/viewsourcevibe/lib/widgets/probe_views.dart)",
+      "Bash(security find-identity *)"
     ]
   }
 }
