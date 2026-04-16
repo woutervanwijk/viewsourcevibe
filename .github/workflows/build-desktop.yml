@@ -15,12 +15,12 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.3.0'
+          flutter-version: '3.41.6'
           cache: true
-      
+
       - name: Get dependencies
         run: flutter pub get
-      
+
       - name: Build macOS
         run: flutter build macos --release
       
@@ -43,12 +43,12 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.3.0'
+          flutter-version: '3.41.6'
           cache: true
-      
+
       - name: Get dependencies
         run: flutter pub get
-      
+
       - name: Build Windows
         run: flutter build windows --release
       
@@ -66,9 +66,9 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.3.0'
+          flutter-version: '3.41.6'
           cache: true
-      
+
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -94,12 +94,12 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.3.0'
+          flutter-version: '3.41.6'
           cache: true
-      
+
       - name: Get dependencies
         run: flutter pub get
-      
+
       - name: Build iOS
         run: flutter build ios --release --no-codesign
       
@@ -117,12 +117,12 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.3.0'
+          flutter-version: '3.41.6'
           cache: true
-      
+
       - name: Get dependencies
         run: flutter pub get
-      
+
       - name: Build Android APK
         run: flutter build apk --release
       
