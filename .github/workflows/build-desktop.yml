@@ -137,13 +137,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
-      
+
+      - name: Package artifacts
+        run: |
+          zip -r ViewSourceVibe-macOS.zip ViewSourceVibe-macOS/
+          zip -r ViewSourceVibe-Windows.zip ViewSourceVibe-Windows/
+          zip -r ViewSourceVibe-iOS.zip ViewSourceVibe-iOS/
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ViewSourceVibe-macOS/**
-            ViewSourceVibe-Windows/**
-            ViewSourceVibe-iOS/**
-            ViewSourceVibe-Android-APK/**
-            ViewSourceVibe-Android-AAB/**
+            ViewSourceVibe-macOS.zip
+            ViewSourceVibe-Windows.zip
+            ViewSourceVibe-iOS.zip
+            ViewSourceVibe-Android-APK/app-release.apk
+            ViewSourceVibe-Android-AAB/app-release.aab
