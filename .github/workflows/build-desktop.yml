@@ -24,22 +24,29 @@ jobs:
       - name: Build macOS
         run: flutter build macos --release
 
-      - name: Prepare macOS artifact
+      - name: Create macOS DMG
         run: |
-          rm -rf "build/View Source Vibe.app" 2>/dev/null || true
-          mv "build/macos/Build/Products/Release/View Source Vibe.app" "build/View Source Vibe.app"
+          brew install create-dmg
+          create-dmg \
+            --volname "View Source Vibe" \
+            --window-pos 200 120 \
+            --window-size 600 300 \
+            --icon-size 100 \
+            --app-drop-link 425 120 \
+            "ViewSourceVibe.dmg" \
+            "build/macos/Build/Products/Release/View Source Vibe.app"
 
-      - name: Upload macOS artifact
+      - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
           name: ViewSourceVibe-macOS
-          path: build/View Source Vibe.app
+          path: ViewSourceVibe.dmg
 
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -51,15 +58,43 @@ jobs:
 
       - name: Build Windows
         run: flutter build windows --release
-      
-      - name: Upload Windows artifact
+
+      - name: Create Windows installer
+        run: |
+          $iss = @"
+          [Setup]
+          AppName=View Source Vibe
+          AppVersion=${{ github.ref_name }}
+          DefaultDirName={autopf}\View Source Vibe
+          OutputDir=installer
+          OutputBaseFilename=ViewSourceVibe-Setup
+          Compression=lzma
+          SolidCompression=yes
+          ArchitecturesInstallIn64BitMode=x64compatible
+
+          [Files]
+          Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+
+          [Icons]
+          Name: "{autoprograms}\View Source Vibe"; Filename: "{app}\view_source_vibe.exe"
+          Name: "{autodesktop}\View Source Vibe"; Filename: "{app}\view_source_vibe.exe"
+
+          [Run]
+          Filename: "{app}\view_source_vibe.exe"; Description: "Launch View Source Vibe"; Flags: nowait postinstall skipifsilent
+          "@
+          $iss | Out-File -FilePath setup.iss -Encoding UTF8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+        shell: pwsh
+
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: ViewSourceVibe-Windows
-          path: build/windows/x64/runner/Release
+          path: installer/ViewSourceVibe-Setup.exe
 
 
   build-ios:
+    if: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,17 +111,21 @@ jobs:
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
+      - name: Package iOS artifact
+        run: zip -r ViewSourceVibe-iOS.zip build/ios/iphoneos/Runner.app
+
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: ViewSourceVibe-iOS
-          path: build/ios/iphoneos/Runner.app
+          path: ViewSourceVibe-iOS.zip
 
   build-android:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -116,13 +155,13 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/release.keystore
-      
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: ViewSourceVibe-Android-APK
           path: build/app/outputs/apk/release/app-release.apk
-      
+
       - name: Upload Android App Bundle
         uses: actions/upload-artifact@v4
         with:
@@ -130,7 +169,7 @@ jobs:
           path: build/app/outputs/bundle/release/app-release.aab
 
   create-release:
-    needs: [build-macos, build-windows, build-ios, build-android]
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -138,18 +177,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
 
-      - name: Package artifacts
-        run: |
-          zip -r ViewSourceVibe-macOS.zip ViewSourceVibe-macOS/
-          zip -r ViewSourceVibe-Windows.zip ViewSourceVibe-Windows/
-          zip -r ViewSourceVibe-iOS.zip ViewSourceVibe-iOS/
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ViewSourceVibe-macOS.zip
-            ViewSourceVibe-Windows.zip
-            ViewSourceVibe-iOS.zip
-            ViewSourceVibe-Android-APK/app-release.apk
-            ViewSourceVibe-Android-AAB/app-release.aab
+            ViewSourceVibe-macOS/ViewSourceVibe.dmg
+            ViewSourceVibe-Windows/ViewSourceVibe-Setup.exe
+            # ViewSourceVibe-iOS/ViewSourceVibe-iOS.zip
+            # ViewSourceVibe-Android-APK/app-release.apk
+            # ViewSourceVibe-Android-AAB/app-release.aab
