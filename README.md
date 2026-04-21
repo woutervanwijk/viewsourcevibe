@@ -75,17 +75,14 @@ View Source Vibe is a powerful tool to view source code, browse and inspect web 
 
 The macOS build is not notarized, so Gatekeeper will block it on first launch. To open it anyway:
 
-**Option 1 — Right-click method (easiest)**
-1. Right-click (or Control-click) `View Source Vibe.app`
-2. Choose **Open** from the context menu
-3. Click **Open** in the dialog that appears
+The macOS build is not notarized, so Gatekeeper will block it on first launch. To open it anyway:
 
-**Option 2 — System Settings**
+**Option 1 — System Settings**
 1. Try to open the app normally — it will be blocked
 2. Go to **System Settings → Privacy & Security**
 3. Scroll down and click **Open Anyway** next to the blocked app
 
-**Option 3 — Terminal (removes the quarantine flag permanently)**
+**Option 2 — Terminal (removes the quarantine flag permanently)**
 ```bash
 xattr -cr "/Applications/View Source Vibe.app"
 ```
