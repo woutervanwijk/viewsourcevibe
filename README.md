@@ -71,6 +71,25 @@ View Source Vibe is a powerful tool to view source code, browse and inspect web 
 3. **Switch Tabs** to inspect Source, DOM, Metadata, or Network details.
 4. **Share** content from other apps to "View Source Vibe" for instant analysis.
 
+## 🖥️ Installing the macOS App
+
+The macOS build is not notarized, so Gatekeeper will block it on first launch. To open it anyway:
+
+**Option 1 — Right-click method (easiest)**
+1. Right-click (or Control-click) `View Source Vibe.app`
+2. Choose **Open** from the context menu
+3. Click **Open** in the dialog that appears
+
+**Option 2 — System Settings**
+1. Try to open the app normally — it will be blocked
+2. Go to **System Settings → Privacy & Security**
+3. Scroll down and click **Open Anyway** next to the blocked app
+
+**Option 3 — Terminal (removes the quarantine flag permanently)**
+```bash
+xattr -cr "/Applications/View Source Vibe.app"
+```
+
 ## 🛠️ Building from Source
 
 ```bash
