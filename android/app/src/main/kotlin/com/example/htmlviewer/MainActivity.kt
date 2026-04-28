@@ -12,6 +12,7 @@ import java.nio.charset.Charset
 
 class MainActivity : FlutterActivity() {
     private val SHARED_CONTENT_CHANNEL = "info.wouter.sourceviewer/shared_content"
+    private val MAX_SHARED_FILE_BYTES = 10 * 1024 * 1024
     private var sharedIntent: Intent? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -362,7 +363,7 @@ class MainActivity : FlutterActivity() {
                         println("MainActivity: Exporting virtual file as $targetType")
                         contentResolver.openTypedAssetFileDescriptor(uri, targetType, null)?.use { afd ->
                             afd.createInputStream().use { stream ->
-                                return stream.bufferedReader().readText()
+                                return readStreamTextWithLimit(stream)
                             }
                         }
                     }
@@ -413,24 +414,7 @@ class MainActivity : FlutterActivity() {
 
             if (inputStream != null) {
                 inputStream.use { stream ->
-                    val buffer = ByteArray(1024 * 16) // 16KB buffer
-                    val outputStream = ByteArrayOutputStream()
-                    var bytesRead: Int
-                    
-                    while (stream.read(buffer).also { bytesRead = it } != -1) {
-                        outputStream.write(buffer, 0, bytesRead)
-                    }
-                    
-                    val bytes = outputStream.toByteArray()
-                    println("MainActivity: Successfully read ${bytes.size} bytes from URI: $uri")
-                    
-                    if (bytes.isEmpty()) return ""
-
-                    try {
-                        return String(bytes, Charset.forName("UTF-8"))
-                    } catch (e: Exception) {
-                        return String(bytes, Charset.forName("ISO-8859-1"))
-                    }
+                    return readStreamTextWithLimit(stream)
                 }
             }
 
@@ -438,7 +422,7 @@ class MainActivity : FlutterActivity() {
             println("MainActivity: Attempting openFileDescriptor for URI: $uri")
             contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 java.io.FileInputStream(pfd.fileDescriptor).use { fis ->
-                    return fis.bufferedReader().readText()
+                    return readStreamTextWithLimit(fis)
                 }
             }
         } catch (e: SecurityException) {
@@ -448,5 +432,29 @@ class MainActivity : FlutterActivity() {
         }
         
         return null
+    }
+
+    private fun readStreamTextWithLimit(stream: java.io.InputStream): String {
+        val buffer = ByteArray(1024 * 16)
+        val outputStream = ByteArrayOutputStream()
+        var totalBytes = 0
+        var bytesRead: Int
+
+        while (stream.read(buffer).also { bytesRead = it } != -1) {
+            totalBytes += bytesRead
+            if (totalBytes > MAX_SHARED_FILE_BYTES) {
+                throw IllegalArgumentException("Shared file exceeds maximum limit (10MB)")
+            }
+            outputStream.write(buffer, 0, bytesRead)
+        }
+
+        val bytes = outputStream.toByteArray()
+        if (bytes.isEmpty()) return ""
+
+        return try {
+            String(bytes, Charset.forName("UTF-8"))
+        } catch (e: Exception) {
+            String(bytes, Charset.forName("ISO-8859-1"))
+        }
     }
 }

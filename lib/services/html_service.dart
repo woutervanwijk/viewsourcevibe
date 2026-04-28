@@ -8,6 +8,7 @@ import 'package:http/io_client.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:view_source_vibe/utils/cookie_utils.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
@@ -23,6 +24,8 @@ import 'package:xml/xml.dart' as xml;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HtmlService extends ChangeNotifier {
+  static const int _maxUrlResponseBytes = 10 * 1024 * 1024;
+
   HtmlFile? _currentFile;
   int? _requestedTabIndex;
   int? get requestedTabIndex => _requestedTabIndex;
@@ -1102,6 +1105,7 @@ class HtmlService extends ChangeNotifier {
     Uri? originalUri,
     int redirectDepth = 0,
   }) async {
+    HttpClient? hClient;
     try {
       // Prevent infinite redirect loops
       if (redirectDepth > 5) {
@@ -1110,7 +1114,7 @@ class HtmlService extends ChangeNotifier {
       }
 
       // Use HttpClient to manually handle redirects and capture certificate
-      final hClient = HttpClient();
+      hClient = HttpClient();
       hClient.badCertificateCallback =
           (X509Certificate cert, String host, int port) => true;
       final hRequest = await hClient.openUrl('GET', uri);
@@ -1143,7 +1147,7 @@ class HtmlService extends ChangeNotifier {
         if (redirectUri.scheme == 'http' || redirectUri.scheme == 'https') {
           return await _getFinalUrlAfterRedirects(
             redirectUri,
-            http.Client(),
+            client,
             headers,
             originalUri: originalUri ?? uri, // Preserve the original URI
             redirectDepth: redirectDepth + 1,
@@ -1172,6 +1176,8 @@ class HtmlService extends ChangeNotifier {
 
       // For other errors, return the original URL if available, otherwise current URI
       return originalUri?.toString() ?? uri.toString();
+    } finally {
+      hClient?.close(force: true);
     }
   }
 
@@ -2072,6 +2078,8 @@ class HtmlService extends ChangeNotifier {
 
   Future<HtmlFile> _loadFromUrlInternal(String url) async {
     Map<String, dynamic>? currentProbeResult;
+    http.Client? client;
+    HttpClient? hClient;
 
     try {
       // Validate and sanitize URL
@@ -2094,7 +2102,7 @@ class HtmlService extends ChangeNotifier {
       }
 
       // Use the http package with timeout and security settings
-      final client = _createClient();
+      client = _createClient();
       final stopwatch = Stopwatch()..start();
       String? ipAddress;
 
@@ -2134,7 +2142,13 @@ class HtmlService extends ChangeNotifier {
       }
 
       // Use HttpClient for the final request
-      final hClient = HttpClient();
+      var acceptedInvalidCertificate = false;
+      hClient = HttpClient();
+      hClient.badCertificateCallback =
+          (X509Certificate cert, String host, int port) {
+        acceptedInvalidCertificate = true;
+        return true;
+      };
       final hRequest = await hClient.openUrl('GET', Uri.parse(finalUrl));
 
       headers.forEach((key, value) {
@@ -2159,7 +2173,7 @@ class HtmlService extends ChangeNotifier {
       }
 
       // Read body
-      final bytes = await hResponse.fold<List<int>>([], (p, e) => p..addAll(e));
+      final bytes = await _readResponseBytesWithLimit(hResponse);
       final content = utf8.decode(bytes, allowMalformed: true);
 
       stopwatch.stop();
@@ -2210,6 +2224,10 @@ class HtmlService extends ChangeNotifier {
         'security': securityHeaders,
         'cookies': cookies,
         'certificate': certInfo,
+        'tlsInvalidCertificate': acceptedInvalidCertificate,
+        'tlsWarning': acceptedInvalidCertificate
+            ? 'TLS certificate validation failed. Content was loaded anyway for inspection.'
+            : null,
         'analyzedCookies': <Map<String, dynamic>>[],
       };
 
@@ -2327,7 +2345,32 @@ Technical details: $e''';
         isError: true,
         probeResult: currentProbeResult,
       );
+    } finally {
+      client?.close();
+      hClient?.close(force: true);
     }
+  }
+
+  Future<List<int>> _readResponseBytesWithLimit(
+    HttpClientResponse response,
+  ) async {
+    final declaredLength = response.contentLength;
+    if (declaredLength > _maxUrlResponseBytes) {
+      throw Exception('Response size exceeds maximum limit (10MB)');
+    }
+
+    final builder = BytesBuilder(copy: false);
+    var total = 0;
+
+    await for (final chunk in response) {
+      total += chunk.length;
+      if (total > _maxUrlResponseBytes) {
+        throw Exception('Response size exceeds maximum limit (10MB)');
+      }
+      builder.add(chunk);
+    }
+
+    return builder.takeBytes();
   }
 
   Future<void> loadFromUrl(
@@ -2395,9 +2438,13 @@ Technical details: $e''';
       final uri = Uri.parse(targetUrl);
 
       // Use HttpClient directly to get certificate info
+      var acceptedInvalidCertificate = false;
       client = HttpClient();
       client.badCertificateCallback =
-          (X509Certificate cert, String host, int port) => true;
+          (X509Certificate cert, String host, int port) {
+        acceptedInvalidCertificate = true;
+        return true;
+      };
       client.connectionTimeout = const Duration(seconds: 10);
 
       final stopwatch = Stopwatch()..start();
@@ -2521,6 +2568,10 @@ Technical details: $e''';
           'security': securityHeaders,
           'cookies': cookies,
           'certificate': certInfo,
+          'tlsInvalidCertificate': acceptedInvalidCertificate,
+          'tlsWarning': acceptedInvalidCertificate
+              ? 'TLS certificate validation failed. Content was loaded anyway for inspection.'
+              : null,
           'analyzedCookies': <Map<String, dynamic>>[],
         };
 
@@ -4207,7 +4258,8 @@ Technical details: $e''';
 
       // Schedule a delayed re-query to catch deferred/lazy-loaded resources
       // (analytics scripts, lazy images, etc. that load after onLoadStop).
-      debugPrint('pageWeight: scheduling refresh, isPartial=$isPartial url=$url');
+      debugPrint(
+          'pageWeight: scheduling refresh, isPartial=$isPartial url=$url');
       if (!isPartial) {
         _refreshPageWeightAfterDelay(url).ignore();
       }
@@ -4233,15 +4285,15 @@ Technical details: $e''';
       const Duration(seconds: 10),
     ]) {
       await Future.delayed(delay);
-      debugPrint('pageWeight delayed check: controller=${activeWebViewController != null}, currentPath=${_currentFile?.path}, url=$url');
+      debugPrint(
+          'pageWeight delayed check: controller=${activeWebViewController != null}, currentPath=${_currentFile?.path}, url=$url');
       if (activeWebViewController == null) return;
       if (_currentFile?.path != url) return; // user navigated away
       await _doPageWeightRefresh(url);
     }
   }
 
-  static const String _weightQueryJs =
-      '(function() {'
+  static const String _weightQueryJs = '(function() {'
       ' var tTx=0; var tDec=0;'
       ' var acc=window.__vsv_res||{};'
       ' var list=[]; var seen=new Set();'
@@ -4275,7 +4327,8 @@ Technical details: $e''';
 
       String jsonStr = '';
       if (weightRaw is String) jsonStr = _unquoteHtml(weightRaw);
-      debugPrint('pageWeight _doRefresh: jsonStr empty=${jsonStr.isEmpty}, rawType=${weightRaw.runtimeType}');
+      debugPrint(
+          'pageWeight _doRefresh: jsonStr empty=${jsonStr.isEmpty}, rawType=${weightRaw.runtimeType}');
       if (jsonStr.isEmpty) return;
 
       final dynamic decoded = jsonDecode(jsonStr);
@@ -4288,7 +4341,8 @@ Technical details: $e''';
 
       final prevTx = (_lastPageWeight?['transfer'] as num? ?? 0).toInt();
       final prevDec = (_lastPageWeight?['decoded'] as num? ?? 0).toInt();
-      debugPrint('pageWeight _doRefresh: newTx=$newTx newDec=$newDec prevTx=$prevTx prevDec=$prevDec');
+      debugPrint(
+          'pageWeight _doRefresh: newTx=$newTx newDec=$newDec prevTx=$prevTx prevDec=$prevDec');
 
       // SPAs (e.g. Next.js) often call performance.clearResourceTimings() which can
       // make the new snapshot look smaller than what we already captured. Always merge

@@ -15,19 +15,24 @@ import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 /// Sets up URL scheme handling for deep linking
-Future<void> setupUrlHandling(HtmlService htmlService) async {
+Future<void> setupUrlHandling(
+  HtmlService htmlService, {
+  bool handleInitialLink = true,
+}) async {
   try {
     // Initialize AppLinks
     final appLinks = AppLinks();
 
-    // Handle initial link when app is launched
-    debugPrint('setupUrlHandling: Checking for initial app link...');
-    final initialUri = await appLinks.getInitialLink();
-    debugPrint('setupUrlHandling: Initial URI result: $initialUri');
-    if (initialUri != null) {
-      await _handleDeepLink(initialUri, htmlService);
-    } else {
-      debugPrint('setupUrlHandling: No initial URI found');
+    if (handleInitialLink) {
+      // Handle initial link when app is launched
+      debugPrint('setupUrlHandling: Checking for initial app link...');
+      final initialUri = await appLinks.getInitialLink();
+      debugPrint('setupUrlHandling: Initial URI result: $initialUri');
+      if (initialUri != null) {
+        await _handleDeepLink(initialUri, htmlService);
+      } else {
+        debugPrint('setupUrlHandling: No initial URI found');
+      }
     }
 
     // Listen for link changes while app is running
@@ -89,6 +94,11 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
   }
   // Handle viewsourcevibe://file?path=... scheme
   else if (uri.scheme == 'viewsourcevibe' && uri.host == 'file') {
+    if (_isDesktopPlatform) {
+      debugPrint('Ignoring file deep link on desktop: $uri');
+      return;
+    }
+
     final filePath = uri.queryParameters['path'];
     if (filePath != null && filePath.isNotEmpty) {
       debugPrint('Opening file from deep link: $filePath');
@@ -241,6 +251,11 @@ Try these solutions:
   }
 }
 
+bool get _isDesktopPlatform {
+  if (kIsWeb) return false;
+  return Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+}
+
 void main() async {
   // Initialize Flutter binding before any async operations
   WidgetsFlutterBinding.ensureInitialized();
@@ -352,7 +367,7 @@ Future<void> _performDelayedInitialization(
   if (initialUri != null) {
     await _handleDeepLink(initialUri, htmlService);
     // After deep link, also setup the stream for future links
-    setupUrlHandling(htmlService);
+    setupUrlHandling(htmlService, handleInitialLink: false);
   } else {
     // Check for pending shared content (Android/iOS Share Sheet)
     bool hasSharedContent = false;
@@ -370,8 +385,8 @@ Future<void> _performDelayedInitialization(
     // SharedContentWrapper timing, which can race with this function on cold start)
     if (hasSharedContent) {
       try {
-        final handled = await UnifiedSharingService.handlePendingSharedContent(
-            htmlService);
+        final handled =
+            await UnifiedSharingService.handlePendingSharedContent(htmlService);
         debugPrint(handled
             ? '✅ Cold start shared content handled successfully'
             : '⚠️ Cold start shared content not handled (empty or context unavailable)');
@@ -485,7 +500,7 @@ Future<void> _performDelayedInitialization(
     }
 
     // Still setup URL handling for future links even if no initial link was found
-    setupUrlHandling(htmlService);
+    setupUrlHandling(htmlService, handleInitialLink: false);
   }
 }
 

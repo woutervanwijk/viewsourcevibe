@@ -199,22 +199,29 @@ class _BrowserViewState extends State<BrowserView> {
                 // SPAs call performance.clearResourceTimings() to manage memory, but
                 // we keep our own copy of everything seen since page load.
                 if (!window.__vsv_res) window.__vsv_res = {};
+                var __vsvMaxResources = 1000;
                 function _vsvRecord(name, tx, dec) {
                   if (!name || name.startsWith('data:')) return;
                   var prev = window.__vsv_res[name];
                   if (!prev || dec > (prev.d || 0) || (!prev.d && tx > (prev.t || 0))) {
                     window.__vsv_res[name] = {t: tx || 0, d: dec || 0};
                   }
+                  var keys = Object.keys(window.__vsv_res);
+                  while (keys.length > __vsvMaxResources) {
+                    delete window.__vsv_res[keys.shift()];
+                  }
                 }
                 // PerformanceObserver: captures resources where Timing-Allow-Origin is set.
                 function attachObserver() {
                   try {
+                    if (window.__vsv_observerAttached) return;
                     var obs = new PerformanceObserver(function(list) {
                       list.getEntries().forEach(function(e) {
                         _vsvRecord(e.name, e.transferSize || 0, e.decodedBodySize || 0);
                       });
                     });
                     obs.observe({type: 'resource', buffered: true});
+                    window.__vsv_observerAttached = true;
                   } catch(e) {}
                 }
                 attachObserver();
@@ -222,7 +229,6 @@ class _BrowserViewState extends State<BrowserView> {
                 var _vsv_push = history.pushState;
                 history.pushState = function() {
                   _vsv_push.apply(this, arguments);
-                  attachObserver();
                 };
                 // Patch fetch to capture API response sizes (cross-origin CDN static
                 // assets block size via TAO, but API endpoints usually allow it).

@@ -244,9 +244,8 @@ class _SourceViewerState extends State<SourceViewer> {
     final fileName = widget.file.name.split('/').last.split('\\').last;
     final fileContent = widget.file.content;
     final lines = fileContent.split('\n');
-    final fileExtension = fileName.isNotEmpty
-        ? fileName.split('.').last.toLowerCase()
-        : '';
+    final fileExtension =
+        fileName.isNotEmpty ? fileName.split('.').last.toLowerCase() : '';
     final isHtmlFile = fileExtension == 'html' || fileExtension == 'htm';
 
     return Stack(children: [
@@ -462,6 +461,8 @@ class _SourceViewerState extends State<SourceViewer> {
             },
           ),
           const Divider(height: 1),
+          if (_hasTlsWarning(widget.file))
+            _buildTlsWarningBanner(context, widget.file),
 
           // File content with built-in syntax highlighting and line numbers
           Expanded(
@@ -558,11 +559,8 @@ class _SourceViewerState extends State<SourceViewer> {
     ]);
   }
 
-  Widget _buildEditor(
-      BuildContext context,
-      HtmlService htmlService,
-      String content,
-      _SourceViewerBodyData data) {
+  Widget _buildEditor(BuildContext context, HtmlService htmlService,
+      String content, _SourceViewerBodyData data) {
     return htmlService.buildEditor(
       content,
       data.selectedContentType ?? widget.file.extension,
@@ -582,6 +580,37 @@ class _SourceViewerState extends State<SourceViewer> {
       verticalController: _verticalController,
       horizontalController: _horizontalController,
     ) as Widget;
+  }
+
+  bool _hasTlsWarning(HtmlFile file) {
+    return file.probeResult?['tlsInvalidCertificate'] == true;
+  }
+
+  Widget _buildTlsWarningBanner(BuildContext context, HtmlFile file) {
+    final warning = file.probeResult?['tlsWarning']?.toString() ??
+        'TLS certificate validation failed. Content was loaded anyway for inspection.';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: Colors.orange.withValues(alpha: 0.14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Colors.orange, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              warning,
+              style: const TextStyle(
+                color: Colors.orange,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

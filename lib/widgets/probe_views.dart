@@ -438,7 +438,7 @@ class ProbeSecurityView extends ProbeViewBase {
     final Map<String, dynamic> security = result['security'] ?? {};
 
     return Scrollbar(
-      child: ListView(
+        child: ListView(
       primary: true,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
@@ -450,6 +450,10 @@ class ProbeSecurityView extends ProbeViewBase {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
+        if (result['tlsInvalidCertificate'] == true) ...[
+          _buildTlsWarningCard(context, result),
+          const SizedBox(height: 12),
+        ],
         ...(() {
           final sortedSecurity = security.entries.toList()
             ..sort(
@@ -504,6 +508,29 @@ class ProbeSecurityView extends ProbeViewBase {
         _buildCertificateCard(context, result['certificate']),
       ],
     ));
+  }
+
+  Widget _buildTlsWarningCard(
+      BuildContext context, Map<String, dynamic> result) {
+    final warning = result['tlsWarning']?.toString() ??
+        'TLS certificate validation failed. Content was loaded anyway for inspection.';
+    return Card(
+      elevation: 0,
+      color: Colors.orange.withValues(alpha: 0.1),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Colors.orange.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+        title: const Text(
+          'TLS Certificate Warning',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(warning),
+        dense: true,
+      ),
+    );
   }
 
   Widget _buildCertificateCard(
@@ -709,7 +736,7 @@ class ProbeCookiesView extends ProbeViewBase {
       });
 
       return Scrollbar(
-        child: ListView.builder(
+          child: ListView.builder(
         primary: true,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         itemCount: sortedCookies.length,
@@ -866,7 +893,7 @@ class ProbeCookiesView extends ProbeViewBase {
     }
 
     return Scrollbar(
-      child: ListView.builder(
+        child: ListView.builder(
       primary: true,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       itemCount: cookies.length,

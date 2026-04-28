@@ -8,13 +8,20 @@ class ProbeService {
     HttpClient? client;
     try {
       String targetUrl = url.trim();
-      if (!targetUrl.contains('://') && !targetUrl.startsWith('about:') && !targetUrl.startsWith('data:')) {
+      if (!targetUrl.contains('://') &&
+          !targetUrl.startsWith('about:') &&
+          !targetUrl.startsWith('data:')) {
         targetUrl = 'https://$targetUrl';
       }
 
       final uri = Uri.parse(targetUrl);
+      var acceptedInvalidCertificate = false;
       client = HttpClient();
-      client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      client.badCertificateCallback =
+          (X509Certificate cert, String host, int port) {
+        acceptedInvalidCertificate = true;
+        return true;
+      };
       client.connectionTimeout = const Duration(seconds: 10);
 
       final stopwatch = Stopwatch()..start();
@@ -22,7 +29,8 @@ class ProbeService {
 
       if (uri.host.isNotEmpty) {
         try {
-          final addresses = await InternetAddress.lookup(uri.host).timeout(const Duration(seconds: 2));
+          final addresses = await InternetAddress.lookup(uri.host)
+              .timeout(const Duration(seconds: 2));
           if (addresses.isNotEmpty) {
             ipAddress = addresses.first.address;
           }
@@ -89,7 +97,8 @@ class ProbeService {
       });
 
       final securityHeaders = {
-        'Strict-Transport-Security': normalizedHeaders['strict-transport-security'],
+        'Strict-Transport-Security':
+            normalizedHeaders['strict-transport-security'],
         'Content-Security-Policy': normalizedHeaders['content-security-policy'],
         'X-Frame-Options': normalizedHeaders['x-frame-options'],
         'X-Content-Type-Options': normalizedHeaders['x-content-type-options'],
@@ -114,6 +123,10 @@ class ProbeService {
         'security': securityHeaders,
         'cookies': serverCookies,
         'certificate': certInfo,
+        'tlsInvalidCertificate': acceptedInvalidCertificate,
+        'tlsWarning': acceptedInvalidCertificate
+            ? 'TLS certificate validation failed. Content was loaded anyway for inspection.'
+            : null,
         'analyzedCookies': <Map<String, dynamic>>[],
       };
     } catch (e) {
@@ -187,19 +200,37 @@ class ProbeService {
     name = name.toLowerCase();
     pageUrl = pageUrl.toLowerCase();
 
-    if (name.endsWith('.js') || name.contains('.js?') || name.contains('.js#') || name.contains('script')) {
+    if (name.endsWith('.js') ||
+        name.contains('.js?') ||
+        name.contains('.js#') ||
+        name.contains('script')) {
       return 'script';
     }
-    if (name.endsWith('.css') || name.contains('.css?') || name.contains('.css#') || name.contains('style')) {
+    if (name.endsWith('.css') ||
+        name.contains('.css?') ||
+        name.contains('.css#') ||
+        name.contains('style')) {
       return 'style';
     }
-    if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.gif') ||
-        name.endsWith('.webp') || name.endsWith('.svg') || name.endsWith('.ico') || name.endsWith('.avif') ||
-        name.contains('image/') || name.contains('img_') || name.contains('/images/')) {
+    if (name.endsWith('.png') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.gif') ||
+        name.endsWith('.webp') ||
+        name.endsWith('.svg') ||
+        name.endsWith('.ico') ||
+        name.endsWith('.avif') ||
+        name.contains('image/') ||
+        name.contains('img_') ||
+        name.contains('/images/')) {
       return 'image';
     }
-    if (name == pageUrl || name == '$pageUrl/' || name.endsWith('.html') || name.endsWith('.htm') ||
-        name.contains('document') || (!name.contains('.') && name.startsWith('http'))) {
+    if (name == pageUrl ||
+        name == '$pageUrl/' ||
+        name.endsWith('.html') ||
+        name.endsWith('.htm') ||
+        name.contains('document') ||
+        (!name.contains('.') && name.startsWith('http'))) {
       return 'document';
     }
     return 'other';

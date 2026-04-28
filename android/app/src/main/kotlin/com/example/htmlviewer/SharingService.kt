@@ -121,6 +121,7 @@ class SharingService : FlutterPlugin, MethodCallHandler, ActivityAware {
     private fun shareHtml(call: MethodCall, result: Result) {
         val html = call.argument<String>("html")
         val filename = call.argument<String>("filename") ?: "shared_content.html"
+        val safeFilename = sanitizeShareFilename(filename, "shared_content.html")
         
         if (html == null) {
             result.error("INVALID_ARGUMENTS", "HTML argument is required", null)
@@ -131,7 +132,7 @@ class SharingService : FlutterPlugin, MethodCallHandler, ActivityAware {
             // Create a temporary file in the app's cache directory
             // This is more reliable than using DOCUMENTS directory
             val cacheDir = context.cacheDir
-            val tempFile = File(cacheDir, filename)
+            val tempFile = File(cacheDir, safeFilename)
             FileWriter(tempFile).use { writer ->
                 writer.write(html)
             }
@@ -167,6 +168,19 @@ class SharingService : FlutterPlugin, MethodCallHandler, ActivityAware {
         } catch (e: Exception) {
             result.error("SHARE_FAILED", "Failed to share HTML: ${e.message}", null)
         }
+    }
+
+    private fun sanitizeShareFilename(filename: String?, fallback: String): String {
+        val candidate = filename
+            ?.replace('\\', '/')
+            ?.substringAfterLast('/')
+            ?.replace(Regex("[\\u0000-\\u001F\\u007F]"), "")
+            ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
+            ?.trim('.', '_')
+            ?.take(120)
+
+        val safe = if (candidate.isNullOrBlank()) fallback else candidate
+        return if (safe.contains('.')) safe else "$safe.html"
     }
 
     private fun shareFile(call: MethodCall, result: Result) {
