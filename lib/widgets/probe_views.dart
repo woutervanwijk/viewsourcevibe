@@ -955,133 +955,137 @@ class ProbeCookiesView extends ProbeViewBase {
       });
 
       return Scrollbar(
-          child: ListView.builder(
+          child: ListView(
         primary: true,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
-        itemCount: sortedCookies.length,
-        itemBuilder: (context, index) {
-          final cookie = sortedCookies[index];
-          final name = cookie['name'] as String? ?? 'Unknown';
-          final value = cookie['value'] as String? ?? '';
-          final category = cookie['category'] as String? ?? 'unknown';
-          final provider = cookie['provider'] as String?;
-          final source = cookie['source'] as String? ?? 'Unknown';
+        children: [
+          _buildCookiePrivacyLens(context, sortedCookies),
+          const SizedBox(height: 12),
+          ...sortedCookies.map((cookie) {
+            final name = cookie['name'] as String? ?? 'Unknown';
+            final value = cookie['value'] as String? ?? '';
+            final category = cookie['category'] as String? ?? 'unknown';
+            final provider = cookie['provider'] as String?;
+            final source = cookie['source'] as String? ?? 'Unknown';
 
-          Color badgeColor;
-          switch (category) {
-            case 'essential':
-              badgeColor = Colors.green;
-              break;
-            case 'analytics':
-              badgeColor = Colors.blue;
-              break;
-            case 'advertising':
-              badgeColor = Colors.orange;
-              break;
-            case 'social':
-              badgeColor = Colors.purple;
-              break;
-            default:
-              badgeColor = Colors.grey;
-          }
+            Color badgeColor;
+            switch (category) {
+              case 'essential':
+                badgeColor = Colors.green;
+                break;
+              case 'analytics':
+                badgeColor = Colors.blue;
+                break;
+              case 'advertising':
+                badgeColor = Colors.orange;
+                break;
+              case 'social':
+                badgeColor = Colors.purple;
+                break;
+              default:
+                badgeColor = Colors.grey;
+            }
 
-          return Card(
-            elevation: 0,
-            margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              side: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ListTile(
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      name,
-                      style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'monospace'),
-                    ),
-                  ),
-                  if (provider != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: badgeColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                            color: badgeColor.withValues(alpha: 0.5)),
-                      ),
+            return Card(
+              elevation: 0,
+              margin: const EdgeInsets.only(bottom: 8),
+              shape: RoundedRectangleBorder(
+                side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                title: Row(
+                  children: [
+                    Expanded(
                       child: Text(
-                        provider,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: badgeColor,
+                        name,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'monospace'),
+                      ),
+                    ),
+                    if (provider != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: badgeColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: badgeColor.withValues(alpha: 0.5)),
+                        ),
+                        child: Text(
+                          provider,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: badgeColor,
+                          ),
                         ),
                       ),
+                    ],
+                  ],
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 4),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          color: Colors.grey),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.category, size: 12, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          category.toUpperCase(),
+                          style:
+                              TextStyle(fontSize: 11, color: Colors.grey[600]),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(
+                            source == 'Browser'
+                                ? Icons.web
+                                : source == 'Server'
+                                    ? Icons.dns
+                                    : Icons.merge_type,
+                            size: 12,
+                            color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          source,
+                          style:
+                              TextStyle(fontSize: 11, color: Colors.grey[600]),
+                        ),
+                      ],
                     ),
                   ],
-                ],
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: '$name=$value'));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Cookie copied'),
+                          duration: Duration(milliseconds: 500)),
+                    );
+                  },
+                ),
               ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                        fontSize: 12,
-                        fontFamily: 'monospace',
-                        color: Colors.grey),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.category, size: 12, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text(
-                        category.toUpperCase(),
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                      ),
-                      const SizedBox(width: 12),
-                      Icon(
-                          source == 'Browser'
-                              ? Icons.web
-                              : source == 'Server'
-                                  ? Icons.dns
-                                  : Icons.merge_type,
-                          size: 12,
-                          color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text(
-                        source,
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.copy, size: 18),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: '$name=$value'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Cookie copied'),
-                        duration: Duration(milliseconds: 500)),
-                  );
-                },
-              ),
-            ),
-          );
-        },
+            );
+          }),
+        ],
       ));
     }
 
@@ -1152,6 +1156,286 @@ class ProbeCookiesView extends ProbeViewBase {
       },
     ));
   }
+
+  Widget _buildCookiePrivacyLens(
+      BuildContext context, List<Map<String, dynamic>> cookies) {
+    final analytics = _countCategory(cookies, 'analytics');
+    final advertising = _countCategory(cookies, 'advertising');
+    final social = _countCategory(cookies, 'social');
+    final unknown = _countCategory(cookies, 'unknown');
+    final secure = cookies.where((cookie) => cookie['secure'] == true).length;
+    final httpOnly =
+        cookies.where((cookie) => cookie['httpOnly'] == true).length;
+    final thirdPartyish = cookies.where(_isThirdPartyishCookie).length;
+    final weakSameSite = cookies.where(_hasWeakSameSite).length;
+    final score = _cookiePrivacyScore(cookies);
+    final color = score >= 75
+        ? Colors.green
+        : score >= 45
+            ? Colors.orange
+            : Colors.red;
+
+    return Card(
+      elevation: 0,
+      color: Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.3),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color.withValues(alpha: 0.36)),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '$score',
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Cookie Privacy Lens',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _cookiePrivacyVerdict(score),
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.68),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildCookieLensChip(
+                    context,
+                    Icons.cookie_outlined,
+                    '${cookies.length} total',
+                    Theme.of(context).colorScheme.primary),
+                if (analytics > 0)
+                  _buildCookieLensChip(context, Icons.analytics_outlined,
+                      '$analytics analytics', Colors.blue),
+                if (advertising > 0)
+                  _buildCookieLensChip(context, Icons.ad_units_outlined,
+                      '$advertising ads', Colors.orange),
+                if (social > 0)
+                  _buildCookieLensChip(context, Icons.share_outlined,
+                      '$social social', Colors.purple),
+                if (unknown > 0)
+                  _buildCookieLensChip(context, Icons.help_outline,
+                      '$unknown unknown', Colors.grey),
+                _buildCookieLensChip(context, Icons.lock_outline,
+                    '$secure secure', Colors.green),
+                _buildCookieLensChip(context, Icons.shield_outlined,
+                    '$httpOnly HttpOnly', Colors.teal),
+                if (thirdPartyish > 0)
+                  _buildCookieLensChip(context, Icons.public,
+                      '$thirdPartyish cross-site-ish', Colors.red),
+                if (weakSameSite > 0)
+                  _buildCookieLensChip(context, Icons.open_in_new,
+                      '$weakSameSite weak SameSite', Colors.red),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ..._cookiePrivacyNotes(cookies).map(
+              (note) => Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(note.icon, size: 15, color: note.color),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        note.text,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCookieLensChip(
+      BuildContext context, IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _cookiePrivacyScore(List<Map<String, dynamic>> cookies) {
+    if (cookies.isEmpty) return 100;
+    var score = 100;
+    score -= _countCategory(cookies, 'advertising') * 12;
+    score -= _countCategory(cookies, 'analytics') * 7;
+    score -= _countCategory(cookies, 'social') * 6;
+    score -= _countCategory(cookies, 'unknown') * 3;
+    score -= cookies.where(_isThirdPartyishCookie).length * 6;
+    score -= cookies.where(_hasWeakSameSite).length * 5;
+    score -= cookies.where(_isMissingSecure).length * 2;
+    return score.clamp(0, 100);
+  }
+
+  int _countCategory(List<Map<String, dynamic>> cookies, String category) {
+    return cookies.where((cookie) => cookie['category'] == category).length;
+  }
+
+  bool _isThirdPartyishCookie(Map<String, dynamic> cookie) {
+    final category = cookie['category']?.toString();
+    final domain = cookie['domain']?.toString() ?? '';
+    final provider = cookie['provider']?.toString() ?? '';
+    return category == 'advertising' ||
+        category == 'social' ||
+        domain.startsWith('.') ||
+        provider.contains('Google') ||
+        provider.contains('Meta') ||
+        provider.contains('Facebook') ||
+        provider.contains('DoubleClick');
+  }
+
+  bool _hasWeakSameSite(Map<String, dynamic> cookie) {
+    final source = cookie['source']?.toString() ?? '';
+    if (!source.contains('Server')) return false;
+    final sameSite = cookie['sameSite']?.toString().toLowerCase();
+    if (sameSite == null || sameSite.isEmpty) return true;
+    return sameSite == 'none' && cookie['secure'] != true;
+  }
+
+  bool _isMissingSecure(Map<String, dynamic> cookie) {
+    final source = cookie['source']?.toString() ?? '';
+    return source.contains('Server') && cookie['secure'] != true;
+  }
+
+  String _cookiePrivacyVerdict(int score) {
+    if (score >= 75) return 'Low visible tracking pressure from cookies.';
+    if (score >= 45) return 'Moderate cookie tracking signals detected.';
+    return 'Heavy tracking or weak cookie boundaries detected.';
+  }
+
+  List<_CookiePrivacyNote> _cookiePrivacyNotes(
+      List<Map<String, dynamic>> cookies) {
+    final notes = <_CookiePrivacyNote>[];
+    final advertising = _countCategory(cookies, 'advertising');
+    final analytics = _countCategory(cookies, 'analytics');
+    final weakSameSite = cookies.where(_hasWeakSameSite).length;
+    final notSecure = cookies.where(_isMissingSecure).length;
+    final httpOnly =
+        cookies.where((cookie) => cookie['httpOnly'] == true).length;
+
+    if (advertising > 0) {
+      notes.add(_CookiePrivacyNote(
+        Icons.ad_units_outlined,
+        Colors.orange,
+        '$advertising advertising cookie${advertising == 1 ? '' : 's'} can support cross-site profiling.',
+      ));
+    }
+    if (analytics > 0) {
+      notes.add(_CookiePrivacyNote(
+        Icons.analytics_outlined,
+        Colors.blue,
+        '$analytics analytics cookie${analytics == 1 ? '' : 's'} can measure repeat visits.',
+      ));
+    }
+    if (weakSameSite > 0) {
+      notes.add(_CookiePrivacyNote(
+        Icons.open_in_new,
+        Colors.red,
+        '$weakSameSite cookie${weakSameSite == 1 ? '' : 's'} missing strict SameSite protection.',
+      ));
+    }
+    if (notSecure > 0) {
+      notes.add(_CookiePrivacyNote(
+        Icons.lock_open,
+        Colors.red,
+        '$notSecure cookie${notSecure == 1 ? '' : 's'} not marked Secure.',
+      ));
+    }
+    if (httpOnly > 0) {
+      notes.add(_CookiePrivacyNote(
+        Icons.shield_outlined,
+        Colors.green,
+        '$httpOnly cookie${httpOnly == 1 ? '' : 's'} protected from JavaScript access.',
+      ));
+    }
+    if (notes.isEmpty) {
+      notes.add(const _CookiePrivacyNote(
+        Icons.check_circle_outline,
+        Colors.green,
+        'No obvious cookie privacy issues detected.',
+      ));
+    }
+    return notes.take(4).toList();
+  }
+}
+
+class _CookiePrivacyNote {
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  const _CookiePrivacyNote(this.icon, this.color, this.text);
 }
 
 class _SecurityHeaderCheck {

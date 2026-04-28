@@ -3520,6 +3520,7 @@ Technical details: $e''';
             'value': c.value,
             'domain': c.domain,
             'expires': c.expires,
+            'sameSite': c.sameSite,
             'secure': c.secure,
             'httpOnly': c.httpOnly,
             'category': c.category.toString().split('.').last,

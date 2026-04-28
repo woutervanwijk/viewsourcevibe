@@ -94,7 +94,7 @@ class MetadataView extends StatelessWidget {
     dynamicSections.sort((a, b) => a.title.compareTo(b.title));
 
     return Scrollbar(
-      child: SingleChildScrollView(
+        child: SingleChildScrollView(
       primary: true,
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -103,6 +103,11 @@ class MetadataView extends StatelessWidget {
           children: [
             _buildHeaderSection(context, metadata, settings),
             const SizedBox(height: 24),
+            if (_hasSocialPreview(metadata)) ...[
+              _buildSectionTitle(context, 'Open Graph / Social Preview'),
+              _buildSocialPreviewSection(context, metadata),
+              const SizedBox(height: 24),
+            ],
             ...dynamicSections.expand((section) => [
                   _buildSectionTitle(context, section.title),
                   section.content,
@@ -230,6 +235,205 @@ class MetadataView extends StatelessWidget {
     );
   }
 
+  bool _hasSocialPreview(Map<String, dynamic> metadata) {
+    final openGraph = metadata['openGraph'] as Map<String, dynamic>? ?? {};
+    final twitter = metadata['twitter'] as Map<String, dynamic>? ?? {};
+    return openGraph.isNotEmpty ||
+        twitter.isNotEmpty ||
+        metadata['title'] != null ||
+        metadata['description'] != null ||
+        metadata['image'] != null;
+  }
+
+  Widget _buildSocialPreviewSection(
+      BuildContext context, Map<String, dynamic> metadata) {
+    final openGraph = metadata['openGraph'] as Map<String, dynamic>? ?? {};
+    final twitter = metadata['twitter'] as Map<String, dynamic>? ?? {};
+    final title = _socialValue(
+      metadata,
+      openGraph,
+      twitter,
+      'title',
+      'og:title',
+      'twitter:title',
+      fallback: 'Untitled page',
+    );
+    final description = _socialValue(
+      metadata,
+      openGraph,
+      twitter,
+      'description',
+      'og:description',
+      'twitter:description',
+      fallback: 'No social description found.',
+    );
+    final image = _socialValue(
+      metadata,
+      openGraph,
+      twitter,
+      'image',
+      'og:image',
+      'twitter:image',
+    );
+    final site = openGraph['og:site_name']?.toString() ??
+        twitter['twitter:site']?.toString() ??
+        '';
+    final type = openGraph['og:type']?.toString() ??
+        twitter['twitter:card']?.toString() ??
+        'summary';
+    final url = openGraph['og:url']?.toString() ?? metadata['canonical'];
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth > 680;
+          final imageWidget = _buildSocialImage(context, image);
+          final textWidget = Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildSocialBadge(context, type, Icons.style_outlined),
+                    if (site.isNotEmpty)
+                      _buildSocialBadge(context, site, Icons.public),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SelectableText(
+                  HtmlUnescape().convert(title ?? ''),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  HtmlUnescape().convert(description ?? ''),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.72),
+                      ),
+                ),
+                if (url != null && url.toString().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  SelectableText(
+                    url.toString(),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+
+          if (wide) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 260, height: 160, child: imageWidget),
+                Expanded(child: textWidget),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: 190, child: imageWidget),
+              textWidget,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSocialImage(BuildContext context, String? image) {
+    if (image == null || image.isEmpty) {
+      return Container(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withValues(alpha: 0.55),
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: Theme.of(context).colorScheme.outline,
+          size: 42,
+        ),
+      );
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          final htmlService = Provider.of<HtmlService>(context, listen: false);
+          htmlService.loadFromUrl(image, switchToTab: 0);
+        },
+        child: ClipRRect(
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(12),
+            bottomLeft: Radius.circular(12),
+          ),
+          child: Image.network(
+            image,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildSocialImage(context, null),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialBadge(BuildContext context, String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .primaryContainer
+            .withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  String? _socialValue(
+    Map<String, dynamic> metadata,
+    Map<String, dynamic> openGraph,
+    Map<String, dynamic> twitter,
+    String metadataKey,
+    String ogKey,
+    String twitterKey, {
+    String? fallback,
+  }) {
+    return openGraph[ogKey]?.toString() ??
+        twitter[twitterKey]?.toString() ??
+        metadata[metadataKey]?.toString() ??
+        fallback;
+  }
+
   Widget _buildHintSection(
       BuildContext context, Map<String, dynamic> hints, AppSettings settings) {
     return Card(
@@ -267,9 +471,9 @@ class MetadataView extends StatelessWidget {
                     title: Text(
                       url.toString(),
                       style: TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'Courier',
-                       ),
+                        fontSize: 12,
+                        fontFamily: 'Courier',
+                      ),
                     ),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 12),
                     dense: true,
@@ -302,10 +506,11 @@ class MetadataView extends StatelessWidget {
         return Chip(
           avatar: Icon(Icons.code,
               size: 16, color: Theme.of(context).colorScheme.primary),
-          label: Text('${e.key}: ${e.value}',
-              style: TextStyle(
-                fontFamily: 'Courier',
-              ),
+          label: Text(
+            '${e.key}: ${e.value}',
+            style: TextStyle(
+              fontFamily: 'Courier',
+            ),
           ),
         );
       }).toList(),
@@ -552,9 +757,9 @@ class MetadataView extends StatelessWidget {
                 Expanded(
                   child: Text(
                     '${isPartial ? '≥ ' : ''}${FormatUtils.formatBytesWithTransfer({
-                      'decoded': weight['decoded'] as int? ?? 0,
-                      'transfer': weight['transfer'] as int? ?? 0,
-                    })}',
+                          'decoded': weight['decoded'] as int? ?? 0,
+                          'transfer': weight['transfer'] as int? ?? 0,
+                        })}',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,

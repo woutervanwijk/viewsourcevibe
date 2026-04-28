@@ -16,6 +16,7 @@ class CookieInfo {
   final String source; // 'Server' or 'Browser'
 
   final String? expires;
+  final String? sameSite;
   final bool secure;
   final bool httpOnly;
 
@@ -27,6 +28,7 @@ class CookieInfo {
     this.provider,
     required this.source,
     this.expires,
+    this.sameSite,
     this.secure = false,
     this.httpOnly = false,
   });
@@ -90,8 +92,8 @@ class CookieUtils {
     'gtm_': {'cat': CookieCategory.analytics, 'prov': 'Google Tag Manager'},
 
     // --- Meta / Facebook ---
-    '_fbp': {'cat': CookieCategory.advertising, 'prov': 'Meta Pixel'},
-    '_fbc': {'cat': CookieCategory.advertising, 'prov': 'Meta Pixel'},
+    '_fbp': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
+    '_fbc': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'fr': {'cat': CookieCategory.advertising, 'prov': 'Facebook'},
     'sb': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
     'datr': {'cat': CookieCategory.essential, 'prov': 'Facebook'},
@@ -433,7 +435,10 @@ class CookieUtils {
     '__Secure-PHPSESSID': {'cat': CookieCategory.essential, 'prov': 'PHP'},
     'csrftoken': {'cat': CookieCategory.essential, 'prov': 'Django/Security'},
     'authId': {'cat': CookieCategory.essential, 'prov': 'Authentication'},
-    'dsy-color-mode': {'cat': CookieCategory.functional, 'prov': 'UI Preference'},
+    'dsy-color-mode': {
+      'cat': CookieCategory.functional,
+      'prov': 'UI Preference'
+    },
     'uhz': {'cat': CookieCategory.functional, 'prov': 'Internal Identifier'},
 
     // --- Security & Bot Management ---
@@ -4298,6 +4303,7 @@ class CookieUtils {
 
     String? domain;
     String? expires;
+    String? sameSite;
     bool secure = false;
     bool httpOnly = false;
 
@@ -4311,6 +4317,8 @@ class CookieUtils {
         if (eqIndex != -1) domain = attr.substring(eqIndex + 1).trim();
       } else if (lowerAttr.startsWith('expires=')) {
         if (eqIndex != -1) expires = attr.substring(eqIndex + 1).trim();
+      } else if (lowerAttr.startsWith('samesite=')) {
+        if (eqIndex != -1) sameSite = attr.substring(eqIndex + 1).trim();
       } else if (lowerAttr == 'secure') {
         secure = true;
       } else if (lowerAttr == 'httponly') {
@@ -4330,10 +4338,7 @@ class CookieUtils {
 
     // Wildcard consent detection - check if cookie name contains 'consent'
     if (knownData == null && name.toLowerCase().contains('consent')) {
-      knownData = {
-        'cat': CookieCategory.essential,
-        'prov': 'Consent Manager'
-      };
+      knownData = {'cat': CookieCategory.essential, 'prov': 'Consent Manager'};
     }
 
     final known = knownData ?? {};
@@ -4343,6 +4348,7 @@ class CookieUtils {
       value: value,
       domain: domain,
       expires: expires,
+      sameSite: sameSite,
       secure: secure,
       httpOnly: httpOnly,
       category: known['cat'] ?? CookieCategory.unknown,
@@ -4377,16 +4383,21 @@ class CookieUtils {
     final browserList = parseBrowserCookies(browserCookies);
     for (var bc in browserList) {
       if (merged.containsKey(bc.name)) {
+        final existing = merged[bc.name]!;
         merged[bc.name] = CookieInfo(
-            name: bc.name,
-            value: bc.value,
-            domain: bc.domain,
-            expires: bc.expires,
-            secure: bc.secure,
-            httpOnly: bc.httpOnly,
-            category: bc.category,
-            provider: bc.provider,
-            source: 'Server + Browser');
+          name: bc.name,
+          value: bc.value,
+          domain: existing.domain ?? bc.domain,
+          expires: existing.expires ?? bc.expires,
+          sameSite: existing.sameSite ?? bc.sameSite,
+          secure: existing.secure || bc.secure,
+          httpOnly: existing.httpOnly || bc.httpOnly,
+          category: existing.category == CookieCategory.unknown
+              ? bc.category
+              : existing.category,
+          provider: existing.provider ?? bc.provider,
+          source: 'Server + Browser',
+        );
       } else {
         merged[bc.name] = bc;
       }
