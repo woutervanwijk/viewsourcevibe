@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:html/dom.dart' as dom;
+import 'package:html/parser.dart' as html_parser;
 import 'package:html_unescape/html_unescape.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -104,6 +106,10 @@ class MetadataView extends StatelessWidget {
         child: Column(
           children: [
             _buildHeaderSection(context, metadata, settings),
+            const SizedBox(height: 24),
+            _buildAccessibilitySnapshot(context, htmlService),
+            const SizedBox(height: 24),
+            _buildSeoHealthPanel(context, htmlService, metadata),
             const SizedBox(height: 24),
             if (_hasSocialPreview(metadata)) ...[
               _buildSectionTitle(context, 'Open Graph / Social Preview'),
@@ -245,6 +251,199 @@ class MetadataView extends StatelessWidget {
             settings),
       ],
     );
+  }
+
+  Widget _buildAccessibilitySnapshot(
+      BuildContext context, HtmlService htmlService) {
+    final doc = _parseCurrentDocument(htmlService);
+    final images = doc.querySelectorAll('img');
+    final imagesMissingAlt = images
+        .where((img) =>
+            !(img.attributes.containsKey('alt')) ||
+            img.attributes['alt']!.trim().isEmpty)
+        .length;
+    final headings = doc.querySelectorAll('h1,h2,h3,h4,h5,h6');
+    final h1Count = doc.querySelectorAll('h1').length;
+    final forms = doc.querySelectorAll('input,select,textarea');
+    final unlabeledControls =
+        forms.where((element) => _isUnlabeledControl(doc, element)).length;
+    final landmarks = doc
+        .querySelectorAll(
+          'main,nav,header,footer,aside,[role="main"],[role="navigation"],[role="banner"],[role="contentinfo"]',
+        )
+        .length;
+
+    final checks = [
+      _SnapshotCheck('H1', h1Count == 1, '$h1Count found'),
+      _SnapshotCheck(
+          'Headings', headings.isNotEmpty, '${headings.length} found'),
+      _SnapshotCheck('Image alt', imagesMissingAlt == 0,
+          images.isEmpty ? 'No images' : '$imagesMissingAlt missing'),
+      _SnapshotCheck('Form labels', unlabeledControls == 0,
+          forms.isEmpty ? 'No controls' : '$unlabeledControls missing'),
+      _SnapshotCheck('Landmarks', landmarks > 0, '$landmarks found'),
+    ];
+    return _buildSnapshotCard(
+      context,
+      title: 'Accessibility Snapshot',
+      icon: Icons.accessibility_new_outlined,
+      checks: checks,
+    );
+  }
+
+  Widget _buildSeoHealthPanel(BuildContext context, HtmlService htmlService,
+      Map<String, dynamic> metadata) {
+    final doc = _parseCurrentDocument(htmlService);
+    final title = metadata['title']?.toString() ?? '';
+    final description = metadata['description']?.toString() ?? '';
+    final canonical = metadata['pageConfig'] is Map
+        ? (metadata['pageConfig']['canonical']?.toString() ?? '')
+        : '';
+    final robotsMeta = doc
+            .querySelector('meta[name="robots"],meta[name="googlebot"]')
+            ?.attributes['content']
+            ?.toString() ??
+        '';
+    final ogTitle =
+        (metadata['openGraph'] as Map?)?['og:title']?.toString() ?? '';
+
+    final checks = [
+      _SnapshotCheck('Title', title.length >= 10 && title.length <= 70,
+          title.isEmpty ? 'Missing' : '${title.length} chars'),
+      _SnapshotCheck(
+          'Description',
+          description.length >= 50 && description.length <= 170,
+          description.isEmpty ? 'Missing' : '${description.length} chars'),
+      _SnapshotCheck('Canonical', canonical.isNotEmpty,
+          canonical.isEmpty ? 'Missing' : 'Present'),
+      _SnapshotCheck(
+          'Robots meta',
+          !robotsMeta.toLowerCase().contains('noindex'),
+          robotsMeta.isEmpty ? 'Indexable by default' : robotsMeta),
+      _SnapshotCheck('OG title', ogTitle.isNotEmpty,
+          ogTitle.isEmpty ? 'Missing' : 'Present'),
+    ];
+    return _buildSnapshotCard(
+      context,
+      title: 'SEO Health Panel',
+      icon: Icons.manage_search_outlined,
+      checks: checks,
+    );
+  }
+
+  Widget _buildSnapshotCard(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required List<_SnapshotCheck> checks,
+  }) {
+    final passed = checks.where((check) => check.ok).length;
+    final score = checks.isEmpty ? 0 : ((passed / checks.length) * 100).round();
+    final color = score >= 80
+        ? Colors.green
+        : score >= 50
+            ? Colors.orange
+            : Colors.red;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: color.withValues(alpha: 0.34)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Text(
+                  '$score',
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: checks.map((check) {
+                final checkColor = check.ok ? Colors.green : Colors.orange;
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: checkColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: checkColor.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        check.ok
+                            ? Icons.check_circle_outline
+                            : Icons.warning_amber_rounded,
+                        color: checkColor,
+                        size: 15,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${check.label}: ${check.detail}',
+                        style: TextStyle(
+                          color: checkColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  dom.Document _parseCurrentDocument(HtmlService htmlService) {
+    return html_parser.parse(htmlService.currentFile?.content ?? '');
+  }
+
+  bool _isUnlabeledControl(dom.Document doc, dom.Element element) {
+    final type = element.attributes['type']?.toLowerCase();
+    if (type == 'hidden' || type == 'submit' || type == 'button') return false;
+    if ((element.attributes['aria-label'] ?? '').trim().isNotEmpty) {
+      return false;
+    }
+    if ((element.attributes['aria-labelledby'] ?? '').trim().isNotEmpty) {
+      return false;
+    }
+    final id = element.attributes['id'];
+    if (id != null && id.isNotEmpty) {
+      final escaped = id.replaceAll('"', r'\"');
+      if (doc.querySelector('label[for="$escaped"]') != null) {
+        return false;
+      }
+    }
+    return element.parent?.localName != 'label';
   }
 
   bool _hasSocialPreview(Map<String, dynamic> metadata) {
@@ -1037,4 +1236,12 @@ class MetadataView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SnapshotCheck {
+  final String label;
+  final bool ok;
+  final String detail;
+
+  const _SnapshotCheck(this.label, this.ok, this.detail);
 }

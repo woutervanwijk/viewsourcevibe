@@ -125,6 +125,8 @@ class ProbeGeneralView extends ProbeViewBase {
         ],
         _buildRobotsSitemapCard(context, htmlService, result),
         const SizedBox(height: 16),
+        _buildStorageInspector(context, browserResult),
+        const SizedBox(height: 16),
         _buildNetworkInfoCard(context, result),
         if (hasBrowserProbe || htmlService.isWebViewLoading) ...[
           const SizedBox(height: 24),
@@ -374,27 +376,218 @@ class ProbeGeneralView extends ProbeViewBase {
     );
   }
 
+  Widget _buildStorageInspector(
+      BuildContext context, Map<String, dynamic>? browserResult) {
+    final storage = browserResult?['storage'] as Map<String, dynamic>?;
+    final local = storage?['localStorage'] as Map<String, dynamic>?;
+    final session = storage?['sessionStorage'] as Map<String, dynamic>?;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.inventory_2_outlined,
+                    color: Theme.of(context).colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Storage Inspector',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (storage == null)
+              const Text(
+                'Open or reload the Browser tab to collect localStorage and sessionStorage.',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              )
+            else ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildDiscoveryChip(
+                    Icons.storage,
+                    'local ${local?['count'] ?? 0} keys',
+                    Colors.blue,
+                  ),
+                  _buildDiscoveryChip(
+                    Icons.memory,
+                    FormatUtils.formatBytes(
+                        (local?['bytes'] as num? ?? 0).toInt()),
+                    Colors.blue,
+                  ),
+                  _buildDiscoveryChip(
+                    Icons.tab,
+                    'session ${session?['count'] ?? 0} keys',
+                    Colors.purple,
+                  ),
+                  _buildDiscoveryChip(
+                    Icons.memory,
+                    FormatUtils.formatBytes(
+                        (session?['bytes'] as num? ?? 0).toInt()),
+                    Colors.purple,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildStorageKeyList(context, 'localStorage', local),
+              _buildStorageKeyList(context, 'sessionStorage', session),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStorageKeyList(
+      BuildContext context, String label, Map<String, dynamic>? storage) {
+    final items = storage?['items'] as List? ?? const [];
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        ...items.take(8).map((item) {
+          final map = item as Map;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    map['k']?.toString() ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  FormatUtils.formatBytes((map['s'] as num? ?? 0).toInt()),
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
   Widget _buildSourceDiffCard(BuildContext context, HtmlService htmlService) {
     final serverSource = htmlService.serverSource;
     final browserSource = htmlService.currentFile?.content;
+    final hasBrowserSource = browserSource != null && browserSource.isNotEmpty;
+    final hasServerSource = serverSource != null && serverSource.isNotEmpty;
 
-    if (serverSource == null ||
-        serverSource.isEmpty ||
-        browserSource == null ||
-        browserSource.isEmpty) {
+    if (!hasServerSource || !hasBrowserSource) {
       return Card(
         elevation: 0,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const ListTile(
-          leading: Icon(Icons.difference_outlined),
-          title: Text('Diff Two Sources'),
-          subtitle: Text(
-            'Load through the browser to compare server source with the rendered DOM snapshot.',
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.difference_outlined,
+                      color: Theme.of(context).colorScheme.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Diff Two Sources',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                !hasBrowserSource
+                    ? 'Open or reload the Browser tab first so there is a rendered DOM snapshot to compare.'
+                    : 'Fetch the original server source to compare it with the browser DOM snapshot.',
+                style: TextStyle(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.68),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildDiscoveryChip(
+                    hasServerSource
+                        ? Icons.check_circle_outline
+                        : Icons.download_outlined,
+                    hasServerSource
+                        ? 'server source ready'
+                        : 'server source missing',
+                    hasServerSource ? Colors.green : Colors.orange,
+                  ),
+                  _buildDiscoveryChip(
+                    hasBrowserSource
+                        ? Icons.check_circle_outline
+                        : Icons.web_asset_off_outlined,
+                    hasBrowserSource
+                        ? 'browser DOM ready'
+                        : 'browser DOM missing',
+                    hasBrowserSource ? Colors.green : Colors.orange,
+                  ),
+                ],
+              ),
+              if (hasBrowserSource && !hasServerSource) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: htmlService.isLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_outlined, size: 16),
+                    label: const Text('Fetch server source'),
+                    onPressed: htmlService.isLoading
+                        ? null
+                        : () => htmlService.loadServerSourceForDiff(),
+                  ),
+                ),
+              ],
+            ],
           ),
-          dense: true,
         ),
       );
     }
@@ -887,6 +1080,10 @@ class ProbeHeadersView extends ProbeViewBase {
         primary: true,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         children: [
+          _buildHeaderIntelligence(context, headers),
+          const SizedBox(height: 16),
+          _buildHeaderCategorySection(context, headers),
+          const SizedBox(height: 16),
           Text(
             'All Response Headers',
             style: Theme.of(context)
@@ -943,6 +1140,383 @@ class ProbeHeadersView extends ProbeViewBase {
       ),
     );
   }
+
+  Widget _buildHeaderIntelligence(
+      BuildContext context, Map<String, dynamic> headers) {
+    final lookup = _headerLookup(headers);
+    final cache = _cacheVerdict(lookup);
+    final compression = _compressionVerdict(lookup);
+    final cdn = _cdnVerdict(lookup);
+    final cors = _corsVerdict(lookup);
+    final negotiation = _negotiationVerdict(lookup);
+    final validators = _validatorVerdict(lookup);
+    final chips = [cache, compression, cdn, cors, negotiation, validators];
+
+    return Card(
+      elevation: 0,
+      color: Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.28),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.rule_folder_outlined,
+                    color: Theme.of(context).colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Header Intelligence',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  chips.map((chip) => _buildHeaderInsightChip(chip)).toList(),
+            ),
+            const SizedBox(height: 12),
+            ..._headerNotes(lookup).map(
+              (note) => Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(note.icon, size: 15, color: note.color),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child:
+                          Text(note.text, style: const TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderCategorySection(
+      BuildContext context, Map<String, dynamic> headers) {
+    final categories = <String, List<String>>{
+      'Caching': [
+        'cache-control',
+        'etag',
+        'last-modified',
+        'expires',
+        'age',
+      ],
+      'Delivery': [
+        'server',
+        'via',
+        'x-cache',
+        'cf-cache-status',
+        'x-served-by',
+        'content-encoding',
+      ],
+      'Negotiation': [
+        'vary',
+        'content-type',
+        'content-language',
+        'accept-ranges',
+      ],
+      'CORS': [
+        'access-control-allow-origin',
+        'access-control-allow-methods',
+        'access-control-allow-headers',
+        'access-control-allow-credentials',
+      ],
+    };
+    final lookup = _headerLookup(headers);
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Header Groups',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            ...categories.entries.map((category) {
+              final present = category.value
+                  .where((key) => (lookup[key] ?? '').isNotEmpty)
+                  .toList();
+              if (present.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category.key,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: present.map((key) {
+                        return Tooltip(
+                          message: lookup[key]!,
+                          child: Chip(
+                            visualDensity: VisualDensity.compact,
+                            label: Text(key),
+                            avatar: const Icon(Icons.label_outline, size: 15),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderInsightChip(_HeaderInsight insight) {
+    return Tooltip(
+      message: insight.detail,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: insight.color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: insight.color.withValues(alpha: 0.24)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(insight.icon, color: insight.color, size: 15),
+            const SizedBox(width: 5),
+            Text(
+              insight.label,
+              style: TextStyle(
+                color: insight.color,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Map<String, String> _headerLookup(Map<String, dynamic> headers) {
+    return {
+      for (final entry in headers.entries)
+        entry.key.toString().toLowerCase(): entry.value.toString(),
+    };
+  }
+
+  _HeaderInsight _cacheVerdict(Map<String, String> headers) {
+    final cacheControl = headers['cache-control']?.toLowerCase() ?? '';
+    final age = headers['age'];
+    if (cacheControl.contains('no-store')) {
+      return const _HeaderInsight(
+        'No-store',
+        Icons.lock_outline,
+        Colors.orange,
+        'Response should not be stored by caches.',
+      );
+    }
+    final maxAge = RegExp(r'max-age=(\d+)').firstMatch(cacheControl);
+    if (maxAge != null) {
+      final seconds = int.tryParse(maxAge.group(1) ?? '') ?? 0;
+      return _HeaderInsight(
+        seconds >= 86400 ? 'Cacheable' : 'Short cache',
+        Icons.cached,
+        seconds >= 86400 ? Colors.green : Colors.orange,
+        'Cache-Control max-age is ${seconds}s${age == null ? '' : ', Age is $age'}.',
+      );
+    }
+    return const _HeaderInsight(
+      'No cache policy',
+      Icons.help_outline,
+      Colors.grey,
+      'No explicit Cache-Control max-age/no-store directive found.',
+    );
+  }
+
+  _HeaderInsight _compressionVerdict(Map<String, String> headers) {
+    final encoding = headers['content-encoding']?.toLowerCase();
+    if (encoding == null || encoding.isEmpty) {
+      return const _HeaderInsight(
+        'No compression',
+        Icons.compress,
+        Colors.orange,
+        'No Content-Encoding header found.',
+      );
+    }
+    return _HeaderInsight(
+      encoding.toUpperCase(),
+      Icons.compress,
+      Colors.green,
+      'Response uses Content-Encoding: $encoding.',
+    );
+  }
+
+  _HeaderInsight _cdnVerdict(Map<String, String> headers) {
+    final server = '${headers['server'] ?? ''} ${headers['via'] ?? ''} '
+            '${headers['cf-cache-status'] ?? ''} ${headers['x-cache'] ?? ''}'
+        .toLowerCase();
+    if (server.contains('cloudflare') ||
+        headers.containsKey('cf-cache-status')) {
+      return const _HeaderInsight(
+        'Cloudflare',
+        Icons.cloud_outlined,
+        Colors.purple,
+        'Cloudflare headers detected.',
+      );
+    }
+    if (server.contains('hit')) {
+      return const _HeaderInsight(
+        'Cache hit',
+        Icons.speed,
+        Colors.green,
+        'Proxy/cache header suggests a cache hit.',
+      );
+    }
+    if (headers.containsKey('via') || headers.containsKey('x-cache')) {
+      return const _HeaderInsight(
+        'Proxy/CDN',
+        Icons.hub_outlined,
+        Colors.blue,
+        'Proxy or cache headers detected.',
+      );
+    }
+    return const _HeaderInsight(
+      'Origin-ish',
+      Icons.dns_outlined,
+      Colors.grey,
+      'No obvious CDN/proxy headers detected.',
+    );
+  }
+
+  _HeaderInsight _corsVerdict(Map<String, String> headers) {
+    final origin = headers['access-control-allow-origin'];
+    final credentials =
+        headers['access-control-allow-credentials']?.toLowerCase() == 'true';
+    if (origin == null || origin.isEmpty) {
+      return const _HeaderInsight(
+        'No CORS',
+        Icons.public_off,
+        Colors.grey,
+        'No Access-Control-Allow-Origin header found.',
+      );
+    }
+    if (origin == '*' && credentials) {
+      return const _HeaderInsight(
+        'Risky CORS',
+        Icons.warning_amber_rounded,
+        Colors.red,
+        'Wildcard origin with credentials is unsafe and usually rejected.',
+      );
+    }
+    return _HeaderInsight(
+      origin == '*' ? 'Open CORS' : 'CORS set',
+      Icons.public,
+      origin == '*' ? Colors.orange : Colors.green,
+      'Access-Control-Allow-Origin: $origin.',
+    );
+  }
+
+  _HeaderInsight _negotiationVerdict(Map<String, String> headers) {
+    final vary = headers['vary'];
+    if (vary == null || vary.isEmpty) {
+      return const _HeaderInsight(
+        'No Vary',
+        Icons.swap_vert,
+        Colors.grey,
+        'No Vary header found.',
+      );
+    }
+    return _HeaderInsight(
+      'Vary: ${vary.split(',').length}',
+      Icons.swap_vert,
+      Colors.blue,
+      'Vary controls cache variants: $vary.',
+    );
+  }
+
+  _HeaderInsight _validatorVerdict(Map<String, String> headers) {
+    final hasEtag = (headers['etag'] ?? '').isNotEmpty;
+    final hasLastModified = (headers['last-modified'] ?? '').isNotEmpty;
+    if (hasEtag || hasLastModified) {
+      return _HeaderInsight(
+        hasEtag && hasLastModified ? '2 validators' : 'Validator',
+        Icons.verified_outlined,
+        Colors.green,
+        'Conditional request validator is present.',
+      );
+    }
+    return const _HeaderInsight(
+      'No validator',
+      Icons.remove_circle_outline,
+      Colors.orange,
+      'No ETag or Last-Modified header found.',
+    );
+  }
+
+  List<_HeaderNote> _headerNotes(Map<String, String> headers) {
+    final notes = <_HeaderNote>[];
+    if ((headers['content-type'] ?? '').isEmpty) {
+      notes.add(const _HeaderNote(Icons.warning_amber_rounded, Colors.orange,
+          'Missing Content-Type makes content sniffing more likely.'));
+    }
+    if ((headers['x-content-type-options'] ?? '').toLowerCase() != 'nosniff') {
+      notes.add(const _HeaderNote(Icons.security, Colors.orange,
+          'X-Content-Type-Options: nosniff is not present.'));
+    }
+    if ((headers['server'] ?? '').isNotEmpty ||
+        (headers['x-powered-by'] ?? '').isNotEmpty) {
+      notes.add(const _HeaderNote(Icons.badge_outlined, Colors.grey,
+          'Server technology is disclosed in response headers.'));
+    }
+    if ((headers['content-length'] ?? '').isEmpty &&
+        (headers['transfer-encoding'] ?? '').isNotEmpty) {
+      notes.add(const _HeaderNote(Icons.alt_route, Colors.blue,
+          'Transfer-Encoding is used instead of a fixed Content-Length.'));
+    }
+    if (notes.isEmpty) {
+      notes.add(const _HeaderNote(Icons.check_circle_outline, Colors.green,
+          'No obvious header hygiene notes.'));
+    }
+    return notes.take(4).toList();
+  }
 }
 
 class ProbeSecurityView extends ProbeViewBase {
@@ -959,6 +1533,8 @@ class ProbeSecurityView extends ProbeViewBase {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
         _buildSecurityScorecard(context, result, security),
+        const SizedBox(height: 16),
+        _buildCspSimulator(context, security),
         const SizedBox(height: 16),
         Text(
           'Security Header Audit',
@@ -1244,6 +1820,185 @@ class ProbeSecurityView extends ProbeViewBase {
   }
 
   bool _isPresent(String? value) => value != null && value.isNotEmpty;
+
+  Widget _buildCspSimulator(
+      BuildContext context, Map<String, dynamic> security) {
+    final csp = security['Content-Security-Policy']?.toString() ?? '';
+    final directives = _parseCsp(csp);
+    final findings = _cspFindings(directives);
+    final score = directives.isEmpty
+        ? 0
+        : (100 -
+                findings.where((f) => f.severity == _CspSeverity.high).length *
+                    22 -
+                findings
+                        .where((f) => f.severity == _CspSeverity.medium)
+                        .length *
+                    12)
+            .clamp(0, 100);
+    final color = score >= 80
+        ? Colors.green
+        : score >= 50
+            ? Colors.orange
+            : Colors.red;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: color.withValues(alpha: 0.34)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.policy_outlined, color: color, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'CSP Simulator',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Text('$score',
+                    style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (directives.isEmpty)
+              const Text(
+                'No Content-Security-Policy header found.',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              )
+            else ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: directives.entries.map((entry) {
+                  return _buildCspChip(
+                    Icons.rule,
+                    '${entry.key} ${entry.value.length}',
+                    Colors.blue,
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              ...findings.map((finding) {
+                final findingColor = finding.severity.color;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(finding.severity.icon,
+                          color: findingColor, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          finding.text,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Map<String, List<String>> _parseCsp(String csp) {
+    final result = <String, List<String>>{};
+    for (final part in csp.split(';')) {
+      final tokens = part.trim().split(RegExp(r'\s+'));
+      if (tokens.isEmpty || tokens.first.isEmpty) continue;
+      result[tokens.first.toLowerCase()] = tokens.skip(1).toList();
+    }
+    return result;
+  }
+
+  Widget _buildCspChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<_CspFinding> _cspFindings(Map<String, List<String>> directives) {
+    if (directives.isEmpty) {
+      return const [
+        _CspFinding(_CspSeverity.high,
+            'Missing CSP allows any source by browser default.'),
+      ];
+    }
+    final findings = <_CspFinding>[];
+    final defaultSrc = directives['default-src'] ?? const [];
+    final scriptSrc = directives['script-src'] ?? defaultSrc;
+    final objectSrc = directives['object-src'];
+    final baseUri = directives['base-uri'];
+    final frameAncestors = directives['frame-ancestors'];
+
+    if (scriptSrc.contains("'unsafe-inline'")) {
+      findings.add(const _CspFinding(
+          _CspSeverity.high, "script-src allows 'unsafe-inline'."));
+    }
+    if (scriptSrc.contains("'unsafe-eval'")) {
+      findings.add(const _CspFinding(
+          _CspSeverity.high, "script-src allows 'unsafe-eval'."));
+    }
+    if (defaultSrc.contains('*') || scriptSrc.contains('*')) {
+      findings.add(const _CspFinding(
+          _CspSeverity.medium, 'Wildcard source allows broad loading.'));
+    }
+    if (objectSrc == null || !objectSrc.contains("'none'")) {
+      findings.add(const _CspFinding(
+          _CspSeverity.medium, "object-src should usually be 'none'."));
+    }
+    if (baseUri == null) {
+      findings.add(const _CspFinding(
+          _CspSeverity.medium, 'Missing base-uri protection.'));
+    }
+    if (frameAncestors == null) {
+      findings.add(const _CspFinding(_CspSeverity.medium,
+          'Missing frame-ancestors clickjacking control.'));
+    }
+    if (findings.isEmpty) {
+      findings.add(const _CspFinding(
+          _CspSeverity.low, 'Policy looks reasonably constrained.'));
+    }
+    return findings;
+  }
 
   Widget _buildTlsWarningCard(
       BuildContext context, Map<String, dynamic> result) {
@@ -2086,6 +2841,58 @@ class _SourceDiffSummary {
     required this.similarity,
     required this.samples,
   });
+}
+
+enum _CspSeverity {
+  low,
+  medium,
+  high;
+
+  Color get color {
+    switch (this) {
+      case _CspSeverity.low:
+        return Colors.green;
+      case _CspSeverity.medium:
+        return Colors.orange;
+      case _CspSeverity.high:
+        return Colors.red;
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _CspSeverity.low:
+        return Icons.check_circle_outline;
+      case _CspSeverity.medium:
+        return Icons.warning_amber_rounded;
+      case _CspSeverity.high:
+        return Icons.dangerous_outlined;
+    }
+  }
+}
+
+class _CspFinding {
+  final _CspSeverity severity;
+  final String text;
+
+  const _CspFinding(this.severity, this.text);
+}
+
+class _HeaderInsight {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final String detail;
+
+  const _HeaderInsight(this.label, this.icon, this.color, this.detail);
+}
+
+class _HeaderNote {
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  const _HeaderNote(this.icon, this.color, this.text);
 }
 
 class _SecurityHeaderCheck {

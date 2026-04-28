@@ -70,8 +70,11 @@ class RequestTimelineView extends StatelessWidget {
               const SizedBox(height: 8),
               if (sortedResources.isEmpty)
                 _buildEmptyResourcesCard(context)
-              else
+              else ...[
                 _buildTimelineMap(context, sortedResources, timelineEnd),
+                const SizedBox(height: 16),
+                _buildWaterfallDetail(context, sortedResources, timelineEnd),
+              ],
             ],
           ),
         );
@@ -317,6 +320,119 @@ class RequestTimelineView extends StatelessWidget {
                 );
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWaterfallDetail(
+    BuildContext context,
+    List<Map<String, dynamic>> resources,
+    double timelineEnd,
+  ) {
+    final maxEnd = timelineEnd <= 0 ? 1.0 : timelineEnd;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Performance Waterfall Detail',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            ...resources.take(60).map((resource) {
+              final name = resource['name']?.toString() ?? '';
+              final type = _resourceType(name);
+              final color = _typeColor(type);
+              final start = _startTime(resource);
+              final duration = _duration(resource);
+              final left = (start / maxEnd).clamp(0.0, 1.0);
+              final width = (duration / maxEnd).clamp(0.01, 1.0 - left);
+              final transfer = (resource['transfer'] as num? ?? 0).toInt();
+              final decoded = (resource['decoded'] as num? ?? 0).toInt();
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(_typeIcon(type), color: color, size: 15),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _shortResourceName(name),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${_formatMs(start)} / ${_formatMs(duration)}',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    LayoutBuilder(builder: (context, constraints) {
+                      return Stack(
+                        children: [
+                          Container(
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          Positioned(
+                            left: constraints.maxWidth * left,
+                            width: (constraints.maxWidth * width)
+                                .clamp(2.0, constraints.maxWidth),
+                            child: Container(
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
+                    const SizedBox(height: 3),
+                    Text(
+                      FormatUtils.formatBytesWithTransfer({
+                        'decoded': decoded,
+                        'transfer': transfer,
+                      }),
+                      style: TextStyle(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.58),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
           ],
         ),
       ),

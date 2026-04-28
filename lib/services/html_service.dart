@@ -2408,6 +2408,27 @@ Technical details: $e''';
     );
   }
 
+  Future<void> loadServerSourceForDiff() async {
+    final url = _currentFile?.isUrl == true
+        ? _currentFile!.path
+        : (_currentInputText?.startsWith('http') == true
+            ? _currentInputText
+            : null);
+    if (url == null || url.isEmpty) return;
+
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _loadFromUrlInternal(url);
+    } catch (e) {
+      debugPrint('Error loading server source for diff: $e');
+      _probeError = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   // Map<String, dynamic> getHighlightTheme() => githubTheme;
 
   /// Probe a URL to get status code and headers without downloading the full content
