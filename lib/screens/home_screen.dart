@@ -13,6 +13,7 @@ import 'package:view_source_vibe/widgets/metadata_view.dart';
 import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/media_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
+import 'package:view_source_vibe/widgets/request_timeline_view.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 import 'package:view_source_vibe/widgets/browser_view.dart';
@@ -82,12 +83,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // + (1 if isBrowserSupported AND shouldShowBrowser for Browser)
     // + (1 if isHtmlOrXml for DOM Tree)
     // + (3 if showMetadataTabs for Metadata/Services/Media)
-    // + (4 if showServerTabs for Probe/Headers/Security/Cookies)
+    // + (5 if showServerTabs for Cookies/Timeline/Probe/Headers/Security)
     int newLength = 1; // Editor
     if (isBrowserSupported && shouldShowBrowser) newLength += 1;
     if (isHtmlOrXml) newLength += 1;
     if (showMetadataTabs) newLength += 3;
-    if (showServerTabs) newLength += 4;
+    if (showServerTabs) newLength += 5;
 
     if (oldLength != newLength || force) {
       _tabController.removeListener(_handleTabSelection);
@@ -178,6 +179,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
         if (showServerTabs) _buildTab(Icons.cookie_outlined, 'Cookies'),
         if (showServerTabs) ...[
+          _buildTab(Icons.timeline, 'Timeline'),
           _buildTab(Icons.network_check, 'Probe'),
           _buildTab(Icons.list_alt, 'Headers'),
           _buildTab(Icons.security, 'Security'),
@@ -194,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
       if (showServerTabs) _buildTab(Icons.cookie_outlined, 'Cookies'),
       if (showServerTabs) ...[
+        _buildTab(Icons.timeline, 'Timeline'),
         _buildTab(Icons.network_check, 'Probe'),
         _buildTab(Icons.list_alt, 'Headers'),
         _buildTab(Icons.security, 'Security'),
@@ -279,6 +282,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: _buildRefreshable(const ProbeCookiesView(), 'cookies')),
         if (showServerTabs) ...[
           KeepAliveWrapper(
+              child: _buildRefreshable(
+                  const RequestTimelineView(), 'request-timeline')),
+          KeepAliveWrapper(
               child: _buildRefreshable(const ProbeGeneralView(), 'probe')),
           KeepAliveWrapper(
               child: _buildRefreshable(const ProbeHeadersView(), 'headers')),
@@ -322,8 +328,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             key: const ValueKey('tab_cookies'),
             child: _buildRefreshable(const ProbeCookiesView(), 'cookies')),
 
-      // 7-9. Probe: General, Headers, Security
+      // 7-10. Probe: Timeline, General, Headers, Security
       if (showServerTabs) ...[
+        KeepAliveWrapper(
+            key: const ValueKey('tab_timeline'),
+            child: _buildRefreshable(
+                const RequestTimelineView(), 'request-timeline')),
         KeepAliveWrapper(
             key: const ValueKey('tab_probe'),
             child: _buildRefreshable(const ProbeGeneralView(), 'probe')),

@@ -140,7 +140,9 @@ class HtmlService extends ChangeNotifier {
     int idx = 1; // starts after Source
     if (isHtmlOrXml) idx += 1; // DOM Tree
     if (showMetadataTabs) idx += 3; // Metadata + Services + Media
-    if (showServerTabs) idx += 4; // Cookies + Probe + Headers + Security
+    if (showServerTabs) {
+      idx += 5; // Cookies + Timeline + Probe + Headers + Security
+    }
     return idx;
   }
 
@@ -156,6 +158,8 @@ class HtmlService extends ChangeNotifier {
   Map<String, dynamic>? get probeResult => _probeResult;
   Map<String, dynamic>? get browserProbeResult =>
       _browserProbeResult; // Expose browser probe result
+  List<Map<String, dynamic>> get resourceTimelineData =>
+      List.unmodifiable(_resourcePerformanceData ?? const []);
   bool get isProbing => _isProbing;
   bool get canGoBack => _navigationStack.isNotEmpty;
   String? get probeError => _probeError;
@@ -1104,6 +1108,7 @@ class HtmlService extends ChangeNotifier {
     Map<String, String> headers, {
     Uri? originalUri,
     int redirectDepth = 0,
+    List<Map<String, dynamic>>? redirectChain,
   }) async {
     HttpClient? hClient;
     try {
@@ -1141,6 +1146,12 @@ class HtmlService extends ChangeNotifier {
         final locationHeader = hResponse.headers.value('location')!;
         // Handle relative redirects by resolving against the original URI
         final redirectUri = uri.resolve(locationHeader);
+        redirectChain?.add({
+          'from': uri.toString(),
+          'to': redirectUri.toString(),
+          'statusCode': hResponse.statusCode,
+          'reasonPhrase': hResponse.reasonPhrase,
+        });
 
         // Recursively follow the redirect to get the final URL
         // Security: Ensure we don't get redirected to non-http/https schemes (like file://)
@@ -1151,6 +1162,7 @@ class HtmlService extends ChangeNotifier {
             headers,
             originalUri: originalUri ?? uri, // Preserve the original URI
             redirectDepth: redirectDepth + 1,
+            redirectChain: redirectChain,
           );
         } else {
           debugPrint(
@@ -2127,11 +2139,13 @@ class HtmlService extends ChangeNotifier {
       };
 
       // Manual redirect handling
+      final redirectChain = <Map<String, dynamic>>[];
       final finalUrl = await _getFinalUrlAfterRedirects(
         uri,
         client,
         headers,
         originalUri: uri,
+        redirectChain: redirectChain,
       );
 
       // Update the input text immediately
@@ -2233,6 +2247,7 @@ class HtmlService extends ChangeNotifier {
 
       if (finalUrl != url) {
         currentProbeResult['redirectLocation'] = finalUrl;
+        currentProbeResult['redirectChain'] = redirectChain;
       }
 
       // Note: _probeResult is NOT updated here anymore.
@@ -2592,6 +2607,14 @@ Technical details: $e''';
             // Resolve relative URLs
             final redirectUri = uri.resolve(location);
             _probeResult!['redirectLocation'] = redirectUri.toString();
+            _probeResult!['redirectChain'] = [
+              {
+                'from': targetUrl,
+                'to': redirectUri.toString(),
+                'statusCode': response.statusCode,
+                'reasonPhrase': response.reasonPhrase,
+              }
+            ];
           }
         }
 
