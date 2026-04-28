@@ -706,7 +706,9 @@ void _detectTechnologies(
   }
   if (_hasPattern(html,
       r'''tailwind(?:\.min)?\.css|class=["'][^"']*?\b(?:text-|bg-|p-|m-|flex-|grid-)''')) {
-    if (_hasPattern(html, r'''\b(?:sm:|md:|lg:|xl:|2xl:)[a-z]''')) {
+    if (html.contains('tailwind') ||
+        _hasPattern(html, r'''\b(?:sm:|md:|lg:|xl:|2xl:)[a-z]''') ||
+        _hasPattern(html, r'''class=["'][^"']*\btext-[^"']*\bbg-[^"']*''')) {
       tech['CSS Framework'] = 'Tailwind CSS';
     }
   }

@@ -2599,6 +2599,7 @@ Technical details: $e''';
 
         // Update cookies with any browser cookies we might already have
         _updateAnalyzedCookies();
+        _discoverRobotsAndSitemap(uri, url).ignore();
 
         // Extract redirect location if present
         if (response.isRedirect) {
@@ -2676,6 +2677,120 @@ Technical details: $e''';
         _currentlyProbingUrl = null;
         _autoSave();
       }
+    }
+  }
+
+  Future<void> _discoverRobotsAndSitemap(
+      Uri pageUri, String originalUrl) async {
+    if (pageUri.scheme != 'http' && pageUri.scheme != 'https') return;
+    if (pageUri.host.isEmpty) return;
+
+    final base = pageUri.replace(path: '/', query: '', fragment: '');
+    final robotsUri = base.resolve('/robots.txt');
+    final sitemapUri = base.resolve('/sitemap.xml');
+
+    final robots = await _fetchSmallProbeText(robotsUri);
+    final sitemaps = <String>{};
+    final disallowRules = <String>[];
+    final allowRules = <String>[];
+    final userAgents = <String>{};
+
+    if (robots.body != null) {
+      final lines = const LineSplitter().convert(robots.body!);
+      for (final line in lines) {
+        final trimmed = line.split('#').first.trim();
+        if (trimmed.isEmpty || !trimmed.contains(':')) continue;
+        final index = trimmed.indexOf(':');
+        final key = trimmed.substring(0, index).trim().toLowerCase();
+        final value = trimmed.substring(index + 1).trim();
+        if (value.isEmpty) continue;
+
+        switch (key) {
+          case 'sitemap':
+            sitemaps.add(pageUri.resolve(value).toString());
+            break;
+          case 'disallow':
+            disallowRules.add(value);
+            break;
+          case 'allow':
+            allowRules.add(value);
+            break;
+          case 'user-agent':
+            userAgents.add(value);
+            break;
+        }
+      }
+    }
+
+    final sitemap = await _fetchSmallProbeText(sitemapUri, headOnly: true);
+    if ((sitemap.statusCode ?? 0) >= 200 && (sitemap.statusCode ?? 0) < 400) {
+      sitemaps.add(sitemapUri.toString());
+    }
+
+    if (_probeResult == null) return;
+    final resultUrl = _probeResult!['url']?.toString();
+    final resultFinalUrl = _probeResult!['finalUrl']?.toString();
+    final isStillCurrent = (_currentlyProbingUrl != null &&
+            _currentlyProbingUrl == originalUrl) ||
+        (resultUrl != null && areUrlsEqual(resultUrl, originalUrl)) ||
+        (resultFinalUrl != null && areUrlsEqual(resultFinalUrl, originalUrl));
+    if (!isStillCurrent) return;
+
+    _probeResult!['robotsSitemap'] = {
+      'robotsUrl': robotsUri.toString(),
+      'robotsStatus': robots.statusCode,
+      'robotsPresent': robots.statusCode != null &&
+          robots.statusCode! >= 200 &&
+          robots.statusCode! < 400,
+      'sitemapUrl': sitemapUri.toString(),
+      'sitemapStatus': sitemap.statusCode,
+      'sitemaps': sitemaps.toList()..sort(),
+      'disallowCount': disallowRules.length,
+      'allowCount': allowRules.length,
+      'userAgents': userAgents.toList()..sort(),
+      'sampleDisallow': disallowRules.take(8).toList(),
+      'sampleAllow': allowRules.take(8).toList(),
+      'robotsBytes': robots.body?.length ?? 0,
+    };
+
+    if (_currentFile != null && areUrlsEqual(_currentFile!.path, originalUrl)) {
+      _currentFile = _currentFile!.copyWith(probeResult: _probeResult);
+    }
+    notifyListeners();
+  }
+
+  Future<_SmallProbeResponse> _fetchSmallProbeText(Uri uri,
+      {bool headOnly = false}) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 6);
+    client.badCertificateCallback =
+        (X509Certificate cert, String host, int port) => true;
+    try {
+      final request = await client.openUrl(headOnly ? 'HEAD' : 'GET', uri);
+      request.headers.set('User-Agent', 'ViewSourceVibe/1.0');
+      request.followRedirects = true;
+      final response =
+          await request.close().timeout(const Duration(seconds: 8));
+      if (headOnly) {
+        await response.drain().timeout(const Duration(seconds: 2));
+        return _SmallProbeResponse(statusCode: response.statusCode);
+      }
+
+      final bytes = <int>[];
+      await for (final chunk in response.timeout(const Duration(seconds: 8))) {
+        final remaining = 256 * 1024 - bytes.length;
+        if (remaining <= 0) break;
+        bytes.addAll(chunk.length > remaining ? chunk.take(remaining) : chunk);
+      }
+      return _SmallProbeResponse(
+        statusCode: response.statusCode,
+        body: utf8.decode(bytes, allowMalformed: true),
+      );
+    } catch (e) {
+      debugPrint('Robots/sitemap discovery failed for $uri: $e');
+      return const _SmallProbeResponse();
+    } finally {
+      client.close(force: true);
     }
   }
 
@@ -4752,4 +4867,11 @@ Technical details: $e''';
       debugPrint('Error extracting WebView content: $e');
     }
   }
+}
+
+class _SmallProbeResponse {
+  final int? statusCode;
+  final String? body;
+
+  const _SmallProbeResponse({this.statusCode, this.body});
 }

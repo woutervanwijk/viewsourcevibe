@@ -108,6 +108,11 @@ class MetadataView extends StatelessWidget {
               _buildSocialPreviewSection(context, metadata),
               const SizedBox(height: 24),
             ],
+            if (metadata['detectedTech']?.isNotEmpty == true) ...[
+              _buildSectionTitle(context, 'Tech Stack Confidence'),
+              _buildTechConfidenceSection(context, metadata['detectedTech']),
+              const SizedBox(height: 24),
+            ],
             ...dynamicSections.expand((section) => [
                   _buildSectionTitle(context, section.title),
                   section.content,
@@ -515,6 +520,117 @@ class MetadataView extends StatelessWidget {
         );
       }).toList(),
     );
+  }
+
+  Widget _buildTechConfidenceSection(
+      BuildContext context, Map<String, dynamic> tech) {
+    final items = tech.entries.map((entry) {
+      final confidence = _techConfidence(entry.key, entry.value.toString());
+      return (
+        label: entry.key,
+        value: entry.value.toString(),
+        score: confidence.$1,
+        reason: confidence.$2,
+      );
+    }).toList()
+      ..sort((a, b) => b.score.compareTo(a.score));
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: items.map((item) {
+            final color = item.score >= 80
+                ? Colors.green
+                : item.score >= 60
+                    ? Colors.orange
+                    : Colors.grey;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CircularProgressIndicator(
+                          value: item.score / 100,
+                          strokeWidth: 5,
+                          color: color,
+                          backgroundColor: color.withValues(alpha: 0.12),
+                        ),
+                        Center(
+                          child: Text(
+                            '${item.score}',
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${item.label}: ${item.value}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          item.reason,
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.64),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  (int, String) _techConfidence(String label, String value) {
+    final combined = '$label $value'.toLowerCase();
+    if (combined.contains('version')) {
+      return (92, 'Version-specific signal from generator/header pattern.');
+    }
+    if (['cdn', 'web server', 'backend', 'platform', 'cache', 'storage']
+        .any(combined.contains)) {
+      return (88, 'Server header or infrastructure marker.');
+    }
+    if (['cms', 'framework', 'static site', 'e-commerce']
+        .any(combined.contains)) {
+      return (78, 'HTML path, script, or generator marker.');
+    }
+    if (combined.contains('css')) {
+      return (64, 'CSS class or stylesheet heuristic.');
+    }
+    return (58, 'Weak heuristic match; inspect source to confirm.');
   }
 
   Widget _buildSectionTitle(BuildContext context, String title) {

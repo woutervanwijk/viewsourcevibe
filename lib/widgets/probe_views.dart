@@ -114,6 +114,15 @@ class ProbeGeneralView extends ProbeViewBase {
         ],
         _buildStatusCard(context, htmlService, result),
         const SizedBox(height: 16),
+        _buildContentTypeTruthCard(context, htmlService, result),
+        const SizedBox(height: 16),
+        if (_redirectChainFrom(result).isNotEmpty) ...[
+          _buildRedirectChainView(
+              context, htmlService, _redirectChainFrom(result)),
+          const SizedBox(height: 16),
+        ],
+        _buildRobotsSitemapCard(context, htmlService, result),
+        const SizedBox(height: 16),
         _buildNetworkInfoCard(context, result),
         if (hasBrowserProbe || htmlService.isWebViewLoading) ...[
           const SizedBox(height: 24),
@@ -139,6 +148,357 @@ class ProbeGeneralView extends ProbeViewBase {
         ],
       ],
     ));
+  }
+
+  Widget _buildContentTypeTruthCard(BuildContext context,
+      HtmlService htmlService, Map<String, dynamic> result) {
+    final headers = result['headers'] as Map?;
+    final rawContentType = headers?['content-type']?.toString() ??
+        headers?['Content-Type']?.toString() ??
+        '';
+    final declaredMime = rawContentType.split(';').first.trim().toLowerCase();
+    final content = htmlService.currentFile?.content ?? '';
+    final filename =
+        htmlService.currentFile?.name ?? result['finalUrl']?.toString();
+    final sniffed = _sniffContentType(content, filename);
+    final status = _contentTypeTruthStatus(declaredMime, sniffed);
+    final color = status.$1;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: color.withValues(alpha: 0.36)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(status.$2, color: color, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Content-Type Truth Check',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildDetailRow(
+                'Declared', declaredMime.isEmpty ? 'N/A' : rawContentType),
+            _buildDetailRow('Sniffed', sniffed),
+            _buildDetailRow('Verdict', status.$3),
+          ],
+        ),
+      ),
+    );
+  }
+
+  (Color, IconData, String) _contentTypeTruthStatus(
+      String declaredMime, String sniffed) {
+    if (declaredMime.isEmpty) {
+      return (
+        Colors.orange,
+        Icons.help_outline,
+        'No Content-Type header to compare.'
+      );
+    }
+    if (_mimeMatchesSniff(declaredMime, sniffed)) {
+      return (
+        Colors.green,
+        Icons.check_circle_outline,
+        'Header and content look aligned.'
+      );
+    }
+    return (
+      Colors.red,
+      Icons.warning_amber_rounded,
+      'Header does not match the loaded content shape.'
+    );
+  }
+
+  bool _mimeMatchesSniff(String mime, String sniffed) {
+    if (sniffed == 'empty') return true;
+    if (mime.contains('html')) return sniffed == 'html';
+    if (mime.contains('xml') || mime.contains('svg')) return sniffed == 'xml';
+    if (mime.contains('json')) return sniffed == 'json';
+    if (mime.contains('javascript') || mime.contains('ecmascript')) {
+      return sniffed == 'javascript' || sniffed == 'text';
+    }
+    if (mime == 'text/css') return sniffed == 'css' || sniffed == 'text';
+    if (mime.startsWith('text/')) {
+      return ['text', 'html', 'css', 'javascript'].contains(sniffed);
+    }
+    return true;
+  }
+
+  String _sniffContentType(String content, String? filename) {
+    final trimmed = content.trimLeft();
+    final lowerName = filename?.toLowerCase() ?? '';
+    if (trimmed.isEmpty) return 'empty';
+    if (trimmed.startsWith('<!doctype html') || trimmed.startsWith('<html')) {
+      return 'html';
+    }
+    if (trimmed.startsWith('<?xml') ||
+        trimmed.startsWith('<rss') ||
+        trimmed.startsWith('<feed')) {
+      return 'xml';
+    }
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json';
+    if (lowerName.endsWith('.css') ||
+        trimmed.contains('{') && trimmed.contains(':')) {
+      return 'css';
+    }
+    if (lowerName.endsWith('.js') ||
+        trimmed.startsWith('import ') ||
+        trimmed.startsWith('const ') ||
+        trimmed.startsWith('function ')) {
+      return 'javascript';
+    }
+    return 'text';
+  }
+
+  Widget _buildRobotsSitemapCard(BuildContext context, HtmlService htmlService,
+      Map<String, dynamic> result) {
+    final discovery = result['robotsSitemap'] as Map<String, dynamic>?;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.travel_explore,
+                    size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Robots / Sitemap Discovery',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (discovery == null)
+              const Text('Discovery is running or unavailable for this URL.',
+                  style: TextStyle(color: Colors.grey, fontSize: 12))
+            else ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildDiscoveryChip(
+                    discovery['robotsPresent'] == true
+                        ? Icons.check_circle_outline
+                        : Icons.warning_amber_rounded,
+                    'robots ${discovery['robotsStatus'] ?? 'N/A'}',
+                    discovery['robotsPresent'] == true
+                        ? Colors.green
+                        : Colors.orange,
+                  ),
+                  _buildDiscoveryChip(
+                    Icons.map_outlined,
+                    '${(discovery['sitemaps'] as List? ?? []).length} sitemap${(discovery['sitemaps'] as List? ?? []).length == 1 ? '' : 's'}',
+                    Colors.blue,
+                  ),
+                  _buildDiscoveryChip(
+                    Icons.block,
+                    '${discovery['disallowCount'] ?? 0} disallow',
+                    Colors.red,
+                  ),
+                  _buildDiscoveryChip(
+                    Icons.done_outline,
+                    '${discovery['allowCount'] ?? 0} allow',
+                    Colors.green,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildDetailRow(
+                  'Robots URL', discovery['robotsUrl']?.toString() ?? 'N/A'),
+              if ((discovery['sitemaps'] as List? ?? []).isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...(discovery['sitemaps'] as List).map((url) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      leading:
+                          const Icon(Icons.account_tree_outlined, size: 18),
+                      title: Text(
+                        url.toString(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, fontFamily: 'monospace'),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+                      onTap: () => htmlService.loadFromUrl(url.toString()),
+                    )),
+              ],
+              if ((discovery['sampleDisallow'] as List? ?? []).isNotEmpty) ...[
+                const Divider(height: 20),
+                Text(
+                  'Sample disallow rules',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...(discovery['sampleDisallow'] as List).map(
+                  (rule) => Text(rule.toString(),
+                      style: const TextStyle(
+                          fontSize: 12, fontFamily: 'monospace')),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscoveryChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRedirectChainView(BuildContext context, HtmlService htmlService,
+      List<Map<String, dynamic>> redirects) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.alt_route,
+                    size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Redirect Chain View',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...redirects.asMap().entries.map((entry) {
+              final redirect = entry.value;
+              final status = redirect['statusCode']?.toString() ?? '3xx';
+              final from = redirect['from']?.toString() ?? '';
+              final to = redirect['to']?.toString() ?? '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 13,
+                      backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                      child: Text(
+                        '${entry.key + 1}',
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(status,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13)),
+                          const SizedBox(height: 3),
+                          SelectableText(from,
+                              style: const TextStyle(fontSize: 11)),
+                          const SizedBox(height: 3),
+                          InkWell(
+                            onTap: () => htmlService.loadFromUrl(to),
+                            child: Text(
+                              to,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 11,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _redirectChainFrom(Map<String, dynamic> result) {
+    final raw = result['redirectChain'];
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+    final redirectLocation = result['redirectLocation']?.toString();
+    if (redirectLocation == null || redirectLocation.isEmpty) return [];
+    return [
+      {
+        'from': result['url'],
+        'to': redirectLocation,
+        'statusCode': result['statusCode'],
+        'reasonPhrase': result['reasonPhrase'],
+      }
+    ];
   }
 
   Widget _buildBrowserProbeCard(
@@ -507,7 +867,7 @@ class ProbeSecurityView extends ProbeViewBase {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        _buildCertificateCard(context, result['certificate']),
+        _buildCertificateCard(context, result),
       ],
     ));
   }
@@ -753,7 +1113,8 @@ class ProbeSecurityView extends ProbeViewBase {
   }
 
   Widget _buildCertificateCard(
-      BuildContext context, Map<String, dynamic>? cert) {
+      BuildContext context, Map<String, dynamic> result) {
+    final cert = result['certificate'] as Map<String, dynamic>?;
     if (cert == null) {
       return Card(
         elevation: 0,
@@ -778,6 +1139,12 @@ class ProbeSecurityView extends ProbeViewBase {
     final Map<String, dynamic>? issuerParsed = cert['issuerParsed'];
     final String start = cert['startValidity'] ?? '';
     final String end = cert['endValidity'] ?? '';
+    final finalUrl =
+        result['finalUrl']?.toString() ?? result['url']?.toString();
+    final host = Uri.tryParse(finalUrl ?? '')?.host ?? '';
+    final commonName = subjectParsed?['Common Name']?.toString() ?? '';
+    final validity = _certificateValidity(end);
+    final hostMatch = _certificateHostMatches(host, commonName);
 
     return Card(
       elevation: 0,
@@ -790,6 +1157,34 @@ class ProbeSecurityView extends ProbeViewBase {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _buildCertSignal(
+                    context,
+                    validity.$2,
+                    validity.$1,
+                    validity.$3,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildCertSignal(
+                    context,
+                    hostMatch ? Colors.green : Colors.orange,
+                    hostMatch
+                        ? Icons.verified_user_outlined
+                        : Icons.help_outline,
+                    host.isEmpty
+                        ? 'Host unknown'
+                        : hostMatch
+                            ? 'CN matches host'
+                            : 'CN differs from host',
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
             Text(
               'Subject (Owner)',
               style: TextStyle(
@@ -822,6 +1217,17 @@ class ProbeSecurityView extends ProbeViewBase {
                         context, 'Valid Until', _formatDate(end))),
               ],
             ),
+            if (cert['der'] != null) ...[
+              const Divider(height: 24),
+              _buildCertDetail(
+                context,
+                'DER Fingerprint Hint',
+                cert['der'].toString().substring(
+                      0,
+                      cert['der'].toString().length.clamp(0, 32),
+                    ),
+              ),
+            ],
             if (cert['pem'] != null) ...[
               const Divider(height: 24),
               SizedBox(
@@ -842,6 +1248,76 @@ class ProbeSecurityView extends ProbeViewBase {
         ),
       ),
     );
+  }
+
+  Widget _buildCertSignal(
+      BuildContext context, Color color, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  (IconData, Color, String) _certificateValidity(String end) {
+    try {
+      final endDate = DateTime.parse(end);
+      final days = endDate.difference(DateTime.now()).inDays;
+      if (days < 0) {
+        return (
+          Icons.dangerous_outlined,
+          Colors.red,
+          'Expired ${days.abs()}d ago'
+        );
+      }
+      if (days < 14) {
+        return (Icons.warning_amber_rounded, Colors.red, 'Expires in ${days}d');
+      }
+      if (days < 45) {
+        return (
+          Icons.warning_amber_rounded,
+          Colors.orange,
+          'Expires in ${days}d'
+        );
+      }
+      return (Icons.check_circle_outline, Colors.green, 'Valid for ${days}d');
+    } catch (_) {
+      return (Icons.help_outline, Colors.grey, 'Validity unknown');
+    }
+  }
+
+  bool _certificateHostMatches(String host, String commonName) {
+    if (host.isEmpty || commonName.isEmpty) return false;
+    final normalizedHost = host.toLowerCase();
+    final normalizedCn = commonName.toLowerCase();
+    if (normalizedCn == normalizedHost) return true;
+    if (normalizedCn.startsWith('*.')) {
+      final suffix = normalizedCn.substring(1);
+      return normalizedHost.endsWith(suffix) &&
+          normalizedHost.split('.').length == normalizedCn.split('.').length;
+    }
+    return false;
   }
 
   Widget _buildParsedInfo(
