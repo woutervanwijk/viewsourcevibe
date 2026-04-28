@@ -73,5 +73,22 @@ void main() {
 
       expect(tech['Platform'], 'Vercel');
     });
+
+    test('Keeps JSON-LD structured data for the viewer', () async {
+      final html = '''
+<html><head>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"Hello"}
+</script>
+</head><body></body></html>
+''';
+
+      final metadata = await extractMetadataInIsolate(html, '');
+      final structuredData = metadata['structuredData'] as List;
+
+      expect(structuredData, hasLength(1));
+      expect(structuredData.first['@type'], 'Article');
+      expect(structuredData.first['headline'], 'Hello');
+    });
   });
 }

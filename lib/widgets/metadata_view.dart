@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:html_unescape/html_unescape.dart';
@@ -106,6 +108,11 @@ class MetadataView extends StatelessWidget {
             if (_hasSocialPreview(metadata)) ...[
               _buildSectionTitle(context, 'Open Graph / Social Preview'),
               _buildSocialPreviewSection(context, metadata),
+              const SizedBox(height: 24),
+            ],
+            if ((metadata['structuredData'] as List?)?.isNotEmpty == true) ...[
+              _buildSectionTitle(context, 'Structured Data Viewer'),
+              _buildStructuredDataSection(context, metadata['structuredData']),
               const SizedBox(height: 24),
             ],
             if (metadata['detectedTech']?.isNotEmpty == true) ...[
@@ -520,6 +527,88 @@ class MetadataView extends StatelessWidget {
         );
       }).toList(),
     );
+  }
+
+  Widget _buildStructuredDataSection(
+      BuildContext context, List<dynamic> structuredData) {
+    final encoder = const JsonEncoder.withIndent('  ');
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: structuredData.asMap().entries.map((entry) {
+          final item = entry.value;
+          final type = _structuredDataType(item);
+          final title = _structuredDataTitle(item);
+          final json = encoder.convert(item);
+          final isLast = entry.key == structuredData.length - 1;
+
+          return Column(
+            children: [
+              ExpansionTile(
+                initiallyExpanded: entry.key == 0,
+                leading: const Icon(Icons.schema_outlined),
+                title: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  type,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: IconButton(
+                  tooltip: 'Copy JSON-LD',
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: json));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Structured data copied')),
+                    );
+                  },
+                ),
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: SelectableText(
+                      json,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (!isLast) const Divider(height: 1),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  String _structuredDataType(dynamic item) {
+    if (item is! Map) return 'Unknown schema';
+    final rawType = item['@type'];
+    if (rawType is List) return rawType.join(', ');
+    return rawType?.toString() ?? 'Unknown schema';
+  }
+
+  String _structuredDataTitle(dynamic item) {
+    if (item is! Map) return 'JSON-LD Item';
+    for (final key in ['name', 'headline', 'title', '@id']) {
+      final value = item[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return _structuredDataType(item);
   }
 
   Widget _buildTechConfidenceSection(

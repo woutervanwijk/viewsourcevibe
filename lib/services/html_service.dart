@@ -62,6 +62,7 @@ class HtmlService extends ChangeNotifier {
   String? _currentlyProbingUrl;
   Map<String, dynamic>?
       _browserProbeResult; // Store separate browser probe data
+  String? _lastServerSource;
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
@@ -158,6 +159,7 @@ class HtmlService extends ChangeNotifier {
   Map<String, dynamic>? get probeResult => _probeResult;
   Map<String, dynamic>? get browserProbeResult =>
       _browserProbeResult; // Expose browser probe result
+  String? get serverSource => _lastServerSource;
   List<Map<String, dynamic>> get resourceTimelineData =>
       List.unmodifiable(_resourcePerformanceData ?? const []);
   bool get isProbing => _isProbing;
@@ -538,6 +540,7 @@ class HtmlService extends ChangeNotifier {
   void _resetLoadState({String? newUrl, bool notify = true}) {
     _probeResult = null;
     _browserProbeResult = null;
+    _lastServerSource = null;
     _probeError = null;
     _pageMetadata = null;
     _lastPageWeight = null;
@@ -1965,6 +1968,7 @@ class HtmlService extends ChangeNotifier {
     if (clearProbe) {
       _probeResult = null; // Clear probe results
       _probeError = null; // Clear probe errors
+      _lastServerSource = null;
     }
     // Always clear page metadata when loading a new file, even if preserving probe
     // This ensures metadata tabs are cleaned when navigating back
@@ -2189,6 +2193,7 @@ class HtmlService extends ChangeNotifier {
       // Read body
       final bytes = await _readResponseBytesWithLimit(hResponse);
       final content = utf8.decode(bytes, allowMalformed: true);
+      _lastServerSource = content;
 
       stopwatch.stop();
 
@@ -4141,6 +4146,44 @@ Technical details: $e''';
 
       // 2. Optional: Get Page Weight & Cookies
       try {
+        final storageRaw = await activeWebViewController!.evaluateJavascript(
+          source: '''
+              (function() {
+                function collectStorage(storage) {
+                  var items = [];
+                  var total = 0;
+                  try {
+                    for (var i = 0; i < storage.length; i++) {
+                      var key = storage.key(i);
+                      var value = storage.getItem(key) || "";
+                      total += key.length + value.length;
+                      items.push({k: key, s: value.length});
+                    }
+                  } catch (e) {}
+                  items.sort(function(a, b) { return b.s - a.s; });
+                  return {count: items.length, bytes: total, items: items.slice(0, 30)};
+                }
+                return JSON.stringify({
+                  localStorage: collectStorage(window.localStorage),
+                  sessionStorage: collectStorage(window.sessionStorage)
+                });
+              })();
+            ''',
+        );
+
+        String storageJson = '';
+        if (storageRaw is String) {
+          storageJson = _unquoteHtml(storageRaw);
+        }
+
+        Map<String, dynamic>? storageData;
+        if (storageJson.isNotEmpty) {
+          final dynamic decodedStorage = jsonDecode(storageJson);
+          if (decodedStorage is Map) {
+            storageData = Map<String, dynamic>.from(decodedStorage);
+          }
+        }
+
         final weightRaw = await activeWebViewController!.evaluateJavascript(
           source:
               // Use the __vsv_res accumulator set up by the injected user script.
@@ -4351,6 +4394,7 @@ Technical details: $e''';
                 },
               },
               'resourceCount': _resourcePerformanceData?.length ?? 0,
+              if (storageData != null) 'storage': storageData,
             };
 
             // Update _lastPageWeight for Metadata tab compatibility

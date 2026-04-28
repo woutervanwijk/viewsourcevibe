@@ -33,6 +33,7 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
     'detectedServices': <String, List<String>>{},
     'resourceHints': <String, List<String>>{},
     'pageConfig': <String, dynamic>{},
+    'structuredData': <Map<String, dynamic>>[],
     'media': {
       'images': <Map<String, dynamic>>[],
       'videos': <Map<String, dynamic>>[],
@@ -451,10 +452,12 @@ void _extractJsonLdInfo(dom.Document doc, Map<String, dynamic> metadata) {
       final dynamic jsonData = jsonDecode(jsonStr);
 
       if (jsonData is Map<String, dynamic>) {
+        metadata['structuredData'].add(jsonData);
         _processJsonLdObject(jsonData, metadata);
       } else if (jsonData is List) {
         for (final item in jsonData) {
           if (item is Map<String, dynamic>) {
+            metadata['structuredData'].add(item);
             _processJsonLdObject(item, metadata);
           }
         }

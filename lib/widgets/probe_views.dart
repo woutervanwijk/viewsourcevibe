@@ -116,6 +116,8 @@ class ProbeGeneralView extends ProbeViewBase {
         const SizedBox(height: 16),
         _buildContentTypeTruthCard(context, htmlService, result),
         const SizedBox(height: 16),
+        _buildSourceDiffCard(context, htmlService),
+        const SizedBox(height: 16),
         if (_redirectChainFrom(result).isNotEmpty) ...[
           _buildRedirectChainView(
               context, htmlService, _redirectChainFrom(result)),
@@ -370,6 +372,160 @@ class ProbeGeneralView extends ProbeViewBase {
         ),
       ),
     );
+  }
+
+  Widget _buildSourceDiffCard(BuildContext context, HtmlService htmlService) {
+    final serverSource = htmlService.serverSource;
+    final browserSource = htmlService.currentFile?.content;
+
+    if (serverSource == null ||
+        serverSource.isEmpty ||
+        browserSource == null ||
+        browserSource.isEmpty) {
+      return Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const ListTile(
+          leading: Icon(Icons.difference_outlined),
+          title: Text('Diff Two Sources'),
+          subtitle: Text(
+            'Load through the browser to compare server source with the rendered DOM snapshot.',
+          ),
+          dense: true,
+        ),
+      );
+    }
+
+    final diff = _sourceDiff(serverSource, browserSource);
+    final changed = diff.addedLines + diff.removedLines;
+    final color = changed == 0
+        ? Colors.green
+        : changed < 30
+            ? Colors.orange
+            : Colors.red;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: color.withValues(alpha: 0.34)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.difference_outlined, color: color, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Diff Two Sources',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildDiscoveryChip(
+                    Icons.dns, '${diff.serverLines} server lines', Colors.blue),
+                _buildDiscoveryChip(Icons.web,
+                    '${diff.browserLines} browser lines', Colors.purple),
+                _buildDiscoveryChip(
+                    Icons.add, '+${diff.addedLines}', Colors.green),
+                _buildDiscoveryChip(
+                    Icons.remove, '-${diff.removedLines}', Colors.red),
+                _buildDiscoveryChip(
+                    Icons.percent, '${diff.similarity}% similar', color),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              changed == 0
+                  ? 'Server source and browser DOM snapshot look identical.'
+                  : 'Shows a compact line-level diff between curl/server HTML and the browser DOM snapshot.',
+              style: TextStyle(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.68),
+                fontSize: 12,
+              ),
+            ),
+            if (diff.samples.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHighest
+                      .withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  diff.samples.join('\n'),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  _SourceDiffSummary _sourceDiff(String serverSource, String browserSource) {
+    final serverLines = _normalizedLines(serverSource);
+    final browserLines = _normalizedLines(browserSource);
+    final serverSet = serverLines.toSet();
+    final browserSet = browserLines.toSet();
+    final removed =
+        serverLines.where((line) => !browserSet.contains(line)).toList();
+    final added =
+        browserLines.where((line) => !serverSet.contains(line)).toList();
+    final shared = serverSet.intersection(browserSet).length;
+    final total = serverSet.union(browserSet).length;
+    final similarity = total == 0 ? 100 : ((shared / total) * 100).round();
+
+    final samples = <String>[
+      ...removed.take(4).map((line) => '- ${_shortDiffLine(line)}'),
+      ...added.take(4).map((line) => '+ ${_shortDiffLine(line)}'),
+    ];
+
+    return _SourceDiffSummary(
+      serverLines: serverLines.length,
+      browserLines: browserLines.length,
+      addedLines: added.length,
+      removedLines: removed.length,
+      similarity: similarity,
+      samples: samples,
+    );
+  }
+
+  List<String> _normalizedLines(String source) {
+    return source
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+  }
+
+  String _shortDiffLine(String line) {
+    final collapsed = line.replaceAll(RegExp(r'\s+'), ' ');
+    return collapsed.length > 140
+        ? '${collapsed.substring(0, 137)}...'
+        : collapsed;
   }
 
   Widget _buildDiscoveryChip(IconData icon, String label, Color color) {
@@ -1912,6 +2068,24 @@ class _CookiePrivacyNote {
   final String text;
 
   const _CookiePrivacyNote(this.icon, this.color, this.text);
+}
+
+class _SourceDiffSummary {
+  final int serverLines;
+  final int browserLines;
+  final int addedLines;
+  final int removedLines;
+  final int similarity;
+  final List<String> samples;
+
+  const _SourceDiffSummary({
+    required this.serverLines,
+    required this.browserLines,
+    required this.addedLines,
+    required this.removedLines,
+    required this.similarity,
+    required this.samples,
+  });
 }
 
 class _SecurityHeaderCheck {
