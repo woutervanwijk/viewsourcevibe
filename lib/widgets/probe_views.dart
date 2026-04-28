@@ -442,6 +442,8 @@ class ProbeSecurityView extends ProbeViewBase {
       primary: true,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
+        _buildSecurityScorecard(context, result, security),
+        const SizedBox(height: 16),
         Text(
           'Security Header Audit',
           style: Theme.of(context)
@@ -509,6 +511,223 @@ class ProbeSecurityView extends ProbeViewBase {
       ],
     ));
   }
+
+  Widget _buildSecurityScorecard(BuildContext context,
+      Map<String, dynamic> result, Map<String, dynamic> security) {
+    final checks = _buildSecurityHeaderChecks(result, security);
+    final applicableChecks =
+        checks.where((check) => check.isApplicable).toList();
+    final passed = applicableChecks.where((check) => check.isPassing).length;
+    final total = applicableChecks.length;
+    final score = total == 0 ? 0.0 : passed / total;
+    final percentage = (score * 100).round();
+
+    final Color scoreColor;
+    if (percentage >= 80) {
+      scoreColor = Colors.green;
+    } else if (percentage >= 50) {
+      scoreColor = Colors.orange;
+    } else {
+      scoreColor = Colors.red;
+    }
+
+    return Card(
+      elevation: 0,
+      color: Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.32),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: scoreColor.withValues(alpha: 0.45)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 54,
+                  height: 54,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CircularProgressIndicator(
+                        value: score,
+                        strokeWidth: 6,
+                        color: scoreColor,
+                        backgroundColor: scoreColor.withValues(alpha: 0.14),
+                      ),
+                      Center(
+                        child: Text(
+                          '$percentage',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: scoreColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Security Headers Score',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '$passed of $total controls present',
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.72),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: checks.map((check) {
+                final color = !check.isApplicable
+                    ? Colors.grey
+                    : check.isPassing
+                        ? Colors.green
+                        : Colors.orange;
+                return Tooltip(
+                  message: check.detail,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: color.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          !check.isApplicable
+                              ? Icons.remove_circle_outline
+                              : check.isPassing
+                                  ? Icons.check_circle_outline
+                                  : Icons.warning_amber_rounded,
+                          color: color,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          check.label,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<_SecurityHeaderCheck> _buildSecurityHeaderChecks(
+      Map<String, dynamic> result, Map<String, dynamic> security) {
+    final csp = _headerValue(security, 'Content-Security-Policy');
+    final frameOptions = _headerValue(security, 'X-Frame-Options');
+    final contentTypeOptions = _headerValue(security, 'X-Content-Type-Options');
+    final hsts = _headerValue(security, 'Strict-Transport-Security');
+    final referrerPolicy = _headerValue(security, 'Referrer-Policy');
+    final permissionsPolicy = _headerValue(security, 'Permissions-Policy');
+    final finalUrl =
+        result['finalUrl']?.toString() ?? result['url']?.toString();
+    final isHttps = finalUrl?.startsWith('https://') ?? false;
+
+    final hasFrameProtection =
+        _isPresent(frameOptions) || (csp?.contains('frame-ancestors') ?? false);
+    final hasNoSniff =
+        contentTypeOptions?.toLowerCase().contains('nosniff') ?? false;
+
+    return [
+      _SecurityHeaderCheck(
+        label: 'HSTS',
+        isApplicable: isHttps,
+        isPassing: _isPresent(hsts),
+        detail: isHttps
+            ? (_isPresent(hsts)
+                ? 'Strict-Transport-Security is present.'
+                : 'Missing Strict-Transport-Security on HTTPS.')
+            : 'HSTS is only meaningful on HTTPS responses.',
+      ),
+      _SecurityHeaderCheck(
+        label: 'CSP',
+        isPassing: _isPresent(csp),
+        detail: _isPresent(csp)
+            ? 'Content-Security-Policy is present.'
+            : 'Missing Content-Security-Policy.',
+      ),
+      _SecurityHeaderCheck(
+        label: 'Frames',
+        isPassing: hasFrameProtection,
+        detail: hasFrameProtection
+            ? 'Frame protection is present.'
+            : 'Missing X-Frame-Options or CSP frame-ancestors.',
+      ),
+      _SecurityHeaderCheck(
+        label: 'No Sniff',
+        isPassing: hasNoSniff,
+        detail: hasNoSniff
+            ? 'X-Content-Type-Options includes nosniff.'
+            : 'Missing X-Content-Type-Options: nosniff.',
+      ),
+      _SecurityHeaderCheck(
+        label: 'Referrer',
+        isPassing: _isPresent(referrerPolicy),
+        detail: _isPresent(referrerPolicy)
+            ? 'Referrer-Policy is present.'
+            : 'Missing Referrer-Policy.',
+      ),
+      _SecurityHeaderCheck(
+        label: 'Permissions',
+        isPassing: _isPresent(permissionsPolicy),
+        detail: _isPresent(permissionsPolicy)
+            ? 'Permissions-Policy is present.'
+            : 'Missing Permissions-Policy.',
+      ),
+    ];
+  }
+
+  String? _headerValue(Map<String, dynamic> security, String key) {
+    final value = security[key];
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text.toLowerCase();
+  }
+
+  bool _isPresent(String? value) => value != null && value.isNotEmpty;
 
   Widget _buildTlsWarningCard(
       BuildContext context, Map<String, dynamic> result) {
@@ -933,4 +1152,18 @@ class ProbeCookiesView extends ProbeViewBase {
       },
     ));
   }
+}
+
+class _SecurityHeaderCheck {
+  final String label;
+  final bool isApplicable;
+  final bool isPassing;
+  final String detail;
+
+  const _SecurityHeaderCheck({
+    required this.label,
+    this.isApplicable = true,
+    required this.isPassing,
+    required this.detail,
+  });
 }
