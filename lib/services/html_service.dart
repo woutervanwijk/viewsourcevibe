@@ -4035,16 +4035,16 @@ Technical details: $e''';
               ' var acc=window.__vsv_res||{};'
               ' var list=[]; var seen=new Set();'
               ' for(var name in acc) {'
-              '   var e=acc[name]; var tx=e.t||0; var dec=e.d||0;'
+              '   var e=acc[name]; var tx=e.t||0; var dec=e.d||0; var st=e.s||0; var du=e.u||0;'
               '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
-              '   list.push({n:name,t:tx,d:dec}); seen.add(name);'
+              '   list.push({n:name,t:tx,d:dec,s:st,u:du}); seen.add(name);'
               ' }'
               ' var r=performance.getEntriesByType("resource");'
               ' for(var i=0;i<r.length;i++) {'
               '   var name=r[i].name; if(seen.has(name)) continue;'
-              '   var tx=r[i].transferSize||0; var dec=r[i].decodedBodySize||0;'
+              '   var tx=r[i].transferSize||0; var dec=r[i].decodedBodySize||0; var st=r[i].startTime||0; var du=r[i].duration||0;'
               '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
-              '   list.push({n:name,t:tx,d:dec}); seen.add(name);'
+              '   list.push({n:name,t:tx,d:dec,s:st,u:du}); seen.add(name);'
               ' }'
               ' var nav=performance.getEntriesByType("navigation")[0];'
               ' var nTx=0; var nDec=0;'
@@ -4052,11 +4052,11 @@ Technical details: $e''';
               '   nTx=nav.transferSize||0; nDec=nav.decodedBodySize||0;'
               '   if(nDec===0) nDec=document.documentElement.outerHTML.length;'
               '   tTx+=nTx; tDec+=nDec;'
-              '   list.push({n:nav.name,t:nTx,d:nDec});'
+              '   list.push({n:nav.name,t:nTx,d:nDec,s:nav.startTime||0,u:nav.duration||0});'
               ' } else if(!nav && !seen.has(document.location.href)) {'
               '   var sz=document.documentElement.outerHTML.length;'
               '   nTx=sz; nDec=sz; tTx+=sz; tDec+=sz;'
-              '   list.push({n:document.location.href,t:sz,d:sz});'
+              '   list.push({n:document.location.href,t:sz,d:sz,s:0,u:0});'
               ' }'
               ' return JSON.stringify({tx:tTx,dec:tDec,nTx:nTx,nDec:nDec,list:list,cookies:document.cookie});'
               ' })();',
@@ -4119,6 +4119,8 @@ Technical details: $e''';
                     'name': e['n'],
                     'transfer': (e['t'] as num? ?? 0).toInt(),
                     'decoded': (e['d'] as num? ?? 0).toInt(),
+                    'startTime': (e['s'] as num? ?? 0).toDouble(),
+                    'duration': (e['u'] as num? ?? 0).toDouble(),
                   },
                 ),
               );
@@ -4321,24 +4323,24 @@ Technical details: $e''';
       ' var acc=window.__vsv_res||{};'
       ' var list=[]; var seen=new Set();'
       ' for(var name in acc) {'
-      '   var e=acc[name]; var tx=e.t||0; var dec=e.d||0;'
+      '   var e=acc[name]; var tx=e.t||0; var dec=e.d||0; var st=e.s||0; var du=e.u||0;'
       '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
-      '   list.push({n:name,t:tx,d:dec}); seen.add(name);'
+      '   list.push({n:name,t:tx,d:dec,s:st,u:du}); seen.add(name);'
       ' }'
       // Fallback: pick up anything from before the observer was attached
       ' var r=performance.getEntriesByType("resource");'
       ' for(var i=0;i<r.length;i++) {'
       '   var name=r[i].name; if(seen.has(name)) continue;'
-      '   var tx=r[i].transferSize||0; var dec=r[i].decodedBodySize||0;'
+      '   var tx=r[i].transferSize||0; var dec=r[i].decodedBodySize||0; var st=r[i].startTime||0; var du=r[i].duration||0;'
       '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
-      '   list.push({n:name,t:tx,d:dec}); seen.add(name);'
+      '   list.push({n:name,t:tx,d:dec,s:st,u:du}); seen.add(name);'
       ' }'
       ' var nav=performance.getEntriesByType("navigation")[0];'
       ' if(nav && !seen.has(nav.name)) {'
       '   var nTx=nav.transferSize||0; var nDec=nav.decodedBodySize||0;'
       '   if(nDec===0) nDec=document.documentElement.outerHTML.length;'
       '   tTx+=nTx; tDec+=nDec;'
-      '   list.push({n:nav.name,t:nTx,d:nDec});'
+      '   list.push({n:nav.name,t:nTx,d:nDec,s:nav.startTime||0,u:nav.duration||0});'
       ' }'
       ' return JSON.stringify({tx:tTx,dec:tDec,list:list});'
       ' })();';

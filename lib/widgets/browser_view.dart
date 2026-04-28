@@ -200,11 +200,16 @@ class _BrowserViewState extends State<BrowserView> {
                 // we keep our own copy of everything seen since page load.
                 if (!window.__vsv_res) window.__vsv_res = {};
                 var __vsvMaxResources = 1000;
-                function _vsvRecord(name, tx, dec) {
+                function _vsvRecord(name, tx, dec, start, dur) {
                   if (!name || name.startsWith('data:')) return;
                   var prev = window.__vsv_res[name];
                   if (!prev || dec > (prev.d || 0) || (!prev.d && tx > (prev.t || 0))) {
-                    window.__vsv_res[name] = {t: tx || 0, d: dec || 0};
+                    window.__vsv_res[name] = {
+                      t: tx || 0,
+                      d: dec || 0,
+                      s: start || 0,
+                      u: dur || 0
+                    };
                   }
                   var keys = Object.keys(window.__vsv_res);
                   while (keys.length > __vsvMaxResources) {
@@ -217,7 +222,7 @@ class _BrowserViewState extends State<BrowserView> {
                     if (window.__vsv_observerAttached) return;
                     var obs = new PerformanceObserver(function(list) {
                       list.getEntries().forEach(function(e) {
-                        _vsvRecord(e.name, e.transferSize || 0, e.decodedBodySize || 0);
+                        _vsvRecord(e.name, e.transferSize || 0, e.decodedBodySize || 0, e.startTime || 0, e.duration || 0);
                       });
                     });
                     obs.observe({type: 'resource', buffered: true});
@@ -239,7 +244,7 @@ class _BrowserViewState extends State<BrowserView> {
                   return _vsvFetch.apply(this, arguments).then(function(resp) {
                     try {
                       var cl = resp.headers.get('content-length');
-                      if (cl) { var sz = parseInt(cl, 10); if (sz > 0) _vsvRecord(url, sz, sz); }
+                      if (cl) { var sz = parseInt(cl, 10); if (sz > 0) _vsvRecord(url, sz, sz, performance.now(), 0); }
                     } catch(e) {}
                     return resp;
                   });
@@ -256,7 +261,7 @@ class _BrowserViewState extends State<BrowserView> {
                   xhr.addEventListener('load', function() {
                     try {
                       var cl = xhr.getResponseHeader('content-length');
-                      if (cl && xhr._vsvUrl) { var sz = parseInt(cl,10); if (sz>0) _vsvRecord(xhr._vsvUrl, sz, sz); }
+                      if (cl && xhr._vsvUrl) { var sz = parseInt(cl,10); if (sz>0) _vsvRecord(xhr._vsvUrl, sz, sz, performance.now(), 0); }
                     } catch(e) {}
                   }, {once: true});
                   return _vsvXhrSend.apply(this, arguments);

@@ -37,14 +37,16 @@ class RequestTimelineView extends StatelessWidget {
         }
 
         final sortedResources = [...resources]..sort((a, b) {
-            final aSize = _resourceSize(a);
-            final bSize = _resourceSize(b);
-            return bSize.compareTo(aSize);
+            final startCompare = _startTime(a).compareTo(_startTime(b));
+            if (startCompare != 0) return startCompare;
+            return _duration(b).compareTo(_duration(a));
           });
-        final maxSize = sortedResources.fold<int>(
+        final timelineEnd = sortedResources.fold<double>(
           0,
-          (max, resource) =>
-              _resourceSize(resource) > max ? _resourceSize(resource) : max,
+          (max, resource) {
+            final end = _startTime(resource) + _duration(resource);
+            return end > max ? end : max;
+          },
         );
 
         return Scrollbar(
@@ -69,9 +71,7 @@ class RequestTimelineView extends StatelessWidget {
               if (sortedResources.isEmpty)
                 _buildEmptyResourcesCard(context)
               else
-                ...sortedResources.map(
-                  (resource) => _buildResourceCard(context, resource, maxSize),
-                ),
+                _buildTimelineMap(context, sortedResources, timelineEnd),
             ],
           ),
         );
@@ -257,81 +257,212 @@ class RequestTimelineView extends StatelessWidget {
     );
   }
 
-  Widget _buildResourceCard(
+  Widget _buildTimelineMap(
     BuildContext context,
-    Map<String, dynamic> resource,
-    int maxSize,
+    List<Map<String, dynamic>> resources,
+    double timelineEnd,
   ) {
-    final name = resource['name']?.toString() ?? '';
-    final transfer = (resource['transfer'] as num? ?? 0).toInt();
-    final decoded = (resource['decoded'] as num? ?? 0).toInt();
-    final size = _resourceSize(resource);
-    final fraction = maxSize <= 0 ? 0.0 : (size / maxSize).clamp(0.0, 1.0);
-    final type = _resourceType(name);
-    final color = _typeColor(type);
+    final entries = _buildTimelineEntries(resources, timelineEnd);
+    final height = (entries.length * 64.0 + 96).clamp(320.0, 2200.0);
 
     return Card(
       elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Icon(_typeIcon(type), color: color, size: 18),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
+            _buildTimelineLegend(context),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final laneWidth =
+                    (constraints.maxWidth * 0.38).clamp(128.0, 210.0);
+                final labelLeft = laneWidth + 18;
+
+                return SizedBox(
+                  height: height,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _TimelineMapPainter(
+                            entries: entries,
+                            laneWidth: laneWidth,
+                            labelLeft: labelLeft,
+                            colors: _timelineTypeColors,
+                            axisColor:
+                                Theme.of(context).colorScheme.outlineVariant,
+                            textColor: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.56),
+                          ),
+                        ),
+                      ),
+                      ...entries.map(
+                        (entry) => Positioned(
+                          left: labelLeft + 8,
+                          right: 0,
+                          top: (entry.y - 24).clamp(8.0, height - 54),
+                          child: _buildTimelineLabel(context, entry),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    type,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  FormatUtils.formatBytesWithTransfer({
-                    'decoded': decoded,
-                    'transfer': transfer,
-                  }),
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SelectableText(
-              name,
-              maxLines: 3,
-              style: const TextStyle(fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: fraction,
-                minHeight: 5,
-                color: color,
-                backgroundColor: color.withValues(alpha: 0.12),
-              ),
+                );
+              },
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildTimelineLegend(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _timelineTypes.map((type) {
+        final color = _typeColor(type);
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.26)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(_typeIcon(type), color: color, size: 14),
+              const SizedBox(width: 5),
+              Text(
+                type,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTimelineLabel(BuildContext context, _TimelineEntry entry) {
+    final color = _typeColor(entry.type);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(_typeIcon(entry.type), color: color, size: 14),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  entry.shortName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            '${_formatMs(entry.start)} start  |  ${_formatMs(entry.duration)}  |  ${entry.sizeLabel}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.66),
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<_TimelineEntry> _buildTimelineEntries(
+    List<Map<String, dynamic>> resources,
+    double timelineEnd,
+  ) {
+    const top = 34.0;
+    final bottom = (resources.length * 64.0 + 96).clamp(320.0, 2200.0) - 34;
+    final span = bottom - top;
+    var previousY = top - 54;
+
+    return resources.map((resource) {
+      final name = resource['name']?.toString() ?? '';
+      final transfer = (resource['transfer'] as num? ?? 0).toInt();
+      final decoded = (resource['decoded'] as num? ?? 0).toInt();
+      final start = _startTime(resource);
+      final duration = _duration(resource);
+      final type = _resourceType(name);
+      final rawY = timelineEnd <= 0 ? top : top + (start / timelineEnd) * span;
+      final y = rawY < previousY + 54 ? previousY + 54 : rawY;
+      previousY = y;
+
+      return _TimelineEntry(
+        name: name,
+        shortName: _shortResourceName(name),
+        type: type,
+        start: start,
+        duration: duration,
+        y: y.clamp(top, bottom),
+        sizeLabel: FormatUtils.formatBytesWithTransfer({
+          'decoded': decoded,
+          'transfer': transfer,
+        }),
+      );
+    }).toList();
+  }
+
+  String _shortResourceName(String name) {
+    final uri = Uri.tryParse(name);
+    final path = uri?.path ?? name;
+    final parts = path.split('/').where((part) => part.isNotEmpty).toList();
+    if (parts.isEmpty) return uri?.host ?? name;
+    return parts.last.length > 48
+        ? '${parts.last.substring(0, 45)}...'
+        : parts.last;
+  }
+
+  double _startTime(Map<String, dynamic> resource) {
+    return (resource['startTime'] as num? ?? 0).toDouble();
+  }
+
+  double _duration(Map<String, dynamic> resource) {
+    final duration = (resource['duration'] as num? ?? 0).toDouble();
+    return duration < 0 ? 0 : duration;
+  }
+
+  String _formatMs(double value) {
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(2)}s';
+    }
+    return '${value.round()}ms';
   }
 
   Widget _buildMetricChip(
@@ -395,12 +526,6 @@ class RequestTimelineView extends StatelessWidget {
         'reasonPhrase': probe['reasonPhrase'],
       }
     ];
-  }
-
-  int _resourceSize(Map<String, dynamic> resource) {
-    final transfer = (resource['transfer'] as num? ?? 0).toInt();
-    final decoded = (resource['decoded'] as num? ?? 0).toInt();
-    return decoded > transfer ? decoded : transfer;
   }
 
   String _resourceType(String name) {
@@ -468,5 +593,172 @@ class RequestTimelineView extends StatelessWidget {
       default:
         return Colors.grey;
     }
+  }
+}
+
+const List<String> _timelineTypes = [
+  'document',
+  'style',
+  'script',
+  'image',
+  'font',
+  'fetch',
+  'other',
+];
+
+const Map<String, Color> _timelineTypeColors = {
+  'document': Colors.green,
+  'style': Colors.purple,
+  'script': Colors.amber,
+  'image': Colors.teal,
+  'font': Colors.indigo,
+  'fetch': Colors.blue,
+  'other': Colors.grey,
+};
+
+class _TimelineEntry {
+  final String name;
+  final String shortName;
+  final String type;
+  final double start;
+  final double duration;
+  final double y;
+  final String sizeLabel;
+
+  const _TimelineEntry({
+    required this.name,
+    required this.shortName,
+    required this.type,
+    required this.start,
+    required this.duration,
+    required this.y,
+    required this.sizeLabel,
+  });
+}
+
+class _TimelineMapPainter extends CustomPainter {
+  final List<_TimelineEntry> entries;
+  final double laneWidth;
+  final double labelLeft;
+  final Map<String, Color> colors;
+  final Color axisColor;
+  final Color textColor;
+
+  const _TimelineMapPainter({
+    required this.entries,
+    required this.laneWidth,
+    required this.labelLeft,
+    required this.colors,
+    required this.axisColor,
+    required this.textColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const top = 18.0;
+    final bottom = size.height - 18;
+    final laneGap = laneWidth / (_timelineTypes.length + 1);
+    final laneXs = <String, double>{
+      for (var i = 0; i < _timelineTypes.length; i++)
+        _timelineTypes[i]: laneGap * (i + 1),
+    };
+
+    final baselinePaint = Paint()
+      ..color = axisColor
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(labelLeft - 6, top),
+      Offset(labelLeft - 6, bottom),
+      baselinePaint,
+    );
+
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    );
+
+    for (final type in _timelineTypes) {
+      final x = laneXs[type]!;
+      final color = colors[type] ?? Colors.grey;
+      final lanePaint = Paint()
+        ..color = color.withValues(alpha: 0.42)
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawLine(Offset(x, top), Offset(x, bottom), lanePaint);
+
+      textPainter.text = TextSpan(
+        text: type,
+        style: TextStyle(
+          color: color.withValues(alpha: 0.85),
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      textPainter.layout();
+      canvas.save();
+      canvas.translate(x - 5, 0);
+      canvas.rotate(-1.5708);
+      textPainter.paint(canvas, const Offset(-44, 0));
+      canvas.restore();
+    }
+
+    for (final entry in entries) {
+      final x = laneXs[entry.type] ?? laneXs['other']!;
+      final color = colors[entry.type] ?? Colors.grey;
+      final y = entry.y.clamp(top + 18, bottom - 18);
+      final durationHeight =
+          entry.duration <= 0 ? 8.0 : (entry.duration / 18).clamp(8.0, 46.0);
+
+      final durationPaint = Paint()
+        ..color = color
+        ..strokeWidth = 6
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        Offset(x, y),
+        Offset(x, (y + durationHeight).clamp(top, bottom)),
+        durationPaint,
+      );
+
+      final connectorPaint = Paint()
+        ..color = color.withValues(alpha: 0.72)
+        ..strokeWidth = 1.4;
+      canvas.drawLine(Offset(x, y), Offset(labelLeft, y), connectorPaint);
+
+      final dotPaint = Paint()..color = color;
+      canvas.drawCircle(Offset(x, y), 4.5, dotPaint);
+      canvas.drawCircle(
+        Offset(labelLeft, y),
+        2.5,
+        Paint()..color = color.withValues(alpha: 0.85),
+      );
+    }
+
+    final startLabel = TextPainter(
+      text: TextSpan(
+        text: 'start',
+        style: TextStyle(color: textColor, fontSize: 10),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    startLabel.paint(canvas, Offset(labelLeft, top - 14));
+
+    final endLabel = TextPainter(
+      text: TextSpan(
+        text: 'later',
+        style: TextStyle(color: textColor, fontSize: 10),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    endLabel.paint(canvas, Offset(labelLeft, bottom + 3));
+  }
+
+  @override
+  bool shouldRepaint(covariant _TimelineMapPainter oldDelegate) {
+    return entries != oldDelegate.entries ||
+        laneWidth != oldDelegate.laneWidth ||
+        labelLeft != oldDelegate.labelLeft ||
+        axisColor != oldDelegate.axisColor ||
+        textColor != oldDelegate.textColor;
   }
 }
