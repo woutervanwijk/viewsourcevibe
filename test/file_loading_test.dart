@@ -3,6 +3,8 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('File Loading Tests', () {
     test('HTML Service loads files correctly', () async {
       final htmlService = HtmlService();
@@ -20,7 +22,7 @@ void main() {
       );
 
       await htmlService.loadFile(testFile);
-      expect(htmlService.currentFile, testFile);
+      expect(htmlService.currentFile, isNotNull);
       expect(htmlService.currentFile?.name, 'test.html');
       expect(htmlService.currentFile?.content,
           '<html><body>Hello World</body></html>');

@@ -351,6 +351,8 @@ class HtmlService extends ChangeNotifier {
   bool get shouldShowBrowserTab {
     // Already loaded a URL
     if (_currentFile?.isUrl ?? false) return true;
+    // Local files can still have a useful rendered view (HTML/SVG/media/XML).
+    if (_currentFile != null && isBrowserSupported) return true;
     // WebView is actively loading
     if (_isWebViewLoading) return true;
     // A URL load was triggered but _currentFile is still null (_resetLoadState ran)
@@ -501,16 +503,33 @@ class HtmlService extends ChangeNotifier {
   /// Trigger a browser reload if the URL has changed and the browser tab is visible
   Future<void> triggerBrowserReload() async {
     final controller = activeWebViewController;
-    if (controller == null || _currentFile == null || !_currentFile!.isUrl) {
+    final file = _currentFile;
+    if (controller == null || file == null) {
       return;
     }
     try {
       final currentBrowserUrl = await controller.getUrl();
-      if (currentBrowserUrl.toString() != _currentFile!.path) {
-        debugPrint('Triggering browser reload for: ${_currentFile!.path}');
-        _webViewLoadingUrl = _currentFile!.path;
+      if (file.isUrl) {
+        if (currentBrowserUrl.toString() != file.path) {
+          debugPrint('Triggering browser reload for: ${file.path}');
+          _webViewLoadingUrl = file.path;
+          await controller.loadUrl(
+            urlRequest: URLRequest(url: WebUri(file.path)),
+          );
+        }
+        return;
+      }
+
+      if (isBrowserSupported && file.content.isNotEmpty) {
+        debugPrint('Triggering browser reload for local file: ${file.name}');
+        final baseUrl = file.path.isNotEmpty ? WebUri(file.path) : null;
+        await controller.loadData(
+          data: file.content,
+          baseUrl: baseUrl,
+        );
+      } else if (currentBrowserUrl.toString() != 'about:blank') {
         await controller.loadUrl(
-          urlRequest: URLRequest(url: WebUri(_currentFile!.path)),
+          urlRequest: URLRequest(url: WebUri('about:blank')),
         );
       }
     } catch (e) {

@@ -18,7 +18,8 @@ void main() {
       final testFile = HtmlFile(
         name: 'test.html',
         path: 'https://example.com',
-        content: '<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>',
+        content:
+            '<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>',
         lastModified: DateTime.now(),
         size: 100,
         isUrl: true,
@@ -43,7 +44,8 @@ void main() {
       final testFile = HtmlFile(
         name: 'test.html',
         path: 'https://example.com',
-        content: '<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>',
+        content:
+            '<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>',
         lastModified: DateTime.now(),
         size: 100,
         isUrl: true,
@@ -57,6 +59,23 @@ void main() {
 
       // Verify that metadata is available
       expect(htmlService.pageMetadata, isNotNull);
+    });
+
+    test('local HTML files should expose browser view', () async {
+      final testFile = HtmlFile(
+        name: 'local.html',
+        path: '/tmp/local.html',
+        content:
+            '<!DOCTYPE html><html><head><title>Local</title></head><body><h1>Local file</h1></body></html>',
+        lastModified: DateTime.now(),
+        size: 100,
+      );
+
+      await htmlService.loadFile(testFile);
+
+      expect(htmlService.currentFile?.isUrl, isFalse);
+      expect(htmlService.isBrowserSupported, isTrue);
+      expect(htmlService.shouldShowBrowserTab, isTrue);
     });
 
     test('probeUrl should complete without errors', () async {
