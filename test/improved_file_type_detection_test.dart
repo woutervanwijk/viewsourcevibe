@@ -1,74 +1,60 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 
 void main() {
   group('Strict file type detection tests', () {
+    final detector = FileTypeDetector();
     final htmlService = HtmlService();
 
     test('Strict: HTML detection (content-based)', () async {
       const content = '<!DOCTYPE html><html><body><h1>Hello</h1></body></html>';
-      // Pass generic filename to force content detection
-      final result = await htmlService.detectFileTypeAndGenerateFilename(
-          'unknown', content);
-      // Expect .html extension
-      expect(result, endsWith('.html'));
+      final result = await detector.detectFileType(content: content);
+      expect(result, 'HTML');
     });
 
     test('Strict: XML detection (content-based)', () async {
       const content = '<?xml version="1.0"?><root><item>Hello</item></root>';
-      final result =
-          await htmlService.detectFileTypeAndGenerateFilename('data', content);
-      expect(result, endsWith('.xml'));
+      final result = await detector.detectFileType(content: content);
+      expect(result, 'XML');
     });
 
     test('Strict: JSON detection (content-based)', () async {
       const content = '{"name": "test", "value": 123}';
-      final result =
-          await htmlService.detectFileTypeAndGenerateFilename('data', content);
-      expect(result, endsWith('.json'));
+      final result = await detector.detectFileType(content: content);
+      expect(result, 'JSON');
     });
 
     test('Strict: YAML detection (content-based)', () async {
       const content = '---\nname: test\nvalue: 123';
-      final result = await htmlService.detectFileTypeAndGenerateFilename(
-          'config', content);
-      expect(result, endsWith('.yaml'));
+      final result = await detector.detectFileType(content: content);
+      expect(result, 'YAML');
     });
 
     test('Strict: RSS detection (content-based)', () async {
       const content =
           '<rss version="2.0"><channel><title>Ref</title></channel></rss>';
-      final result =
-          await htmlService.detectFileTypeAndGenerateFilename('feed', content);
-      // RSS usually maps to .xml or .rss (FileTypeDetector returns XML for RSS content if strictly parsed)
-      // HtmlService ensures .xml for RSS content if base name has no extension
-      expect(result, anyOf(endsWith('.xml'), endsWith('.rss')));
+      final result = await detector.detectFileType(content: content);
+      expect(result, 'XML');
     });
 
-    test('Strict: JS snippet should default to Text (content-based)', () async {
+    test('Strict: JS snippet should be JavaScript (content-based)', () async {
       const content = 'function test() { return true; }';
-      final result = await htmlService.detectFileTypeAndGenerateFilename(
-          'snippet', content);
-      // Strict rule: JS content is ambiguous -> Text
-      expect(result, endsWith('.txt'));
+      final result = await detector.detectFileType(content: content);
+      expect(result, 'JavaScript');
     });
 
-    test('Strict: CSS snippet should default to Text (content-based)',
-        () async {
+    test('Strict: CSS snippet should be CSS (content-based)', () async {
       const content = 'body { margin: 0; }';
-      final result = await htmlService.detectFileTypeAndGenerateFilename(
-          'styles', content);
-      // Strict rule: CSS content is ambiguous -> Text
-      expect(result, endsWith('.txt'));
+      final result = await detector.detectFileType(content: content);
+      expect(result, 'CSS');
     });
 
-    test('Strict: Markdown snippet should default to Text (content-based)',
+    test('Strict: Markdown snippet should be Markdown (content-based)',
         () async {
       const content = '# Hello World\n## Subtitle';
-      final result = await htmlService.detectFileTypeAndGenerateFilename(
-          'readme', content);
-      // Strict rule: Markdown content is ambiguous -> Text
-      expect(result, endsWith('.txt'));
+      final result = await detector.detectFileType(content: content);
+      expect(result, 'Markdown');
     });
 
     test('Strict: Extension prioritization (JS)', () async {

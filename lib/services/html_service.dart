@@ -200,6 +200,26 @@ class HtmlService extends ChangeNotifier {
 
     if (looksLikeHtml) return true;
 
+    if (_currentFile?.content.isNotEmpty ?? false) {
+      final trimmedContent = _currentFile!.content.trim();
+      final lowerContent = trimmedContent.toLowerCase();
+      final looksLikeXmlContent = lowerContent.startsWith('<') &&
+          !lowerContent.startsWith('<!doctype html') &&
+          !lowerContent.startsWith('<html') &&
+          (trimmedContent.contains('<Channel>') ||
+              lowerContent.contains('<rss') ||
+              lowerContent.contains('<feed') ||
+              lowerContent.contains('<xml'));
+
+      if (looksLikeXmlContent) return false;
+
+      final looksLikeHtmlContent = lowerContent.startsWith('<!doctype html') ||
+          lowerContent.startsWith('<html') ||
+          RegExp(r'<(head|body|title|meta|script|style|div|main|section|article)\b')
+              .hasMatch(lowerContent);
+      if (looksLikeHtmlContent) return true;
+    }
+
     // Tertiary check: If we are midway through loading a URL and probe/file are not ready,
     // guess from the input text (URL) to keep UI stable.
     final String url = (_currentInputText ?? '').toLowerCase();
@@ -213,10 +233,8 @@ class HtmlService extends ChangeNotifier {
       return true;
     }
 
-    // For HTTP URLs, be more conservative - only return true if it looks like HTML content
-    // Exclude known non-HTML extensions to prevent false positives
+    // For HTTP URLs, be conservative when no content/header is available.
     if (url.startsWith('http')) {
-      // List of common non-HTML extensions that should not show DOM tree
       final nonHtmlExtensions = [
         '.rss',
         '.xml',
@@ -251,7 +269,6 @@ class HtmlService extends ChangeNotifier {
         '.webm',
         '.m4a',
         '.aac',
-        '.zip',
         '.tar',
         '.gz',
         '.rar',
@@ -262,37 +279,15 @@ class HtmlService extends ChangeNotifier {
         '.msi',
         '.apk',
         '.ipa',
-        '.pdf',
         '.epub',
         '.mobi',
         '.azw3'
       ];
 
-      // If URL ends with any known non-HTML extension, it's not HTML
       if (nonHtmlExtensions.any((ext) => url.endsWith(ext))) {
         return false;
       }
-
-      // For generic URLs (like domains), we can't be sure, so default to false
-      // to avoid showing DOM tree for non-HTML content
-      // This is more conservative but prevents false positives
       return false;
-    }
-
-    // Content-based override: if we have content that looks like XML but was detected as HTML,
-    // override the detection based on actual content
-    if (_currentFile?.content.isNotEmpty ?? false) {
-      final trimmedContent = _currentFile!.content.trim();
-      final looksLikeXmlContent = trimmedContent.startsWith('<') &&
-          !trimmedContent.startsWith('<!DOCTYPE html') &&
-          !trimmedContent.startsWith('<html') &&
-          !trimmedContent.startsWith('<HTML') &&
-          (trimmedContent.contains('<Channel>') ||
-              trimmedContent.contains('<rss') ||
-              trimmedContent.contains('<feed') ||
-              trimmedContent.contains('<xml'));
-
-      if (looksLikeXmlContent) return false;
     }
 
     return false;

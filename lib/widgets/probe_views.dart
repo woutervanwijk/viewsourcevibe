@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -235,8 +237,9 @@ class ProbeGeneralView extends ProbeViewBase {
       return sniffed == 'javascript' || sniffed == 'text';
     }
     if (mime == 'text/css') return sniffed == 'css' || sniffed == 'text';
+    if (mime == 'text/plain') return sniffed == 'text';
     if (mime.startsWith('text/')) {
-      return ['text', 'html', 'css', 'javascript'].contains(sniffed);
+      return sniffed == 'text';
     }
     return true;
   }
@@ -245,26 +248,81 @@ class ProbeGeneralView extends ProbeViewBase {
     final trimmed = content.trimLeft();
     final lowerName = filename?.toLowerCase() ?? '';
     if (trimmed.isEmpty) return 'empty';
-    if (trimmed.startsWith('<!doctype html') || trimmed.startsWith('<html')) {
+
+    final lower = trimmed.toLowerCase();
+    final withoutLeadingComments = lower.replaceFirst(
+      RegExp(r'^(<!--.*?-->\s*)+', dotAll: true),
+      '',
+    );
+
+    // HTML wins before CSS/JS. Full documents and fragments often contain
+    // inline <style> or <script> blocks that look like standalone CSS/JS.
+    if (withoutLeadingComments.startsWith('<!doctype html') ||
+        withoutLeadingComments.startsWith('<html') ||
+        RegExp(r'<(head|body|title|meta|script|style|div|main|section|article)\b')
+            .hasMatch(lower)) {
       return 'html';
     }
-    if (trimmed.startsWith('<?xml') ||
-        trimmed.startsWith('<rss') ||
-        trimmed.startsWith('<feed')) {
+
+    if (lower.startsWith('<?xml') ||
+        lower.startsWith('<rss') ||
+        lower.startsWith('<feed') ||
+        lower.startsWith('<svg')) {
       return 'xml';
     }
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json';
-    if (lowerName.endsWith('.css') ||
-        trimmed.contains('{') && trimmed.contains(':')) {
+
+    if (_looksLikeJson(trimmed)) return 'json';
+
+    if (lowerName.endsWith('.css') || _looksLikeStandaloneCss(trimmed)) {
       return 'css';
     }
     if (lowerName.endsWith('.js') ||
-        trimmed.startsWith('import ') ||
-        trimmed.startsWith('const ') ||
-        trimmed.startsWith('function ')) {
+        lowerName.endsWith('.mjs') ||
+        _looksLikeStandaloneJavascript(trimmed)) {
       return 'javascript';
     }
     return 'text';
+  }
+
+  bool _looksLikeJson(String content) {
+    final trimmed = content.trimLeft();
+    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) return false;
+    try {
+      jsonDecode(trimmed);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _looksLikeStandaloneCss(String content) {
+    final trimmed = content.trimLeft();
+    final lower = trimmed.toLowerCase();
+    if (lower.contains('<style') || lower.contains('<script')) return false;
+    if (RegExp(r'^(const|let|var|function|class|import|export)\b')
+        .hasMatch(lower)) {
+      return false;
+    }
+    if (lower.startsWith('@charset') ||
+        lower.startsWith('@import') ||
+        lower.startsWith('@media') ||
+        lower.startsWith('@font-face') ||
+        lower.startsWith('@keyframes')) {
+      return true;
+    }
+    return RegExp(r'^[.#]?[a-z0-9_:\-\*\[\]="\s,>+~]+\{[^}]*:[^}]*\}',
+            caseSensitive: false, dotAll: true)
+        .hasMatch(trimmed);
+  }
+
+  bool _looksLikeStandaloneJavascript(String content) {
+    final trimmed = content.trimLeft();
+    final lower = trimmed.toLowerCase();
+    if (lower.contains('<script') || lower.contains('<style')) return false;
+    return RegExp(
+      r'^(import\s|export\s|const\s|let\s|var\s|function\s|class\s|async\s+function\s|\(\s*function|\w+\s*=>)',
+      caseSensitive: false,
+    ).hasMatch(trimmed);
   }
 
   Widget _buildRobotsSitemapCard(BuildContext context, HtmlService htmlService,

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:mime_type/mime_type.dart';
 
@@ -29,8 +31,11 @@ class FileTypeDetector {
     String? contentType,
   }) async {
     // Generate a cache key based on available inputs
-    final cacheKey =
-        _generateCacheKey(filename: filename, content: content, bytes: bytes);
+    final cacheKey = _generateCacheKey(
+        filename: filename,
+        content: content,
+        bytes: bytes,
+        contentType: contentType);
 
     // Return cached result if available
     if (_detectionCache.containsKey(cacheKey)) {
@@ -60,6 +65,7 @@ class FileTypeDetector {
               'Binary files are not supported. Only text files can be loaded.');
         }
       } catch (e) {
+        if (e is FileTypeError) rethrow;
         // If binary detection fails, continue with text detection
       }
     }
@@ -296,6 +302,11 @@ class FileTypeDetector {
         (filename.contains('.io') && filename.contains('/')) ||
         (filename.contains('.co') && filename.contains('/'));
 
+    final mappedType = extensionMap[ext];
+    if (mappedType != null) {
+      return mappedType;
+    }
+
     if (isUrl) {
       // Check if the extension is clearly not HTML (CSS, JS, etc.)
       final nonHtmlExtensions = [
@@ -332,7 +343,7 @@ class FileTypeDetector {
       }
     }
 
-    return extensionMap[ext] ?? 'Text';
+    return 'Text';
   }
 
   /// Detect MIME type from file extension or content
@@ -405,6 +416,7 @@ class FileTypeDetector {
       'image/png': 'Image', 'image/jpeg': 'Image', 'image/gif': 'Image',
       'image/webp': 'Image', 'image/bmp': 'Image', 'image/x-icon': 'Image',
       'image/avif': 'Image',
+      'image/svg+xml': 'Image',
       'video/mp4': 'Video', 'video/webm': 'Video', 'video/ogg': 'Video',
       'video/quicktime': 'Video',
       'audio/mpeg': 'Audio', 'audio/wav': 'Audio', 'audio/ogg': 'Audio',
@@ -422,7 +434,8 @@ class FileTypeDetector {
       analysisContent = content.substring(0, 16 * 1024);
     }
 
-    final lowerContent = analysisContent.toLowerCase().trim();
+    final trimmedContent = analysisContent.trimLeft();
+    final lowerContent = trimmedContent.toLowerCase().trim();
 
     // Empty content is Text
     if (lowerContent.isEmpty) return 'Text';
@@ -446,39 +459,23 @@ class FileTypeDetector {
       } catch (_) {}
     }
 
-    // 2. HTML Detection (Strict)
-    // Must have DOCTYPE or <html> tag
-    if (lowerContent.startsWith('<!doctype html') ||
-        lowerContent.contains('<html')) {
-      return 'HTML';
-    }
-    // Ambiguous HTML tags like <div> or <p> are NOT enough for strict detection
-    // unless accompanied by <head> AND <body>
-    if (lowerContent.contains('<head') && lowerContent.contains('<body')) {
+    // 2. HTML Detection. HTML wins before CSS/JS because inline <style> and
+    // <script> blocks can look like standalone CSS/JS.
+    final withoutLeadingComments = lowerContent.replaceFirst(
+      RegExp(r'^(<!--.*?-->\s*)+', dotAll: true),
+      '',
+    );
+    if (withoutLeadingComments.startsWith('<!doctype html') ||
+        withoutLeadingComments.startsWith('<html') ||
+        RegExp(r'<(head|body|title|meta|script|style|div|main|section|article)\b')
+            .hasMatch(lowerContent)) {
       return 'HTML';
     }
 
     // 3. JSON Detection (Strict)
     // Must parse as valid JSON
-    if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
-        (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
-      try {
-        // explicit check to avoid simple strings masquerading as JSON
-        // purely structural check isn't enough, but full parse is safe
-        // We use a lighter check first:
-        if (lowerContent.contains('"') ||
-            lowerContent.contains(':') ||
-            lowerContent.contains(',') ||
-            lowerContent == '{}' ||
-            lowerContent == '[]') {
-          // It might be JSON, but let's be sure it's not just a code block
-          // Verify it doesn't look like a function body
-          if (!lowerContent.contains('function') &&
-              !lowerContent.contains('=>')) {
-            return 'JSON';
-          }
-        }
-      } catch (_) {}
+    if (_looksLikeJson(trimmedContent)) {
+      return 'JSON';
     }
 
     // 4. YAML Detection (Strict)
@@ -497,7 +494,25 @@ class FileTypeDetector {
       // Let's stick to stricter markers for now.
     }
 
-    // 5. Code Detection (Strict)
+    // 5. Styles and code detection. These are intentionally below HTML so
+    // inline CSS/JS inside an HTML fragment does not steal the result.
+    if (_looksLikeStandaloneCss(trimmedContent)) {
+      return 'CSS';
+    }
+    if (_looksLikeStandaloneJavascript(trimmedContent)) {
+      return 'JavaScript';
+    }
+
+    // Markdown (common enough to identify with leading heading/list markers)
+    if (lowerContent.startsWith('# ') ||
+        lowerContent.startsWith('## ') ||
+        lowerContent.contains('\n# ') ||
+        lowerContent.contains('\n- ') ||
+        lowerContent.contains('\n* ')) {
+      return 'Markdown';
+    }
+
+    // 6. Code Detection (Strict)
     // Only detect if strongly typed or has distinct signatures
 
     // Java/C#/C++ (Strong)
@@ -511,9 +526,8 @@ class FileTypeDetector {
     }
 
     // Python (Strong)
-    if (lowerContent.contains('def ') &&
-        lowerContent.contains(':\n') &&
-        (lowerContent.contains('import ') || lowerContent.contains('class '))) {
+    if (RegExp(r'(^|\n)\s*def\s+\w+\s*\([^)]*\)\s*:', multiLine: true)
+        .hasMatch(analysisContent)) {
       return 'Python';
     }
 
@@ -523,9 +537,65 @@ class FileTypeDetector {
       return 'Dart';
     }
 
+    if (RegExp(r'^\s*select\s+.+\s+from\s+', caseSensitive: false, dotAll: true)
+        .hasMatch(analysisContent)) {
+      return 'SQL';
+    }
+
+    if (RegExp(r'(^|\n)\s*def\s+\w+(\n|\s)', multiLine: true)
+            .hasMatch(analysisContent) &&
+        lowerContent.contains('puts ')) {
+      return 'Ruby';
+    }
+
+    if (lowerContent.startsWith('<?php') || lowerContent.contains('<?php')) {
+      return 'PHP';
+    }
+
     // Default to Text for everything else
     // This removes the aggressive keyword counting for JS/CSS/etc.
     return 'Text';
+  }
+
+  static bool _looksLikeJson(String content) {
+    final trimmed = content.trimLeft();
+    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) return false;
+    try {
+      jsonDecode(trimmed);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool _looksLikeStandaloneCss(String content) {
+    final trimmed = content.trimLeft();
+    final lower = trimmed.toLowerCase();
+    if (lower.contains('<style') || lower.contains('<script')) return false;
+    if (RegExp(r'^(const|let|var|function|class|import|export)\b')
+        .hasMatch(lower)) {
+      return false;
+    }
+    if (lower.startsWith('@charset') ||
+        lower.startsWith('@import') ||
+        lower.startsWith('@media') ||
+        lower.startsWith('@font-face') ||
+        lower.startsWith('@keyframes')) {
+      return true;
+    }
+    return RegExp(r'^[.#]?[a-z0-9_:\-\*\[\]="\s,>+~]+\{[^}]*:[^}]*\}',
+            caseSensitive: false, dotAll: true)
+        .hasMatch(trimmed);
+  }
+
+  static bool _looksLikeStandaloneJavascript(String content) {
+    final trimmed = content.trimLeft();
+    final lower = trimmed.toLowerCase();
+    if (lower.contains('<script') || lower.contains('<style')) return false;
+    return RegExp(
+      r'^(import\s|export\s|const\s|let\s|var\s|function\s|class\s|async\s+function\s|\(\s*function|\w+\s*=>)',
+      caseSensitive: false,
+    ).hasMatch(trimmed);
   }
 
   /// Check if file content represents a binary file
@@ -582,57 +652,6 @@ class FileTypeDetector {
       return true;
     }
 
-    // Check for common binary file extensions
-    if (filename != null && filename.contains('.')) {
-      final ext = filename.split('.').last.toLowerCase();
-      final binaryExtensions = [
-        'pdf',
-        'zip',
-        'png',
-        'jpg',
-        'jpeg',
-        'gif',
-        'bmp',
-        'webp',
-        'mp3',
-        'mp4',
-        'avi',
-        'mov',
-        'mkv',
-        'wav',
-        'flac',
-        'exe',
-        'dll',
-        'so',
-        'dylib',
-        'bin',
-        'img',
-        'iso',
-        'class',
-        'jar',
-        'war',
-        'ear',
-        'apk',
-        'ipa',
-        'doc',
-        'docx',
-        'xls',
-        'xlsx',
-        'ppt',
-        'pptx',
-        'psd',
-        'ai',
-        'indd',
-        'eps',
-        'ttf',
-        'otf',
-      ];
-
-      if (binaryExtensions.contains(ext)) {
-        return true;
-      }
-    }
-
     return false;
   }
 
@@ -651,13 +670,25 @@ class FileTypeDetector {
   }
 
   /// Generate cache key for detection results
-  String _generateCacheKey(
-      {String? filename, String? content, Uint8List? bytes}) {
+  String _generateCacheKey({
+    String? filename,
+    String? content,
+    Uint8List? bytes,
+    String? contentType,
+  }) {
     final parts = <String>[];
 
     if (filename != null) parts.add('fn:$filename');
-    if (content != null) parts.add('ct:${content.length}');
-    if (bytes != null) parts.add('by:${bytes.length}');
+    if (contentType != null) parts.add('mt:$contentType');
+    if (content != null) {
+      final prefix = content.length > 128 ? content.substring(0, 128) : content;
+      parts.add('ct:${content.length}:${prefix.hashCode}');
+    }
+    if (bytes != null) {
+      final prefix = bytes.length > 32 ? bytes.sublist(0, 32) : bytes;
+      parts.add(
+          'by:${bytes.length}:${prefix.fold<int>(0, (a, b) => a * 31 + b)}');
+    }
 
     return parts.join('|');
   }

@@ -170,6 +170,25 @@ void main() {
             '<?xml version="1.0"?><root><element>content</element></root>';
         expect(await detector.detectFileType(content: xmlContent), 'XML');
       });
+
+      test('Should keep HTML fragments with inline CSS as HTML', () async {
+        const htmlContent =
+            '<div style="color: red"><style>body { margin: 0; }</style>Text</div>';
+        expect(await detector.detectFileType(content: htmlContent), 'HTML');
+      });
+
+      test('Should keep HTML fragments with inline JavaScript as HTML',
+          () async {
+        const htmlContent =
+            '<script>const config = { theme: "dark" };</script><main>App</main>';
+        expect(await detector.detectFileType(content: htmlContent), 'HTML');
+      });
+
+      test('Should not treat JavaScript object literals as JSON', () async {
+        const jsContent =
+            'const config = { theme: "dark", nested: { ok: true } };';
+        expect(await detector.detectFileType(content: jsContent), 'JavaScript');
+      });
     });
 
     group('Priority Detection', () {
