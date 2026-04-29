@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/inspection_export_service.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:view_source_vibe/models/html_file.dart';
@@ -84,7 +85,9 @@ class Toolbar extends StatelessWidget {
         }
 
         final htmlFile = HtmlFile(
-          name: file.name.isNotEmpty ? file.name.split('/').last.split('\\').last : '',
+          name: file.name.isNotEmpty
+              ? file.name.split('/').last.split('\\').last
+              : '',
           path: file.path ?? '',
           content: content,
           lastModified: DateTime.now(),
@@ -211,6 +214,46 @@ class Toolbar extends StatelessWidget {
     }
   }
 
+  Future<void> _exportInspectionPackage(BuildContext context) async {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    if (htmlService.currentFile == null) return;
+
+    try {
+      if (Platform.isIOS || Platform.isAndroid) {
+        final file = await InspectionExportService()
+            .createShareableInspectionPackage(htmlService);
+        await UnifiedSharingService.shareFile(
+          file.path,
+          mimeType: 'application/zip',
+        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Inspection package shared')),
+          );
+        }
+        return;
+      }
+
+      final file =
+          await InspectionExportService().exportCurrentInspection(htmlService);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Inspection package saved: ${file.path}'),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Inspection export error: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Selector<HtmlService, bool>(
@@ -238,6 +281,17 @@ class Toolbar extends StatelessWidget {
                 tooltip: 'Share',
                 onPressed: () => _shareCurrentFile(context),
               ),
+            Selector<HtmlService, bool>(
+              selector: (context, service) => service.currentFile != null,
+              builder: (context, hasFile, child) {
+                return IconButton(
+                  icon: const Icon(Icons.archive_outlined),
+                  tooltip: 'Export Inspection Package',
+                  onPressed:
+                      hasFile ? () => _exportInspectionPackage(context) : null,
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.settings),
               tooltip: 'Settings',
