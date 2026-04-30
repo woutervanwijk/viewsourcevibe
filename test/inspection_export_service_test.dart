@@ -47,6 +47,21 @@ void main() {
       ) as Map<String, dynamic>;
       expect(manifest['format'], 'view-source-vibe-inspection-package');
       expect(manifest['source']['path'], 'https://example.com');
+
+      final report = utf8.decode(archive.findFile('report.html')!.readBytes()!);
+      for (final section in [
+        'Metadata',
+        'Probe',
+        'Services',
+        'Cookies',
+        'Headers',
+        'Security',
+        'Timeline',
+        'Raw Metadata JSON',
+        'Raw Probe JSON',
+      ]) {
+        expect(report, contains(section));
+      }
     });
   });
 }

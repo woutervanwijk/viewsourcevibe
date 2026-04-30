@@ -216,12 +216,14 @@ class Toolbar extends StatelessWidget {
 
   Future<void> _exportInspectionPackage(BuildContext context) async {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
-    if (htmlService.currentFile == null) return;
+    final currentFile = htmlService.currentFile;
+    if (currentFile == null) return;
 
     try {
+      final exportService = InspectionExportService();
       if (Platform.isIOS || Platform.isAndroid) {
-        final file = await InspectionExportService()
-            .createShareableInspectionPackage(htmlService);
+        final file =
+            await exportService.createShareableInspectionPackage(htmlService);
         await UnifiedSharingService.shareFile(
           file.path,
           mimeType: 'application/zip',
@@ -234,13 +236,22 @@ class Toolbar extends StatelessWidget {
         return;
       }
 
-      final file =
-          await InspectionExportService().exportCurrentInspection(htmlService);
+      final filename =
+          InspectionExportService.buildPackageFilename(currentFile);
+      final savePath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Inspection Package',
+        fileName: filename,
+        type: FileType.custom,
+        allowedExtensions: const ['zip'],
+        bytes: Uint8List.fromList(exportService.buildPackageBytes(htmlService)),
+      );
+
+      if (savePath == null) return;
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Inspection package saved: ${file.path}'),
+            content: Text('Inspection package saved: $savePath'),
           ),
         );
       }
