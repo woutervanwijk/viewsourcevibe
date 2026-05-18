@@ -16,6 +16,21 @@ This file contains the context, architecture guidelines, and coding standards fo
   - `shared_preferences` (Persistent local settings)
   - `app_links` (Deep linking)
 
+## 🚀 Build, Release & Signing
+- Desktop release builds are handled by `.github/workflows/build-desktop.yml`.
+- Pushing a tag matching `v*` builds macOS and Windows artifacts and creates a GitHub Release.
+- The macOS artifact is a DMG built from `flutter build macos --release`, then explicitly signed, notarized, stapled, and uploaded.
+- Do not add `--codesign` to `flutter build macos`; this Flutter command does not support that option in the pinned CI toolchain.
+- macOS signing expects a **Developer ID Application** certificate in the `APPLE_CERTIFICATE_P12` secret. App Store distribution certificates are not interchangeable for the downloadable DMG flow.
+- Required macOS signing/notarization secrets:
+  - `APPLE_CERTIFICATE_P12` - base64-encoded `.p12`
+  - `APPLE_CERTIFICATE_PASSWORD` - `.p12` password
+  - `APPLE_ID` - Apple ID used with `notarytool`
+  - `APPLE_PASSWORD` - app-specific password for the Apple ID
+  - `APPLE_TEAM_ID` - Apple Developer Team ID
+- The workflow temporarily patches `DEVELOPMENT_TEAM` during CI from `APPLE_TEAM_ID`; avoid hard-coding a different team in workflow scripts.
+- Keep `macos/Runner/Release.entitlements` aligned with app capabilities. The signing step passes these entitlements when re-signing the main app bundle.
+
 ## 🏗 Architecture & Directory Structure
 The `lib/` directory follows a clean separation of concerns:
 - **`models/`**: Data classes and state representations. Keep them immutable where possible.

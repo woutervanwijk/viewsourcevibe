@@ -39,7 +39,7 @@ https://apps.apple.com/us/app/view-source-vibe/id6759335719
 View Source Vibe is a powerful tool to view source code, browse and inspect web pages, and analyze web technologies. Built with Flutter, it offers a desktop-class inspection experience on your mobile device.
 
 [![Flutter](https://img.shields.io/badge/Built%20with-Flutter-blue)](https://flutter.dev)
-[![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android-green)](https://flutter.dev/multi-platform)
+[![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows-green)](https://flutter.dev/multi-platform)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ## ✨ key features
@@ -71,21 +71,27 @@ View Source Vibe is a powerful tool to view source code, browse and inspect web 
 3. **Switch Tabs** to inspect Source, DOM, Metadata, or Network details.
 4. **Share** content from other apps to "View Source Vibe" for instant analysis.
 
-## 🖥️ Installing the macOS App
+## 🖥️ Desktop Releases
 
-The macOS build is not notarized, so Gatekeeper will block it on first launch. To open it anyway:
+Tagged releases build desktop artifacts through GitHub Actions:
 
-The macOS build is not notarized, so Gatekeeper will block it on first launch. To open it anyway:
+- **macOS:** signed, notarized, and stapled DMG for distribution outside the Mac App Store.
+- **Windows:** installer built from the Flutter Windows release output.
 
-**Option 1 — System Settings**
-1. Try to open the app normally — it will be blocked
-2. Go to **System Settings → Privacy & Security**
-3. Scroll down and click **Open Anyway** next to the blocked app
+To create a release build, push a version tag:
 
-**Option 2 — Terminal (removes the quarantine flag permanently)**
 ```bash
-xattr -cr "/Applications/View Source Vibe.app"
+git tag v1.1.4
+git push origin v1.1.4
 ```
+
+The macOS notarization workflow requires these GitHub Actions secrets:
+
+- `APPLE_CERTIFICATE_P12` - base64-encoded Developer ID Application `.p12`
+- `APPLE_CERTIFICATE_PASSWORD` - password for the `.p12`
+- `APPLE_ID` - Apple ID used for notarization
+- `APPLE_PASSWORD` - app-specific password for that Apple ID
+- `APPLE_TEAM_ID` - Apple Developer Team ID
 
 ## 🛠️ Building from Source
 

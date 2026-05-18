@@ -16,10 +16,10 @@ This guide explains how to set up and use the CI/CD pipelines for ViewSourceVibe
 Before setting up CI/CD, ensure you have:
 
 1. **GitHub Repository** - Your project should be on GitHub
-2. **Apple Developer Account** - For iOS app signing and distribution
+2. **Apple Developer Account** - For iOS app signing and macOS Developer ID notarization
 3. **Google Play Developer Account** - For Android app distribution
 4. **Fastlane Installed** - `gem install fastlane`
-5. **Flutter Installed** - Version 3.19.0 or compatible
+5. **Flutter Installed** - The desktop workflow currently pins Flutter `3.41.6`
 
 ## 🛠️ Setup Instructions
 
@@ -27,9 +27,16 @@ Before setting up CI/CD, ensure you have:
 
 Go to your GitHub repository **Settings > Secrets > Actions** and add the following secrets:
 
-#### iOS Secrets:
+#### macOS Desktop Release Secrets:
 - `APPLE_CERTIFICATE_P12` - Base64 encoded .p12 certificate file
 - `APPLE_CERTIFICATE_PASSWORD` - Password for the certificate
+- `APPLE_ID` - Apple ID used for notarization
+- `APPLE_PASSWORD` - App-specific password for the Apple ID
+- `APPLE_TEAM_ID` - Apple Developer Team ID
+
+The macOS desktop workflow expects the `.p12` to contain a **Developer ID Application** certificate. This is required for a signed, notarized DMG distributed outside the Mac App Store.
+
+#### iOS Secrets:
 - `APPLE_PROVISIONING_PROFILE` - Base64 encoded provisioning profile
 - `APP_STORE_CONNECT_API_KEY_PATH` - Path to App Store Connect API key
 - `APP_STORE_CONNECT_API_KEY_ISSUER_ID` - Issuer ID for API key
@@ -67,7 +74,32 @@ Update the following files with your actual app identifiers:
 
 ## 🔄 Available Workflows
 
-### 1. iOS CI/CD (`ios-ci-cd.yml`)
+### 1. Desktop Releases (`build-desktop.yml`)
+
+**Triggers:**
+- Push tags matching `v*`, for example `v1.1.4`
+- Manual runs from the GitHub Actions UI
+
+**Jobs:**
+- **build-macos**: Builds the Flutter macOS app, imports the Developer ID certificate into a temporary keychain, signs the app with hardened runtime, creates a DMG, signs/notarizes/staples the DMG, and uploads it as an artifact.
+- **build-windows**: Builds the Flutter Windows app and packages it with Inno Setup.
+- **create-release**: On tag builds, creates a GitHub Release containing the macOS DMG and Windows installer.
+
+**Usage:**
+```bash
+git tag v1.1.4
+git push origin v1.1.4
+```
+
+If a tag needs to be rebuilt, delete and recreate the remote tag carefully:
+
+```bash
+git push origin :refs/tags/v1.1.4
+git tag -f v1.1.4
+git push origin v1.1.4 --force
+```
+
+### 2. iOS CI/CD (`ios-ci-cd.yml.disabled`)
 
 **Triggers:**
 - Push to `main` or `develop` branches
@@ -86,7 +118,7 @@ Update the following files with your actual app identifiers:
 gh workflow run ios-ci-cd.yml
 ```
 
-### 2. Android CI/CD (`android-ci-cd.yml`)
+### 3. Android CI/CD (`android-ci-cd.yml.disabled`)
 
 **Triggers:**
 - Push to `main` or `develop` branches
@@ -105,7 +137,7 @@ gh workflow run ios-ci-cd.yml
 gh workflow run android-ci-cd.yml
 ```
 
-### 3. Combined CI/CD (`combined-ci-cd.yml`)
+### 4. Combined CI/CD (`combined-ci-cd.yml.disabled`)
 
 **Triggers:**
 - Push to `main` or `develop` branches
@@ -125,12 +157,12 @@ gh workflow run combined-ci-cd.yml
 
 ## 🔐 Secrets Configuration
 
-### iOS Certificate Setup
+### macOS Developer ID Certificate Setup
 
 1. **Export Certificate**:
 ```bash
-# On your Mac, export the certificate
-security export -k ~/Library/Keychains/login.keychain -t certs -o cert.p12 -P your_password
+# On your Mac, export the Developer ID Application certificate
+security export -k ~/Library/Keychains/login.keychain-db -t identities -f pkcs12 -o cert.p12 -P your_password
 ```
 
 2. **Base64 Encode**:
@@ -143,15 +175,31 @@ base64 -i cert.p12 -o cert_base64.txt
 # Copy the content of cert_base64.txt to APPLE_CERTIFICATE_P12 secret
 ```
 
+The password passed to `security export` must be stored as `APPLE_CERTIFICATE_PASSWORD`.
+
+### macOS Notarization Password Setup
+
+Create an app-specific password for the Apple ID used for notarization:
+
+1. Go to [account.apple.com](https://account.apple.com/).
+2. Open **Sign-In and Security > App-Specific Passwords**.
+3. Generate a password for GitHub Actions.
+4. Store it as `APPLE_PASSWORD`.
+5. Store the Apple ID as `APPLE_ID` and the Apple Developer Team ID as `APPLE_TEAM_ID`.
+
+### iOS Certificate Setup
+
+The disabled iOS workflow uses separate provisioning profile setup and App Store Connect configuration. Keep those secrets only if re-enabling iOS CI/CD.
+
 ### Provisioning Profile Setup
 
 1. **Export Profile**:
 ```bash
 # Find your provisioning profile UUID
-ls ~/Library/MobileDevice/Provisioningiles/Profiles/
+ls ~/Library/MobileDevice/Provisioning\ Profiles/
 
 # Export the profile
-cp ~/Library/MobileDevice/Provisioningiles/Profiles/UUID.mobileprovision profile.mobileprovision
+cp ~/Library/MobileDevice/Provisioning\ Profiles/UUID.mobileprovision profile.mobileprovision
 ```
 
 2. **Base64 Encode**:
@@ -170,9 +218,10 @@ base64 -i profile.mobileprovision -o profile_base64.txt
 
 The workflows are set up to trigger automatically:
 
-- **Push to `develop`**: Builds and deploys to TestFlight (iOS) and Beta (Android)
-- **Push to `main`**: Builds and deploys to App Store (iOS) and Production (Android)
-- **Pull Requests**: Runs tests and builds but doesn't deploy
+- **Push a `v*` tag**: Builds signed/notarized macOS DMG and Windows installer, then creates a GitHub Release
+- **Manual workflow run**: Builds desktop artifacts without needing a new tag
+
+The iOS, Android, and combined CI/CD workflows are currently disabled with `.disabled` filenames.
 
 ### Manual Triggers
 
@@ -185,9 +234,17 @@ You can manually trigger workflows from the GitHub Actions tab:
 
 ### Local Testing
 
-Test Fastlane lanes locally before pushing:
+Test Flutter and Fastlane lanes locally before pushing:
 
 ```bash
+# Test Flutter
+flutter analyze
+flutter test
+
+# Test desktop builds
+flutter build macos --release
+flutter build windows --release
+
 # Test iOS build
 fastlane ios build_ios
 
@@ -202,7 +259,27 @@ fastlane test
 
 ### Common Issues
 
-#### 1. Certificate/Provisioning Profile Issues
+#### 1. macOS Developer ID Signing Issues
+
+**Error**: "No Developer ID Application signing identity found in the keychain."
+
+**Solution**:
+- Verify `APPLE_CERTIFICATE_P12` contains a Developer ID Application certificate and private key
+- Check `APPLE_CERTIFICATE_PASSWORD` matches the exported `.p12`
+- Confirm the certificate is not expired or revoked
+- Export the certificate as a PKCS#12 identity, not only as a public certificate
+
+#### 2. macOS Notarization Issues
+
+**Error**: `notarytool` authentication or submission failure
+
+**Solution**:
+- Verify `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`
+- Ensure `APPLE_PASSWORD` is an app-specific password, not the normal Apple ID password
+- Check Apple Developer Program membership and agreements
+- Read the notarytool log URL in the GitHub Actions output
+
+#### 3. Certificate/Provisioning Profile Issues
 
 **Error**: "No certificate found" or "No provisioning profile found"
 
@@ -211,7 +288,7 @@ fastlane test
 - Check certificate and profile are not expired
 - Ensure bundle identifier matches in Xcode and Fastlane
 
-#### 2. Fastlane Version Mismatch
+#### 4. Fastlane Version Mismatch
 
 **Error**: "Fastlane version mismatch"
 
@@ -224,7 +301,7 @@ gem update fastlane
 fastlane --version
 ```
 
-#### 3. Flutter Version Issues
+#### 5. Flutter Version Issues
 
 **Error**: "Flutter version mismatch"
 
@@ -233,7 +310,7 @@ fastlane --version
 - Run `flutter upgrade` locally
 - Ensure all developers use same Flutter version
 
-#### 4. Build Failures
+#### 6. Build Failures
 
 **Error**: "Build failed with errors"
 
