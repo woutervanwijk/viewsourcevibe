@@ -9,6 +9,9 @@ on:
 jobs:
   build-macos:
     runs-on: macos-latest
+    env:
+      APP_PATH: build/macos/Build/Products/Release/View Source Vibe.app
+      DMG_PATH: ViewSourceVibe.dmg
     steps:
       - uses: actions/checkout@v4
 
@@ -21,8 +24,88 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Import Apple signing certificate
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/apple-signing-certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo "$APPLE_CERTIFICATE_P12" | base64 -D > "$CERTIFICATE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Configure Apple development team
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_TEAM_ID" ]; then
+            echo "APPLE_TEAM_ID secret is required."
+            exit 1
+          fi
+
+          perl -0pi -e 's/DEVELOPMENT_TEAM = [A-Z0-9]+;/DEVELOPMENT_TEAM = $ENV{APPLE_TEAM_ID};/g' macos/Runner.xcodeproj/project.pbxproj
+
       - name: Build macOS
-        run: flutter build macos --release
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: flutter build macos --release --codesign
+
+      - name: Sign macOS app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning | awk -F '"' '/Developer ID Application/ { print $2; exit }')"
+
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "No Developer ID Application signing identity found in the keychain."
+            security find-identity -v -p codesigning
+            exit 1
+          fi
+
+          if [ -d "$APP_PATH/Contents/Frameworks" ]; then
+            while IFS= read -r -d '' FRAMEWORK; do
+              codesign \
+                --force \
+                --options runtime \
+                --timestamp \
+                --sign "$SIGNING_IDENTITY" \
+                "$FRAMEWORK"
+            done < <(find "$APP_PATH/Contents/Frameworks" -type d -name "*.framework" -print0)
+
+            while IFS= read -r -d '' LIBRARY; do
+              codesign \
+                --force \
+                --options runtime \
+                --timestamp \
+                --sign "$SIGNING_IDENTITY" \
+                "$LIBRARY"
+            done < <(find "$APP_PATH/Contents/Frameworks" -type f \( -name "*.dylib" -o -name "*.so" \) -print0)
+          fi
+
+          codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --entitlements macos/Runner/Release.entitlements \
+            --sign "$SIGNING_IDENTITY" \
+            "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          spctl --assess --type execute --verbose=4 "$APP_PATH" || true
 
       - name: Create macOS DMG
         run: |
@@ -33,14 +116,50 @@ jobs:
             --window-size 600 300 \
             --icon-size 100 \
             --app-drop-link 425 120 \
-            "ViewSourceVibe.dmg" \
-            "build/macos/Build/Products/Release/View Source Vibe.app"
+            "$DMG_PATH" \
+            "$APP_PATH"
+
+      - name: Sign and notarize macOS DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning | awk -F '"' '/Developer ID Application/ { print $2; exit }')"
+
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "No Developer ID Application signing identity found in the keychain."
+            security find-identity -v -p codesigning
+            exit 1
+          fi
+
+          codesign \
+            --force \
+            --timestamp \
+            --sign "$SIGNING_IDENTITY" \
+            "$DMG_PATH"
+          codesign --verify --verbose=2 "$DMG_PATH"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG_PATH"
 
       - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
           name: ViewSourceVibe-macOS
-          path: ViewSourceVibe.dmg
+          path: ${{ env.DMG_PATH }}
+
+      - name: Clean up signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
 
   build-windows:
     runs-on: windows-latest
