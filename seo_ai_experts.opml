@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>SEO, AEO and GEO Experts</title>
+  </head>
+  <body>
+    <outline text="SEO, AEO and GEO Experts" title="SEO, AEO and GEO Experts">
+      <outline text="Lily Ray" title="Lily Ray" type="link" htmlUrl="https://algorythmic.co/" />
+      <outline text="Chris Long" title="Chris Long" type="link" htmlUrl="https://www.thesixtysecondseo.com/" />
+      <outline text="Ann Smarty" title="Ann Smarty" type="link" htmlUrl="https://www.annsmarty.com/" />
+      <outline text="Kevin Indig" title="Kevin Indig" type="link" htmlUrl="https://www.kevin-indig.com/" />
+      <outline text="Dan Petrovic" title="Dan Petrovic" type="link" htmlUrl="https://dejan.ai/dan-petrovic/" />
+      <outline text="Rand Fishkin" title="Rand Fishkin" type="link" htmlUrl="https://sparktoro.com/team/rand" />
+      <outline text="Marie Haynes" title="Marie Haynes" type="link" htmlUrl="https://www.mariehaynes.com/" />
+      <outline text="Glenn Gabe" title="Glenn Gabe" type="link" htmlUrl="https://www.gsqi.com/" />
+      <outline text="Barry Schwartz" title="Barry Schwartz" type="link" htmlUrl="https://www.seroundtable.com/" />
+      <outline text="Will Melton" title="Will Melton" type="link" htmlUrl="https://willmelton.com/" />
+    </outline>
+  </body>
+</opml>
