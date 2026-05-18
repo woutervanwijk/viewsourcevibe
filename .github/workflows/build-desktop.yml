@@ -61,9 +61,7 @@ jobs:
           perl -0pi -e 's/DEVELOPMENT_TEAM = [A-Z0-9]+;/DEVELOPMENT_TEAM = $ENV{APPLE_TEAM_ID};/g' macos/Runner.xcodeproj/project.pbxproj
 
       - name: Build macOS
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: flutter build macos --release --codesign
+        run: flutter build macos --release
 
       - name: Sign macOS app
         env:
