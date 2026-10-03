@@ -474,6 +474,16 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
+  /// Main document size as reported by the browser for [url], or 0 if unknown.
+  int _browserDocSizeFor(String url) {
+    final probeUrl = _browserProbeResult?['url'] as String?;
+    if (probeUrl == null || !areUrlsEqual(probeUrl, url)) return 0;
+    return (_browserProbeResult?['pageWeight']?['mainDocumentDecoded']
+                as num? ??
+            0)
+        .toInt();
+  }
+
   /// Lazy load source code without resetting the whole flow
   Future<void> _loadSourceOnly(String url) async {
     if (_isLoading) return;
@@ -488,7 +498,9 @@ class HtmlService extends ChangeNotifier {
 
       // Only update if we are still on the same URL
       if (_currentFile?.path == url) {
-        await loadFile(file);
+        final browserSize = _browserDocSizeFor(url);
+        await loadFile(
+            browserSize > 0 ? file.copyWith(size: browserSize) : file);
       }
     } catch (e) {
       debugPrint('Error lazy loading source: $e');
@@ -2293,11 +2305,13 @@ class HtmlService extends ChangeNotifier {
           contentType: contentType,
         );
 
-        // Update _lastPageWeight from probe as a baseline fallback
-        _lastPageWeight = {
-          'transfer': contentLength ?? content.length,
-          'decoded': content.length,
-        };
+        // Probe-based weight is only a fallback when the browser reported nothing.
+        if (_browserProbeResult == null) {
+          _lastPageWeight = {
+            'transfer': contentLength ?? content.length,
+            'decoded': content.length,
+          };
+        }
 
         return HtmlFile(
           name: processedFilename,
@@ -4459,10 +4473,7 @@ Technical details: $e''';
       // Use browser-reported main document size for the file size if available,
       // as it represents the official network response size.
       // Fallback to content.length (the length of the extracted DOM string).
-      final int browserDocSize =
-          (_browserProbeResult?['pageWeight']?['mainDocumentDecoded'] as num? ??
-                  0)
-              .toInt();
+      final int browserDocSize = _browserDocSizeFor(url);
 
       final file = HtmlFile(
         name: filename,
