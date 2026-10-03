@@ -97,6 +97,8 @@ class InspectionExportService {
     addJson('network/cookies.json', probe?['analyzedCookies'] ?? []);
     addJson('network/redirects.json', _redirectsFrom(probe));
     addJson('network/timeline.json', timeline);
+    addJson('analysis/sovereignty.json',
+        htmlService.sovereigntyReport?.toJson() ?? {});
 
     addJson('analysis/metadata.json', metadata ?? {});
     addJson('analysis/security-scorecard.json', probe?['security'] ?? {});

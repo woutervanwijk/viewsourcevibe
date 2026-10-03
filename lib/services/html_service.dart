@@ -13,6 +13,7 @@ import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:view_source_vibe/utils/cookie_utils.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
+import 'package:view_source_vibe/services/sovereignty_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -58,6 +59,8 @@ class HtmlService extends ChangeNotifier {
   // Probe state
   Map<String, dynamic>? _probeResult;
   bool _isProbing = false;
+  SovereigntyReport? _sovereigntyReport;
+  bool _isAnalyzingSovereignty = false;
   String? _probeError;
   String? _currentlyProbingUrl;
   Map<String, dynamic>?
@@ -142,7 +145,7 @@ class HtmlService extends ChangeNotifier {
     if (isHtmlOrXml) idx += 1; // DOM Tree
     if (showMetadataTabs) idx += 3; // Metadata + Services + Media
     if (showServerTabs) {
-      idx += 5; // Cookies + Timeline + Probe + Headers + Security
+      idx += 6; // Cookies + Timeline + Probe + Headers + Security + Sovereignty
     }
     return idx;
   }
@@ -163,6 +166,32 @@ class HtmlService extends ChangeNotifier {
   List<Map<String, dynamic>> get resourceTimelineData =>
       List.unmodifiable(_resourcePerformanceData ?? const []);
   bool get isProbing => _isProbing;
+  SovereigntyReport? get sovereigntyReport => _sovereigntyReport;
+  bool get isAnalyzingSovereignty => _isAnalyzingSovereignty;
+
+  /// Where is this page hosted, and by whom? Lazily run by the Sovereignty tab.
+  Future<void> analyzeSovereignty() async {
+    final url = _currentFile?.path;
+    if (_isAnalyzingSovereignty || url == null || !url.startsWith('http')) {
+      return;
+    }
+    _isAnalyzingSovereignty = true;
+    notifyListeners();
+    try {
+      _sovereigntyReport = await SovereigntyService.analyze(
+        pageUrl: url,
+        probeResult: _probeResult,
+        resources: resourceTimelineData,
+        metadata: _pageMetadata,
+      );
+    } catch (e) {
+      debugPrint('Sovereignty analysis failed: $e');
+    } finally {
+      _isAnalyzingSovereignty = false;
+      notifyListeners();
+    }
+  }
+
   bool get canGoBack => _navigationStack.isNotEmpty;
   String? get probeError => _probeError;
   bool get isLoading => _isLoading;
@@ -559,6 +588,7 @@ class HtmlService extends ChangeNotifier {
     _pageMetadata = null;
     _lastPageWeight = null;
     _resourcePerformanceData = null;
+    _sovereigntyReport = null;
     _webViewLoadingProgress = 0.0;
     _isProbing = false;
     _currentlyProbingUrl = null;

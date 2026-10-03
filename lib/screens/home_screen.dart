@@ -14,6 +14,7 @@ import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/media_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
 import 'package:view_source_vibe/widgets/request_timeline_view.dart';
+import 'package:view_source_vibe/widgets/sovereignty_view.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 import 'package:view_source_vibe/widgets/browser_view.dart';
@@ -83,12 +84,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // + (1 if isBrowserSupported AND shouldShowBrowser for Browser)
     // + (1 if isHtmlOrXml for DOM Tree)
     // + (3 if showMetadataTabs for Metadata/Services/Media)
-    // + (5 if showServerTabs for Cookies/Timeline/Probe/Headers/Security)
+    // + (6 if showServerTabs for Cookies/Timeline/Probe/Headers/Security/Sovereignty)
     int newLength = 1; // Editor
     if (isBrowserSupported && shouldShowBrowser) newLength += 1;
     if (isHtmlOrXml) newLength += 1;
     if (showMetadataTabs) newLength += 3;
-    if (showServerTabs) newLength += 5;
+    if (showServerTabs) newLength += 6;
 
     if (oldLength != newLength || force) {
       _tabController.removeListener(_handleTabSelection);
@@ -183,6 +184,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _buildTab(Icons.network_check, 'Probe'),
           _buildTab(Icons.list_alt, 'Headers'),
           _buildTab(Icons.security, 'Security'),
+          _buildTab(Icons.public, 'Sovereignty'),
         ],
       ];
     }
@@ -200,6 +202,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _buildTab(Icons.network_check, 'Probe'),
         _buildTab(Icons.list_alt, 'Headers'),
         _buildTab(Icons.security, 'Security'),
+        _buildTab(Icons.public, 'Sovereignty'),
       ],
       // When 'Always use browser' is off, Browser tab goes last
       if (shouldShowBrowser && !useBrowserByDefault) browserTab,
@@ -290,6 +293,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: _buildRefreshable(const ProbeHeadersView(), 'headers')),
           KeepAliveWrapper(
               child: _buildRefreshable(const ProbeSecurityView(), 'security')),
+          KeepAliveWrapper(
+              child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
         ],
       ];
     }
@@ -343,6 +348,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         KeepAliveWrapper(
             key: const ValueKey('tab_security'),
             child: _buildRefreshable(const ProbeSecurityView(), 'security')),
+        KeepAliveWrapper(
+            key: const ValueKey('tab_sovereignty'),
+            child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
       ],
 
       // When 'Always use browser' is off, Browser tab goes last
