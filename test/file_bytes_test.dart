@@ -1,12 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/html_file.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:mockito/mockito.dart';
-
-// Mock classes for testing
-class MockPlatformFile extends Mock implements PlatformFile {}
-
-class MockFilePickerResult extends Mock implements FilePickerResult {}
 
 void main() {
   group('File Bytes Null Safety Tests', () {
