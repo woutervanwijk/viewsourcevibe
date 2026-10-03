@@ -11,13 +11,13 @@ class PlatformSharingHandler {
         switch (call.method) {
           case 'handleSharedText':
             final text = call.arguments as String?;
-            return _handleSharedText(text);
+            return await _handleSharedText(text);
           case 'handleSharedUrl':
             final url = call.arguments as String?;
-            return _handleSharedUrl(url);
+            return await _handleSharedUrl(url);
           case 'handleSharedFile':
             final args = call.arguments as Map<dynamic, dynamic>?;
-            return _handleSharedFile(args);
+            return await _handleSharedFile(args);
           default:
             throw MissingPluginException(
                 'Method ${call.method} not implemented');

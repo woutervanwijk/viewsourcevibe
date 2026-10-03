@@ -6,7 +6,7 @@ import FlutterMacOS
 import Foundation
 
 import app_links
-import file_picker
+import file_picker_darwin
 import flutter_inappwebview_macos
 import path_provider_foundation
 import shared_preferences_foundation

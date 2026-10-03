@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +16,7 @@ class Toolbar extends StatelessWidget {
 
   Future<void> _pickFile(BuildContext context) async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: [
           // Web Development
@@ -47,41 +48,15 @@ class Toolbar extends StatelessWidget {
         ],
       );
 
-      if (result != null && context.mounted) {
-        final file = result.files.single;
-
-        // Try to get content from bytes first, then fall back to reading from file path
+      if (file != null && context.mounted) {
         String content = '';
-        int fileSize = file.size;
-
-        if (file.bytes != null && file.bytes!.isNotEmpty) {
-          // Use bytes if available
-          content = String.fromCharCodes(file.bytes!);
-        } else if (file.path != null && file.path!.isNotEmpty) {
-          // Try to read from file path if bytes are not available
-          try {
-            final fileObject = File(file.path!);
-            if (await fileObject.exists()) {
-              content = await fileObject.readAsString();
-              fileSize = await fileObject.length();
-            }
-          } catch (e) {
-            debugPrint('Error reading file from path: $e');
-            // Fall back to empty content if file reading fails
-            content = '';
-            fileSize = 0;
-          }
-        }
-
-        // If we still have no content, try to get it from file identifier
-        if (content.isEmpty && file.identifier != null) {
-          try {
-            // Some file pickers provide content through identifier
-            // This is a fallback attempt for special cases
-            content = 'File content could not be loaded: ${file.name}';
-          } catch (e) {
-            debugPrint('Error getting file content: $e');
-          }
+        int fileSize = 0;
+        try {
+          final bytes = await file.readAsBytes();
+          content = utf8.decode(bytes, allowMalformed: true);
+          fileSize = bytes.length;
+        } catch (e) {
+          debugPrint('Error reading file: $e');
         }
 
         final htmlFile = HtmlFile(
@@ -238,7 +213,7 @@ class Toolbar extends StatelessWidget {
 
       final filename =
           InspectionExportService.buildPackageFilename(currentFile);
-      final savePath = await FilePicker.platform.saveFile(
+      final savePath = await FilePicker.saveFile(
         dialogTitle: 'Save Inspection Package',
         fileName: filename,
         type: FileType.custom,
