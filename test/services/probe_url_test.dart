@@ -1,59 +1,62 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 
+/// Probing uses dart:io's HttpClient, so test against a local server.
 void main() {
   group('HtmlService.probeUrl', () {
-    test('returns correct details for 200 OK HEAD request', () async {
-      final htmlService = HtmlService();
+    late HttpServer server;
+    late String url;
+    var failHead = false;
+    String? rangeHeader;
 
-      final mockClient = MockClient((request) async {
-        if (request.method == 'HEAD' &&
-            request.url.toString() == 'https://example.com') {
-          return http.Response('', 200, headers: {
-            'content-type': 'text/html',
-            'content-length': '1234',
-          });
+    setUp(() async {
+      failHead = false;
+      rangeHeader = null;
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      url = 'http://${server.address.address}:${server.port}/';
+      server.listen((request) async {
+        if (request.method == 'HEAD') {
+          if (failHead) {
+            // Drop the connection, as some servers do for HEAD.
+            (await request.response.detachSocket(writeHeaders: false))
+                .destroy();
+            return;
+          }
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType.html
+            ..contentLength = 1234;
+        } else {
+          rangeHeader = request.headers.value('range');
+          request.response
+            ..statusCode = 206
+            ..headers.contentType = ContentType.html
+            ..headers.set('content-range', 'bytes 0-0/1234')
+            ..write('F');
         }
-        return http.Response('Not Found', 404);
+        await request.response.close();
       });
-
-      await http.runWithClient(() async {
-        final result = await htmlService.probeUrl('https://example.com');
-
-        expect(result['statusCode'], 200);
-        expect(result['headers']['content-type'], 'text/html');
-        expect(result['finalUrl'], 'https://example.com');
-      }, () => mockClient);
     });
 
-    test('falls back to GET with Range header if HEAD fails', () async {
-      final htmlService = HtmlService();
+    tearDown(() => server.close(force: true));
 
-      final mockClient = MockClient((request) async {
-        if (request.method == 'HEAD') {
-          throw Exception('Connection closed'); // Simulate failure
-        }
-        if (request.method == 'GET' &&
-            request.url.toString() == 'https://example.com' &&
-            request.headers['Range'] == 'bytes=0-0') {
-          return http.Response('F', 206, headers: {
-            // 206 Partial Content
-            'content-type': 'text/html',
-            'content-length': '1',
-            'content-range': 'bytes 0-0/1234'
-          });
-        }
-        return http.Response('Not Found POO', 404);
-      });
+    test('returns details for a 200 OK HEAD request', () async {
+      final result = await HtmlService().probeUrl(url);
 
-      await http.runWithClient(() async {
-        final result = await htmlService.probeUrl('https://example.com');
+      expect(result['statusCode'], 200);
+      expect(result['headers']['content-type'], startsWith('text/html'));
+      expect(result['contentLength'], 1234);
+    });
 
-        expect(result['statusCode'], 206);
-        expect(result['headers']['content-type'], 'text/html');
-      }, () => mockClient);
+    test('falls back to GET with a Range header if HEAD fails', () async {
+      failHead = true;
+      final result = await HtmlService().probeUrl(url);
+
+      expect(result['statusCode'], 206);
+      expect(rangeHeader, 'bytes=0-0');
+      expect(result['headers']['content-type'], startsWith('text/html'));
     });
   });
 }

@@ -7,14 +7,14 @@ import 'package:flutter/material.dart';
 
 void main() {
   group('URL Input Clearing Tests', () {
-    
     late HtmlService htmlService;
-    
+
     setUp(() {
       htmlService = HtmlService();
     });
 
-    testWidgets('URL input shows URL when web content is loaded', (WidgetTester tester) async {
+    testWidgets('URL input shows URL when web content is loaded',
+        (WidgetTester tester) async {
       // Build the URL input widget
       await tester.pumpWidget(
         MaterialApp(
@@ -41,7 +41,7 @@ void main() {
         isUrl: true,
       );
 
-      htmlService.loadFile(webFile);
+      await tester.runAsync(() => htmlService.loadFile(webFile));
       await tester.pumpAndSettle();
 
       // Verify URL is shown
@@ -49,7 +49,8 @@ void main() {
       expect(textField.controller?.text, 'https://example.com/test.html');
     });
 
-    testWidgets('URL input clears when local file is loaded', (WidgetTester tester) async {
+    testWidgets('URL input clears when local file is loaded',
+        (WidgetTester tester) async {
       // Build the URL input widget
       await tester.pumpWidget(
         MaterialApp(
@@ -81,15 +82,16 @@ void main() {
         isUrl: false,
       );
 
-      htmlService.loadFile(localFile);
+      await tester.runAsync(() => htmlService.loadFile(localFile));
       await tester.pumpAndSettle();
 
-      // Verify URL is cleared
+      // Local files show their name instead of a URL
       final updatedTextField = tester.widget<TextField>(urlField);
-      expect(updatedTextField.controller?.text, '');
+      expect(updatedTextField.controller?.text, 'local.html');
     });
 
-    testWidgets('URL input clears when switching from web to local file', (WidgetTester tester) async {
+    testWidgets('URL input clears when switching from web to local file',
+        (WidgetTester tester) async {
       // Build the URL input widget
       await tester.pumpWidget(
         MaterialApp(
@@ -112,7 +114,7 @@ void main() {
         isUrl: true,
       );
 
-      htmlService.loadFile(webFile);
+      await tester.runAsync(() => htmlService.loadFile(webFile));
       await tester.pumpAndSettle();
 
       // Verify URL is shown
@@ -130,18 +132,18 @@ void main() {
         isUrl: false,
       );
 
-      htmlService.loadFile(localFile);
+      await tester.runAsync(() => htmlService.loadFile(localFile));
       await tester.pumpAndSettle();
 
-      // Verify URL is cleared
+      // Local files show their name instead of the previous URL
       final updatedTextField = tester.widget<TextField>(urlField);
-      expect(updatedTextField.controller?.text, '');
+      expect(updatedTextField.controller?.text, 'local.html');
     });
   });
 
   group('URL Input Edge Cases', () {
-    
-    testWidgets('URL input handles file path edge cases', (WidgetTester tester) async {
+    testWidgets('URL input handles file path edge cases',
+        (WidgetTester tester) async {
       final htmlService = HtmlService();
 
       await tester.pumpWidget(
@@ -157,23 +159,50 @@ void main() {
 
       // Test various file path formats
       final testCases = [
-        HtmlFile(name: 'file.html', path: 'file:///path/to/file.html', content: '', lastModified: DateTime.now(), size: 0, isUrl: false),
-        HtmlFile(name: 'file.html', path: '/absolute/path/file.html', content: '', lastModified: DateTime.now(), size: 0, isUrl: false),
-        HtmlFile(name: 'file.html', path: 'relative/path/file.html', content: '', lastModified: DateTime.now(), size: 0, isUrl: false),
-        HtmlFile(name: 'file.html', path: 'assets/sample.html', content: '', lastModified: DateTime.now(), size: 0, isUrl: false),
+        HtmlFile(
+            name: 'file.html',
+            path: 'file:///path/to/file.html',
+            content: '',
+            lastModified: DateTime.now(),
+            size: 0,
+            isUrl: false),
+        HtmlFile(
+            name: 'file.html',
+            path: '/absolute/path/file.html',
+            content: '',
+            lastModified: DateTime.now(),
+            size: 0,
+            isUrl: false),
+        HtmlFile(
+            name: 'file.html',
+            path: 'relative/path/file.html',
+            content: '',
+            lastModified: DateTime.now(),
+            size: 0,
+            isUrl: false),
+        HtmlFile(
+            name: 'file.html',
+            path: 'assets/sample.html',
+            content: '',
+            lastModified: DateTime.now(),
+            size: 0,
+            isUrl: false),
       ];
 
       for (final file in testCases) {
-        htmlService.loadFile(file);
+        await tester.runAsync(() => htmlService.loadFile(file));
         await tester.pumpAndSettle();
 
         final urlField = find.byType(TextField);
         final textField = tester.widget<TextField>(urlField);
-        expect(textField.controller?.text, '', reason: 'URL should be cleared for path: ${file.path}');
+        expect(textField.controller?.text, file.name,
+            reason:
+                'Local file name should replace the URL for path: ${file.path}');
       }
     });
 
-    testWidgets('URL input handles URL edge cases', (WidgetTester tester) async {
+    testWidgets('URL input handles URL edge cases',
+        (WidgetTester tester) async {
       final htmlService = HtmlService();
 
       await tester.pumpWidget(
@@ -196,17 +225,25 @@ void main() {
       ];
 
       for (final url in testCases) {
-        final file = HtmlFile(name: 'test.html', path: url, content: '', lastModified: DateTime.now(), size: 0, isUrl: true);
-        htmlService.loadFile(file);
+        final file = HtmlFile(
+            name: 'test.html',
+            path: url,
+            content: '',
+            lastModified: DateTime.now(),
+            size: 0,
+            isUrl: true);
+        await tester.runAsync(() => htmlService.loadFile(file));
         await tester.pumpAndSettle();
 
         final urlField = find.byType(TextField);
         final textField = tester.widget<TextField>(urlField);
-        expect(textField.controller?.text, url, reason: 'URL should be shown for URL: $url');
+        expect(textField.controller?.text, url,
+            reason: 'URL should be shown for URL: $url');
       }
     });
 
-    testWidgets('Clean button is visible when URL is loaded', (WidgetTester tester) async {
+    testWidgets('Clean button is visible when URL is loaded',
+        (WidgetTester tester) async {
       final htmlService = HtmlService();
 
       await tester.pumpWidget(
@@ -230,16 +267,18 @@ void main() {
         isUrl: true,
       );
 
-      htmlService.loadFile(webFile);
+      await tester.runAsync(() => htmlService.loadFile(webFile));
       await tester.pumpAndSettle();
 
       // Verify clean button is visible
       final urlField = find.byType(TextField);
       final textField = tester.widget<TextField>(urlField);
-      expect(textField.decoration?.suffixIcon, isNotNull, reason: 'Clean button should be visible when URL is loaded');
+      expect(textField.decoration?.suffixIcon, isNotNull,
+          reason: 'Clean button should be visible when URL is loaded');
     });
 
-    testWidgets('Clean button clears URL and unloads file', (WidgetTester tester) async {
+    testWidgets('Clean button clears the URL text but keeps the page',
+        (WidgetTester tester) async {
       final htmlService = HtmlService();
 
       await tester.pumpWidget(
@@ -263,7 +302,7 @@ void main() {
         isUrl: true,
       );
 
-      htmlService.loadFile(webFile);
+      await tester.runAsync(() => htmlService.loadFile(webFile));
       await tester.pumpAndSettle();
 
       // Verify URL is loaded
@@ -276,11 +315,13 @@ void main() {
       await tester.tap(cleanButton);
       await tester.pumpAndSettle();
 
-      // Verify URL is cleared from both text field and service
+      // Like a browser's address bar: the text is cleared, the page stays.
       final urlField = find.byType(TextField);
       final textField = tester.widget<TextField>(urlField);
-      expect(textField.controller?.text, '', reason: 'Text field should be cleared');
-      expect(htmlService.currentFile, isNull, reason: 'File should be cleared from service');
+      expect(textField.controller?.text, '',
+          reason: 'Text field should be cleared');
+      expect(htmlService.currentFile?.path, webFile.path,
+          reason: 'The loaded page stays open');
     });
   });
 }

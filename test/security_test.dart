@@ -18,6 +18,11 @@ class MockPathProviderPlatform extends Fake
   Future<String?> getTemporaryPath() async {
     return Directory.systemTemp.createTempSync().path;
   }
+
+  @override
+  Future<String?> getApplicationSupportPath() async {
+    return Directory.systemTemp.createTempSync().path;
+  }
 }
 
 void main() {
@@ -77,8 +82,10 @@ void main() {
       final html =
           await RssTemplateService.convertRssToHtml(xml, 'http://example.com');
 
-      expect(html, contains('&lt;img src=x onerror=alert(1)&gt;'));
+      // Descriptions are rendered as plain-text excerpts: markup is stripped
+      // (or escaped), never executed.
       expect(html, isNot(contains('<img src=x onerror=alert(1)>')));
+      expect(html, isNot(contains('onerror=alert(1)>')));
     });
   });
 

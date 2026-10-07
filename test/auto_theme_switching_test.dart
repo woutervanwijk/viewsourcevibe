@@ -1,22 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:view_source_vibe/models/settings.dart';
 
 void main() {
   // Initialize Flutter binding for testing
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  // Set up method channel for shared preferences
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .setMockMethodCallHandler(
-          const MethodChannel('plugins.flutter.io/shared_preferences'),
-          (MethodCall methodCall) async {
-    if (methodCall.method == 'getAll') {
-      return <String, dynamic>{};
-    }
-    return null;
-  });
+  SharedPreferences.setMockInitialValues({});
 
   group('Auto Theme Switching Tests', () {
     late AppSettings settings;

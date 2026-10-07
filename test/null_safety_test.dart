@@ -4,6 +4,8 @@ import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Null Safety Tests', () {
     test('HTML File model handles null properties safely', () {
       // Test that HTML file properties are properly initialized
@@ -55,7 +57,8 @@ void main() {
       );
 
       await htmlService.loadFile(testFile);
-      expect(htmlService.currentFile, testFile);
+      expect(htmlService.currentFile?.path, testFile.path);
+      expect(htmlService.currentFile?.content, testFile.content);
 
       // Test clearing file
       await htmlService.clearFile();

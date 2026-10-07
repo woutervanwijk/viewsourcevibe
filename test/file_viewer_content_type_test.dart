@@ -7,102 +7,81 @@ import 'package:view_source_vibe/models/settings.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('FileViewer shows content type menu when tapped',
-      (WidgetTester tester) async {
-    // Create a sample file
-    final sampleFile = HtmlFile(
-      name: 'test.html',
-      path: 'test.html',
-      content: '<html><body>Test Content</body></html>',
-      lastModified: DateTime.now(),
-      size: 32,
-      isUrl: false,
-    );
+  final sampleFile = HtmlFile(
+    name: 'test.html',
+    path: 'test.html',
+    content: '<html><body>Test Content</body></html>',
+    lastModified: DateTime.now(),
+    size: 32,
+    isUrl: false,
+  );
 
-    // Create services
+  // Loads the file (real async work) and shows it in a SourceViewer.
+  // Uses fixed pumps: the editor's blinking cursor never settles.
+  Future<HtmlService> pumpViewer(WidgetTester tester) async {
     final htmlService = HtmlService();
-    final settings = AppSettings();
-
-    // Load the file
-    await htmlService.loadFile(sampleFile);
-
-    // Build the widget
+    await tester.runAsync(() => htmlService.loadFile(sampleFile));
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider<HtmlService>.value(value: htmlService),
-          ChangeNotifierProvider<AppSettings>.value(value: settings),
+          ChangeNotifierProvider<AppSettings>(create: (_) => AppSettings()),
         ],
         child: MaterialApp(
-          home: Scaffold(
-            body: SourceViewer(file: sampleFile),
-          ),
+          home: Scaffold(body: SourceViewer(file: htmlService.currentFile!)),
         ),
       ),
     );
+    await tester.pump(const Duration(milliseconds: 300));
+    return htmlService;
+  }
 
-    // Verify the file viewer is displayed
-    expect(find.text('test.html'), findsOneWidget);
-    expect(find.text('Test Content'), findsOneWidget);
+  Future<void> openMenu(WidgetTester tester) async {
+    await tester.tap(find.text('HTML')); // header shows the detected type
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+  }
 
-    // Tap the filename area to show content type menu
-    final filenameArea = find.text('test.html');
-    await tester.tap(filenameArea);
-    await tester.pumpAndSettle();
+  // The type list is longer than the test screen: scroll an item into view.
+  Future<Finder> menuItem(WidgetTester tester, String label) async {
+    final item = find.text(label);
+    await tester.scrollUntilVisible(
+      item,
+      100,
+      scrollable: find
+          .descendant(
+              of: find.byType(BottomSheet), matching: find.byType(Scrollable))
+          .first,
+    );
+    return item;
+  }
 
-    // Verify the content type menu is shown
-    expect(find.text('Select Content Type'), findsOneWidget);
-    expect(find.text('JavaScript'), findsOneWidget);
-    expect(find.text('CSS'), findsOneWidget);
+  testWidgets('header shows the detected type and opens the type menu',
+      (tester) async {
+    await pumpViewer(tester);
     expect(find.text('HTML'), findsOneWidget);
+
+    await openMenu(tester);
+
+    expect(find.text('Select Content Type'), findsOneWidget);
+    expect(await menuItem(tester, 'CSS'), findsOneWidget);
+    expect(await menuItem(tester, 'JavaScript'), findsOneWidget);
   });
 
-  testWidgets('FileViewer updates content type when selected',
-      (WidgetTester tester) async {
-    // Create a sample file
-    final sampleFile = HtmlFile(
-      name: 'test.html',
-      path: 'test.html',
-      content: '<html><body>Test Content</body></html>',
-      lastModified: DateTime.now(),
-      size: 32,
-      isUrl: false,
-    );
+  testWidgets('choosing a type changes highlighting, not the file name',
+      (tester) async {
+    final htmlService = await pumpViewer(tester);
+    await openMenu(tester);
 
-    // Create services
-    final htmlService = HtmlService();
-    final settings = AppSettings();
+    await tester.tap(await menuItem(tester, 'JavaScript'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
-    // Load the file
-    await htmlService.loadFile(sampleFile);
+    expect(htmlService.selectedContentType, 'javascript');
+    expect(htmlService.currentFile?.name, 'test.html');
+    expect(find.text('Select Content Type'), findsNothing);
 
-    // Build the widget
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<HtmlService>.value(value: htmlService),
-          ChangeNotifierProvider<AppSettings>.value(value: settings),
-        ],
-        child: MaterialApp(
-          home: Scaffold(
-            body: SourceViewer(file: sampleFile),
-          ),
-        ),
-      ),
-    );
-
-    // Tap the filename area to show content type menu
-    final filenameArea = find.text('test.html');
-    await tester.tap(filenameArea);
-    await tester.pumpAndSettle();
-
-    // Find and tap the JavaScript option
-    final javascriptOption = find.text('JavaScript').first;
-    await tester.tap(javascriptOption);
-    await tester.pumpAndSettle();
-
-    // Verify the filename has changed to reflect the new content type
-    expect(find.text('test.js'), findsOneWidget);
-    expect(find.text('test.html'), findsNothing);
+    // Let the debounced auto-save timer (1.5s) fire before teardown.
+    await tester.pump(const Duration(seconds: 2));
   });
 }

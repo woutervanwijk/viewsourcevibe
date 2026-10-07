@@ -3,6 +3,8 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Code Editor Reset Tests', () {
     late HtmlService htmlService;
 
@@ -21,11 +23,12 @@ void main() {
       );
 
       await htmlService.loadFile(firstFile);
-      
+
       // Verify first file is loaded
       expect(htmlService.currentFile, isNotNull);
       expect(htmlService.currentFile?.name, 'first.html');
-      expect(htmlService.currentFile?.content, '<html><body>First content</body></html>');
+      expect(htmlService.currentFile?.content,
+          '<html><body>First content</body></html>');
 
       // Load second file
       final secondFile = HtmlFile(
@@ -37,18 +40,20 @@ void main() {
       );
 
       await htmlService.loadFile(secondFile);
-      
+
       // Verify second file is loaded and first file is replaced
       expect(htmlService.currentFile, isNotNull);
       expect(htmlService.currentFile?.name, 'second.html');
-      expect(htmlService.currentFile?.content, '<html><body>Second content</body></html>');
-      expect(htmlService.currentFile?.content, isNot('<html><body>First content</body></html>'));
+      expect(htmlService.currentFile?.content,
+          '<html><body>Second content</body></html>');
+      expect(htmlService.currentFile?.content,
+          isNot('<html><body>First content</body></html>'));
     });
 
     test('loadFile should reset scroll position', () {
       // This test verifies that the scroll controller is reset
       // We can't test the actual UI behavior here, but we can verify the logic
-      
+
       final file = HtmlFile(
         name: 'test.html',
         path: 'test.html',
@@ -75,7 +80,7 @@ void main() {
       expect(htmlService.currentFile, isNotNull);
 
       // Clear the file
-      htmlService.clearFile();
+      await htmlService.clearFile();
       expect(htmlService.currentFile, isNull);
     });
   });

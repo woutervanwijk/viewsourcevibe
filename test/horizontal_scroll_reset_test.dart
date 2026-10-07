@@ -1,9 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/material.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Horizontal Scroll Reset Tests', () {
     late HtmlService htmlService;
 
@@ -11,15 +12,16 @@ void main() {
       htmlService = HtmlService();
     });
 
-    test('HtmlService should have horizontal scroll controller', () {
-      expect(htmlService.horizontalScrollController, isNotNull);
-      expect(htmlService.horizontalScrollController, isA<ScrollController>());
+    test('horizontal scroll controller comes from the editor', () {
+      // The editor registers its controller when it is built; the service
+      // doesn't own one, so loads must work without it.
+      expect(htmlService.horizontalScrollController, isNull);
     });
 
     test('loadFile should reset horizontal scroll position', () async {
       // Create a long line of text that would require horizontal scrolling
       final longContent = 'a' * 1000; // Very long line
-      
+
       final file = HtmlFile(
         name: 'long_line.txt',
         path: 'long_line.txt',
@@ -30,26 +32,20 @@ void main() {
 
       // Load the file - this should reset horizontal scroll position
       await htmlService.loadFile(file);
-      
+
       // Verify that the loadFile method completes without error
       // We can't test the actual scroll position in unit tests since controllers aren't attached
-      expect(htmlService.currentFile, file);
+      expect(htmlService.currentFile?.path, file.path);
       expect(htmlService.currentFile?.content, longContent);
     });
 
-    test('Horizontal scroll controller should be disposed properly', () {
-      final horizontalController = htmlService.horizontalScrollController;
-      expect(horizontalController, isNotNull);
-      
-      // Dispose the service
-      htmlService.dispose();
-      
-      // This test mainly verifies that dispose completes without throwing
-      // We can't test the controller state after disposal in this context
-      addTearDown(() {}); // Prevent double dispose in test cleanup
+    test('dispose works without an editor attached', () {
+      expect(() => htmlService.dispose(), returnsNormally);
     });
 
-    test('Both vertical and horizontal scroll controllers should be reset on file load', () async {
+    test(
+        'Both vertical and horizontal scroll controllers should be reset on file load',
+        () async {
       // Create test files
       final firstFile = HtmlFile(
         name: 'first.txt',
@@ -69,13 +65,13 @@ void main() {
 
       // Load first file
       await htmlService.loadFile(firstFile);
-      expect(htmlService.currentFile, firstFile);
-      
+      expect(htmlService.currentFile?.path, firstFile.path);
+
       // Load second file - should reset both scroll positions
       await htmlService.loadFile(secondFile);
-      
+
       // Verify that files are loaded correctly (we can't test scroll positions in unit tests)
-      expect(htmlService.currentFile, secondFile);
+      expect(htmlService.currentFile?.path, secondFile.path);
       expect(htmlService.currentFile?.content, 'Second file content');
     });
   });

@@ -3,6 +3,8 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Scroll Controller Test', () {
     late HtmlService htmlService;
 
@@ -10,7 +12,7 @@ void main() {
       htmlService = HtmlService();
     });
 
-    test('HTML Service should notify listeners when file is loaded', () {
+    test('HTML Service should notify listeners when file is loaded', () async {
       bool notified = false;
       htmlService.addListener(() {
         notified = true;
@@ -34,7 +36,7 @@ void main() {
         size: testContent.length,
       );
 
-      htmlService.loadFile(file);
+      await htmlService.loadFile(file);
 
       expect(notified, isTrue);
       expect(htmlService.currentFile, isNotNull);
