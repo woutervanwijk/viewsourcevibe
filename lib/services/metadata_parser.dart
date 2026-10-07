@@ -557,6 +557,8 @@ void _detectTechnologies(
   if (generator.contains('wordpress')) {
     tech['CMS'] = 'WordPress';
     _extractVersion(generator, 'WordPress', tech);
+  } else if (generator.contains('typo3')) {
+    tech['CMS'] = 'TYPO3';
   } else if (generator.contains('joomla')) {
     tech['CMS'] = 'Joomla';
     _extractVersion(generator, 'Joomla', tech);
@@ -596,6 +598,10 @@ void _detectTechnologies(
   if (tech['CMS'] == null && tech['Static Site'] == null) {
     if (html.contains('wp-content') || html.contains('wp-includes')) {
       tech['CMS'] = 'WordPress';
+    } else if (html.contains('typo3conf/') ||
+        html.contains('typo3temp/') ||
+        html.contains('/typo3/')) {
+      tech['CMS'] = 'TYPO3';
     } else if (html.contains('/templates/') &&
         (html.contains('/media/jui/') || html.contains('/media/system/'))) {
       tech['CMS'] = 'Joomla';

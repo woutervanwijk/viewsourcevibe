@@ -13,6 +13,7 @@ import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:view_source_vibe/utils/cookie_utils.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
+import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
@@ -169,7 +170,37 @@ class HtmlService extends ChangeNotifier {
   SovereigntyReport? get sovereigntyReport => _sovereigntyReport;
   bool get isAnalyzingSovereignty => _isAnalyzingSovereignty;
 
+  String get _sovereigntyHost =>
+      Uri.tryParse(_currentFile?.path ?? '')?.host ?? '';
+
+  /// Registrable domain the per-site jurisdiction choice is stored under.
+  String get sovereigntyDomain =>
+      SovereigntyService.registrableDomain(_sovereigntyHost);
+
+  /// Legal home of the current site: chosen manually, else detected,
+  /// else the default from settings.
+  SiteJurisdiction get siteJurisdiction {
+    final manual = _appSettings?.siteJurisdiction(sovereigntyDomain);
+    if (manual != null) return (jurisdiction: manual, source: 'Set manually');
+    final detected = detectSiteJurisdiction(
+      host: _sovereigntyHost,
+      certificateSubject:
+          _probeResult?['certificate']?['subjectParsed'] as Map?,
+      structuredData: _pageMetadata?['structuredData'] as List?,
+    );
+    return detected ??
+        (
+          jurisdiction:
+              _appSettings?.homeJurisdiction ?? defaultHomeJurisdiction(),
+          source: 'Not detected; default from Settings',
+        );
+  }
+
+  void setSiteJurisdiction(String? jurisdiction) =>
+      _appSettings?.setSiteJurisdiction(sovereigntyDomain, jurisdiction);
+
   /// Where is this page hosted, and by whom? Lazily run by the Sovereignty tab.
+
   Future<void> analyzeSovereignty() async {
     final url = _currentFile?.path;
     if (_isAnalyzingSovereignty || url == null || !url.startsWith('http')) {
@@ -183,6 +214,8 @@ class HtmlService extends ChangeNotifier {
         probeResult: _probeResult,
         resources: resourceTimelineData,
         metadata: _pageMetadata,
+        html: _currentFile?.content,
+        home: siteJurisdiction.jurisdiction,
       );
     } catch (e) {
       debugPrint('Sovereignty analysis failed: $e');
@@ -701,11 +734,11 @@ class HtmlService extends ChangeNotifier {
       _webViewLoadingUrl = url;
       _isWebViewLoading = true;
 
-      // If Browser isn't selected, request switch (unless already switching somewhere else or in Source-First mode)
-      bool isCurrentlyOnBrowser = _activeTabIndex == browserTabIndex;
-      if (!isCurrentlyOnBrowser &&
+      // Stay on whatever tab the user is on. Only when the WebView was never
+      // shown (so it doesn't exist yet) switch to it, or nothing would load.
+      if (activeWebViewController == null &&
           switchToTab == null &&
-          _useBrowserByDefault) {
+          _activeTabIndex != browserTabIndex) {
         _requestedTabIndex = browserTabIndex;
       }
 
@@ -2140,9 +2173,8 @@ class HtmlService extends ChangeNotifier {
       debugPrint(
         'Back navigation: Loading previous file: ${previousFile.path}',
       );
-      // Use the unified loadUrl entry point.
-      // switchToTab 0 ensures we go to the Source tab (or Browser depending on logic)
-      await loadUrl(previousFile.path, switchToTab: 0);
+      // Use the unified loadUrl entry point; stays on the current tab.
+      await loadUrl(previousFile.path);
     } finally {
       _isNavigatingBack = false;
     }
@@ -4965,12 +4997,7 @@ Technical details: $e''';
 
         _currentFile = htmlFile;
         _currentInputText = url;
-        // Only switch to the Source tab if the user isn't already on the Browser tab.
-        // Previously this was hardcoded to 0, which caused a loop where the Browser tab
-        // would appear and then immediately disappear as content switched to Source.
-        if (_activeTabIndex != browserTabIndex) {
-          _requestedTabIndex = sourceTabIndex;
-        }
+        // Stay on whatever tab the user is on.
 
         // Clear cache and reset beautify on new file load
         _beautifiedCache.clear();

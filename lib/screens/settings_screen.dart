@@ -4,6 +4,7 @@ import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/jurisdiction.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -127,6 +128,29 @@ class SettingsScreen extends StatelessWidget {
                         onChanged: (value) =>
                             settings.useBrowserByDefault = value,
                         secondary: const Icon(Icons.public),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.gavel_outlined),
+                        title: const Text('Default site jurisdiction'),
+                        subtitle: const Text(
+                            'Legal home assumed for a site when the Sovereignty tab cannot detect it. You can change it per site.'),
+                        trailing: DropdownButton<String?>(
+                          value: settings.homeJurisdictionSetting,
+                          onChanged: (value) =>
+                              settings.homeJurisdictionSetting = value,
+                          items: [
+                            DropdownMenuItem(
+                              value: null,
+                              child: Text(
+                                  'Automatic (${jurisdictionLabel(defaultHomeJurisdiction())})'),
+                            ),
+                            for (final j in homeJurisdictionChoices)
+                              DropdownMenuItem(
+                                value: j,
+                                child: Text(jurisdictionLabel(j)),
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -425,8 +449,6 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
-
-
 
   void _navigateToAboutScreen(BuildContext context) {
     Navigator.of(context).push(

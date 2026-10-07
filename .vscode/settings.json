@@ -2,6 +2,8 @@
   // Flutter specific settings
   // "dart.flutterSdkPath": ".",
   "dart.flutterHotReloadOnSave": "allIfDirty",
+  // Also hot reload when files change on disk (e.g. edited by external tools)
+  "dart.previewHotReloadOnSaveWatcher": true,
   // "dart.flutterHotRestartOnSave": "always",
   "dart.flutterRunLogFile": "debug.log",
   "dart.flutterTestLogFile": "test.log",

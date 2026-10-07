@@ -140,7 +140,7 @@ class _UrlInputState extends State<UrlInput> {
                 size: await file.length(),
                 isUrl: false,
               );
-              await htmlService.loadFile(htmlFile, switchToTab: switchToTab ?? 0);
+              await htmlService.loadFile(htmlFile, switchToTab: switchToTab);
               return;
             }
           } catch (e) {
@@ -151,13 +151,13 @@ class _UrlInputState extends State<UrlInput> {
         // If we can't find the file, fall back to URL loading
         await htmlService.loadFromUrl(
           url,
-          switchToTab: switchToTab ?? 0,
+          switchToTab: switchToTab,
           forceReload: true,
         );
       } else {
         await htmlService.loadFromUrl(
           url,
-          switchToTab: switchToTab ?? 0,
+          switchToTab: switchToTab,
           forceReload: true,
         );
       }
@@ -318,7 +318,7 @@ class _UrlInputState extends State<UrlInput> {
                                 onFieldSubmitted();
                               }
 
-                              _loadUrl(switchToTab: 0);
+                              _loadUrl(); // stay on the current tab
                             },
                           ),
                         );
@@ -327,7 +327,7 @@ class _UrlInputState extends State<UrlInput> {
                         return _AutocompleteOptions(
                           displayStringForOption: (option) => option,
                           onSelected: onSelected,
-                          onOptionTap: () => _loadUrl(switchToTab: 0),
+                          onOptionTap: () => _loadUrl(),
                           options: options,
                           maxOptionsHeight: 200,
                         );

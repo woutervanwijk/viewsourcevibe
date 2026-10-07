@@ -33,6 +33,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _lastShowServerTabs = false;
   bool _lastIsBrowserSupported = true;
   bool _lastShouldShowBrowser = true;
+  List<String> _tabLabels = const [];
+
+  /// Label of the tab the user is on. Tabs come and go while a page loads,
+  /// so the selection follows the tab itself, not its index.
+  String? _selectedTabLabel;
 
   @override
   void initState() {
@@ -51,6 +56,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Guard against firing during the animation (indexIsChanging is true mid-swipe).
     // Only act once the destination tab is settled.
     if (_tabController.indexIsChanging) return;
+    if (_tabController.index < _tabLabels.length) {
+      _selectedTabLabel = _tabLabels[_tabController.index];
+    }
 
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     htmlService.setActiveTabIndex(_tabController.index);
@@ -78,35 +86,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     final oldIndex = _tabController.index;
-    final oldLength = _tabController.length;
+    final labels = [for (final (_, label) in _tabSpecs(htmlService)) label];
 
-    // Calculate exact length: 1 (Editor)
-    // + (1 if isBrowserSupported AND shouldShowBrowser for Browser)
-    // + (1 if isHtmlOrXml for DOM Tree)
-    // + (3 if showMetadataTabs for Metadata/Services/Media)
-    // + (6 if showServerTabs for Cookies/Timeline/Probe/Headers/Security/Sovereignty)
-    int newLength = 1; // Editor
-    if (isBrowserSupported && shouldShowBrowser) newLength += 1;
-    if (isHtmlOrXml) newLength += 1;
-    if (showMetadataTabs) newLength += 3;
-    if (showServerTabs) newLength += 6;
-
-    if (oldLength != newLength || force) {
+    if (!_listEquals(labels, _tabLabels) || force) {
+      final newLength = labels.length;
+      final keep =
+          _selectedTabLabel == null ? -1 : labels.indexOf(_selectedTabLabel!);
       _tabController.removeListener(_handleTabSelection);
       // We don't dispose here if called during build to avoid issues
       _tabController = TabController(
         length: newLength,
         vsync: this,
-        initialIndex: oldIndex.clamp(0, newLength - 1),
+        initialIndex: keep >= 0 ? keep : oldIndex.clamp(0, newLength - 1),
       );
       _tabController.addListener(_handleTabSelection);
+      _tabLabels = labels;
       _lastIsHtmlOrXml = isHtmlOrXml;
       _lastShowMetadataTabs = showMetadataTabs;
       _lastShowServerTabs = showServerTabs;
       _lastIsBrowserSupported = isBrowserSupported;
       _lastShouldShowBrowser = shouldShowBrowser;
+      if (keep >= 0) {
+        // Called during build: notify the service after this frame.
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => htmlService.setActiveTabIndex(keep));
+      }
     }
   }
+
+  static bool _listEquals(List<String> a, List<String> b) =>
+      a.length == b.length &&
+      Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
 
   @override
   void dispose() {
@@ -160,54 +170,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  List<Widget> _getTabs(HtmlService htmlService) {
+  /// Tabs in display order. Kept in sync with [_getTabViews].
+  List<(IconData, String)> _tabSpecs(HtmlService htmlService) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
     final showServerTabs = htmlService.showServerTabs;
     final isBrowserSupported = htmlService.isBrowserSupported;
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
-    final shouldShowBrowser = htmlService.shouldShowBrowserTab;
-
-    final sourceTab = _buildTab(Icons.code, 'Source');
-    final browserTab = _buildTab(Icons.language, 'Browser');
-
-    if (!isBrowserSupported) {
-      return [
-        sourceTab,
-        if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
-        if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
-        if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
-        if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
-        if (showServerTabs) _buildTab(Icons.cookie_outlined, 'Cookies'),
-        if (showServerTabs) ...[
-          _buildTab(Icons.timeline, 'Timeline'),
-          _buildTab(Icons.network_check, 'Probe'),
-          _buildTab(Icons.list_alt, 'Headers'),
-          _buildTab(Icons.security, 'Security'),
-          _buildTab(Icons.public, 'Sovereignty'),
-        ],
-      ];
-    }
+    final shouldShowBrowser =
+        isBrowserSupported && htmlService.shouldShowBrowserTab;
+    const browserTab = (Icons.language, 'Browser');
 
     return [
       if (shouldShowBrowser && useBrowserByDefault) browserTab,
-      sourceTab,
-      if (isHtmlOrXml) _buildTab(Icons.account_tree_outlined, 'DOM Tree'),
-      if (showMetadataTabs) _buildTab(Icons.info_outline, 'Metadata'),
-      if (showMetadataTabs) _buildTab(Icons.layers_outlined, 'Services'),
-      if (showMetadataTabs) _buildTab(Icons.perm_media_outlined, 'Media'),
-      if (showServerTabs) _buildTab(Icons.cookie_outlined, 'Cookies'),
+      (Icons.code, 'Source'),
+      if (isHtmlOrXml) (Icons.account_tree_outlined, 'DOM Tree'),
+      if (showMetadataTabs) ...[
+        (Icons.info_outline, 'Metadata'),
+        (Icons.layers_outlined, 'Services'),
+        (Icons.perm_media_outlined, 'Media'),
+      ],
       if (showServerTabs) ...[
-        _buildTab(Icons.timeline, 'Timeline'),
-        _buildTab(Icons.network_check, 'Probe'),
-        _buildTab(Icons.list_alt, 'Headers'),
-        _buildTab(Icons.security, 'Security'),
-        _buildTab(Icons.public, 'Sovereignty'),
+        (Icons.cookie_outlined, 'Cookies'),
+        (Icons.timeline, 'Timeline'),
+        (Icons.network_check, 'Probe'),
+        (Icons.list_alt, 'Headers'),
+        (Icons.security, 'Security'),
+        (Icons.public, 'Sovereignty'),
       ],
       // When 'Always use browser' is off, Browser tab goes last
       if (shouldShowBrowser && !useBrowserByDefault) browserTab,
     ];
   }
+
+  List<Widget> _getTabs(HtmlService htmlService) => [
+        for (final (icon, label) in _tabSpecs(htmlService))
+          _buildTab(icon, label),
+      ];
 
   List<Widget> _getTabViews(HtmlService htmlService, HtmlFile? currentFile) {
     final isHtmlOrXml = htmlService.isHtmlOrXml;

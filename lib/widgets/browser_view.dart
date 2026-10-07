@@ -86,7 +86,10 @@ class _BrowserViewState extends State<BrowserView> {
   void _loadContentIfVisible() {
     if (!mounted) return;
     final htmlService = Provider.of<HtmlService>(context, listen: false);
-    if (htmlService.activeTabIndex == htmlService.browserTabIndex) {
+    // Also load in the background during a browser-first load, so the user
+    // can stay on another tab while the page (and its source) comes in.
+    if (htmlService.activeTabIndex == htmlService.browserTabIndex ||
+        htmlService.isWebViewLoading) {
       _loadContent();
     }
   }

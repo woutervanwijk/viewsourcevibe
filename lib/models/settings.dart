@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:view_source_vibe/services/jurisdiction.dart';
 
 // Theme metadata class
 class ThemeMetadata {
@@ -25,6 +28,9 @@ class AppSettings with ChangeNotifier {
   static const String _prefsShowLineNumbers = 'showLineNumbers';
   static const String _prefsWrapText = 'wrapText';
   static const String _prefsUseBrowserByDefault = 'useBrowserByDefault';
+  static const String _prefsHomeJurisdiction = 'homeJurisdiction';
+  static const String _prefsSiteJurisdictions = 'siteJurisdictions';
+  static const int _maxSiteJurisdictions = 255;
 
   // Shared Preferences instance
   SharedPreferences? _prefs;
@@ -41,6 +47,8 @@ class AppSettings with ChangeNotifier {
   // Behavior settings
   bool _wrapText = false;
   bool _useBrowserByDefault = true;
+  String? _homeJurisdiction; // null = from device locale
+  Map<String, String> _siteJurisdictions = {}; // domain -> jurisdiction
 
   // Getters
   ThemeModeOption get themeMode => _themeMode;
@@ -50,6 +58,11 @@ class AppSettings with ChangeNotifier {
   bool get showLineNumbers => _showLineNumbers;
   bool get wrapText => _wrapText;
   bool get useBrowserByDefault => _useBrowserByDefault;
+
+  /// Fallback jurisdiction for sites whose legal home isn't detected;
+  /// null = from the device locale.
+  String? get homeJurisdictionSetting => _homeJurisdiction;
+  String get homeJurisdiction => _homeJurisdiction ?? defaultHomeJurisdiction();
 
   // Setters with notification and persistence
   set themeMode(ThemeModeOption value) {
@@ -261,6 +274,31 @@ class AppSettings with ChangeNotifier {
     }
   }
 
+  /// Manually chosen legal home for a site (by registrable domain).
+  String? siteJurisdiction(String domain) => _siteJurisdictions[domain];
+
+  /// Remembers the [_maxSiteJurisdictions] most recently set sites.
+  void setSiteJurisdiction(String domain, String? value) {
+    if (_siteJurisdictions[domain] == value) return;
+    _siteJurisdictions.remove(domain); // re-insert as most recent
+    if (value != null) {
+      _siteJurisdictions[domain] = value;
+      while (_siteJurisdictions.length > _maxSiteJurisdictions) {
+        _siteJurisdictions.remove(_siteJurisdictions.keys.first);
+      }
+    }
+    _saveSetting(_prefsSiteJurisdictions, jsonEncode(_siteJurisdictions));
+    notifyListeners();
+  }
+
+  set homeJurisdictionSetting(String? value) {
+    if (_homeJurisdiction != value) {
+      _homeJurisdiction = value;
+      _saveSetting(_prefsHomeJurisdiction, value ?? '');
+      notifyListeners();
+    }
+  }
+
   // Initialize shared preferences
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -284,6 +322,14 @@ class AppSettings with ChangeNotifier {
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
     _useBrowserByDefault = _prefs!.getBool(_prefsUseBrowserByDefault) ?? true;
+    final home = _prefs!.getString(_prefsHomeJurisdiction);
+    _homeJurisdiction = (home == null || home.isEmpty) ? null : home;
+    try {
+      _siteJurisdictions = Map<String, String>.from(
+          jsonDecode(_prefs!.getString(_prefsSiteJurisdictions) ?? '{}'));
+    } catch (_) {
+      _siteJurisdictions = {};
+    }
 
     // Auto-switch theme if in system mode and theme doesn't match current dark mode
     if (_themeMode == ThemeModeOption.system) {
@@ -483,5 +529,4 @@ class AppSettings with ChangeNotifier {
   // Available font sizes
   static List<double> get availableFontSizes =>
       [10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0];
-
 }
