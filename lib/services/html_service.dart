@@ -2083,8 +2083,12 @@ class HtmlService extends ChangeNotifier {
   /// Get a list of available content types for syntax highlighting
   /// Get a list of available content types for syntax highlighting
   List<String> getAvailableContentTypes() {
-    // Get all available language keys from SourceView
-    final availableLanguages = SourceViewerEditor.getAvailableLanguages();
+    // Language keys from the highlighter, plus 'html', which loadFile selects
+    // for HTML pages and the editor maps to the XML highlighter.
+    final availableLanguages = {
+      ...SourceViewerEditor.getAvailableLanguages(),
+      'html',
+    };
 
     // Filter and sort the list to show most common types first
     final commonTypes = [
