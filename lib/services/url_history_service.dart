@@ -18,15 +18,54 @@ class UrlHistoryService with ChangeNotifier {
   List<String> get history => _history;
 
   void _loadHistory() {
-    _history = _prefs.getStringList(_historyKey) ?? [];
+    // Normalise and dedupe entries saved by older versions.
+    _history = dedupe(_prefs.getStringList(_historyKey) ?? []);
+  }
+
+  /// Canonical form, as a browser's URL parser would store it:
+  /// lowercase scheme and host, `/` for an empty path, no fragment.
+  /// Non-http(s) entries (local file names) are returned unchanged.
+  static String normalize(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null ||
+        !(uri.isScheme('http') || uri.isScheme('https')) ||
+        uri.host.isEmpty) {
+      return url;
+    }
+    return uri
+        .replace(path: uri.path.isEmpty ? '/' : uri.path)
+        .removeFragment()
+        .toString();
+  }
+
+  /// What makes two entries the same suggestion: like Chrome's address bar,
+  /// ignore the scheme, a leading `www.` and a trailing slash.
+  static String dedupeKey(String url) {
+    final uri = Uri.tryParse(normalize(url));
+    if (uri == null || uri.host.isEmpty) return url;
+    final host = uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
+    var path = uri.path;
+    if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+    return '$host$path${uri.hasQuery ? '?${uri.query}' : ''}';
+  }
+
+  /// Normalises [urls] and keeps the first (most recent) of each duplicate.
+  static List<String> dedupe(List<String> urls) {
+    final seen = <String>{};
+    return [
+      for (final url in urls.map(normalize))
+        if (seen.add(dedupeKey(url))) url,
+    ];
   }
 
   Future<void> addUrl(String url) async {
     if (url.isEmpty) return;
 
-    // Remove if already exists to move it to the top
-    _history.remove(url);
-    _history.insert(0, url);
+    // Replace any equivalent entry and move it to the top.
+    final normalized = normalize(url);
+    final key = dedupeKey(normalized);
+    _history.removeWhere((entry) => dedupeKey(entry) == key);
+    _history.insert(0, normalized);
 
     // Limit to 200 items
     if (_history.length > 200) {
@@ -35,6 +74,14 @@ class UrlHistoryService with ChangeNotifier {
 
     await _prefs.setStringList(_historyKey, _history);
     notifyListeners();
+  }
+
+  /// [from] redirected to [to]: keep only the destination, as browsers hide
+  /// redirect sources from address bar suggestions.
+  Future<void> replaceUrl(String from, String to) async {
+    final key = dedupeKey(from);
+    _history.removeWhere((entry) => dedupeKey(entry) == key);
+    await addUrl(to);
   }
 
   Future<void> clearHistory() async {

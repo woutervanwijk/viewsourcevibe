@@ -86,6 +86,10 @@ class HtmlService extends ChangeNotifier {
   String? _webViewLoadingUrl;
   String? get webViewLoadingUrl => _webViewLoadingUrl;
 
+  // URL added to history when a browser load started; replaced by the final
+  // URL if the load redirects.
+  String? _historyPendingUrl;
+
   // Track last file update to detect rapid redirects
   DateTime? _lastCurrentFileUpdate;
 
@@ -756,6 +760,7 @@ class HtmlService extends ChangeNotifier {
 
       if (url.isNotEmpty && _shouldAddToHistory(tempFile)) {
         _urlHistoryService?.addUrl(url);
+        _historyPendingUrl = url;
 
         // Create a placeholder HtmlFile for the current URL in Browser-First Flow
         // This ensures _currentFile is set even when HTML isn't fetched yet
@@ -1836,8 +1841,15 @@ class HtmlService extends ChangeNotifier {
 
     // Record in history if it has a path/URL
     if (_shouldAddToHistory(file)) {
-      // For local files, only add the name to history for a cleaner display
-      _urlHistoryService?.addUrl(file.isUrl ? file.path : file.name);
+      final pending = _historyPendingUrl;
+      _historyPendingUrl = null;
+      if (file.isUrl && pending != null && !areUrlsEqual(pending, file.path)) {
+        // The requested URL redirected here: keep only the destination.
+        _urlHistoryService?.replaceUrl(pending, file.path);
+      } else {
+        // For local files, only add the name to history for a cleaner display
+        _urlHistoryService?.addUrl(file.isUrl ? file.path : file.name);
+      }
     }
 
     // Set requested tab switch if provided
