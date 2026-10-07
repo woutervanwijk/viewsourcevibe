@@ -1290,68 +1290,6 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
-  /// Ensure filename has proper extension based on content
-  String ensureHtmlExtension(String filename, String content) {
-    // Handle empty or unclear filenames
-    if (filename.isEmpty ||
-        filename == '/' ||
-        filename == 'index' ||
-        !filename.contains('.') && !filename.contains('/')) {
-      filename = 'File';
-    }
-
-    // If filename already has an extension, use it
-    if (filename.contains('.')) {
-      return filename;
-    }
-
-    // Try to detect content type from content using strict FileTypeDetector logic
-    // We avoid duplicating the logic here to ensure consistency
-
-    // Only perform content detection if we don't have a file extension
-    // or if we want to double-check specific formats
-    if (content.isNotEmpty) {
-      // Use the strict detector we just updated
-      // We can't easily call likely async FileTypeDetector here without async,
-      // but we can use a synchronous helper if we had one, or just replicate the *strict* checks.
-      // Since we are in a sync function (or async?), let's check.
-      // This function is async: Future<String> detectFileTypeAndGenerateFilename
-
-      // Replicate ONLY the strict checks for filename extension generation
-      final lowerContent = content.toLowerCase().trim();
-
-      // HTML (Strict)
-      if (lowerContent.startsWith('<!doctype html') ||
-          lowerContent.contains('<html')) {
-        return '$filename.html';
-      }
-
-      // XML/RSS (Strict)
-      if (lowerContent.startsWith('<?xml') ||
-          lowerContent.startsWith('<rss') ||
-          lowerContent.startsWith('<feed')) {
-        return '$filename.xml';
-      }
-
-      // JSON (Strict)
-      if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) ||
-          (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
-        // Quick check for JSON-like chars
-        if (lowerContent.contains('"') && lowerContent.contains(':')) {
-          return '$filename.json';
-        }
-      }
-
-      // YAML (Strict)
-      if (lowerContent.startsWith('---\n')) {
-        return '$filename.yaml';
-      }
-    }
-
-    // Default to .txt if no strict match found
-    return '$filename.txt';
-  }
-
   /// Detect file type and generate appropriate filename using robust detection
 
   Future<String> detectFileTypeAndGenerateFilename(

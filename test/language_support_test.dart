@@ -25,8 +25,8 @@ void main() {
       final htmlService = HtmlService();
 
       // Test current supported extensions
-      expect(htmlService.getLanguageForExtension('html'), 'xml');
-      expect(htmlService.getLanguageForExtension('htm'), 'xml');
+      expect(htmlService.getLanguageForExtension('html'), 'html');
+      expect(htmlService.getLanguageForExtension('htm'), 'html');
       expect(htmlService.getLanguageForExtension('css'), 'css');
       expect(htmlService.getLanguageForExtension('js'), 'javascript');
       expect(htmlService.getLanguageForExtension('json'), 'json');

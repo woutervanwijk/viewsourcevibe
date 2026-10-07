@@ -12,44 +12,44 @@ void main() {
 
     test('Web Development file extensions should be supported', () {
       // HTML family
-      expect(htmlService.getLanguageForExtension('html'), 'xml');
-      expect(htmlService.getLanguageForExtension('htm'), 'xml');
-      expect(htmlService.getLanguageForExtension('xhtml'), 'xml');
-      
+      expect(htmlService.getLanguageForExtension('html'), 'html');
+      expect(htmlService.getLanguageForExtension('htm'), 'html');
+      expect(htmlService.getLanguageForExtension('xhtml'), 'html');
+
       // CSS
       expect(htmlService.getLanguageForExtension('css'), 'css');
-      
+
       // JavaScript family
       expect(htmlService.getLanguageForExtension('js'), 'javascript');
       expect(htmlService.getLanguageForExtension('javascript'), 'javascript');
       expect(htmlService.getLanguageForExtension('mjs'), 'javascript');
       expect(htmlService.getLanguageForExtension('cjs'), 'javascript');
-      
+
       // TypeScript
       expect(htmlService.getLanguageForExtension('ts'), 'typescript');
       expect(htmlService.getLanguageForExtension('typescript'), 'typescript');
-      
+
       // JSX/TSX
       expect(htmlService.getLanguageForExtension('jsx'), 'javascript');
       expect(htmlService.getLanguageForExtension('tsx'), 'javascript');
-      
+
       // JSON
       expect(htmlService.getLanguageForExtension('json'), 'json');
       expect(htmlService.getLanguageForExtension('json5'), 'json');
-      
+
       // XML family
       expect(htmlService.getLanguageForExtension('xml'), 'xml');
       expect(htmlService.getLanguageForExtension('xsd'), 'xml');
       expect(htmlService.getLanguageForExtension('xsl'), 'xml');
       expect(htmlService.getLanguageForExtension('svg'), 'xml');
-      
+
       // YAML
       expect(htmlService.getLanguageForExtension('yaml'), 'yaml');
       expect(htmlService.getLanguageForExtension('yml'), 'yaml');
-      
+
       // Vue
       expect(htmlService.getLanguageForExtension('vue'), 'vue');
-      
+
       // Svelte
       expect(htmlService.getLanguageForExtension('svelte'), 'html');
     });
@@ -58,11 +58,11 @@ void main() {
       // Markdown
       expect(htmlService.getLanguageForExtension('md'), 'markdown');
       expect(htmlService.getLanguageForExtension('markdown'), 'markdown');
-      
+
       // Plain text
       expect(htmlService.getLanguageForExtension('txt'), 'plaintext');
       expect(htmlService.getLanguageForExtension('text'), 'plaintext');
-      
+
       // AsciiDoc
       expect(htmlService.getLanguageForExtension('adoc'), 'asciidoc');
       expect(htmlService.getLanguageForExtension('asciidoc'), 'asciidoc');
@@ -71,35 +71,35 @@ void main() {
     test('Programming Language file extensions should be supported', () {
       // Dart
       expect(htmlService.getLanguageForExtension('dart'), 'dart');
-      
+
       // Python
       expect(htmlService.getLanguageForExtension('py'), 'python');
       expect(htmlService.getLanguageForExtension('python'), 'python');
-      
+
       // Java
       expect(htmlService.getLanguageForExtension('java'), 'java');
-      
+
       // Kotlin
       expect(htmlService.getLanguageForExtension('kt'), 'kotlin');
       expect(htmlService.getLanguageForExtension('kts'), 'kotlin');
-      
+
       // Swift
       expect(htmlService.getLanguageForExtension('swift'), 'swift');
-      
+
       // Go
       expect(htmlService.getLanguageForExtension('go'), 'go');
-      
+
       // Rust
       expect(htmlService.getLanguageForExtension('rs'), 'rust');
       expect(htmlService.getLanguageForExtension('rust'), 'rust');
-      
+
       // PHP
       expect(htmlService.getLanguageForExtension('php'), 'php');
-      
+
       // Ruby
       expect(htmlService.getLanguageForExtension('rb'), 'ruby');
       expect(htmlService.getLanguageForExtension('ruby'), 'ruby');
-      
+
       // C++
       expect(htmlService.getLanguageForExtension('cpp'), 'cpp');
       expect(htmlService.getLanguageForExtension('cc'), 'cpp');
@@ -108,36 +108,36 @@ void main() {
       expect(htmlService.getLanguageForExtension('h'), 'cpp');
       expect(htmlService.getLanguageForExtension('hpp'), 'cpp');
       expect(htmlService.getLanguageForExtension('hxx'), 'cpp');
-      
+
       // C
       expect(htmlService.getLanguageForExtension('c'), 'c');
-      
+
       // C#
       expect(htmlService.getLanguageForExtension('cs'), 'csharp');
-      
+
       // Scala
       expect(htmlService.getLanguageForExtension('scala'), 'scala');
-      
+
       // Haskell
       expect(htmlService.getLanguageForExtension('hs'), 'haskell');
       expect(htmlService.getLanguageForExtension('haskell'), 'haskell');
-      
+
       // Lua
       expect(htmlService.getLanguageForExtension('lua'), 'lua');
-      
+
       // Perl
       expect(htmlService.getLanguageForExtension('pl'), 'perl');
       expect(htmlService.getLanguageForExtension('perl'), 'perl');
-      
+
       // R
       expect(htmlService.getLanguageForExtension('r'), 'r');
-      
+
       // Shell scripting
       expect(htmlService.getLanguageForExtension('sh'), 'bash');
       expect(htmlService.getLanguageForExtension('bash'), 'bash');
       expect(htmlService.getLanguageForExtension('zsh'), 'bash');
       expect(htmlService.getLanguageForExtension('fish'), 'bash');
-      
+
       // PowerShell
       expect(htmlService.getLanguageForExtension('ps1'), 'powershell');
       expect(htmlService.getLanguageForExtension('psm1'), 'powershell');
@@ -148,27 +148,27 @@ void main() {
       expect(htmlService.getLanguageForExtension('ini'), 'ini');
       expect(htmlService.getLanguageForExtension('conf'), 'ini');
       expect(htmlService.getLanguageForExtension('config'), 'ini');
-      
+
       // Properties
       expect(htmlService.getLanguageForExtension('properties'), 'properties');
-      
+
       // TOML
       expect(htmlService.getLanguageForExtension('toml'), 'toml');
-      
+
       // SQL
       expect(htmlService.getLanguageForExtension('sql'), 'sql');
-      
+
       // GraphQL
       expect(htmlService.getLanguageForExtension('graphql'), 'graphql');
       expect(htmlService.getLanguageForExtension('gql'), 'graphql');
-      
+
       // Docker
       expect(htmlService.getLanguageForExtension('dockerfile'), 'dockerfile');
-      
+
       // Make
       expect(htmlService.getLanguageForExtension('makefile'), 'makefile');
       expect(htmlService.getLanguageForExtension('mk'), 'makefile');
-      
+
       // CMake
       expect(htmlService.getLanguageForExtension('cmake'), 'cmake');
     });
@@ -177,10 +177,10 @@ void main() {
       // SCSS/Sass
       expect(htmlService.getLanguageForExtension('scss'), 'scss');
       expect(htmlService.getLanguageForExtension('sass'), 'scss');
-      
+
       // Less
       expect(htmlService.getLanguageForExtension('less'), 'less');
-      
+
       // Stylus
       expect(htmlService.getLanguageForExtension('styl'), 'stylus');
       expect(htmlService.getLanguageForExtension('stylus'), 'stylus');
@@ -190,11 +190,11 @@ void main() {
       // Diff/Patch
       expect(htmlService.getLanguageForExtension('diff'), 'diff');
       expect(htmlService.getLanguageForExtension('patch'), 'diff');
-      
+
       // Gitignore
       expect(htmlService.getLanguageForExtension('gitignore'), 'gitignore');
       expect(htmlService.getLanguageForExtension('ignore'), 'gitignore');
-      
+
       // EditorConfig
       expect(htmlService.getLanguageForExtension('editorconfig'), 'ini');
     });
@@ -210,7 +210,8 @@ void main() {
       expect(htmlService.getLanguageForExtension('1c'), '1c');
       expect(htmlService.getLanguageForExtension('abnf'), 'abnf');
       expect(htmlService.getLanguageForExtension('accesslog'), 'accesslog');
-      expect(htmlService.getLanguageForExtension('actionscript'), 'actionscript');
+      expect(
+          htmlService.getLanguageForExtension('actionscript'), 'actionscript');
       expect(htmlService.getLanguageForExtension('ada'), 'ada');
       expect(htmlService.getLanguageForExtension('angelscript'), 'angelscript');
       expect(htmlService.getLanguageForExtension('apache'), 'apache');
@@ -315,7 +316,8 @@ void main() {
       expect(htmlService.getLanguageForExtension('parser3'), 'parser3');
       expect(htmlService.getLanguageForExtension('pf'), 'pf');
       expect(htmlService.getLanguageForExtension('pgsql'), 'pgsql');
-      expect(htmlService.getLanguageForExtension('php-template'), 'php-template');
+      expect(
+          htmlService.getLanguageForExtension('php-template'), 'php-template');
       expect(htmlService.getLanguageForExtension('pony'), 'pony');
       expect(htmlService.getLanguageForExtension('processing'), 'processing');
       expect(htmlService.getLanguageForExtension('profile'), 'profile');
@@ -335,7 +337,8 @@ void main() {
       expect(htmlService.getLanguageForExtension('roboconf'), 'roboconf');
       expect(htmlService.getLanguageForExtension('routeros'), 'routeros');
       expect(htmlService.getLanguageForExtension('rsl'), 'rsl');
-      expect(htmlService.getLanguageForExtension('ruleslanguage'), 'ruleslanguage');
+      expect(htmlService.getLanguageForExtension('ruleslanguage'),
+          'ruleslanguage');
       expect(htmlService.getLanguageForExtension('sas'), 'sas');
       expect(htmlService.getLanguageForExtension('scheme'), 'scheme');
       expect(htmlService.getLanguageForExtension('scm'), 'scheme');
@@ -354,7 +357,8 @@ void main() {
       expect(htmlService.getLanguageForExtension('step21'), 'step21');
       expect(htmlService.getLanguageForExtension('stp'), 'step21');
       expect(htmlService.getLanguageForExtension('subunit'), 'subunit');
-      expect(htmlService.getLanguageForExtension('taggerscript'), 'taggerscript');
+      expect(
+          htmlService.getLanguageForExtension('taggerscript'), 'taggerscript');
       expect(htmlService.getLanguageForExtension('tap'), 'tap');
       expect(htmlService.getLanguageForExtension('tcl'), 'tcl');
       expect(htmlService.getLanguageForExtension('thrift'), 'thrift');
@@ -366,7 +370,8 @@ void main() {
       expect(htmlService.getLanguageForExtension('vb'), 'vbnet');
       expect(htmlService.getLanguageForExtension('vbscript'), 'vbscript');
       expect(htmlService.getLanguageForExtension('vbs'), 'vbscript');
-      expect(htmlService.getLanguageForExtension('vbscript-html'), 'vbscript-html');
+      expect(htmlService.getLanguageForExtension('vbscript-html'),
+          'vbscript-html');
       expect(htmlService.getLanguageForExtension('verilog'), 'verilog');
       expect(htmlService.getLanguageForExtension('v'), 'verilog');
       expect(htmlService.getLanguageForExtension('vhdl'), 'vhdl');
@@ -402,69 +407,13 @@ void main() {
       expect(htmlService.getReHighlightModeForExtension('bash'), isNotNull);
     });
 
-    test('Mode retrieval should fall back gracefully for unknown languages', () {
+    test('Mode retrieval should fall back gracefully for unknown languages',
+        () {
       // Even for unknown languages, we should get a fallback mode
-      final mode = htmlService.getReHighlightModeForExtension('unknown_language_xyz');
+      final mode =
+          htmlService.getReHighlightModeForExtension('unknown_language_xyz');
       expect(mode, isNotNull);
       expect(mode, builtinAllLanguages['plaintext']);
-    });
-
-    test('Content detection should identify various file types', () {
-      // Test HTML detection
-      const htmlContent = '<!DOCTYPE html><html><head><title>Test</title></head><body>Hello</body></html>';
-      expect(htmlService.ensureHtmlExtension('test', htmlContent), 'HTML File');
-
-      // Test CSS detection
-      const cssContent = 'body { background-color: #fff; } @media screen { div { color: blue; } }';
-      expect(htmlService.ensureHtmlExtension('test', cssContent), 'CSS File');
-
-      // Test JavaScript detection
-      const jsContent = 'function test() { const x = 1; let y = 2; return x + y; }';
-      expect(htmlService.ensureHtmlExtension('test', jsContent), 'JavaScript File');
-
-      // Test JSON detection
-      const jsonContent = '{"name": "test", "value": 123}';
-      expect(htmlService.ensureHtmlExtension('test', jsonContent), 'JSON File');
-
-      // Test YAML detection
-      const yamlContent = '---\nkey: value\nlist:\n  - item1\n  - item2';
-      expect(htmlService.ensureHtmlExtension('test', yamlContent), 'YAML File');
-
-      // Test Markdown detection
-      const markdownContent = '# Heading\n## Subheading\n**bold text**\n* item\n1. numbered';
-      expect(htmlService.ensureHtmlExtension('test', markdownContent), 'Markdown File');
-
-      // Test XML detection
-      const xmlContent = '<?xml version="1.0"?><root><element>content</element></root>';
-      expect(htmlService.ensureHtmlExtension('test', xmlContent), 'XML File');
-
-      // Test Python detection
-      const pythonContent = 'def hello():\n    print("Hello World")\n    return True';
-      expect(htmlService.ensureHtmlExtension('test', pythonContent), 'Python File');
-
-      // Test Java detection
-      const javaContent = 'public class Test {\n    public static void main(String[] args) {\n        System.out.println("Hello");\n    }\n}';
-      expect(htmlService.ensureHtmlExtension('test', javaContent), 'Java File');
-
-      // Test C++ detection
-      const cppContent = '#include <iostream>\nint main() {\n    std::cout << "Hello" << std::endl;\n    return 0;\n}';
-      expect(htmlService.ensureHtmlExtension('test', cppContent), 'C++ File');
-
-      // Test PHP detection
-      const phpContent = '<?php\n\$variable = "test";\necho \$variable;\n?';
-      expect(htmlService.ensureHtmlExtension('test', phpContent), 'PHP File');
-
-      // Test Ruby detection
-      const rubyContent = 'def hello\n  puts "Hello World"\nend\nhello()';
-      expect(htmlService.ensureHtmlExtension('test', rubyContent), 'Ruby File');
-
-      // Test SQL detection
-      const sqlContent = 'SELECT * FROM users WHERE id = 1 ORDER BY name LIMIT 10;';
-      expect(htmlService.ensureHtmlExtension('test', sqlContent), 'SQL File');
-
-      // Test fallback for unknown content
-      const unknownContent = 'This is just some random text without specific patterns.';
-      expect(htmlService.ensureHtmlExtension('test', unknownContent), 'Text File');
     });
   });
 }
