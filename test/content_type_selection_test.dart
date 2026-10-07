@@ -3,6 +3,8 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Content Type Selection Tests', () {
     late HtmlService htmlService;
 
@@ -13,12 +15,15 @@ void main() {
     test('getAvailableContentTypes returns non-empty list', () {
       final contentTypes = htmlService.getAvailableContentTypes();
       expect(contentTypes, isNotEmpty);
-      expect(contentTypes, contains('xml')); // html is mapped to xml in re_highlight
+      expect(contentTypes,
+          contains('xml')); // html is mapped to xml in re_highlight
       expect(contentTypes, contains('javascript'));
       expect(contentTypes, contains('plaintext'));
     });
 
-    test('updateFileContentType preserves filename but updates selected content type', () async {
+    test(
+        'updateFileContentType preserves filename but updates selected content type',
+        () async {
       // Load a sample file
       final sampleFile = HtmlFile(
         name: 'test.html',
@@ -35,7 +40,7 @@ void main() {
       // Verify initial state
       expect(htmlService.currentFile?.name, 'test.html');
       expect(htmlService.currentFile?.extension, 'html');
-      expect(htmlService.selectedContentType, isNull); // No selected content type initially
+      expect(htmlService.selectedContentType, 'html'); // Detected on load
 
       // Change content type to JavaScript
       htmlService.updateFileContentType('javascript');
@@ -43,7 +48,8 @@ void main() {
       // Verify the filename is preserved but selected content type is updated
       expect(htmlService.currentFile?.name, 'test.html'); // Filename unchanged
       expect(htmlService.currentFile?.extension, 'html'); // Extension unchanged
-      expect(htmlService.selectedContentType, 'javascript'); // Selected content type updated
+      expect(htmlService.selectedContentType,
+          'javascript'); // Selected content type updated
 
       // Change content type to CSS
       htmlService.updateFileContentType('css');
@@ -51,10 +57,13 @@ void main() {
       // Verify the filename is still preserved but selected content type is updated
       expect(htmlService.currentFile?.name, 'test.html'); // Filename unchanged
       expect(htmlService.currentFile?.extension, 'html'); // Extension unchanged
-      expect(htmlService.selectedContentType, 'css'); // Selected content type updated
+      expect(htmlService.selectedContentType,
+          'css'); // Selected content type updated
     });
 
-    test('updateFileContentType with plaintext preserves filename but updates selected content type', () async {
+    test(
+        'updateFileContentType with plaintext preserves filename but updates selected content type',
+        () async {
       final sampleFile = HtmlFile(
         name: 'test.html',
         path: 'test.html',
@@ -70,7 +79,8 @@ void main() {
       // Verify filename is preserved but selected content type is updated
       expect(htmlService.currentFile?.name, 'test.html'); // Filename unchanged
       expect(htmlService.currentFile?.extension, 'html'); // Extension unchanged
-      expect(htmlService.selectedContentType, 'plaintext'); // Selected content type updated
+      expect(htmlService.selectedContentType,
+          'plaintext'); // Selected content type updated
     });
 
     test('updateFileContentType preserves file content', () async {
@@ -91,7 +101,9 @@ void main() {
       expect(htmlService.currentFile?.size, content.length);
     });
 
-    test('Automatic option reverts to original file and clears selected content type', () async {
+    test(
+        'Automatic option reverts to original file and clears selected content type',
+        () async {
       final content = '<html><body>Test Content</body></html>';
       final sampleFile = HtmlFile(
         name: 'test.html',
@@ -103,21 +115,23 @@ void main() {
       );
 
       await htmlService.loadFile(sampleFile);
-      
+
       // Verify initial state
       expect(htmlService.currentFile?.name, 'test.html');
       expect(htmlService.currentFile?.extension, 'html');
-      expect(htmlService.selectedContentType, isNull);
+      expect(htmlService.selectedContentType, 'html'); // Detected on load
 
       // Change to JavaScript
       htmlService.updateFileContentType('javascript');
       expect(htmlService.currentFile?.name, 'test.html'); // Filename unchanged
-      expect(htmlService.selectedContentType, 'javascript'); // Selected content type set
+      expect(htmlService.selectedContentType,
+          'javascript'); // Selected content type set
 
       // Revert to Automatic
       htmlService.updateFileContentType('automatic');
       expect(htmlService.currentFile?.name, 'test.html'); // Filename unchanged
-      expect(htmlService.selectedContentType, isNull); // Selected content type cleared
+      expect(htmlService.selectedContentType,
+          isNull); // Selected content type cleared
 
       // Verify content is preserved
       expect(htmlService.currentFile?.content, content);

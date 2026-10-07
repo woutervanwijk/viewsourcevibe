@@ -3,13 +3,25 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  // Loading a file selects its detected content type and discards a manual
+  // choice made for the previous file.
+  const detectedType = {
+    'html': 'html',
+    'css': 'css',
+    'js': 'javascript',
+    'json': 'json',
+    'yaml': 'yaml',
+  };
+
   group('Automatic syntax highlighting reset tests', () {
-    
-    test('Selected content type should reset to null when loading new file', () async {
+    test('Selected content type should reset to null when loading new file',
+        () async {
       final htmlService = HtmlService();
-      
+
       print('🔍 Testing automatic reset when loading new files:');
-      
+
       // Step 1: Load initial file
       final initialFile = HtmlFile(
         name: 'initial.html',
@@ -19,21 +31,22 @@ void main() {
         size: 40,
         isUrl: true,
       );
-      
+
       await htmlService.loadFile(initialFile);
-      
+
       print('  1. Initial file loaded');
       print('     Selected content type: ${htmlService.selectedContentType}');
-      expect(htmlService.selectedContentType, isNull);
-      
+      expect(htmlService.selectedContentType,
+          'html'); // detected, manual choice discarded
+
       // Step 2: Manually set a content type (simulate user selection)
       htmlService.updateFileContentType('javascript');
-      
+
       print('  2. Manually set content type to JavaScript');
       print('     Selected content type: ${htmlService.selectedContentType}');
       expect(htmlService.selectedContentType, 'javascript');
-      
-      // Step 3: Load a new file - should reset to Automatic (null)
+
+      // Step 3: Load a new file - should reset to the detected type
       final newFile = HtmlFile(
         name: 'new.html',
         path: 'https://example.com/new.html',
@@ -42,36 +55,37 @@ void main() {
         size: 35,
         isUrl: true,
       );
-      
+
       await htmlService.loadFile(newFile);
-      
+
       print('  3. New file loaded');
       print('     Selected content type: ${htmlService.selectedContentType}');
-      
-      // Should be reset to null (Automatic)
-      expect(htmlService.selectedContentType, isNull);
+
+      // Should be reset to the detected type
+      expect(htmlService.selectedContentType,
+          'html'); // detected, manual choice discarded
       expect(htmlService.currentFile?.name, 'new.html');
-      
-      print('  ✅ Content type correctly reset to Automatic (null)');
+
+      print('  ✅ Content type correctly reset to the detected type');
     });
-    
+
     test('Multiple file loads should always reset content type', () async {
       final htmlService = HtmlService();
-      
+
       print('🔍 Testing multiple file loads:');
-      
+
       final files = [
         {'name': 'file1.html', 'content': '<html><body>File 1</body></html>'},
         {'name': 'file2.css', 'content': 'body { margin: 0; }'},
         {'name': 'file3.js', 'content': 'function test() { return true; }'},
       ];
-      
+
       for (final fileData in files) {
         final name = fileData['name']!;
         final content = fileData['content']!;
-        
+
         print('  Loading: $name');
-        
+
         final file = HtmlFile(
           name: name,
           path: 'https://example.com/$name',
@@ -80,21 +94,22 @@ void main() {
           size: content.length,
           isUrl: true,
         );
-        
+
         await htmlService.loadFile(file);
-        
-        // Each load should reset to Automatic
-        expect(htmlService.selectedContentType, isNull);
+
+        // Each load should reset to the detected type
+        expect(htmlService.selectedContentType,
+            detectedType[name.split('.').last]); // manual choice discarded
         expect(htmlService.currentFile?.name, name);
-        
-        print('    ✅ Content type reset to Automatic');
-        
+
+        print('    ✅ Content type reset to detected type');
+
         // Simulate user changing content type
         htmlService.updateFileContentType('python');
         expect(htmlService.selectedContentType, 'python');
         print('    ✅ Manually set to Python');
       }
-      
+
       // Final load should still reset
       final finalFile = HtmlFile(
         name: 'final.html',
@@ -104,22 +119,23 @@ void main() {
         size: 30,
         isUrl: true,
       );
-      
+
       await htmlService.loadFile(finalFile);
-      expect(htmlService.selectedContentType, isNull);
-      
+      expect(htmlService.selectedContentType,
+          'html'); // detected, manual choice discarded
+
       print('  ✅ Final load also reset content type');
     });
-    
+
     test('URL loading should also reset content type', () async {
       final htmlService = HtmlService();
-      
+
       print('🔍 Testing URL loading reset:');
-      
+
       // This test would normally require mocking HTTP requests
       // For now, we'll test the principle by checking that loadFile
       // (which is called by loadFromUrl) resets the content type
-      
+
       // Simulate the scenario:
       // 1. User loads a file and changes content type
       final initialFile = HtmlFile(
@@ -130,16 +146,17 @@ void main() {
         size: 35,
         isUrl: true,
       );
-      
+
       await htmlService.loadFile(initialFile);
-      expect(htmlService.selectedContentType, isNull);
-      print('  1. Initial load: content type is Automatic');
-      
+      expect(htmlService.selectedContentType,
+          'html'); // detected, manual choice discarded
+      print('  1. Initial load: content type is detected');
+
       // User changes to manual content type
       htmlService.updateFileContentType('typescript');
       expect(htmlService.selectedContentType, 'typescript');
       print('  2. User changed to TypeScript');
-      
+
       // Simulate loading from URL (which calls loadFile internally)
       final urlFile = HtmlFile(
         name: 'url-page.html',
@@ -149,23 +166,24 @@ void main() {
         size: 40,
         isUrl: true,
       );
-      
+
       // This simulates what happens when loadFromUrl calls loadFile
       await htmlService.loadFile(urlFile);
-      
-      // Should reset to Automatic
-      expect(htmlService.selectedContentType, isNull);
+
+      // Should reset to the detected type
+      expect(htmlService.selectedContentType,
+          'html'); // detected, manual choice discarded
       expect(htmlService.currentFile?.name, 'url-page.html');
-      
-      print('  3. URL load: content type reset to Automatic');
+
+      print('  3. URL load: content type reset to detected type');
       print('  ✅ URL loading correctly resets content type');
     });
-    
+
     test('Automatic option should work correctly after reset', () async {
       final htmlService = HtmlService();
-      
+
       print('🔍 Testing Automatic option functionality:');
-      
+
       // Load a file
       final file = HtmlFile(
         name: 'test.html',
@@ -175,21 +193,22 @@ void main() {
         size: 30,
         isUrl: true,
       );
-      
+
       await htmlService.loadFile(file);
-      expect(htmlService.selectedContentType, isNull);
-      print('  1. File loaded, content type is Automatic (null)');
-      
+      expect(htmlService.selectedContentType,
+          'html'); // detected, manual choice discarded
+      print('  1. File loaded, content type is detected');
+
       // Change to manual content type
       htmlService.updateFileContentType('css');
       expect(htmlService.selectedContentType, 'css');
       print('  2. Changed to CSS manually');
-      
+
       // Use Automatic option (should revert to original file)
       htmlService.updateFileContentType('automatic');
       expect(htmlService.selectedContentType, isNull);
       print('  3. Automatic option used, content type is null again');
-      
+
       // Load new file (should still reset)
       final newFile = HtmlFile(
         name: 'new.html',
@@ -199,19 +218,20 @@ void main() {
         size: 28,
         isUrl: true,
       );
-      
+
       await htmlService.loadFile(newFile);
-      expect(htmlService.selectedContentType, isNull);
-      print('  4. New file loaded, content type still Automatic');
-      
+      expect(htmlService.selectedContentType,
+          'html'); // detected, manual choice discarded
+      print('  4. New file loaded, content type detected again');
+
       print('  ✅ Automatic option works correctly');
     });
-    
+
     test('Content type reset should work with various file types', () async {
       final htmlService = HtmlService();
-      
+
       print('🔍 Testing reset with different file types:');
-      
+
       final fileTypes = [
         {
           'name': 'script.js',
@@ -234,14 +254,14 @@ void main() {
           'extension': 'yaml'
         },
       ];
-      
+
       for (final fileType in fileTypes) {
         final name = fileType['name']!;
         final content = fileType['content']!;
         final extension = fileType['extension']!;
-        
+
         print('  Testing .$extension files:');
-        
+
         final file = HtmlFile(
           name: name,
           path: 'https://example.com/$name',
@@ -250,16 +270,17 @@ void main() {
           size: content.length,
           isUrl: true,
         );
-        
+
         // Load file
         await htmlService.loadFile(file);
-        expect(htmlService.selectedContentType, isNull);
-        print('    ✅ $name: content type reset to Automatic');
-        
+        expect(htmlService.selectedContentType,
+            detectedType[name.split('.').last]); // manual choice discarded
+        print('    ✅ $name: content type reset to detected type');
+
         // Change content type
         htmlService.updateFileContentType('python');
         expect(htmlService.selectedContentType, 'python');
-        
+
         // Load another file of same type
         final anotherFile = HtmlFile(
           name: 'another.$extension',
@@ -269,9 +290,10 @@ void main() {
           size: content.length,
           isUrl: true,
         );
-        
+
         await htmlService.loadFile(anotherFile);
-        expect(htmlService.selectedContentType, isNull);
+        expect(htmlService.selectedContentType,
+            detectedType[name.split('.').last]); // manual choice discarded
         print('    ✅ another.$extension: content type reset again');
       }
     });

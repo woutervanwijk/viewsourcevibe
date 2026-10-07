@@ -80,8 +80,8 @@ void main() {
         headers: {'location': redirectedUrl},
       );
 
-      // Verify the response is a redirect
-      expect(mockStreamedResponse.isRedirect, true);
+      // Verify the response is a redirect (3xx with a Location header)
+      expect(mockStreamedResponse.statusCode ~/ 100, 3);
       expect(mockStreamedResponse.headers['location'], redirectedUrl);
 
       print('  ✅ Mock redirect response created correctly');
@@ -128,7 +128,8 @@ void main() {
       for (final scenario in scenarios) {
         final name = scenario['name']! as String;
         final original = scenario['original']! as String;
-        final redirects = List<String>.from(scenario['redirects']! as Iterable<dynamic>);
+        final redirects =
+            List<String>.from(scenario['redirects']! as Iterable<dynamic>);
         final expectedFinal = scenario['expectedFinal']! as String;
 
         print('  Testing: $name');
@@ -161,8 +162,9 @@ void main() {
           headers: {'location': 'https://example.com/redirect'},
         );
 
-        // Verify it's detected as a redirect
-        expect(mockResponse.isRedirect, true,
+        // Verify it's detected as a redirect (http's isRedirect is only a
+        // constructor flag, so check the status class instead)
+        expect(mockResponse.statusCode ~/ 100 == 3, true,
             reason: 'Status $statusCode should be redirect');
         print('  ✅ Status $statusCode detected as redirect');
       }
@@ -176,7 +178,7 @@ void main() {
           statusCode,
         );
 
-        expect(mockResponse.isRedirect, false,
+        expect(mockResponse.statusCode ~/ 100 == 3, false,
             reason: 'Status $statusCode should not be redirect');
         print('  ✅ Status $statusCode correctly not detected as redirect');
       }

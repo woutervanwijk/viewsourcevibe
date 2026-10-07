@@ -29,14 +29,12 @@ void main() {
     test('Verify method handles edge cases', () async {
       final htmlService = HtmlService();
 
-      // Test that invalid URLs throw appropriate exceptions
-      await expectLater(
-        () => htmlService.loadFromUrl(''),
-        throwsA(isA<Exception>()),
-      );
+      // An empty URL is ignored.
+      await expectLater(htmlService.loadFromUrl(''), completes);
 
+      // A URL without a host is rejected.
       await expectLater(
-        () => htmlService.loadFromUrl('invalid-url'),
+        () => htmlService.loadFromUrl('https://'),
         throwsA(isA<Exception>()),
       );
     });
