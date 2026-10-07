@@ -70,7 +70,7 @@ class FormatUtils {
   static String formatNumberWithDots(String numberStr) {
     if (numberStr.isEmpty) return numberStr;
 
-    final sep = _thousandsSeparator;
+    final sep = thousandsSeparator;
     final buffer = StringBuffer();
     final chars = numberStr.split('').reversed.toList();
     for (int i = 0; i < chars.length; i++) {
@@ -93,7 +93,7 @@ class FormatUtils {
 
   /// Returns the locale-appropriate thousands separator.
   /// Dutch/German/Spanish/French use '.'; English uses ','.
-  static String get _thousandsSeparator {
+  static String get thousandsSeparator {
     final lang = PlatformDispatcher.instance.locale.languageCode.toLowerCase();
     // Languages that conventionally use '.' (or a space interpreted as '.') as thousands separator
     const dotLanguages = {
@@ -129,7 +129,7 @@ class FormatUtils {
   }
 
   static String _formatWithCommas(int n) {
-    final sep = _thousandsSeparator;
+    final sep = thousandsSeparator;
     final s = n.toString();
     final buffer = StringBuffer();
     final chars = s.split('').reversed.toList();
