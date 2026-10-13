@@ -161,7 +161,11 @@ class MediaView extends StatelessWidget {
             .compareTo((mapB['src'] ?? '').toString().toLowerCase());
       });
 
-    if (images.isEmpty && videos.isEmpty) {
+    final List<dynamic> fonts = _deduplicateMedia(
+      List.from(metadata['media']['fonts'] ?? []),
+    );
+
+    if (images.isEmpty && videos.isEmpty && fonts.isEmpty) {
       // Since we already checked for loading states at the beginning,
       // we can directly show the empty state message
       return ConstrainedBox(
@@ -176,7 +180,7 @@ class MediaView extends StatelessWidget {
                   size: 64,
                   color: Theme.of(context).colorScheme.outlineVariant),
               const SizedBox(height: 16),
-              const Text('No Images or Videos found'),
+              const Text('No Images, Videos or Fonts found'),
             ],
           ),
         ),
@@ -195,6 +199,12 @@ class MediaView extends StatelessWidget {
               _buildSectionTitle(context, 'Videos (${videos.length})'),
               const SizedBox(height: 8),
               ...videos.map((video) => _buildVideoItem(context, video)),
+              const SizedBox(height: 24),
+            ],
+            if (fonts.isNotEmpty) ...[
+              _buildSectionTitle(context, 'Fonts (${fonts.length})'),
+              const SizedBox(height: 8),
+              ...fonts.map((font) => _FontItem(font: font)),
               const SizedBox(height: 24),
             ],
             if (images.isNotEmpty) ...[
@@ -529,6 +539,107 @@ class MediaView extends StatelessWidget {
                 );
               },
             ),
+    );
+  }
+}
+
+/// Font file card: downloads the font, registers it under a unique family
+/// and renders a sample. Falls back to name-only if the format can't be loaded
+/// (e.g. WOFF2 on some native platforms).
+class _FontItem extends StatefulWidget {
+  final Map font;
+  const _FontItem({required this.font});
+
+  @override
+  State<_FontItem> createState() => _FontItemState();
+}
+
+class _FontItemState extends State<_FontItem> {
+  static int _counter = 0;
+  late final String _src = widget.font['src'].toString();
+  final String _family = 'vsv_font_${_counter++}';
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final data = await NetworkAssetBundle(Uri.parse(_src)).load('');
+      final loader = FontLoader(_family)..addFont(Future.value(data));
+      await loader.load();
+      if (mounted) setState(() => _loaded = true);
+    } catch (e) {
+      debugPrint('Font preview unavailable for $_src: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final path = Uri.tryParse(_src)?.pathSegments.lastOrNull ?? _src;
+    final dot = path.lastIndexOf('.');
+    final name = Uri.decodeComponent(dot > 0 ? path.substring(0, dot) : path);
+    final format = dot > 0 ? path.substring(dot + 1).toUpperCase() : '';
+    final size = widget.font['size'];
+    final hasSize = size is Map && (size['decoded'] ?? 0) > 0;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: _src));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Font URL copied to clipboard')),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_loaded)
+                Text(
+                  'Aa Bb Cc 0123 — The quick brown fox',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontFamily: _family, fontSize: 24),
+                ),
+              if (_loaded) const SizedBox(height: 8),
+              Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              Text(
+                [
+                  if (format.isNotEmpty) format,
+                  if (hasSize)
+                    FormatUtils.formatBytesWithTransfer(
+                        Map<String, dynamic>.from(size)),
+                ].join(' · '),
+                style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.primary,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _src,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

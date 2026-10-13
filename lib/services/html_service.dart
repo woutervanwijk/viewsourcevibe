@@ -148,7 +148,7 @@ class HtmlService extends ChangeNotifier {
     if (_useBrowserByDefault) return 0;
     int idx = 1; // starts after Source
     if (isHtmlOrXml) idx += 1; // DOM Tree
-    if (showMetadataTabs) idx += 3; // Metadata + Services + Media
+    if (showMetadataTabs) idx += 4; // Metadata + Services + Privacy + Media
     if (showServerTabs) {
       idx += 6; // Cookies + Timeline + Probe + Headers + Security + Sovereignty
     }
@@ -3926,6 +3926,19 @@ Technical details: $e''';
           }
         }
       }
+    }
+
+    // Fonts: taken from the resources the browser actually loaded
+    if (_pageMetadata!['media'] != null) {
+      final fontExt = RegExp(r'\.(woff2?|ttf|otf|eot)$', caseSensitive: false);
+      _pageMetadata!['media']['fonts'] = [
+        for (final r in _resourcePerformanceData ?? const [])
+          if (fontExt.hasMatch(Uri.tryParse(r['name'] as String? ?? '')?.path ?? ''))
+            {
+              'src': r['name'],
+              'size': {'transfer': r['transfer'], 'decoded': r['decoded']},
+            }
+      ];
     }
 
     _sortMetadataLists();

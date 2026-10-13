@@ -12,6 +12,7 @@ import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/widgets/metadata_view.dart';
 import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/media_view.dart';
+import 'package:view_source_vibe/widgets/privacy_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
 import 'package:view_source_vibe/widgets/request_timeline_view.dart';
 import 'package:view_source_vibe/widgets/sovereignty_view.dart';
@@ -188,6 +189,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (showMetadataTabs) ...[
         (Icons.info_outline, 'Metadata'),
         (Icons.layers_outlined, 'Services'),
+        (Icons.privacy_tip_outlined, 'Privacy'),
         (Icons.perm_media_outlined, 'Media'),
       ],
       if (showServerTabs) ...[
@@ -278,6 +280,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: _buildRefreshable(const ServicesView(), 'services')),
         if (showMetadataTabs)
           KeepAliveWrapper(
+              child: _buildRefreshable(const PrivacyView(), 'privacy')),
+        if (showMetadataTabs)
+          KeepAliveWrapper(
               child: _buildRefreshable(const MediaView(), 'media')),
         if (showServerTabs)
           KeepAliveWrapper(
@@ -320,7 +325,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             key: const ValueKey('tab_services'),
             child: _buildRefreshable(const ServicesView(), 'services')),
 
-      // 5. Media (Conditional)
+      // 5. Privacy (Conditional)
+      if (showMetadataTabs)
+        KeepAliveWrapper(
+            key: const ValueKey('tab_privacy'),
+            child: _buildRefreshable(const PrivacyView(), 'privacy')),
+
+      // 6. Media (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
             key: const ValueKey('tab_media'),

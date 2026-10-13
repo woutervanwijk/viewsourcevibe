@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/tracker_detector.dart';
 import '../utils/format_utils.dart';
 
 class ServicesView extends StatelessWidget {
@@ -623,53 +624,8 @@ class ServicesView extends StatelessWidget {
   }
 
   List<String> _allResourceUrls(
-      Map<String, dynamic>? metadata, HtmlService htmlService) {
-    final urls = <String>[];
-
-    void add(dynamic value) {
-      if (value is String && value.isNotEmpty) urls.add(value);
-      if (value is Map) {
-        final raw = value['src'] ?? value['href'] ?? value['name'];
-        if (raw is String && raw.isNotEmpty) urls.add(raw);
-      }
-    }
-
-    if (metadata != null) {
-      for (final key in [
-        'jsLinks',
-        'externalJsLinks',
-        'cssLinks',
-        'externalCssLinks',
-        'iframeLinks',
-        'externalIframeLinks',
-      ]) {
-        final list = metadata[key];
-        if (list is List) {
-          for (final item in list) {
-            add(item);
-          }
-        }
-      }
-
-      final media = metadata['media'];
-      if (media is Map) {
-        for (final key in ['images', 'videos']) {
-          final list = media[key];
-          if (list is List) {
-            for (final item in list) {
-              add(item);
-            }
-          }
-        }
-      }
-    }
-
-    for (final resource in htmlService.resourceTimelineData) {
-      add(resource);
-    }
-
-    return urls;
-  }
+          Map<String, dynamic>? metadata, HtmlService htmlService) =>
+      collectResourceUrls(metadata, htmlService.resourceTimelineData);
 
   _TrackerMatch? _matchTrackerUrl(String url) {
     final lower = url.toLowerCase();
