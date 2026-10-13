@@ -33,6 +33,8 @@ class PrivacyView extends StatelessWidget {
           htmlService.pageMetadata, htmlService.resourceTimelineData),
       cookies: (htmlService.probeResult?['analyzedCookies'] as List? ?? [])
           .whereType<Map>(),
+      services: (htmlService.pageMetadata?['detectedServices'] as Map? ?? {})
+          .map((k, v) => MapEntry(k.toString(), List<String>.from(v as List))),
     );
 
     if (hits.isEmpty) {
@@ -134,6 +136,7 @@ class _TrackerTile extends StatelessWidget {
     final details = [
       if (hit.requests > 0)
         '${hit.requests} request${hit.requests == 1 ? '' : 's'}',
+      if (hit.inSource && hit.requests == 0) 'in page source',
       if (hit.cookies.isNotEmpty)
         '${hit.cookies.length} cookie${hit.cookies.length == 1 ? '' : 's'}',
     ].join(' · ');

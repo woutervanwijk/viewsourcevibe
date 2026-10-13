@@ -763,13 +763,13 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
   final patterns = {
     'Analytics & Trackers': {
       'Google Analytics':
-          r'google-analytics\.com|googletagmanager\.com/gtag/js|_ga|_gid',
+          r'google-analytics\.com|googletagmanager\.com/gtag/js|\bgtag\(',
       'Google Tag Manager': r'googletagmanager\.com/gtm\.js',
       'HubSpot Analytics': r'js\.hs-scripts\.com|js\.hs-analytics\.net',
       'Facebook Pixel': r'fbevents\.js|connect\.facebook\.net|fbq\(',
       'Hotjar': r'static\.hotjar\.com|hj\(',
       'Mixpanel': r'cdn\.mxpnl\.com|mixpanel\.init',
-      'Segment': r'cdn\.segment\.com|analytics\.js',
+      'Segment': r'cdn\.segment\.com|analytics\.load\(',
       'Crazy Egg': r'script\.crazyegg\.com',
       'Plausible': r'plausible\.io/js/script\.js',
       'Fathom': r'cdn\.usefathom\.com',

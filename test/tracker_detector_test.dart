@@ -39,4 +39,19 @@ void main() {
     expect(ga.requests, 2);
     expect(ga.cookies, {'_ga'});
   });
+
+  test('adds trackers found in page source, skips unknown social widgets', () {
+    final hits = detectTrackers(
+      pageUrl: 'https://example.com/',
+      resourceUrls: const [],
+      cookies: const [],
+      services: {
+        'Analytics & Trackers': ['Google Tag Manager', 'Facebook Pixel'],
+        'Social & Widgets': ['WhatsApp'],
+      },
+    );
+
+    expect(hits.map((h) => h.name), ['Meta Pixel', 'Google Tag Manager']);
+    expect(hits.every((h) => h.inSource), isTrue);
+  });
 }
