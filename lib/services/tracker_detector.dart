@@ -39,6 +39,9 @@ class TrackerHit {
   final Set<String> cookies = {};
   int requests = 0;
 
+  /// Found in the page source (inline snippets, pixels) rather than as a request.
+  bool inSource = false;
+
   TrackerHit(this.name, this.category, this.iconDomain);
 }
 
@@ -137,6 +140,8 @@ const trackerDatabase = <TrackerInfo>[
   TrackerInfo('ShareThis', TrackerCategory.social, ['sharethis.com']),
   TrackerInfo('Disqus', TrackerCategory.social, ['disqus.com', 'disquscdn.com']),
   TrackerInfo('Twitch', TrackerCategory.social, ['twitch.tv']),
+  TrackerInfo('Instagram', TrackerCategory.social, ['instagram.com', 'cdninstagram.com']),
+  TrackerInfo('Spotify', TrackerCategory.social, ['spotify.com', 'scdn.co']),
   // Analytics
   TrackerInfo('Google Analytics', TrackerCategory.analytics,
       ['analytics.google.com', 'google-analytics.com']),
@@ -183,6 +188,15 @@ const trackerDatabase = <TrackerInfo>[
   TrackerInfo('Pardot', TrackerCategory.marketing, ['pardot.com']),
   TrackerInfo('Intercom', TrackerCategory.marketing,
       ['intercom.io', 'intercomcdn.com']),
+  TrackerInfo('ActiveCampaign', TrackerCategory.marketing,
+      ['activecampaign.com', 'trackcmp.net']),
+  TrackerInfo('Drift', TrackerCategory.marketing, ['drift.com', 'driftt.com']),
+  TrackerInfo('Zendesk', TrackerCategory.marketing,
+      ['zendesk.com', 'zdassets.com']),
+  TrackerInfo('Crisp', TrackerCategory.marketing, ['crisp.chat']),
+  TrackerInfo('Tawk.to', TrackerCategory.marketing, ['tawk.to']),
+  TrackerInfo('Salesforce', TrackerCategory.marketing,
+      ['salesforce.com', 'force.com']),
 ];
 
 TrackerInfo? _byHost(String host) {
@@ -250,6 +264,7 @@ List<TrackerHit> detectTrackers({
   required String pageUrl,
   required Iterable<String> resourceUrls,
   required Iterable<Map> cookies,
+  Map<String, List<String>> services = const {},
 }) {
   final pageHost = _hostOf(pageUrl);
   final hits = <String, TrackerHit>{};
@@ -295,6 +310,27 @@ List<TrackerHit> detectTrackers({
                 null));
     hit.cookies.add(name);
   }
+
+  // Services found by pattern in the page source (inline snippets etc.).
+  const serviceCategories = {
+    'Analytics & Trackers': TrackerCategory.analytics,
+    'Advertising': TrackerCategory.advertising,
+    'Marketing & CRM': TrackerCategory.marketing,
+    'Social & Widgets': TrackerCategory.social,
+  };
+  services.forEach((group, names) {
+    final category = serviceCategories[group];
+    if (category == null) return;
+    for (final name in names) {
+      final info = _byProvider(name);
+      // Unknown social widgets (share links etc.) are not trackers.
+      if (info == null && category == TrackerCategory.social) continue;
+      (info != null
+              ? hitFor(info)
+              : hits.putIfAbsent(name, () => TrackerHit(name, category, null)))
+          .inSource = true;
+    }
+  });
 
   return hits.values.toList()
     ..sort((a, b) {
