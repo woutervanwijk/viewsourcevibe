@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:view_source_vibe/widgets/service_logo.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -715,8 +716,11 @@ class MetadataView extends StatelessWidget {
       runSpacing: 8,
       children: tech.entries.map((e) {
         return Chip(
-          avatar: Icon(Icons.code,
-              size: 16, color: Theme.of(context).colorScheme.primary),
+          avatar: ServiceLogo(
+              label: e.value.toString(),
+              fallback: Icons.code,
+              color: Theme.of(context).colorScheme.primary,
+              size: 18),
           label: Text(
             '${e.key}: ${e.value}',
             style: TextStyle(

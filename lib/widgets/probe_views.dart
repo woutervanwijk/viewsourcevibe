@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:view_source_vibe/widgets/service_logo.dart';
+import 'package:view_source_vibe/services/logo_service.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -2462,13 +2464,25 @@ class ProbeCookiesView extends ProbeViewBase {
                           border: Border.all(
                               color: badgeColor.withValues(alpha: 0.5)),
                         ),
-                        child: Text(
-                          provider,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: badgeColor,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (logoDomainFor(provider) != null) ...[
+                              ServiceLogo(
+                                  label: provider,
+                                  fallback: Icons.cookie_outlined,
+                                  size: 14),
+                              const SizedBox(width: 4),
+                            ],
+                            Text(
+                              provider,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: badgeColor,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
