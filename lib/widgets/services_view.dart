@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/tracker_detector.dart';
+import 'package:view_source_vibe/widgets/service_logo.dart';
 import '../utils/format_utils.dart';
 
 class ServicesView extends StatelessWidget {
@@ -198,7 +199,11 @@ class ServicesView extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(finding.icon, color: color, size: 18),
+                      ServiceLogo(
+                          label: finding.provider,
+                          fallback: finding.icon,
+                          color: color,
+                          size: 22),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -487,6 +492,8 @@ class ServicesView extends StatelessWidget {
                 ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
               return sortedItems.map((item) {
                 return Chip(
+                  avatar: ServiceLogo(
+                      label: item, fallback: icon, color: color, size: 20),
                   label: Text(item),
                   backgroundColor: color.withValues(alpha: 0.05),
                   side: BorderSide(color: color.withValues(alpha: 0.2)),

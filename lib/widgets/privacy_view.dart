@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/tracker_detector.dart';
+import 'package:view_source_vibe/widgets/service_logo.dart';
 
 /// Who is tracking you on this page: known trackers found in loaded resources
 /// and cookies, with logos.
@@ -149,23 +150,12 @@ class _TrackerTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
-        leading: SizedBox(
-          width: 36,
-          height: 36,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: hit.iconDomain == null
-                ? Icon(fallbackIcon, color: color)
-                // Logos come from DuckDuckGo's favicon service, so the page
-                // you inspect is never contacted for them.
-                : Image.network(
-                    'https://icons.duckduckgo.com/ip3/${hit.iconDomain}.ico',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) =>
-                        Icon(fallbackIcon, color: color),
-                  ),
-          ),
-        ),
+        leading: ServiceLogo(
+            domain: hit.iconDomain,
+            label: hit.name,
+            fallback: fallbackIcon,
+            color: color,
+            size: 36),
         title:
             Text(hit.name, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Column(

@@ -47,21 +47,19 @@ class TrackerHit {
 
 const trackerDatabase = <TrackerInfo>[
   // Advertising
-  TrackerInfo(
-      'Google Ads',
-      TrackerCategory.advertising,
-      [
-        'ads.google.com',
-        'doubleclick.net',
-        'googleadservices.com',
-        'googlesyndication.com',
-        '2mdn.net',
-        'adservice.google.com',
-      ],
-      aliases: ['google', 'google ads', 'doubleclick']),
-  TrackerInfo(
-      'Meta Pixel',
-      TrackerCategory.advertising,
+  TrackerInfo('Google Ads', TrackerCategory.advertising, [
+    'ads.google.com',
+    'doubleclick.net',
+    'googleadservices.com',
+    'googlesyndication.com',
+    '2mdn.net',
+    'adservice.google.com',
+  ], aliases: [
+    'google',
+    'google ads',
+    'doubleclick'
+  ]),
+  TrackerInfo('Meta Pixel', TrackerCategory.advertising,
       ['facebook.com', 'connect.facebook.net', 'facebook.net'],
       aliases: ['facebook', 'meta', 'instagram']),
   TrackerInfo('Microsoft Advertising', TrackerCategory.advertising,
@@ -69,7 +67,7 @@ const trackerDatabase = <TrackerInfo>[
       aliases: ['bing / microsoft', 'bing'], icon: 'ads.microsoft.com'),
   TrackerInfo('TikTok Pixel', TrackerCategory.advertising,
       ['analytics.tiktok.com', 'tiktok.com'],
-      aliases: ['tiktok']),
+      aliases: ['tiktok'], icon: 'tiktok.com'),
   TrackerInfo('LinkedIn Insight', TrackerCategory.advertising,
       ['linkedin.com', 'snap.licdn.com', 'px.ads.linkedin.com'],
       aliases: ['linkedin']),
@@ -78,17 +76,18 @@ const trackerDatabase = <TrackerInfo>[
       aliases: ['pinterest']),
   TrackerInfo('X / Twitter Ads', TrackerCategory.advertising,
       ['ads-twitter.com', 'analytics.twitter.com', 'twitter.com', 't.co'],
-      aliases: ['x', 'twitter']),
+      aliases: ['x', 'twitter'], icon: 'x.com'),
   TrackerInfo('Snapchat Pixel', TrackerCategory.advertising,
       ['sc-static.net', 'snapchat.com'],
-      aliases: ['snapchat', 'snap']),
+      aliases: ['snapchat', 'snap'], icon: 'snapchat.com'),
   TrackerInfo('Reddit Pixel', TrackerCategory.advertising,
       ['alb.reddit.com', 'redditstatic.com'],
-      aliases: ['reddit']),
+      aliases: ['reddit'], icon: 'reddit.com'),
   TrackerInfo('Amazon Ads', TrackerCategory.advertising,
       ['amazon-adsystem.com', 'amazon.com'],
-      aliases: ['amazon']),
-  TrackerInfo('Criteo', TrackerCategory.advertising, ['criteo.com', 'criteo.net']),
+      aliases: ['amazon'], icon: 'advertising.amazon.com'),
+  TrackerInfo(
+      'Criteo', TrackerCategory.advertising, ['criteo.com', 'criteo.net']),
   TrackerInfo('Taboola', TrackerCategory.advertising, ['taboola.com']),
   TrackerInfo('Outbrain', TrackerCategory.advertising, ['outbrain.com']),
   TrackerInfo('AdRoll', TrackerCategory.advertising, ['adroll.com']),
@@ -98,24 +97,29 @@ const trackerDatabase = <TrackerInfo>[
   TrackerInfo('Magnite (Rubicon)', TrackerCategory.advertising,
       ['rubiconproject.com', 'magnite.com'],
       aliases: ['rubicon', 'magnite']),
-  TrackerInfo('OpenX', TrackerCategory.advertising, ['openx.net']),
+  TrackerInfo('OpenX', TrackerCategory.advertising, ['openx.net'],
+      icon: 'openx.com'),
   TrackerInfo('Xandr (AppNexus)', TrackerCategory.advertising, ['adnxs.com'],
       icon: 'xandr.com', aliases: ['appnexus', 'xandr']),
   TrackerInfo('Index Exchange', TrackerCategory.advertising,
       ['casalemedia.com', 'indexww.com'],
       icon: 'indexexchange.com'),
   TrackerInfo('Adform', TrackerCategory.advertising, ['adform.net']),
-  TrackerInfo('Smart AdServer', TrackerCategory.advertising,
-      ['smartadserver.com'],
+  TrackerInfo(
+      'Smart AdServer', TrackerCategory.advertising, ['smartadserver.com'],
       aliases: ['smartadserver']),
   TrackerInfo('Teads', TrackerCategory.advertising, ['teads.tv']),
   TrackerInfo('Yahoo Ads', TrackerCategory.advertising,
       ['ads.yahoo.com', 'analytics.yahoo.com', 'yahoo.com'],
       aliases: ['yahoo']),
-  TrackerInfo('LiveRamp', TrackerCategory.advertising, ['rlcdn.com', 'liveramp.com']),
-  TrackerInfo('Lotame', TrackerCategory.advertising, ['crwdcntrl.net', 'lotame.com']),
-  TrackerInfo('Adobe Audience Manager', TrackerCategory.advertising,
-      ['demdex.net'],
+  TrackerInfo(
+      'LiveRamp', TrackerCategory.advertising, ['rlcdn.com', 'liveramp.com'],
+      icon: 'liveramp.com'),
+  TrackerInfo(
+      'Lotame', TrackerCategory.advertising, ['crwdcntrl.net', 'lotame.com'],
+      icon: 'lotame.com'),
+  TrackerInfo(
+      'Adobe Audience Manager', TrackerCategory.advertising, ['demdex.net'],
       icon: 'adobe.com', aliases: ['adobe advertising']),
   // Session recording
   TrackerInfo('Hotjar', TrackerCategory.behavior, ['hotjar.com', 'hotjar.io']),
@@ -127,8 +131,8 @@ const trackerDatabase = <TrackerInfo>[
   TrackerInfo('Lucky Orange', TrackerCategory.behavior,
       ['luckyorange.com', 'luckyorange.net']),
   TrackerInfo('Smartlook', TrackerCategory.behavior, ['smartlook.com']),
-  TrackerInfo('LogRocket', TrackerCategory.behavior,
-      ['logrocket.com', 'lr-ingest.io']),
+  TrackerInfo(
+      'LogRocket', TrackerCategory.behavior, ['logrocket.com', 'lr-ingest.io']),
   TrackerInfo('Inspectlet', TrackerCategory.behavior, ['inspectlet.com']),
   TrackerInfo('Contentsquare', TrackerCategory.behavior,
       ['contentsquare.com', 'contentsquare.net'],
@@ -136,44 +140,55 @@ const trackerDatabase = <TrackerInfo>[
   // Social
   TrackerInfo('YouTube', TrackerCategory.social, ['youtube.com', 'ytimg.com']),
   TrackerInfo('Vimeo', TrackerCategory.social, ['vimeo.com', 'vimeocdn.com']),
-  TrackerInfo('AddThis', TrackerCategory.social, ['addthis.com', 'addthisedge.com']),
+  TrackerInfo(
+      'AddThis', TrackerCategory.social, ['addthis.com', 'addthisedge.com']),
   TrackerInfo('ShareThis', TrackerCategory.social, ['sharethis.com']),
-  TrackerInfo('Disqus', TrackerCategory.social, ['disqus.com', 'disquscdn.com']),
+  TrackerInfo(
+      'Disqus', TrackerCategory.social, ['disqus.com', 'disquscdn.com']),
   TrackerInfo('Twitch', TrackerCategory.social, ['twitch.tv']),
-  TrackerInfo('Instagram', TrackerCategory.social, ['instagram.com', 'cdninstagram.com']),
+  TrackerInfo('Instagram', TrackerCategory.social,
+      ['instagram.com', 'cdninstagram.com']),
   TrackerInfo('Spotify', TrackerCategory.social, ['spotify.com', 'scdn.co']),
   // Analytics
   TrackerInfo('Google Analytics', TrackerCategory.analytics,
-      ['analytics.google.com', 'google-analytics.com']),
+      ['analytics.google.com', 'google-analytics.com'],
+      icon: 'marketingplatform.google.com'),
   TrackerInfo('Google Tag Manager', TrackerCategory.analytics,
       ['tagmanager.google.com', 'googletagmanager.com']),
   TrackerInfo('Adobe Analytics', TrackerCategory.analytics,
       ['omtrdc.net', '2o7.net', 'adobedc.net', 'adobedtm.com'],
       icon: 'adobe.com'),
-  TrackerInfo('Matomo', TrackerCategory.analytics, ['matomo.cloud', 'matomo.org'],
+  TrackerInfo(
+      'Matomo', TrackerCategory.analytics, ['matomo.cloud', 'matomo.org'],
       aliases: ['piwik']),
   TrackerInfo('Piwik PRO', TrackerCategory.analytics, ['piwik.pro']),
-  TrackerInfo('Mixpanel', TrackerCategory.analytics, ['mixpanel.com', 'mxpnl.com']),
-  TrackerInfo('Segment', TrackerCategory.analytics, ['segment.com', 'segment.io']),
+  TrackerInfo(
+      'Mixpanel', TrackerCategory.analytics, ['mixpanel.com', 'mxpnl.com']),
+  TrackerInfo(
+      'Segment', TrackerCategory.analytics, ['segment.com', 'segment.io']),
   TrackerInfo('Amplitude', TrackerCategory.analytics, ['amplitude.com']),
-  TrackerInfo('Heap', TrackerCategory.analytics, ['heapanalytics.com', 'heap.io']),
+  TrackerInfo(
+      'Heap', TrackerCategory.analytics, ['heapanalytics.com', 'heap.io'],
+      icon: 'heap.io'),
   TrackerInfo('Plausible', TrackerCategory.analytics, ['plausible.io']),
   TrackerInfo('Fathom', TrackerCategory.analytics, ['usefathom.com']),
   TrackerInfo('Yandex Metrica', TrackerCategory.analytics,
       ['mc.yandex.ru', 'mc.yandex.com'],
-      icon: 'metrica.yandex.com', aliases: ['yandex']),
+      icon: 'yandex.com', aliases: ['yandex']),
   TrackerInfo('Cloudflare Analytics', TrackerCategory.analytics,
       ['cloudflareinsights.com'],
       icon: 'cloudflare.com'),
-  TrackerInfo('New Relic', TrackerCategory.analytics,
-      ['newrelic.com', 'nr-data.net']),
+  TrackerInfo(
+      'New Relic', TrackerCategory.analytics, ['newrelic.com', 'nr-data.net']),
   TrackerInfo('Chartbeat', TrackerCategory.analytics,
       ['chartbeat.com', 'chartbeat.net']),
   TrackerInfo('Parse.ly', TrackerCategory.analytics, ['parsely.com']),
   TrackerInfo('Comscore', TrackerCategory.analytics,
-      ['scorecardresearch.com', 'comscore.com']),
+      ['scorecardresearch.com', 'comscore.com'],
+      icon: 'comscore.com'),
   TrackerInfo('Quantcast', TrackerCategory.analytics,
-      ['quantserve.com', 'quantcount.com', 'quantcast.com']),
+      ['quantserve.com', 'quantcount.com', 'quantcast.com'],
+      icon: 'quantcast.com'),
   TrackerInfo('Nielsen', TrackerCategory.analytics, ['imrworldwide.com'],
       icon: 'nielsen.com'),
   // Marketing
@@ -184,19 +199,20 @@ const trackerDatabase = <TrackerInfo>[
   TrackerInfo('Mailchimp', TrackerCategory.marketing,
       ['mailchimp.com', 'chimpstatic.com', 'list-manage.com']),
   TrackerInfo('Marketo', TrackerCategory.marketing,
-      ['marketo.net', 'marketo.com', 'mktoresp.com']),
+      ['marketo.net', 'marketo.com', 'mktoresp.com'],
+      icon: 'marketo.com'),
   TrackerInfo('Pardot', TrackerCategory.marketing, ['pardot.com']),
   TrackerInfo('Intercom', TrackerCategory.marketing,
       ['intercom.io', 'intercomcdn.com']),
   TrackerInfo('ActiveCampaign', TrackerCategory.marketing,
       ['activecampaign.com', 'trackcmp.net']),
   TrackerInfo('Drift', TrackerCategory.marketing, ['drift.com', 'driftt.com']),
-  TrackerInfo('Zendesk', TrackerCategory.marketing,
-      ['zendesk.com', 'zdassets.com']),
+  TrackerInfo(
+      'Zendesk', TrackerCategory.marketing, ['zendesk.com', 'zdassets.com']),
   TrackerInfo('Crisp', TrackerCategory.marketing, ['crisp.chat']),
   TrackerInfo('Tawk.to', TrackerCategory.marketing, ['tawk.to']),
-  TrackerInfo('Salesforce', TrackerCategory.marketing,
-      ['salesforce.com', 'force.com']),
+  TrackerInfo(
+      'Salesforce', TrackerCategory.marketing, ['salesforce.com', 'force.com']),
 ];
 
 TrackerInfo? _byHost(String host) {
@@ -205,6 +221,9 @@ TrackerInfo? _byHost(String host) {
   }
   return null;
 }
+
+/// Tracker matching a provider/product name such as a cookie provider.
+TrackerInfo? trackerInfoFor(String provider) => _byProvider(provider);
 
 TrackerInfo? _byProvider(String provider) {
   final p = provider.toLowerCase();
@@ -230,7 +249,8 @@ List<String> collectResourceUrls(
   final urls = <String>[];
 
   void add(dynamic value) {
-    final raw = value is Map ? value['src'] ?? value['href'] ?? value['name'] : value;
+    final raw =
+        value is Map ? value['src'] ?? value['href'] ?? value['name'] : value;
     if (raw is String && raw.isNotEmpty) urls.add(raw);
   }
 
@@ -269,8 +289,8 @@ List<TrackerHit> detectTrackers({
   final pageHost = _hostOf(pageUrl);
   final hits = <String, TrackerHit>{};
 
-  TrackerHit hitFor(TrackerInfo t) =>
-      hits.putIfAbsent(t.name, () => TrackerHit(t.name, t.category, t.iconDomain));
+  TrackerHit hitFor(TrackerInfo t) => hits.putIfAbsent(
+      t.name, () => TrackerHit(t.name, t.category, t.iconDomain));
 
   for (final url in resourceUrls.toSet()) {
     final host = _hostOf(url);
@@ -292,7 +312,8 @@ List<TrackerHit> detectTrackers({
     final category = cookie['category']?.toString();
     final provider = cookie['provider']?.toString() ?? '';
     final name = cookie['name']?.toString() ?? '';
-    final domain = (cookie['domain']?.toString() ?? '').replaceFirst(RegExp(r'^\.'), '');
+    final domain =
+        (cookie['domain']?.toString() ?? '').replaceFirst(RegExp(r'^\.'), '');
     if (provider.isEmpty ||
         (category != 'analytics' &&
             category != 'advertising' &&
