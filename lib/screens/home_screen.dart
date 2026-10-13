@@ -190,6 +190,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         (Icons.info_outline, 'Metadata'),
         (Icons.layers_outlined, 'Services'),
         (Icons.privacy_tip_outlined, 'Privacy'),
+        if (showServerTabs) (Icons.public, 'Sovereignty'),
         (Icons.perm_media_outlined, 'Media'),
       ],
       if (showServerTabs) ...[
@@ -198,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         (Icons.network_check, 'Probe'),
         (Icons.list_alt, 'Headers'),
         (Icons.security, 'Security'),
-        (Icons.public, 'Sovereignty'),
+        if (!showMetadataTabs) (Icons.public, 'Sovereignty'),
       ],
       // When 'Always use browser' is off, Browser tab goes last
       if (shouldShowBrowser && !useBrowserByDefault) browserTab,
@@ -281,6 +282,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (showMetadataTabs)
           KeepAliveWrapper(
               child: _buildRefreshable(const PrivacyView(), 'privacy')),
+        if (showMetadataTabs && showServerTabs)
+          KeepAliveWrapper(
+              child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
         if (showMetadataTabs)
           KeepAliveWrapper(
               child: _buildRefreshable(const MediaView(), 'media')),
@@ -297,8 +301,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: _buildRefreshable(const ProbeHeadersView(), 'headers')),
           KeepAliveWrapper(
               child: _buildRefreshable(const ProbeSecurityView(), 'security')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
+          if (!showMetadataTabs)
+            KeepAliveWrapper(
+                child:
+                    _buildRefreshable(const SovereigntyView(), 'sovereignty')),
         ],
       ];
     }
@@ -331,6 +337,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             key: const ValueKey('tab_privacy'),
             child: _buildRefreshable(const PrivacyView(), 'privacy')),
 
+      // Sovereignty (right after Privacy)
+      if (showMetadataTabs && showServerTabs)
+        KeepAliveWrapper(
+            key: const ValueKey('tab_sovereignty'),
+            child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
+
       // 6. Media (Conditional)
       if (showMetadataTabs)
         KeepAliveWrapper(
@@ -358,9 +370,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         KeepAliveWrapper(
             key: const ValueKey('tab_security'),
             child: _buildRefreshable(const ProbeSecurityView(), 'security')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_sovereignty'),
-            child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
+        if (!showMetadataTabs)
+          KeepAliveWrapper(
+              key: const ValueKey('tab_sovereignty'),
+              child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
       ],
 
       // When 'Always use browser' is off, Browser tab goes last
