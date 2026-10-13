@@ -1,6 +1,14 @@
 import Flutter
 import UIKit
 
+/// Root view controller of the foreground window scene (keyWindow is deprecated with scenes).
+func activeRootViewController() -> UIViewController? {
+    return UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap { $0.windows }
+        .first { $0.isKeyWindow }?.rootViewController
+}
+
 // Sharing Service for handling native sharing functionality
 class SharingService: NSObject {
     private static let channelName = "info.wouter.sourceview.sharing"
@@ -47,7 +55,7 @@ class SharingService: NSObject {
         ]
 
         // Get the root view controller
-        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+        if let rootViewController = activeRootViewController() {
             rootViewController.present(activityViewController, animated: true, completion: nil)
             result(true)
         } else {
@@ -85,7 +93,7 @@ class SharingService: NSObject {
             ]
 
             // Get the root view controller
-            if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+            if let rootViewController = activeRootViewController() {
                 rootViewController.present(activityViewController, animated: true, completion: nil)
                 result(true)
             } else {
@@ -129,7 +137,7 @@ class SharingService: NSObject {
         ]
 
         // Get the root view controller
-        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+        if let rootViewController = activeRootViewController() {
             rootViewController.present(activityViewController, animated: true, completion: nil)
             result(true)
         } else {
@@ -159,7 +167,7 @@ class SharingService: NSObject {
         ]
 
         // Get the root view controller
-        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+        if let rootViewController = activeRootViewController() {
             rootViewController.present(activityViewController, animated: true, completion: nil)
             result(true)
         } else {
@@ -228,97 +236,102 @@ class SharedContentHandler {
 }
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
-    if let controller = window?.rootViewController as? FlutterViewController {
-        setupServices(with: controller)
-    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  /// Sets up custom services for the given FlutterViewController
-  func setupServices(with controller: FlutterViewController) {
-      setupSharedContentHandler(with: controller)
-      SharingService.register(with: controller.registrar(forPlugin: "SharingService")!)
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    setupServices(with: engineBridge.pluginRegistry)
   }
 
-  func setupSharedContentHandler(with controller: FlutterViewController) {
-    let channel = FlutterMethodChannel(
-      name: "info.wouter.sourceviewer/shared_content",
-      binaryMessenger: controller.binaryMessenger
-    )
-    SharedContentHandler.shared.setup(methodChannel: channel)
+  /// Sets up custom services on the implicit Flutter engine
+  private func setupServices(with registry: FlutterPluginRegistry) {
+    if let registrar = registry.registrar(forPlugin: "SharedContentHandler") {
+      let channel = FlutterMethodChannel(
+        name: "info.wouter.sourceviewer/shared_content",
+        binaryMessenger: registrar.messenger()
+      )
+      SharedContentHandler.shared.setup(methodChannel: channel)
+    }
+    if let registrar = registry.registrar(forPlugin: "SharingService") {
+      SharingService.register(with: registrar)
+    }
+  }
+}
+
+class SceneDelegate: FlutterSceneDelegate {
+  // URL opens (custom scheme / http(s)) are delivered to the scene when the app uses UIScene.
+  override func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    connectionOptions.urlContexts.forEach { handleURLScheme(url: $0.url) }
+    super.scene(scene, willConnectTo: session, options: connectionOptions)
   }
 
-  override func application(
-    _ app: UIApplication,
-    open url: URL,
-    options: [UIApplication.OpenURLOptionsKey : Any] = [:]
-  ) -> Bool {
-    // Handle URL scheme calls from the share extension or Safari.
-    // NOTE: With no UIApplicationSceneManifest in Info.plist, iOS routes URL
-    // opens through this AppDelegate method (not SceneDelegate), so app_links'
-    // application(_:open:options:) delegate fires correctly for cold starts.
-    handleURLScheme(url: url)
-    return super.application(app, open: url, options: options)
+  override func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+    URLContexts.forEach { handleURLScheme(url: $0.url) }
+    super.scene(scene, openURLContexts: URLContexts)
+  }
+}
+
+func handleURLScheme(url: URL) {
+  guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
+      return
   }
 
-  private func handleURLScheme(url: URL) {
-    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
-        return
+  if components.scheme == "viewsourcevibe",
+     let host = components.host,
+     let queryItems = components.queryItems {
+
+    var sharedData: [String: Any] = [:]
+
+    switch host {
+    case "open":
+      if let urlItem = queryItems.first(where: { $0.name == "url" }),
+         let urlValue = urlItem.value,
+         let decodedUrl = urlValue.removingPercentEncoding {
+        sharedData = ["type": "url", "content": decodedUrl]
+      }
+    case "text":
+      if let contentItem = queryItems.first(where: { $0.name == "content" }),
+         let contentValue = contentItem.value,
+         let decodedContent = contentValue.removingPercentEncoding {
+        sharedData = ["type": "text", "content": decodedContent]
+      }
+    case "file":
+      if let pathItem = queryItems.first(where: { $0.name == "path" }),
+         let pathValue = pathItem.value,
+         let decodedPath = pathValue.removingPercentEncoding {
+        var filePath = decodedPath
+        if filePath.hasPrefix("file:///") {
+            filePath = String(filePath.dropFirst(7))
+        } else if filePath.hasPrefix("file://") {
+            filePath = String(filePath.dropFirst(6))
+        }
+        sharedData = [
+          "type": "file",
+          "filePath": filePath,
+          "fileName": URL(fileURLWithPath: filePath).lastPathComponent
+        ]
+      }
+    default:
+      break
     }
 
-    if components.scheme == "viewsourcevibe",
-       let host = components.host,
-       let queryItems = components.queryItems {
-
-      var sharedData: [String: Any] = [:]
-
-      switch host {
-      case "open":
-        if let urlItem = queryItems.first(where: { $0.name == "url" }),
-           let urlValue = urlItem.value,
-           let decodedUrl = urlValue.removingPercentEncoding {
-          sharedData = ["type": "url", "content": decodedUrl]
-        }
-      case "text":
-        if let contentItem = queryItems.first(where: { $0.name == "content" }),
-           let contentValue = contentItem.value,
-           let decodedContent = contentValue.removingPercentEncoding {
-          sharedData = ["type": "text", "content": decodedContent]
-        }
-      case "file":
-        if let pathItem = queryItems.first(where: { $0.name == "path" }),
-           let pathValue = pathItem.value,
-           let decodedPath = pathValue.removingPercentEncoding {
-          var filePath = decodedPath
-          if filePath.hasPrefix("file:///") {
-              filePath = String(filePath.dropFirst(7))
-          } else if filePath.hasPrefix("file://") {
-              filePath = String(filePath.dropFirst(6))
-          }
-          sharedData = [
-            "type": "file",
-            "filePath": filePath,
-            "fileName": URL(fileURLWithPath: filePath).lastPathComponent
-          ]
-        }
-      default:
-        break
-      }
-
-      if !sharedData.isEmpty {
-        SharedContentHandler.shared.setSharedContent(sharedData)
-      }
-    } else if components.scheme == "http" || components.scheme == "https" {
-        SharedContentHandler.shared.setSharedContent([
-            "type": "url",
-            "content": url.absoluteString
-        ])
+    if !sharedData.isEmpty {
+      SharedContentHandler.shared.setSharedContent(sharedData)
     }
+  } else if components.scheme == "http" || components.scheme == "https" {
+      SharedContentHandler.shared.setSharedContent([
+          "type": "url",
+          "content": url.absoluteString
+      ])
   }
 }
