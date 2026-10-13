@@ -1,0 +1,188 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/tracker_detector.dart';
+
+/// Who is tracking you on this page: known trackers found in loaded resources
+/// and cookies, with logos.
+class PrivacyView extends StatelessWidget {
+  const PrivacyView({super.key});
+
+  static (IconData, Color) _style(TrackerCategory c) => switch (c) {
+        TrackerCategory.advertising => (Icons.ad_units_outlined, Colors.red),
+        TrackerCategory.behavior =>
+          (Icons.videocam_outlined, Colors.deepOrange),
+        TrackerCategory.social => (Icons.share_outlined, Colors.green),
+        TrackerCategory.analytics => (Icons.analytics_outlined, Colors.orange),
+        TrackerCategory.marketing => (Icons.campaign_outlined, Colors.blue),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final htmlService = Provider.of<HtmlService>(context);
+
+    if (htmlService.isLoading ||
+        htmlService.isWebViewLoading ||
+        htmlService.isExtractingMetadata) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final hits = detectTrackers(
+      pageUrl: htmlService.currentFile?.path ?? '',
+      resourceUrls: collectResourceUrls(
+          htmlService.pageMetadata, htmlService.resourceTimelineData),
+      cookies: (htmlService.probeResult?['analyzedCookies'] as List? ?? [])
+          .whereType<Map>(),
+    );
+
+    if (hits.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.verified_user_outlined,
+                size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+            const SizedBox(height: 16),
+            const Text('No Trackers Detected'),
+            const SizedBox(height: 8),
+            const Text('No known trackers found on this page.',
+                style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    final byCategory = {
+      for (final c in TrackerCategory.values.reversed)
+        c: hits.where((h) => h.category == c).toList(),
+    }..removeWhere((_, v) => v.isEmpty);
+
+    return Scrollbar(
+      child: SingleChildScrollView(
+        primary: true,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${hits.length} ${hits.length == 1 ? 'tracker follows' : 'trackers follow'} you here',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final e in byCategory.entries)
+                  _chip(e.key.label, e.value.length, _style(e.key)),
+              ],
+            ),
+            for (final e in byCategory.entries) ...[
+              const SizedBox(height: 24),
+              Text(
+                '${e.key.label} (${e.value.length})',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: _style(e.key).$2,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              ...e.value.map((hit) => _TrackerTile(hit: hit)),
+            ],
+            const SizedBox(height: 80),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String label, int count, (IconData, Color) style) {
+    final (icon, color) = style;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text('$count $label',
+              style: TextStyle(
+                  color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackerTile extends StatelessWidget {
+  final TrackerHit hit;
+  const _TrackerTile({required this.hit});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (fallbackIcon, color) = PrivacyView._style(hit.category);
+    final details = [
+      if (hit.requests > 0)
+        '${hit.requests} request${hit.requests == 1 ? '' : 's'}',
+      if (hit.cookies.isNotEmpty)
+        '${hit.cookies.length} cookie${hit.cookies.length == 1 ? '' : 's'}',
+    ].join(' · ');
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: SizedBox(
+          width: 36,
+          height: 36,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: hit.iconDomain == null
+                ? Icon(fallbackIcon, color: color)
+                // Logos come from DuckDuckGo's favicon service, so the page
+                // you inspect is never contacted for them.
+                : Image.network(
+                    'https://icons.duckduckgo.com/ip3/${hit.iconDomain}.ico',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) =>
+                        Icon(fallbackIcon, color: color),
+                  ),
+          ),
+        ),
+        title:
+            Text(hit.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (details.isNotEmpty)
+              Text(details, style: TextStyle(color: color, fontSize: 12)),
+            if (hit.hosts.isNotEmpty)
+              Text(hit.hosts.join(', '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+            if (hit.cookies.isNotEmpty)
+              Text('Cookies: ${hit.cookies.join(', ')}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+          ],
+        ),
+      ),
+    );
+  }
+}
