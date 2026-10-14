@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/detection/catalog.dart';
+import '../detection_helpers.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
@@ -638,10 +640,11 @@ void main() {
   });
 
   test('vendor origins', () {
-    expect(vendorOrigins['TYPO3'], selfHosted);
-    expect(relationTo(vendorOrigins['Google Analytics'], eu), Relation.foreign);
-    expect(relationTo(vendorOrigins['Plausible'], eu), Relation.own);
-    expect(vendorOrigins['Unknown thing'], isNull);
+    expect(vendorOriginFor('TYPO3'), selfHosted);
+    expect(
+        relationTo(vendorOriginFor('Google Analytics'), eu), Relation.foreign);
+    expect(relationTo(vendorOriginFor('Plausible'), eu), Relation.own);
+    expect(vendorOriginFor('Unknown thing'), isNull);
   });
 
   test('TYPO3 detection', () async {
@@ -651,8 +654,8 @@ void main() {
     final byPath = await extractMetadataInIsolate(
         '<html><head><link href="/typo3temp/assets/x.css" rel="stylesheet"></head></html>',
         'https://example.nl/');
-    expect(byGenerator['detectedTech']['CMS'], 'TYPO3');
-    expect(byPath['detectedTech']['CMS'], 'TYPO3');
+    expect(techOf(byGenerator)['CMS'], 'TYPO3');
+    expect(techOf(byPath)['CMS'], 'TYPO3');
   });
 
   test('every EU alternative has a website', () {

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'detection_helpers.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
 
 void main() {
@@ -13,7 +14,7 @@ void main() {
 
       final metadata =
           await extractMetadataInIsolate('<html></html>', '', headers: headers);
-      final tech = metadata['detectedTech'];
+      final tech = techOf(metadata);
 
       expect(tech['Web Server'], 'Nginx');
       expect(tech['Backend'], 'PHP');
@@ -27,7 +28,7 @@ void main() {
 
       final metadata =
           await extractMetadataInIsolate(html, '', headers: headers);
-      final tech = metadata['detectedTech'];
+      final tech = techOf(metadata);
 
       expect(tech['Framework'], 'Next.js');
     });
@@ -36,7 +37,7 @@ void main() {
       final html = '<html><body><div data-reactroot=""></div></body></html>';
 
       final metadata = await extractMetadataInIsolate(html, '');
-      final tech = metadata['detectedTech'];
+      final tech = techOf(metadata);
 
       expect(tech['Library'], 'React');
     });
@@ -46,7 +47,7 @@ void main() {
           '<html><head><link href="tailwind.min.css" rel="stylesheet"></head><body class="text-white bg-black p-4"></body></html>';
 
       final metadata = await extractMetadataInIsolate(html, '');
-      final tech = metadata['detectedTech'];
+      final tech = techOf(metadata);
 
       expect(tech['CSS Framework'], 'Tailwind CSS');
     });
@@ -56,7 +57,7 @@ void main() {
           '<html><head><meta name="generator" content="WordPress 6.4.2"></head><body></body></html>';
 
       final metadata = await extractMetadataInIsolate(html, '');
-      final tech = metadata['detectedTech'];
+      final tech = techOf(metadata);
 
       expect(tech['CMS'], 'WordPress');
       expect(tech['WordPress Version'], '6.4.2');
@@ -69,7 +70,7 @@ void main() {
 
       final metadata =
           await extractMetadataInIsolate('<html></html>', '', headers: headers);
-      final tech = metadata['detectedTech'];
+      final tech = techOf(metadata);
 
       expect(tech['Platform'], 'Vercel');
     });

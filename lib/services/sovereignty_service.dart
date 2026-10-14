@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
+import 'package:view_source_vibe/services/detection/engine.dart';
 
 class HostingProvider {
   final String name;
@@ -237,56 +238,6 @@ class SovereigntyCheck {
         if (alternatives.isNotEmpty) 'alternatives': alternatives,
       };
 }
-
-/// Marker for open-source software that runs wherever it is hosted.
-const selfHosted = 'self-hosted';
-
-/// Vendor HQ country for CMSes and services detected by metadata_parser.
-const vendorOrigins = {
-  // CMS
-  'WordPress': selfHosted, 'Joomla': selfHosted, 'Drupal': selfHosted,
-  'TYPO3': selfHosted, 'Ghost': selfHosted, 'Strapi': selfHosted,
-  'PrestaShop': selfHosted, 'Umbraco': selfHosted,
-  'Squarespace': 'US', 'Webflow': 'US', 'Wix': 'IL', 'Shopify': 'CA',
-  'Contentful': 'DE', 'Sitecore': 'DK', 'Adobe Experience Manager': 'US',
-  '1C-Bitrix': 'RU',
-  // Analytics & trackers
-  'Google Analytics': 'US', 'Google Tag Manager': 'US',
-  'HubSpot Analytics': 'US', 'Facebook Pixel': 'US', 'Hotjar': 'MT',
-  'Mixpanel': 'US', 'Segment': 'US', 'Crazy Egg': 'US', 'Plausible': 'EE',
-  'Fathom': 'CA', 'Mouseflow': 'DK', 'FullStory': 'US', 'Amplitude': 'US',
-  'Klaviyo': 'US', 'Microsoft Clarity': 'US', 'Matomo': selfHosted,
-  'Yandex Metrica': 'RU', 'Smartlook': 'CZ', 'Lucky Orange': 'US',
-  'Heap': 'US',
-  // Marketing & CRM
-  'Intercom': 'US', 'Zendesk': 'US', 'Drift': 'US', 'Crisp': 'FR',
-  'Tawk.to': 'US', 'Chatwoot': selfHosted, 'Mailchimp': 'US',
-  'Marketo': 'US', 'Pardot': 'US', 'Salesforce': 'US', 'HubSpot CRM': 'US',
-  'ActiveCampaign': 'US',
-  // Consent
-  'Cookiebot': 'DK', 'OneTrust': 'US', 'Usercentrics': 'DE',
-  'TrustArc': 'US', 'CookieYes': 'GB', 'Osano': 'US', 'Cassie': 'GB',
-  // Fonts & icons
-  'Google Fonts': 'US', 'Adobe Fonts (Typekit)': 'US', 'Font Awesome': 'US',
-  'Typeform': 'ES',
-  // E-commerce & payments
-  'BigCommerce': 'US', 'BigCartel': 'US', 'Stripe': 'US', 'PayPal': 'US',
-  'Klarna': 'SE', 'WooCommerce': selfHosted, 'Magento': selfHosted,
-  // Advertising
-  'Taboola': 'US', 'Google AdSense/DoubleClick': 'US', 'Outbrain': 'US',
-  'Criteo': 'FR', 'Pinterest Tag': 'US', 'TikTok Pixel': 'CN',
-  'LinkedIn Insight': 'US', 'Amazon Advertising': 'US', 'Snap Pixel': 'US',
-  'Reddit Pixel': 'US', 'AdRoll': 'US',
-  // Cloud & CDN
-  'Amazon Web Services (AWS)': 'US', 'Firebase': 'US',
-  'Microsoft Azure': 'US', 'Cloudflare': 'US', 'Vercel': 'US',
-  'Netlify': 'US', 'Fastly': 'US', 'Akamai': 'US', 'DigitalOcean': 'US',
-  'Heroku': 'US', 'BunnyCDN': 'SI', 'StackPath': 'US',
-  // Social & widgets
-  'Twitter/X': 'US', 'LinkedIn': 'US', 'Instagram': 'US', 'YouTube': 'US',
-  'Disqus': 'US', 'WhatsApp': 'US', 'Telegram': 'AE', 'Facebook Chat': 'US',
-  'Spotify': 'SE', 'Apple Music': 'US', 'AddThis': 'US', 'ShareThis': 'US',
-};
 
 const euAlternatives = {
   'hosting': ['Hetzner', 'OVHcloud', 'Scaleway', 'IONOS'],
@@ -573,6 +524,7 @@ class SovereigntyService {
     required Map<String, dynamic>? probeResult,
     required List<Map<String, dynamic>> resources,
     Map<String, dynamic>? metadata,
+    List<Detection> detections = const [],
     String? html,
     String home = eu,
   }) async {
@@ -665,7 +617,7 @@ class SovereigntyService {
         mailServers: mailServers,
         issuer: issuer,
         tlsProvider: tlsProvider,
-        metadata: metadata,
+        detections: detections,
         home: home,
       ),
       ..._residencyChecks(analyzed, cdn, home),
@@ -677,7 +629,7 @@ class SovereigntyService {
         securityTxt: securityTxt,
         probeResult: probeResult,
       ),
-      ..._privacyChecks(analyzed, metadata, html, home),
+      ..._privacyChecks(analyzed, detections, html, home),
     ];
 
     return SovereigntyReport(
@@ -889,7 +841,7 @@ class SovereigntyService {
     required List<DnsDependency> mailServers,
     required String? issuer,
     required HostingProvider? tlsProvider,
-    required Map<String, dynamic>? metadata,
+    required List<Detection> detections,
     required String home,
   }) {
     const p = Pillar.infrastructure;
@@ -976,22 +928,20 @@ class SovereigntyService {
           : const [],
     ));
 
-    final cms = (metadata?['detectedTech'] as Map?)?['CMS']?.toString();
+    final cms = detections
+        .where((d) => d.category == DetectionCategory.cms)
+        .firstOrNull;
     if (cms != null) {
-      final origin = vendorOrigins[cms];
-      final generator =
-          (metadata?['otherMeta'] as Map?)?['generator']?.toString() ?? '';
+      final origin = cms.entity.origin;
       final status =
           origin == selfHosted ? CheckStatus.pass : statusFor(origin, home);
       checks.add(SovereigntyCheck(
         p,
         origin == selfHosted
-            ? 'CMS: $cms (open source)'
-            : 'CMS: $cms${origin != null ? ' ($origin)' : ''}',
+            ? 'CMS: ${cms.name} (open source)'
+            : 'CMS: ${cms.name}${origin != null ? ' ($origin)' : ''}',
         status,
-        generator.toLowerCase().contains(cms.toLowerCase())
-            ? 'Generator meta tag: $generator'
-            : 'Matched "$cms" in page source',
+        cms.evidence.firstOrNull?.detail ?? 'Detected in the page source',
         weight: 1,
         alternatives: status == CheckStatus.fail
             ? alternativesFor('cms', home)
@@ -1002,16 +952,13 @@ class SovereigntyService {
   }
 
   static List<String> _detectedServiceNames(
-    Map<String, dynamic>? metadata, [
-    Set<String>? categories,
-  ]) {
-    final services = metadata?['detectedServices'] as Map? ?? const {};
-    return [
-      for (final e in services.entries)
-        if (categories == null || categories.contains(e.key))
-          for (final name in (e.value as List)) name.toString(),
-    ];
-  }
+    List<Detection> detections,
+    Set<DetectionCategory> categories,
+  ) =>
+      [
+        for (final d in detections)
+          if (categories.contains(d.category)) d.name
+      ];
 
   /// Judges third-party services by their vendor's jurisdiction.
   static SovereigntyCheck _servicesCheck(
@@ -1025,7 +972,7 @@ class SovereigntyService {
     final foreign = <String>[];
     final adequate = <String>[];
     for (final name in names.toSet()) {
-      final origin = vendorOrigins[name];
+      final origin = vendorOriginFor(name);
       if (origin == null || origin == selfHosted) continue;
       switch (relationTo(origin, home)) {
         case Relation.foreign:
@@ -1133,20 +1080,22 @@ class SovereigntyService {
 
   static List<SovereigntyCheck> _privacyChecks(
     List<HostInfo> hosts,
-    Map<String, dynamic>? metadata,
+    List<Detection> detections,
     String? html,
     String home,
   ) {
     const p = Pillar.privacy;
     final privacy = html == null ? null : findPrivacyLink(html);
     final consent =
-        _detectedServiceNames(metadata, {'Privacy & Consent Management'});
-    final trackers = _detectedServiceNames(
-      metadata,
-      {'Analytics & Trackers', 'Advertising', 'Marketing & CRM'},
-    );
+        _detectedServiceNames(detections, {DetectionCategory.consent});
+    final trackers = _detectedServiceNames(detections, {
+      DetectionCategory.advertising,
+      DetectionCategory.behavior,
+      DetectionCategory.analytics,
+      DetectionCategory.marketing,
+    });
     final fonts = {
-      ..._detectedServiceNames(metadata, {'Fonts & Icons'}),
+      ..._detectedServiceNames(detections, {DetectionCategory.fonts}),
       if (hosts.any((h) =>
           h.host.endsWith('fonts.googleapis.com') ||
           h.host.endsWith('fonts.gstatic.com')))
@@ -1194,7 +1143,8 @@ class SovereigntyService {
       ),
       _servicesCheck(
         'Widgets, embeds & payments in the site\'s jurisdiction',
-        _detectedServiceNames(metadata, {'Social & Widgets', 'E-commerce'}),
+        _detectedServiceNames(detections,
+            {DetectionCategory.social, DetectionCategory.ecommerce}),
         1,
         home,
       ),
