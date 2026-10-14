@@ -1,5 +1,13 @@
 /// Where a detected tracker/service/technology was found.
-enum EvidenceKind { html, request, cookie, header }
+enum EvidenceKind {
+  html,
+  request,
+  cookie,
+  header,
+
+  /// A preconnect / dns-prefetch hint: the page expects to use the host.
+  hint,
+}
 
 class DetectionEvidence {
   final EvidenceKind kind;
@@ -10,7 +18,7 @@ class DetectionEvidence {
   /// Supporting detail: the matched tag, URL, header value or cookie description.
   final String? detail;
 
-  /// 1-based line in the page source (for [EvidenceKind.html]).
+  /// 1-based line in the page source.
   final int? line;
 
   const DetectionEvidence(this.kind, this.title, {this.detail, this.line});
@@ -47,24 +55,11 @@ class DetectionEvidence {
 
   static DetectionEvidence? fromMap(dynamic raw) {
     if (raw is! Map) return null;
-    final kind = EvidenceKind.values
-        .where((k) => k.name == raw['kind'])
-        .firstOrNull;
+    final kind =
+        EvidenceKind.values.where((k) => k.name == raw['kind']).firstOrNull;
     if (kind == null) return null;
     return DetectionEvidence(kind, raw['title']?.toString() ?? '',
         detail: raw['detail']?.toString(), line: raw['line'] as int?);
-  }
-
-  /// Parses a `{name: [evidence maps]}` metadata entry.
-  static Map<String, List<DetectionEvidence>> mapFrom(dynamic raw) {
-    if (raw is! Map) return const {};
-    return {
-      for (final e in raw.entries)
-        e.key.toString(): [
-          for (final item in e.value is List ? e.value as List : const [])
-            if (fromMap(item) case final evidence?) evidence,
-        ],
-    };
   }
 
   /// Description of an analyzed cookie (as stored in `analyzedCookies`).

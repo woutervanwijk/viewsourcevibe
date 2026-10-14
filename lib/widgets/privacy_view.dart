@@ -1,25 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
-import 'package:view_source_vibe/services/tracker_detector.dart';
+import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 import 'package:view_source_vibe/widgets/evidence_view.dart';
-import 'package:view_source_vibe/models/detection_evidence.dart';
 
-/// Who is tracking you on this page: known trackers found in loaded resources
-/// and cookies, with logos.
+/// Who is tracking you on this page: the tracking categories of
+/// [HtmlService.detections], with logos.
 class PrivacyView extends StatelessWidget {
   const PrivacyView({super.key});
 
-  static (IconData, Color) _style(TrackerCategory c) => switch (c) {
-        TrackerCategory.advertising => (Icons.ad_units_outlined, Colors.red),
-        TrackerCategory.behavior => (
+  static (IconData, Color) style(DetectionCategory c) => switch (c) {
+        DetectionCategory.advertising => (Icons.ad_units_outlined, Colors.red),
+        DetectionCategory.behavior => (
             Icons.videocam_outlined,
             Colors.deepOrange
           ),
-        TrackerCategory.social => (Icons.share_outlined, Colors.green),
-        TrackerCategory.analytics => (Icons.analytics_outlined, Colors.orange),
-        TrackerCategory.marketing => (Icons.campaign_outlined, Colors.blue),
+        DetectionCategory.social => (Icons.share_outlined, Colors.green),
+        DetectionCategory.analytics => (
+            Icons.analytics_outlined,
+            Colors.orange
+          ),
+        DetectionCategory.marketing => (Icons.campaign_outlined, Colors.blue),
+        _ => (Icons.category_outlined, Colors.grey),
       };
 
   @override
@@ -32,18 +35,8 @@ class PrivacyView extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final hits = detectTrackers(
-      pageUrl: htmlService.currentFile?.path ?? '',
-      resourceUrls: collectResourceUrls(
-          htmlService.pageMetadata, htmlService.resourceTimelineData),
-      cookies: (htmlService.probeResult?['analyzedCookies'] as List? ?? [])
-          .whereType<Map>(),
-      services: (htmlService.pageMetadata?['detectedServices'] as Map? ?? {})
-          .map((k, v) => MapEntry(k.toString(), List<String>.from(v as List))),
-      serviceEvidence: DetectionEvidence.mapFrom(
-          htmlService.pageMetadata?['serviceEvidence']),
-      html: htmlService.currentFile?.content ?? '',
-    );
+    final hits =
+        htmlService.detections.where((d) => d.category.isTracking).toList();
 
     if (hits.isEmpty) {
       return Center(
@@ -63,7 +56,7 @@ class PrivacyView extends StatelessWidget {
     }
 
     final byCategory = {
-      for (final c in TrackerCategory.values.reversed)
+      for (final c in DetectionCategory.values.where((c) => c.isTracking))
         c: hits.where((h) => h.category == c).toList(),
     }..removeWhere((_, v) => v.isEmpty);
 
@@ -88,7 +81,7 @@ class PrivacyView extends StatelessWidget {
               runSpacing: 8,
               children: [
                 for (final e in byCategory.entries)
-                  _chip(e.key.label, e.value.length, _style(e.key)),
+                  _chip(e.key.label, e.value.length, style(e.key)),
               ],
             ),
             for (final e in byCategory.entries) ...[
@@ -97,7 +90,7 @@ class PrivacyView extends StatelessWidget {
                 '${e.key.label} (${e.value.length})',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: _style(e.key).$2,
+                      color: style(e.key).$2,
                     ),
               ),
               const SizedBox(height: 8),
@@ -134,17 +127,18 @@ class PrivacyView extends StatelessWidget {
 }
 
 class _TrackerTile extends StatelessWidget {
-  final TrackerHit hit;
+  final Detection hit;
   const _TrackerTile({required this.hit});
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final (fallbackIcon, color) = PrivacyView._style(hit.category);
+    final (fallbackIcon, color) = PrivacyView.style(hit.category);
     final details = [
       if (hit.requests > 0)
         '${hit.requests} request${hit.requests == 1 ? '' : 's'}',
       if (hit.inSource && hit.requests == 0) 'in page source',
+      if (hit.hintOnly) 'connection hint only',
       if (hit.cookies.isNotEmpty)
         '${hit.cookies.length} cookie${hit.cookies.length == 1 ? '' : 's'}',
     ].join(' · ');
@@ -158,7 +152,7 @@ class _TrackerTile extends StatelessWidget {
       ),
       child: ListTile(
         leading: ServiceLogo(
-            domain: hit.iconDomain,
+            domain: hit.entity.logoDomain,
             label: hit.name,
             fallback: fallbackIcon,
             color: color,
@@ -177,7 +171,7 @@ class _TrackerTile extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right),
         onTap: () => showEvidenceSheet(context, hit.name, hit.evidence,
             leading: ServiceLogo(
-                domain: hit.iconDomain,
+                domain: hit.entity.logoDomain,
                 label: hit.name,
                 fallback: fallbackIcon,
                 color: color,

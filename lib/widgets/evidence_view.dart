@@ -8,6 +8,7 @@ IconData _iconFor(EvidenceKind kind) => switch (kind) {
       EvidenceKind.request => Icons.swap_horiz,
       EvidenceKind.cookie => Icons.cookie_outlined,
       EvidenceKind.header => Icons.list_alt,
+      EvidenceKind.hint => Icons.link,
     };
 
 /// Rows explaining where a detection came from. HTML lines jump to Source.

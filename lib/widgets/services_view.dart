@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
-import 'package:view_source_vibe/services/tracker_detector.dart';
+import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 import 'package:view_source_vibe/widgets/evidence_view.dart';
+import 'package:view_source_vibe/widgets/privacy_view.dart';
 import 'package:view_source_vibe/models/detection_evidence.dart';
 import '../utils/format_utils.dart';
 
@@ -14,9 +15,10 @@ class ServicesView extends StatelessWidget {
   Widget build(BuildContext context) {
     final htmlService = Provider.of<HtmlService>(context);
     final metadata = htmlService.pageMetadata;
-    final services =
-        metadata?['detectedServices'] as Map<String, List<String>>?;
-    final trackerFindings = _trackerFindings(metadata, htmlService);
+    final detections = htmlService.detections;
+    final services = servicesByCategory(detections);
+    final evidence = {for (final d in detections) d.name: d.evidence};
+    final trackerFindings = _trackerFindings(detections);
 
     // Show loading indicator only if we're still loading or extracting metadata
     if (htmlService.isLoading ||
@@ -26,8 +28,7 @@ class ServicesView extends StatelessWidget {
     }
 
     // Show message if no services detected or metadata is not available
-    if ((metadata == null || services == null || services.isEmpty) &&
-        trackerFindings.isEmpty) {
+    if (services.isEmpty && trackerFindings.isEmpty) {
       // For XML files, we should never show progress - they don't have services
       if (htmlService.isXml) {
         return Center(
@@ -66,7 +67,7 @@ class ServicesView extends StatelessWidget {
     }
 
     // Sort the detected services by category name
-    final sortedEntries = (services?.entries.toList() ?? [])
+    final sortedEntries = services.entries.toList()
       ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
 
     return Scrollbar(
@@ -88,14 +89,10 @@ class ServicesView extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               ...sortedEntries.map((entry) {
-                return _buildServiceCategory(context, entry.key, entry.value,
-                    DetectionEvidence.mapFrom(metadata?['serviceEvidence']));
+                return _buildServiceCategory(
+                    context, entry.key, entry.value, evidence);
               }),
             ],
-            if (metadata?['analyzedCookies'] != null &&
-                (metadata?['analyzedCookies'] as List).isNotEmpty)
-              ..._buildCookieSection(
-                  context, metadata?['analyzedCookies'] as List),
             if (metadata != null) ...[
               const Divider(height: 48),
               _buildSectionTitle(context, 'External Resources'),
@@ -433,31 +430,25 @@ class ServicesView extends StatelessWidget {
     IconData icon;
     Color color;
 
-    switch (category) {
-      case 'Analytics & Trackers':
-        icon = Icons.analytics_outlined;
-        color = Colors.orange;
-        break;
-      case 'Fonts & Icons':
+    final detection =
+        DetectionCategory.values.where((c) => c.label == category).firstOrNull;
+    switch (detection) {
+      case DetectionCategory.fonts:
         icon = Icons.font_download_outlined;
         color = Colors.blue;
-        break;
-      case 'Advertising':
-        icon = Icons.ad_units_outlined;
-        color = Colors.red;
-        break;
-      case 'Cloud & Infrastructure':
+      case DetectionCategory.cloud ||
+            DetectionCategory.cdn ||
+            DetectionCategory.platform:
         icon = Icons.cloud_outlined;
         color = Colors.purple;
-        break;
-      case 'Social & Widgets':
-        icon = Icons.share_outlined;
-        color = Colors.green;
-        break;
-      case 'Uncategorized':
-        icon = Icons.help_outline;
-        color = Colors.grey;
-        break;
+      case DetectionCategory.consent:
+        icon = Icons.verified_user_outlined;
+        color = Colors.teal;
+      case DetectionCategory.ecommerce:
+        icon = Icons.shopping_cart_outlined;
+        color = Colors.indigo;
+      case final c? when c.isTracking:
+        (icon, color) = PrivacyView.style(c);
       default:
         icon = Icons.category_outlined;
         color = Colors.grey;
@@ -528,218 +519,25 @@ class ServicesView extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildCookieSection(
-      BuildContext context, List<dynamic> cookies) {
-    // Group providers by display category
-    final Map<String, Set<String>> grouped = {};
-    final Map<String, List<DetectionEvidence>> evidence = {};
-
-    for (var c in cookies) {
-      if (c is! Map) continue;
-
-      final String? provider = c['provider'];
-      final String category = c['category'] ?? 'unknown';
-
-      final label = provider == null || provider.isEmpty
-          ? (c['name'] ?? 'Unknown Cookie').toString()
-          : provider;
-      evidence.putIfAbsent(label, () => []).add(DetectionEvidence.cookie(c));
-
-      // If provider is missing, group under Uncategorized
-      if (provider == null || provider.isEmpty) {
-        grouped.putIfAbsent('Uncategorized', () => {}).add(label);
-        continue;
-      }
-
-      String displayCat = 'Cloud & Infrastructure';
-      switch (category) {
-        case 'analytics':
-          displayCat = 'Analytics & Trackers';
-          break;
-        case 'advertising':
-          displayCat = 'Advertising';
-          break;
-        case 'social':
-          displayCat = 'Social & Widgets';
-          break;
-        case 'functional':
-        case 'essential':
-          displayCat = 'Cloud & Infrastructure';
-          break;
-      }
-
-      grouped.putIfAbsent(displayCat, () => {}).add(provider);
-    }
-
-    if (grouped.isEmpty) return [];
-
-    return [
-      const Divider(height: 48),
-      _buildSectionTitle(context, 'Detected from Cookies'),
-      const Text(
-        'Technologies identified by analyzing the cookies set by this page.',
-        style: TextStyle(color: Colors.grey, fontSize: 13),
-      ),
-      const SizedBox(height: 24),
-      ...(() {
-        final sortedKeys = grouped.keys.toList()
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        return sortedKeys.map((key) {
-          final items = grouped[key]!.toList()
-            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-          return _buildServiceCategory(context, key, items, evidence);
-        });
-      }()),
-    ];
-  }
-
-  List<_TrackerFinding> _trackerFindings(
-      Map<String, dynamic>? metadata, HtmlService htmlService) {
-    final byKey = <String, _TrackerFinding>{};
-
-    void addFinding(String url, String provider, _TrackerRisk risk,
-        IconData icon, String reason, DetectionEvidence evidence) {
-      final host = _hostFrom(url);
-      if (host.isEmpty) return;
-      final finding = byKey.putIfAbsent(
-          '$provider|$host|$reason',
-          () => _TrackerFinding(
-                provider: provider,
-                host: host,
-                risk: risk,
-                icon: icon,
-                reason: reason,
-              ));
-      if (!finding.evidence.any((e) => e.detail == evidence.detail)) {
-        finding.evidence.add(evidence);
-      }
-    }
-
-    for (final url in _allResourceUrls(metadata, htmlService)) {
-      final match = _matchTrackerUrl(url);
-      if (match != null) {
-        addFinding(
-            url,
-            match.provider,
-            match.risk,
-            match.icon,
-            match.reason,
-            DetectionEvidence(
-                EvidenceKind.request, 'Request to ${_hostFrom(url)}',
-                detail: url));
-      }
-    }
-
-    final cookies = htmlService.probeResult?['analyzedCookies'] as List?;
-    if (cookies != null) {
-      for (final cookie in cookies) {
-        if (cookie is! Map) continue;
-        final category = cookie['category']?.toString() ?? 'unknown';
-        if (category != 'analytics' &&
-            category != 'advertising' &&
-            category != 'social') {
-          continue;
-        }
-        final provider = cookie['provider']?.toString();
-        if (provider == null || provider.isEmpty) continue;
-        final domain = cookie['domain']?.toString();
-        final name = cookie['name']?.toString() ?? 'cookie';
-        addFinding(
-          domain == null || domain.isEmpty ? provider : 'https://$domain',
-          provider,
-          category == 'advertising' ? _TrackerRisk.high : _TrackerRisk.medium,
-          category == 'social' ? Icons.share_outlined : Icons.cookie_outlined,
-          'Cookie: $name',
-          DetectionEvidence.cookie(cookie),
-        );
-      }
-    }
-
-    final findings = byKey.values.toList();
-    findings.sort((a, b) {
-      final riskCompare = b.risk.weight.compareTo(a.risk.weight);
-      if (riskCompare != 0) return riskCompare;
-      return a.provider.toLowerCase().compareTo(b.provider.toLowerCase());
-    });
-    return findings;
-  }
-
-  List<String> _allResourceUrls(
-          Map<String, dynamic>? metadata, HtmlService htmlService) =>
-      collectResourceUrls(metadata, htmlService.resourceTimelineData);
-
-  _TrackerMatch? _matchTrackerUrl(String url) {
-    final lower = url.toLowerCase();
-    const rules = [
-      _TrackerRule(
-          'Google Analytics',
-          [
-            'google-analytics.com',
-            '/gtag/js',
-            'googletagmanager.com/gtm.js',
-            'googletagmanager.com/gtag/js'
-          ],
-          _TrackerRisk.medium,
-          Icons.analytics_outlined,
-          'Analytics script'),
-      _TrackerRule(
-          'Google Ads / DoubleClick',
-          ['doubleclick.net', 'googleadservices.com', 'googlesyndication.com'],
-          _TrackerRisk.high,
-          Icons.ad_units_outlined,
-          'Advertising network'),
-      _TrackerRule(
-          'Meta Pixel',
-          ['connect.facebook.net', 'facebook.com/tr', 'fbcdn.net'],
-          _TrackerRisk.high,
-          Icons.radar,
-          'Social advertising pixel'),
-      _TrackerRule(
-          'Microsoft Clarity',
-          ['clarity.ms', 'claritybt.freshmarketer.com'],
-          _TrackerRisk.medium,
-          Icons.remove_red_eye_outlined,
-          'Session analytics'),
-      _TrackerRule('Microsoft Ads', ['bat.bing.com', 'bing.com/action'],
-          _TrackerRisk.high, Icons.ad_units_outlined, 'Advertising pixel'),
-      _TrackerRule('Hotjar', ['hotjar.com', 'hotjar.io'], _TrackerRisk.medium,
-          Icons.local_fire_department_outlined, 'Behavior analytics'),
-      _TrackerRule('TikTok Pixel', ['analytics.tiktok.com'], _TrackerRisk.high,
-          Icons.radar, 'Advertising pixel'),
-      _TrackerRule(
-          'LinkedIn Insight',
-          ['snap.licdn.com', 'px.ads.linkedin.com'],
-          _TrackerRisk.high,
-          Icons.business_center_outlined,
-          'B2B ad pixel'),
-      _TrackerRule('Pinterest Tag', ['ct.pinterest.com', 's.pinimg.com'],
-          _TrackerRisk.high, Icons.push_pin_outlined, 'Advertising pixel'),
-      _TrackerRule('Matomo', ['matomo.php', 'piwik.php', 'matomo.js'],
-          _TrackerRisk.medium, Icons.analytics_outlined, 'Analytics endpoint'),
-      _TrackerRule('Segment', ['cdn.segment.com', 'api.segment.io'],
-          _TrackerRisk.medium, Icons.hub_outlined, 'Event router'),
-      _TrackerRule('Amplitude', ['amplitude.com', 'amplitude.com/libs'],
-          _TrackerRisk.medium, Icons.query_stats, 'Product analytics'),
-    ];
-
-    for (final rule in rules) {
-      if (rule.patterns.any(lower.contains)) {
-        return _TrackerMatch(
-          rule.provider,
-          rule.risk,
-          rule.icon,
-          rule.reason,
-        );
-      }
-    }
-    return null;
-  }
-
-  String _hostFrom(String url) {
-    final uri = Uri.tryParse(url);
-    if (uri != null && uri.host.isNotEmpty) return uri.host;
-    return url.replaceFirst(RegExp(r'^https?://'), '').split('/').first;
-  }
+  List<_TrackerFinding> _trackerFindings(List<Detection> detections) => [
+        for (final d in detections.where((d) => d.category.isTracking))
+          _TrackerFinding(
+            provider: d.name,
+            host: d.hosts.isEmpty ? 'page source' : d.hosts.join(', '),
+            risk: d.category.tracking >= DetectionCategory.behavior.tracking
+                ? _TrackerRisk.high
+                : _TrackerRisk.medium,
+            icon: PrivacyView.style(d.category).$1,
+            reason: [
+              d.category.label,
+              if (d.requests > 0)
+                '${d.requests} request${d.requests == 1 ? '' : 's'}',
+              if (d.cookies.isNotEmpty) 'cookies: ${d.cookies.join(', ')}',
+              if (d.hintOnly) 'connection hint only',
+            ].join(' · '),
+            evidence: d.evidence,
+          ),
+      ]..sort((a, b) => b.risk.weight.compareTo(a.risk.weight));
 }
 
 enum _TrackerRisk {
@@ -760,7 +558,7 @@ class _TrackerFinding {
   final _TrackerRisk risk;
   final IconData icon;
   final String reason;
-  final List<DetectionEvidence> evidence = [];
+  final List<DetectionEvidence> evidence;
 
   _TrackerFinding({
     required this.provider,
@@ -768,25 +566,6 @@ class _TrackerFinding {
     required this.risk,
     required this.icon,
     required this.reason,
+    required this.evidence,
   });
-}
-
-class _TrackerRule {
-  final String provider;
-  final List<String> patterns;
-  final _TrackerRisk risk;
-  final IconData icon;
-  final String reason;
-
-  const _TrackerRule(
-      this.provider, this.patterns, this.risk, this.icon, this.reason);
-}
-
-class _TrackerMatch {
-  final String provider;
-  final _TrackerRisk risk;
-  final IconData icon;
-  final String reason;
-
-  const _TrackerMatch(this.provider, this.risk, this.icon, this.reason);
 }
