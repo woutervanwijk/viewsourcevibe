@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:view_source_vibe/widgets/service_logo.dart';
+import 'package:view_source_vibe/widgets/evidence_view.dart';
+import 'package:view_source_vibe/models/detection_evidence.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,7 +56,8 @@ class MetadataView extends StatelessWidget {
     if (metadata['detectedTech']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'Technology Stack',
-        content: _buildTechSection(context, metadata['detectedTech'], settings),
+        content: _buildTechSection(context, metadata['detectedTech'], settings,
+            DetectionEvidence.mapFrom(metadata['techEvidence'])),
       ));
     }
     if (metadata['article']?.isNotEmpty == true) {
@@ -124,7 +127,8 @@ class MetadataView extends StatelessWidget {
             ],
             if (metadata['detectedTech']?.isNotEmpty == true) ...[
               _buildSectionTitle(context, 'Tech Stack Confidence'),
-              _buildTechConfidenceSection(context, metadata['detectedTech']),
+              _buildTechConfidenceSection(context, metadata['detectedTech'],
+                  DetectionEvidence.mapFrom(metadata['techEvidence'])),
               const SizedBox(height: 24),
             ],
             ...dynamicSections.expand((section) => [
@@ -709,13 +713,15 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildTechSection(
-      BuildContext context, Map<String, dynamic> tech, AppSettings settings) {
+  Widget _buildTechSection(BuildContext context, Map<String, dynamic> tech,
+      AppSettings settings, Map<String, List<DetectionEvidence>> evidence) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: tech.entries.map((e) {
-        return Chip(
+        return ActionChip(
+          onPressed: () => showEvidenceSheet(
+              context, '${e.key}: ${e.value}', evidence[e.key] ?? const []),
           avatar: ServiceLogo(
               label: e.value.toString(),
               fallback: Icons.code,
@@ -815,7 +821,9 @@ class MetadataView extends StatelessWidget {
   }
 
   Widget _buildTechConfidenceSection(
-      BuildContext context, Map<String, dynamic> tech) {
+      BuildContext context,
+      Map<String, dynamic> tech,
+      Map<String, List<DetectionEvidence>> evidence) {
     final items = tech.entries.map((entry) {
       final confidence = _techConfidence(entry.key, entry.value.toString());
       return (
@@ -842,64 +850,74 @@ class MetadataView extends StatelessWidget {
                 : item.score >= 60
                     ? Colors.orange
                     : Colors.grey;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 46,
-                    height: 46,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CircularProgressIndicator(
-                          value: item.score / 100,
-                          strokeWidth: 5,
-                          color: color,
-                          backgroundColor: color.withValues(alpha: 0.12),
-                        ),
-                        Center(
-                          child: Text(
-                            '${item.score}',
-                            style: TextStyle(
+            final sources = evidence[item.label] ?? const <DetectionEvidence>[];
+            return InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => showEvidenceSheet(
+                    context, '${item.label}: ${item.value}', sources),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 46,
+                        height: 46,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            CircularProgressIndicator(
+                              value: item.score / 100,
+                              strokeWidth: 5,
                               color: color,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                              backgroundColor: color.withValues(alpha: 0.12),
                             ),
-                          ),
+                            Center(
+                              child: Text(
+                                '${item.score}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${item.label}: ${item.value}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              item.reason,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.64),
+                                fontSize: 11,
+                              ),
+                            ),
+                            if (sources.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              EvidenceList(
+                                  evidence: sources, max: 1, compact: true),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${item.label}: ${item.value}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          item.reason,
-                          style: TextStyle(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.64),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
+                ));
           }).toList(),
         ),
       ),

@@ -515,6 +515,14 @@ class HtmlService extends ChangeNotifier {
         (_currentFile?.isMedia ?? false);
   }
 
+  /// Switches to the Source tab (unbeautified) and selects [line] (1-based).
+  void revealSourceLine(int line) {
+    SourceViewerEditor.pendingRevealLine = line;
+    _isBeautifyEnabled = false;
+    _requestedTabIndex = sourceTabIndex;
+    notifyListeners();
+  }
+
   void consumeTabSwitchRequest() {
     _requestedTabIndex = null;
   }

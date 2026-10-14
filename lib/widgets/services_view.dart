@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/tracker_detector.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
+import 'package:view_source_vibe/widgets/evidence_view.dart';
+import 'package:view_source_vibe/models/detection_evidence.dart';
 import '../utils/format_utils.dart';
 
 class ServicesView extends StatelessWidget {
@@ -86,7 +88,8 @@ class ServicesView extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               ...sortedEntries.map((entry) {
-                return _buildServiceCategory(context, entry.key, entry.value);
+                return _buildServiceCategory(context, entry.key, entry.value,
+                    DetectionEvidence.mapFrom(metadata?['serviceEvidence']));
               }),
             ],
             if (metadata?['analyzedCookies'] != null &&
@@ -188,75 +191,85 @@ class ServicesView extends StatelessWidget {
             else
               ...findings.take(12).map((finding) {
                 final color = finding.risk.color;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.06),
+                return InkWell(
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: color.withValues(alpha: 0.22)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ServiceLogo(
-                          label: finding.provider,
-                          fallback: finding.icon,
-                          color: color,
-                          size: 22),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                    onTap: () => showEvidenceSheet(
+                        context, finding.provider, finding.evidence,
+                        leading: ServiceLogo(
+                            label: finding.provider,
+                            fallback: finding.icon,
+                            color: color,
+                            size: 28)),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(8),
+                        border:
+                            Border.all(color: color.withValues(alpha: 0.22)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ServiceLogo(
+                              label: finding.provider,
+                              fallback: finding.icon,
+                              color: color,
+                              size: 22),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    finding.provider,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        finding.provider,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
                                     ),
+                                    Text(
+                                      finding.risk.label,
+                                      style: TextStyle(
+                                        color: color,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  finding.host,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 12,
                                   ),
                                 ),
+                                const SizedBox(height: 2),
                                 Text(
-                                  finding.risk.label,
+                                  finding.reason,
                                   style: TextStyle(
-                                    color: color,
-                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.62),
                                     fontSize: 11,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              finding.host,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              finding.reason,
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.62),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                );
+                    ));
               }),
             if (findings.length > 12)
               Text(
@@ -415,7 +428,8 @@ class ServicesView extends StatelessWidget {
   }
 
   Widget _buildServiceCategory(
-      BuildContext context, String category, List<String> items) {
+      BuildContext context, String category, List<String> items,
+      [Map<String, List<DetectionEvidence>> evidence = const {}]) {
     IconData icon;
     Color color;
 
@@ -491,7 +505,11 @@ class ServicesView extends StatelessWidget {
               final sortedItems = List<String>.from(items)
                 ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
               return sortedItems.map((item) {
-                return Chip(
+                return ActionChip(
+                  onPressed: () => showEvidenceSheet(
+                      context, item, evidence[item] ?? const [],
+                      leading: ServiceLogo(
+                          label: item, fallback: icon, color: color, size: 28)),
                   avatar: ServiceLogo(
                       label: item, fallback: icon, color: color, size: 20),
                   label: Text(item),
@@ -514,6 +532,7 @@ class ServicesView extends StatelessWidget {
       BuildContext context, List<dynamic> cookies) {
     // Group providers by display category
     final Map<String, Set<String>> grouped = {};
+    final Map<String, List<DetectionEvidence>> evidence = {};
 
     for (var c in cookies) {
       if (c is! Map) continue;
@@ -521,11 +540,14 @@ class ServicesView extends StatelessWidget {
       final String? provider = c['provider'];
       final String category = c['category'] ?? 'unknown';
 
+      final label = provider == null || provider.isEmpty
+          ? (c['name'] ?? 'Unknown Cookie').toString()
+          : provider;
+      evidence.putIfAbsent(label, () => []).add(DetectionEvidence.cookie(c));
+
       // If provider is missing, group under Uncategorized
       if (provider == null || provider.isEmpty) {
-        grouped
-            .putIfAbsent('Uncategorized', () => {})
-            .add(c['name'] ?? 'Unknown Cookie');
+        grouped.putIfAbsent('Uncategorized', () => {}).add(label);
         continue;
       }
 
@@ -565,7 +587,7 @@ class ServicesView extends StatelessWidget {
         return sortedKeys.map((key) {
           final items = grouped[key]!.toList()
             ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-          return _buildServiceCategory(context, key, items);
+          return _buildServiceCategory(context, key, items, evidence);
         });
       }()),
     ];
@@ -573,28 +595,38 @@ class ServicesView extends StatelessWidget {
 
   List<_TrackerFinding> _trackerFindings(
       Map<String, dynamic>? metadata, HtmlService htmlService) {
-    final findings = <_TrackerFinding>[];
-    final seen = <String>{};
+    final byKey = <String, _TrackerFinding>{};
 
     void addFinding(String url, String provider, _TrackerRisk risk,
-        IconData icon, String reason) {
+        IconData icon, String reason, DetectionEvidence evidence) {
       final host = _hostFrom(url);
       if (host.isEmpty) return;
-      final key = '$provider|$host|$reason';
-      if (!seen.add(key)) return;
-      findings.add(_TrackerFinding(
-        provider: provider,
-        host: host,
-        risk: risk,
-        icon: icon,
-        reason: reason,
-      ));
+      final finding = byKey.putIfAbsent(
+          '$provider|$host|$reason',
+          () => _TrackerFinding(
+                provider: provider,
+                host: host,
+                risk: risk,
+                icon: icon,
+                reason: reason,
+              ));
+      if (!finding.evidence.any((e) => e.detail == evidence.detail)) {
+        finding.evidence.add(evidence);
+      }
     }
 
     for (final url in _allResourceUrls(metadata, htmlService)) {
       final match = _matchTrackerUrl(url);
       if (match != null) {
-        addFinding(url, match.provider, match.risk, match.icon, match.reason);
+        addFinding(
+            url,
+            match.provider,
+            match.risk,
+            match.icon,
+            match.reason,
+            DetectionEvidence(
+                EvidenceKind.request, 'Request to ${_hostFrom(url)}',
+                detail: url));
       }
     }
 
@@ -618,10 +650,12 @@ class ServicesView extends StatelessWidget {
           category == 'advertising' ? _TrackerRisk.high : _TrackerRisk.medium,
           category == 'social' ? Icons.share_outlined : Icons.cookie_outlined,
           'Cookie: $name',
+          DetectionEvidence.cookie(cookie),
         );
       }
     }
 
+    final findings = byKey.values.toList();
     findings.sort((a, b) {
       final riskCompare = b.risk.weight.compareTo(a.risk.weight);
       if (riskCompare != 0) return riskCompare;
@@ -726,8 +760,9 @@ class _TrackerFinding {
   final _TrackerRisk risk;
   final IconData icon;
   final String reason;
+  final List<DetectionEvidence> evidence = [];
 
-  const _TrackerFinding({
+  _TrackerFinding({
     required this.provider,
     required this.host,
     required this.risk,

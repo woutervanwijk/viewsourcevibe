@@ -139,7 +139,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Should not crash and should show the empty-media message
-      expect(find.text('No Images or Videos found'), findsOneWidget);
+      expect(find.text('No Images, Videos or Fonts found'), findsOneWidget);
     });
   });
 }

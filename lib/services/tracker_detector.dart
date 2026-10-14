@@ -1,3 +1,5 @@
+import 'package:view_source_vibe/models/detection_evidence.dart';
+
 // Detects known trackers from the URLs a page loads and the cookies it sets.
 
 enum TrackerCategory {
@@ -41,6 +43,16 @@ class TrackerHit {
 
   /// Found in the page source (inline snippets, pixels) rather than as a request.
   bool inSource = false;
+
+  /// Where this tracker was found (requests, cookies, HTML).
+  final List<DetectionEvidence> evidence = [];
+
+  void addEvidence(DetectionEvidence item) {
+    if (!evidence
+        .any((e) => e.title == item.title && e.detail == item.detail)) {
+      evidence.add(item);
+    }
+  }
 
   TrackerHit(this.name, this.category, this.iconDomain);
 }
@@ -285,8 +297,13 @@ List<TrackerHit> detectTrackers({
   required Iterable<String> resourceUrls,
   required Iterable<Map> cookies,
   Map<String, List<String>> services = const {},
+  Map<String, List<DetectionEvidence>> serviceEvidence = const {},
+  String html = '',
 }) {
   final pageHost = _hostOf(pageUrl);
+  // The service the inspected site itself belongs to (e.g. Instagram on
+  // instagram.com) is first party, not a tracker.
+  final ownService = pageHost.isEmpty ? null : _byHost(pageHost);
   final hits = <String, TrackerHit>{};
 
   TrackerHit hitFor(TrackerInfo t) => hits.putIfAbsent(
@@ -302,10 +319,14 @@ List<TrackerHit> detectTrackers({
       continue;
     }
     final info = _byHost(host);
-    if (info == null) continue;
+    if (info == null || info == ownService) continue;
+    final index = html.isEmpty ? -1 : html.indexOf(url);
     hitFor(info)
       ..requests += 1
-      ..hosts.add(host);
+      ..hosts.add(host)
+      ..addEvidence(DetectionEvidence(EvidenceKind.request, 'Request to $host',
+          detail: url,
+          line: index < 0 ? null : DetectionEvidence.htmlAt(html, index).line));
   }
 
   for (final cookie in cookies) {
@@ -321,6 +342,7 @@ List<TrackerHit> detectTrackers({
       continue;
     }
     final info = _byHost(domain.toLowerCase()) ?? _byProvider(provider);
+    if (info != null && info == ownService) continue;
     final hit = info != null
         ? hitFor(info)
         : hits.putIfAbsent(
@@ -329,7 +351,9 @@ List<TrackerHit> detectTrackers({
                 provider,
                 TrackerCategory.values.firstWhere((c) => c.name == category),
                 null));
-    hit.cookies.add(name);
+    hit
+      ..cookies.add(name)
+      ..addEvidence(DetectionEvidence.cookie(cookie));
   }
 
   // Services found by pattern in the page source (inline snippets etc.).
@@ -344,12 +368,19 @@ List<TrackerHit> detectTrackers({
     if (category == null) return;
     for (final name in names) {
       final info = _byProvider(name);
+      if (info != null && info == ownService) continue;
       // Unknown social widgets (share links etc.) are not trackers.
       if (info == null && category == TrackerCategory.social) continue;
-      (info != null
-              ? hitFor(info)
-              : hits.putIfAbsent(name, () => TrackerHit(name, category, null)))
-          .inSource = true;
+      final hit = info != null
+          ? hitFor(info)
+          : hits.putIfAbsent(name, () => TrackerHit(name, category, null));
+      hit.inSource = true;
+      for (final item in serviceEvidence[name] ??
+          const [
+            DetectionEvidence(EvidenceKind.html, 'Pattern in page source')
+          ]) {
+        hit.addEvidence(item);
+      }
     }
   });
 

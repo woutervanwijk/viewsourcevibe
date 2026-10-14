@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
 import 'package:xml/xml.dart' as xml;
+import 'package:view_source_vibe/models/detection_evidence.dart';
 
 /// Extract metadata from the file content
 Future<Map<String, dynamic>> extractMetadataInIsolate(
@@ -517,9 +518,91 @@ void _processJsonLdObject(
 }
 
 /// Guess CMS and Frameworks based on patterns in the HTML and Headers
+/// A hostname on its own in quotes (e.g. `"doubleclick.net"` in a JSON
+/// config list) is data, not a resource being loaded.
+bool _isQuotedBareHost(String html, Match match) {
+  final text = match[0] ?? '';
+  if (!RegExp(r'^[a-z0-9.-]+\.[a-z]{2,}$', caseSensitive: false)
+      .hasMatch(text)) {
+    return false;
+  }
+  // Extend to the full hostname around the match.
+  var start = match.start, end = match.end;
+  final hostChar = RegExp(r'[a-zA-Z0-9.-]');
+  while (start > 0 && hostChar.hasMatch(html[start - 1])) {
+    start--;
+  }
+  while (end < html.length && hostChar.hasMatch(html[end])) {
+    end++;
+  }
+  const quotes = {'"', "'"};
+  return start > 0 &&
+      end < html.length &&
+      quotes.contains(html[start - 1]) &&
+      quotes.contains(html[end]);
+}
+
+/// Index ranges of HTML comments; code inside them is not active.
+List<(int, int)> _commentRanges(String html) => [
+      for (final m in RegExp(r'<!--[\s\S]*?-->').allMatches(html))
+        (m.start, m.end)
+    ];
+
+/// Whether [index] is inside markup or script/style code, rather than in an
+/// HTML comment or visible text (e.g. a cookie banner naming doubleclick.net).
+bool _isActiveCode(String lowerHtml, int index, List<(int, int)> comments) {
+  if (comments.any((c) => index >= c.$1 && index < c.$2)) return false;
+  for (final tag in ['script', 'style']) {
+    if (lowerHtml.lastIndexOf('<$tag', index) >
+        lowerHtml.lastIndexOf('</$tag', index)) {
+      return true;
+    }
+  }
+  return lowerHtml.lastIndexOf('<', index) > lowerHtml.lastIndexOf('>', index);
+}
+
 void _detectTechnologies(
     String html, Map<String, dynamic> metadata, Map<String, String>? headers) {
   final Map<String, String> tech = {};
+  final Map<String, List<Map<String, dynamic>>> evidence = {};
+  // Evidence of matches since the last detection; a failed check discards it.
+  var pending = <Map<String, dynamic>>[];
+
+  // Comments count here: they often carry signatures ("optimized with Yoast").
+  bool has(String needle) {
+    final index = html.indexOf(needle);
+    if (index < 0) {
+      pending = [];
+      return false;
+    }
+    pending.add(DetectionEvidence.htmlAt(html, index, match: needle).toMap());
+    return true;
+  }
+
+  bool pattern(String regex) {
+    final match = RegExp(regex, caseSensitive: false).firstMatch(html);
+    if (match == null) {
+      pending = [];
+      return false;
+    }
+    pending.add(
+        DetectionEvidence.htmlAt(html, match.start, match: match[0]).toMap());
+    return true;
+  }
+
+  bool header(String name, String value, String needle) {
+    if (!value.contains(needle)) return false;
+    pending.add(DetectionEvidence(EvidenceKind.header, 'Response header $name',
+            detail: '$name: $value')
+        .toMap());
+    return true;
+  }
+
+  void set(String key, String value) {
+    tech[key] = value;
+    evidence[key] = pending;
+    pending = [];
+  }
 
   // 1. Header-based Detection (Backend, Server, Caching)
   if (headers != null) {
@@ -531,209 +614,230 @@ void _detectTechnologies(
     // We can check Set-Cookie in headers if present as a single string or fallback.
 
     if (server != null) {
-      if (server.contains('nginx')) tech['Web Server'] = 'Nginx';
-      if (server.contains('Apache')) tech['Web Server'] = 'Apache';
-      if (server.contains('Cloudflare')) tech['CDN'] = 'Cloudflare';
-      if (server.contains('Netlify')) tech['CDN'] = 'Netlify';
-      if (server.contains('Vercel')) tech['Platform'] = 'Vercel';
-      if (server.contains('GSE')) tech['Web Server'] = 'Google Servlet Engine';
-      if (server.contains('AmazonS3')) tech['Storage'] = 'Amazon S3';
+      if (header('Server', server, 'nginx')) set('Web Server', 'Nginx');
+      if (header('Server', server, 'Apache')) set('Web Server', 'Apache');
+      if (header('Server', server, 'Cloudflare')) set('CDN', 'Cloudflare');
+      if (header('Server', server, 'Netlify')) set('CDN', 'Netlify');
+      if (header('Server', server, 'Vercel')) set('Platform', 'Vercel');
+      if (header('Server', server, 'GSE')) {
+        set('Web Server', 'Google Servlet Engine');
+      }
+      if (header('Server', server, 'AmazonS3')) set('Storage', 'Amazon S3');
     }
 
     if (xPoweredBy != null) {
-      if (xPoweredBy.contains('PHP')) tech['Backend'] = 'PHP';
-      if (xPoweredBy.contains('ASP.NET')) tech['Backend'] = 'ASP.NET';
-      if (xPoweredBy.contains('Express')) tech['Backend'] = 'Express';
-      if (xPoweredBy.contains('Next.js')) tech['Framework'] = 'Next.js';
+      if (header('X-Powered-By', xPoweredBy, 'PHP')) set('Backend', 'PHP');
+      if (header('X-Powered-By', xPoweredBy, 'ASP.NET')) {
+        set('Backend', 'ASP.NET');
+      }
+      if (header('X-Powered-By', xPoweredBy, 'Express')) {
+        set('Backend', 'Express');
+      }
+      if (header('X-Powered-By', xPoweredBy, 'Next.js')) {
+        set('Framework', 'Next.js');
+      }
     }
 
     if (via != null) {
-      if (via.contains('varnish')) tech['Cache'] = 'Varnish';
+      if (header('Via', via, 'varnish')) set('Cache', 'Varnish');
     }
   }
 
   // 2. HTML-based Detection (Generator Meta Tag)
   final generator = metadata['otherMeta']['generator']?.toLowerCase() ?? '';
+  final generatorTag =
+      RegExp(r'<meta[^>]*generator[^>]*>', caseSensitive: false)
+          .firstMatch(html);
+  final generatorEvidence = generatorTag == null
+      ? <Map<String, dynamic>>[]
+      : [DetectionEvidence.htmlAt(html, generatorTag.start).toMap()];
+  pending = List.of(generatorEvidence);
   if (generator.contains('wordpress')) {
-    tech['CMS'] = 'WordPress';
+    set('CMS', 'WordPress');
     _extractVersion(generator, 'WordPress', tech);
   } else if (generator.contains('typo3')) {
-    tech['CMS'] = 'TYPO3';
+    set('CMS', 'TYPO3');
   } else if (generator.contains('joomla')) {
-    tech['CMS'] = 'Joomla';
+    set('CMS', 'Joomla');
     _extractVersion(generator, 'Joomla', tech);
   } else if (generator.contains('drupal')) {
-    tech['CMS'] = 'Drupal';
+    set('CMS', 'Drupal');
     _extractVersion(generator, 'Drupal', tech);
   } else if (generator.contains('prestashop')) {
-    tech['CMS'] = 'PrestaShop';
+    set('CMS', 'PrestaShop');
   } else if (generator.contains('ghost')) {
-    tech['CMS'] = 'Ghost';
+    set('CMS', 'Ghost');
     _extractVersion(generator, 'Ghost', tech);
   } else if (generator.contains('hugo')) {
-    tech['Static Site'] = 'Hugo';
+    set('Static Site', 'Hugo');
     _extractVersion(generator, 'Hugo', tech);
   } else if (generator.contains('webflow')) {
-    tech['CMS'] = 'Webflow';
+    set('CMS', 'Webflow');
   } else if (generator.contains('wix')) {
-    tech['CMS'] = 'Wix';
+    set('CMS', 'Wix');
   } else if (generator.contains('shopify')) {
-    tech['CMS'] = 'Shopify';
+    set('CMS', 'Shopify');
   } else if (generator.contains('bitrix')) {
-    tech['CMS'] = '1C-Bitrix';
+    set('CMS', '1C-Bitrix');
   } else if (generator.contains('docusaurus')) {
-    tech['Static Site'] = 'Docusaurus';
+    set('Static Site', 'Docusaurus');
   } else if (generator.contains('gatsby')) {
-    tech['Static Site'] = 'Gatsby';
+    set('Static Site', 'Gatsby');
     _extractVersion(generator, 'Gatsby', tech);
   } else if (generator.contains('astro')) {
-    tech['Static Site'] = 'Astro';
+    set('Static Site', 'Astro');
     _extractVersion(generator, 'Astro', tech);
   } else if (generator.contains('jekyll')) {
-    tech['Static Site'] = 'Jekyll';
+    set('Static Site', 'Jekyll');
     _extractVersion(generator, 'Jekyll', tech);
   }
 
+  pending = [];
+
   // 3. Path and Pattern-based CMS detection
   if (tech['CMS'] == null && tech['Static Site'] == null) {
-    if (html.contains('wp-content') || html.contains('wp-includes')) {
-      tech['CMS'] = 'WordPress';
-    } else if (html.contains('typo3conf/') ||
-        html.contains('typo3temp/') ||
-        html.contains('/typo3/')) {
-      tech['CMS'] = 'TYPO3';
-    } else if (html.contains('/templates/') &&
-        (html.contains('/media/jui/') || html.contains('/media/system/'))) {
-      tech['CMS'] = 'Joomla';
-    } else if (html.contains('/sites/all/modules/') ||
-        html.contains('/sites/default/files/')) {
-      tech['CMS'] = 'Drupal';
-    } else if (html.contains('/modules/') &&
-        (html.contains('prestashop') || html.contains('/themes/'))) {
-      if (html.contains('var prestashop =') ||
-          html.contains('id_product_attribute')) {
-        tech['CMS'] = 'PrestaShop';
+    if (has('wp-content') || has('wp-includes')) {
+      set('CMS', 'WordPress');
+    } else if (has('typo3conf/') || has('typo3temp/') || has('/typo3/')) {
+      set('CMS', 'TYPO3');
+    } else if (has('/templates/') &&
+        (has('/media/jui/') || has('/media/system/'))) {
+      set('CMS', 'Joomla');
+    } else if (has('/sites/all/modules/') || has('/sites/default/files/')) {
+      set('CMS', 'Drupal');
+    } else if (has('/modules/') && (has('prestashop') || has('/themes/'))) {
+      if (has('var prestashop =') || has('id_product_attribute')) {
+        set('CMS', 'PrestaShop');
       }
-    } else if (html.contains('cdn.shopify.com') ||
-        html.contains('shopify-payment-button')) {
-      tech['CMS'] = 'Shopify';
-    } else if (html.contains('static1.squarespace.com')) {
-      tech['CMS'] = 'Squarespace';
-    } else if (html.contains('data-wf-page')) {
-      tech['CMS'] = 'Webflow';
-    } else if (html.contains('contentful.com')) {
-      tech['CMS'] = 'Contentful';
-    } else if (html.contains('umbraco')) {
-      tech['CMS'] = 'Umbraco';
-    } else if (html.contains('sitecore')) {
-      tech['CMS'] = 'Sitecore';
-    } else if (html.contains('adobe-experience-manager') ||
-        html.contains('aem')) {
-      tech['CMS'] = 'Adobe Experience Manager';
-    } else if (html.contains('strapi')) {
-      tech['CMS'] = 'Strapi';
+    } else if (has('cdn.shopify.com') || has('shopify-payment-button')) {
+      set('CMS', 'Shopify');
+    } else if (has('static1.squarespace.com')) {
+      set('CMS', 'Squarespace');
+    } else if (has('data-wf-page')) {
+      set('CMS', 'Webflow');
+    } else if (has('contentful.com')) {
+      set('CMS', 'Contentful');
+    } else if (has('umbraco')) {
+      set('CMS', 'Umbraco');
+    } else if (has('sitecore')) {
+      set('CMS', 'Sitecore');
+    } else if (has('adobe-experience-manager') || has('aem')) {
+      set('CMS', 'Adobe Experience Manager');
+    } else if (has('strapi')) {
+      set('CMS', 'Strapi');
     }
   }
 
   // 4. Plugin & Extension Detection
   final List<String> plugins = [];
+  final List<Map<String, dynamic>> pluginEvidence = [];
+  void addPlugin(String name) {
+    plugins.add(name);
+    pluginEvidence.addAll(pending);
+    pending = [];
+  }
+
   if (tech['CMS'] == 'WordPress') {
-    if (html.contains('woocommerce') ||
-        html.contains('/plugins/woocommerce/')) {
-      plugins.add('WooCommerce');
+    if (has('woocommerce') || has('/plugins/woocommerce/')) {
+      addPlugin('WooCommerce');
     }
-    if (html.contains('elementor') || html.contains('elementor-section')) {
-      plugins.add('Elementor');
+    if (has('elementor') || has('elementor-section')) {
+      addPlugin('Elementor');
     }
-    if (html.contains('Yoast SEO') ||
-        html.contains('/plugins/wordpress-seo/')) {
-      plugins.add('Yoast SEO');
+    if (has('Yoast SEO') || has('/plugins/wordpress-seo/')) {
+      addPlugin('Yoast SEO');
     }
-    if (html.contains('Rank Math') || html.contains('rank-math-')) {
-      plugins.add('Rank Math');
+    if (has('Rank Math') || has('rank-math-')) {
+      addPlugin('Rank Math');
     }
-    if (html.contains('wpcf7') || html.contains('contact-form-7')) {
-      plugins.add('Contact Form 7');
+    if (has('wpcf7') || has('contact-form-7')) {
+      addPlugin('Contact Form 7');
     }
-    if (html.contains('wp-rocket') || html.contains('WP Rocket')) {
-      plugins.add('WP Rocket');
+    if (has('wp-rocket') || has('WP Rocket')) {
+      addPlugin('WP Rocket');
     }
-    if (html.contains('W3 Total Cache') || html.contains('/w3-total-cache/')) {
-      plugins.add('W3 Total Cache');
+    if (has('W3 Total Cache') || has('/w3-total-cache/')) {
+      addPlugin('W3 Total Cache');
     }
-    if (html.contains('js-composer') || html.contains('wpb-js-composer')) {
-      plugins.add('WPBakery Page Builder');
+    if (has('js-composer') || has('wpb-js-composer')) {
+      addPlugin('WPBakery Page Builder');
     }
-    if (html.contains('revslider') || html.contains('Slider Revolution')) {
-      plugins.add('Slider Revolution');
+    if (has('revslider') || has('Slider Revolution')) {
+      addPlugin('Slider Revolution');
     }
   } else if (tech['CMS'] == 'Joomla') {
-    if (html.contains('com_virtuemart')) plugins.add('VirtueMart');
-    if (html.contains('com_rsform')) plugins.add('RSForm');
-    if (html.contains('com_jce')) plugins.add('JCE Editor');
-    if (html.contains('com_k2')) plugins.add('K2');
+    if (has('com_virtuemart')) addPlugin('VirtueMart');
+    if (has('com_rsform')) addPlugin('RSForm');
+    if (has('com_jce')) addPlugin('JCE Editor');
+    if (has('com_k2')) addPlugin('K2');
   } else if (tech['CMS'] == 'Drupal') {
-    if (html.contains('views-view')) plugins.add('Views');
-    if (html.contains('webform-client-form')) plugins.add('Webform');
+    if (has('views-view')) addPlugin('Views');
+    if (has('webform-client-form')) addPlugin('Webform');
   }
 
   if (plugins.isNotEmpty) {
     tech['Plugins'] = plugins.join(', ');
+    evidence['Plugins'] = pluginEvidence;
   }
 
   // 5. Frameworks & Libraries (Expanded)
-  if (_hasPattern(html, r'''_next/static|__NEXT_DATA__''')) {
-    tech['Framework'] = 'Next.js';
-  } else if (_hasPattern(html, r'''__NUXT__''')) {
-    tech['Framework'] = 'Nuxt.js';
-  } else if (_hasPattern(html, r'''_sveltekit''')) {
-    tech['Framework'] = 'SvelteKit';
-  } else if (_hasPattern(html, r'''window\.__remixContext|__remixManifest''')) {
-    tech['Framework'] = 'Remix';
-  } else if (_hasPattern(html, r'''data-reactroot|_reactListening''')) {
-    tech['Library'] = 'React';
-  } else if (_hasPattern(html, r'''data-v-|v-if=|v-for=''')) {
-    tech['Library'] = 'Vue.js';
-  } else if (_hasPattern(html, r'''ng-version|ng-app''')) {
-    tech['Framework'] = 'Angular';
-  } else if (_hasPattern(html, r'''jquery(?:\.min)?\.js''')) {
-    tech['Library'] = 'jQuery';
-  } else if (html.contains('x-data=') || html.contains('x-init=')) {
-    tech['Library'] = 'Alpine.js';
-  } else if (html.contains('hx-get=') || html.contains('hx-post=')) {
-    tech['Library'] = 'HTMX';
-  } else if (html.contains('solid-js')) {
-    tech['Library'] = 'SolidJS';
-  } else if (html.contains('lit-html') || html.contains('lit-element')) {
-    tech['Library'] = 'Lit';
+  if (pattern(r'''_next/static|__NEXT_DATA__''')) {
+    set('Framework', 'Next.js');
+  } else if (pattern(r'''__NUXT__''')) {
+    set('Framework', 'Nuxt.js');
+  } else if (pattern(r'''_sveltekit''')) {
+    set('Framework', 'SvelteKit');
+  } else if (pattern(r'''window\.__remixContext|__remixManifest''')) {
+    set('Framework', 'Remix');
+  } else if (pattern(r'''data-reactroot|_reactListening''')) {
+    set('Library', 'React');
+  } else if (pattern(r'''data-v-|v-if=|v-for=''')) {
+    set('Library', 'Vue.js');
+  } else if (pattern(r'''ng-version|ng-app''')) {
+    set('Framework', 'Angular');
+  } else if (pattern(r'''jquery(?:\.min)?\.js''')) {
+    set('Library', 'jQuery');
+  } else if (has('x-data=') || has('x-init=')) {
+    set('Library', 'Alpine.js');
+  } else if (has('hx-get=') || has('hx-post=')) {
+    set('Library', 'HTMX');
+  } else if (has('solid-js')) {
+    set('Library', 'SolidJS');
+  } else if (has('lit-html') || has('lit-element')) {
+    set('Library', 'Lit');
   }
 
   // 6. CSS Frameworks
-  if (_hasPattern(html,
+  if (pattern(
       r'''bootstrap(?:\.min)?\.css|class=["'][^"']*?\b(?:col-|btn-|navbar-)''')) {
-    tech['CSS Framework'] = 'Bootstrap';
+    set('CSS Framework', 'Bootstrap');
   }
-  if (_hasPattern(html,
+  if (pattern(
       r'''tailwind(?:\.min)?\.css|class=["'][^"']*?\b(?:text-|bg-|p-|m-|flex-|grid-)''')) {
-    if (html.contains('tailwind') ||
-        _hasPattern(html, r'''\b(?:sm:|md:|lg:|xl:|2xl:)[a-z]''') ||
-        _hasPattern(html, r'''class=["'][^"']*\btext-[^"']*\bbg-[^"']*''')) {
-      tech['CSS Framework'] = 'Tailwind CSS';
+    if (has('tailwind') ||
+        pattern(r'''\b(?:sm:|md:|lg:|xl:|2xl:)[a-z]''') ||
+        pattern(r'''class=["'][^"']*\btext-[^"']*\bbg-[^"']*''')) {
+      set('CSS Framework', 'Tailwind CSS');
     }
   }
-  if (html.contains('bulma') || html.contains('is-primary')) {
-    tech['CSS Framework'] = 'Bulma';
-  } else if (html.contains('uk-')) {
-    tech['CSS Framework'] = 'UIkit';
-  } else if (html.contains('foundation.min.css')) {
-    tech['CSS Framework'] = 'Foundation';
-  } else if (html.contains('mdc-')) {
-    tech['CSS Framework'] = 'Material Components';
-  } else if (html.contains('chakra-ui')) {
-    tech['CSS Framework'] = 'Chakra UI';
+  if (has('bulma') || has('is-primary')) {
+    set('CSS Framework', 'Bulma');
+  } else if (has('uk-')) {
+    set('CSS Framework', 'UIkit');
+  } else if (has('foundation.min.css')) {
+    set('CSS Framework', 'Foundation');
+  } else if (has('mdc-')) {
+    set('CSS Framework', 'Material Components');
+  } else if (has('chakra-ui')) {
+    set('CSS Framework', 'Chakra UI');
+  }
+
+  for (final key in tech.keys) {
+    if (key.endsWith(' Version')) evidence[key] ??= generatorEvidence;
   }
 
   metadata['detectedTech'] = tech;
+  metadata['techEvidence'] = evidence;
 }
 
 void _extractVersion(
@@ -872,20 +976,29 @@ void _detectServices(String html, Map<String, dynamic> metadata) {
     }
   };
 
+  final evidence = <String, List<Map<String, dynamic>>>{};
+  final comments = _commentRanges(html);
+  final lowerHtml = html.toLowerCase();
   patterns.forEach((category, items) {
     items.forEach((name, pattern) {
-      if (_hasPattern(html, pattern)) {
+      final match = RegExp(pattern, caseSensitive: false)
+          .allMatches(html)
+          .where((m) =>
+              _isActiveCode(lowerHtml, m.start, comments) &&
+              !_isQuotedBareHost(html, m))
+          .firstOrNull;
+      if (match != null) {
         services.putIfAbsent(category, () => <String>[]).add(name);
+        evidence[name] = [
+          DetectionEvidence.htmlAt(html, match.start, match: match[0]).toMap()
+        ];
       }
     });
   });
 
   services.removeWhere((key, value) => value.isEmpty);
   metadata['detectedServices'] = services;
-}
-
-bool _hasPattern(String text, String pattern) {
-  return RegExp(pattern, caseSensitive: false).hasMatch(text);
+  metadata['serviceEvidence'] = evidence;
 }
 
 bool _isLocalResource(String url, String baseUrl) {

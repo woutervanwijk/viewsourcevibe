@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/tracker_detector.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
+import 'package:view_source_vibe/widgets/evidence_view.dart';
+import 'package:view_source_vibe/models/detection_evidence.dart';
 
 /// Who is tracking you on this page: known trackers found in loaded resources
 /// and cookies, with logos.
@@ -11,8 +13,10 @@ class PrivacyView extends StatelessWidget {
 
   static (IconData, Color) _style(TrackerCategory c) => switch (c) {
         TrackerCategory.advertising => (Icons.ad_units_outlined, Colors.red),
-        TrackerCategory.behavior =>
-          (Icons.videocam_outlined, Colors.deepOrange),
+        TrackerCategory.behavior => (
+            Icons.videocam_outlined,
+            Colors.deepOrange
+          ),
         TrackerCategory.social => (Icons.share_outlined, Colors.green),
         TrackerCategory.analytics => (Icons.analytics_outlined, Colors.orange),
         TrackerCategory.marketing => (Icons.campaign_outlined, Colors.blue),
@@ -36,6 +40,9 @@ class PrivacyView extends StatelessWidget {
           .whereType<Map>(),
       services: (htmlService.pageMetadata?['detectedServices'] as Map? ?? {})
           .map((k, v) => MapEntry(k.toString(), List<String>.from(v as List))),
+      serviceEvidence: DetectionEvidence.mapFrom(
+          htmlService.pageMetadata?['serviceEvidence']),
+      html: htmlService.currentFile?.content ?? '',
     );
 
     if (hits.isEmpty) {
@@ -163,18 +170,18 @@ class _TrackerTile extends StatelessWidget {
           children: [
             if (details.isNotEmpty)
               Text(details, style: TextStyle(color: color, fontSize: 12)),
-            if (hit.hosts.isNotEmpty)
-              Text(hit.hosts.join(', '),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
-            if (hit.cookies.isNotEmpty)
-              Text('Cookies: ${hit.cookies.join(', ')}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+            const SizedBox(height: 4),
+            EvidenceList(evidence: hit.evidence, max: 3, compact: true),
           ],
         ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showEvidenceSheet(context, hit.name, hit.evidence,
+            leading: ServiceLogo(
+                domain: hit.iconDomain,
+                label: hit.name,
+                fallback: fallbackIcon,
+                color: color,
+                size: 28)),
       ),
     );
   }
