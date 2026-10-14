@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:view_source_vibe/utils/cookie_utils.dart';
+import 'package:view_source_vibe/utils/font_url.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
@@ -3966,11 +3967,9 @@ Technical details: $e''';
 
     // Fonts: taken from the resources the browser actually loaded
     if (_pageMetadata!['media'] != null) {
-      final fontExt = RegExp(r'\.(woff2?|ttf|otf|eot)$', caseSensitive: false);
       _pageMetadata!['media']['fonts'] = [
         for (final r in _resourcePerformanceData ?? const [])
-          if (fontExt
-              .hasMatch(Uri.tryParse(r['name'] as String? ?? '')?.path ?? ''))
+          if (isFontUrl(r['name'] as String? ?? ''))
             {
               'src': r['name'],
               'size': {'transfer': r['transfer'], 'decoded': r['decoded']},
