@@ -1,3 +1,5 @@
+import 'package:view_source_vibe/services/detection/engine.dart';
+
 enum CookieCategory {
   essential,
   analytics,
@@ -4294,6 +4296,22 @@ class CookieUtils {
     'zuc': {'cat': CookieCategory.advertising, 'prov': 'Zeotap'},
   };
 
+  static const _trackingCategories = {
+    CookieCategory.analytics,
+    CookieCategory.advertising,
+    CookieCategory.social,
+  };
+
+  static CookieCategory _categoryOf(DetectionCategory c) => switch (c) {
+        DetectionCategory.advertising => CookieCategory.advertising,
+        DetectionCategory.social => CookieCategory.social,
+        DetectionCategory.analytics ||
+        DetectionCategory.behavior ||
+        DetectionCategory.marketing =>
+          CookieCategory.analytics,
+        _ => CookieCategory.functional,
+      };
+
   static CookieInfo analyze(String rawCookie, String source) {
     // Parse name and value, and handle attributes
     final parts = rawCookie.split(';');
@@ -4334,6 +4352,27 @@ class CookieUtils {
           break;
         }
       }
+    }
+
+    // Same rules as the detection engine: a catalogued first-party cookie
+    // names its service; a generic tracking name (NID, token, A) seen on
+    // this site is the site's own cookie, not the ad network's.
+    final entity = entityForCookie(name);
+    if (entity != null) {
+      knownData = {
+        'cat': knownData?['cat'] ?? _categoryOf(entity.category),
+        'prov': entity.name,
+      };
+    } else if (knownData != null &&
+        _trackingCategories.contains(knownData['cat']) &&
+        !isDistinctiveCookieName(name)) {
+      knownData = null;
+    } else if (knownData != null) {
+      final prov = knownData['prov'] as String?;
+      knownData = {
+        ...knownData,
+        'prov': prov == null ? null : entityNamed(prov)?.name ?? prov,
+      };
     }
 
     // Wildcard consent detection - check if cookie name contains 'consent'

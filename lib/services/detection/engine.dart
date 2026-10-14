@@ -128,7 +128,8 @@ bool _usedInScript(String html, int start, String path) {
       .hasMatch(html.substring(start < 40 ? 0 : start - 40, start));
 }
 
-Entity? _entityForCookie(String name) {
+/// The service whose first-party cookie this is, from the catalogue.
+Entity? entityForCookie(String name) {
   for (final (e, rule) in _cookieRules) {
     if (rule.endsWith('*')
         ? name.startsWith(rule.substring(0, rule.length - 1))
@@ -369,6 +370,12 @@ List<String> collectResourceUrls(
   return urls;
 }
 
+/// The page only sees first-party cookies, so a generic name such as "token"
+/// or "A" is the site's own cookie, not the ad network's cookie of that name.
+/// Names with a separator (`_ga`-style, `cto_bundle`) are distinctive.
+bool isDistinctiveCookieName(String name) =>
+    name.length >= 4 && RegExp(r'[_.\-]').hasMatch(name);
+
 const _cookieCategories = {
   'analytics': DetectionCategory.analytics,
   'advertising': DetectionCategory.advertising,
@@ -417,20 +424,16 @@ List<Detection> detect({
     final domain = (cookie['domain']?.toString() ?? '')
         .replaceFirst(RegExp(r'^\.'), '')
         .toLowerCase();
-    var e = _entityForCookie(name);
+    var e = entityForCookie(name);
     if (e == null && domain.isNotEmpty && !_sameSite(domain, pageHost)) {
       e = entityForHost(domain);
     }
-    // A tracking cookie from the cookie database counts only when its name
-    // is distinctive: the page sees first-party cookies only, so a generic
-    // name such as "token" or "A" is the site's own, not the ad network's.
     final category = _cookieCategories[cookie['category']];
     final provider = cookie['provider']?.toString() ?? '';
     if (e == null &&
         category != null &&
         provider.isNotEmpty &&
-        name.length >= 4 &&
-        RegExp(r'[_.\-]').hasMatch(name)) {
+        isDistinctiveCookieName(name)) {
       e = entityNamed(provider) ?? Entity(provider, category);
     }
     if (e == null) continue;

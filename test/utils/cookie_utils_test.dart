@@ -11,15 +11,30 @@ void main() {
     });
 
     test('Should identify Google Ads cookies', () {
-      final cookie = CookieUtils.analyze('NID=12345', 'Server');
+      final cookie = CookieUtils.analyze('_gcl_au=1.1.123', 'Browser');
       expect(cookie.category, CookieCategory.advertising);
-      expect(cookie.provider, 'Google');
+      expect(cookie.provider, 'Google Ads');
+    });
+
+    test('Generic first-party names are not labelled as ad cookies', () {
+      for (final name in ['NID', 'token', 'A', 'visitor']) {
+        final cookie = CookieUtils.analyze('$name=1', 'Server');
+        expect(cookie.category, CookieCategory.unknown, reason: name);
+        expect(cookie.provider, null, reason: name);
+      }
+    });
+
+    test('Providers use the catalogue names', () {
+      expect(CookieUtils.analyze('_uetsid=1', 'Browser').provider,
+          'Microsoft Advertising');
+      expect(CookieUtils.analyze('_ym_uid=1', 'Browser').provider,
+          'Yandex Metrica');
     });
 
     test('Should identify Facebook cookies', () {
       final cookie = CookieUtils.analyze('_fbp=fb.1.123456789', 'Server');
       expect(cookie.category, CookieCategory.advertising);
-      expect(cookie.provider, 'Facebook');
+      expect(cookie.provider, 'Meta Pixel');
     });
 
     test('Should identify AWS/Amazon cookies', () {
