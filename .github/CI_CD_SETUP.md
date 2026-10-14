@@ -19,7 +19,7 @@ Before setting up CI/CD, ensure you have:
 2. **Apple Developer Account** - For iOS app signing and macOS Developer ID notarization
 3. **Google Play Developer Account** - For Android app distribution
 4. **Fastlane Installed** - `gem install fastlane`
-5. **Flutter Installed** - The desktop workflow currently pins Flutter `3.41.6`
+5. **Flutter Installed** - The desktop workflow currently pins Flutter `3.47.6`
 
 ## 🛠️ Setup Instructions
 
