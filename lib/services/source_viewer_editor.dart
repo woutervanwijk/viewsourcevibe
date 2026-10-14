@@ -28,6 +28,9 @@ class SourceViewerEditor {
   static final Map<ScrollController, CodeScrollController>
       _scrollControllerCache = {};
 
+  /// 1-based line to select once the source editor is (re)built.
+  static int? pendingRevealLine;
+
   static List<String> getAvailableLanguages() =>
       builtinAllLanguages.keys.toList();
 
@@ -262,6 +265,17 @@ class SourceViewerEditor {
 
     final controller = _cachedControllers[controllerKey]!;
     final findController = _cachedFindControllers[controllerKey]!;
+
+    final revealLine = pendingRevealLine;
+    if (revealLine != null && !isBeautified) {
+      pendingRevealLine = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (controller.lineCount == 0) return;
+        controller
+            .selectLine((revealLine - 1).clamp(0, controller.lineCount - 1));
+        controller.makeCursorCenterIfInvisible();
+      });
+    }
 
     return _buildEditorWidget(
       controller,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
@@ -170,6 +171,32 @@ class HtmlService extends ChangeNotifier {
   String? get serverSource => _lastServerSource;
   List<Map<String, dynamic>> get resourceTimelineData =>
       List.unmodifiable(_resourcePerformanceData ?? const []);
+
+  List<Detection>? _detections;
+  Object? _detectionsKey;
+
+  /// Every service, tracker and technology on the page: the source scan from
+  /// the metadata isolate plus the browser's requests and cookies.
+  List<Detection> get detections {
+    final cookies = _probeResult?['analyzedCookies'] as List?;
+    final key = (
+      identityHashCode(_pageMetadata),
+      identityHashCode(_resourcePerformanceData),
+      _resourcePerformanceData?.length,
+      identityHashCode(cookies),
+      cookies?.length,
+    );
+    if (_detections != null && key == _detectionsKey) return _detections!;
+    _detectionsKey = key;
+    return _detections = detect(
+      pageUrl: _currentFile?.path ?? '',
+      html: _currentFile?.content ?? '',
+      source: Detection.listFrom(_pageMetadata?['detections']),
+      requests: collectResourceUrls(_pageMetadata, resourceTimelineData),
+      cookies: (cookies ?? const []).whereType<Map>(),
+    );
+  }
+
   bool get isProbing => _isProbing;
   SovereigntyReport? get sovereigntyReport => _sovereigntyReport;
   bool get isAnalyzingSovereignty => _isAnalyzingSovereignty;
@@ -218,6 +245,7 @@ class HtmlService extends ChangeNotifier {
         probeResult: _probeResult,
         resources: resourceTimelineData,
         metadata: _pageMetadata,
+        detections: detections,
         html: _currentFile?.content,
         home: siteJurisdiction.jurisdiction,
       );
@@ -513,6 +541,14 @@ class HtmlService extends ChangeNotifier {
         selectedContentType == 'video' ||
         selectedContentType == 'audio' ||
         (_currentFile?.isMedia ?? false);
+  }
+
+  /// Switches to the Source tab (unbeautified) and selects [line] (1-based).
+  void revealSourceLine(int line) {
+    SourceViewerEditor.pendingRevealLine = line;
+    _isBeautifyEnabled = false;
+    _requestedTabIndex = sourceTabIndex;
+    notifyListeners();
   }
 
   void consumeTabSwitchRequest() {
@@ -3933,7 +3969,8 @@ Technical details: $e''';
       final fontExt = RegExp(r'\.(woff2?|ttf|otf|eot)$', caseSensitive: false);
       _pageMetadata!['media']['fonts'] = [
         for (final r in _resourcePerformanceData ?? const [])
-          if (fontExt.hasMatch(Uri.tryParse(r['name'] as String? ?? '')?.path ?? ''))
+          if (fontExt
+              .hasMatch(Uri.tryParse(r['name'] as String? ?? '')?.path ?? ''))
             {
               'src': r['name'],
               'size': {'transfer': r['transfer'], 'decoded': r['decoded']},

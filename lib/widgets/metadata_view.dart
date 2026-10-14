@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:view_source_vibe/widgets/service_logo.dart';
+import 'package:view_source_vibe/widgets/evidence_view.dart';
+import 'package:view_source_vibe/services/detection/engine.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -51,10 +53,11 @@ class MetadataView extends StatelessWidget {
     // Collect dynamic sections to sort them alphabetically
     final List<({String title, Widget content})> dynamicSections = [];
 
-    if (metadata['detectedTech']?.isNotEmpty == true) {
+    final tech = htmlService.detections.where((d) => d.category.tech).toList();
+    if (tech.isNotEmpty) {
       dynamicSections.add((
         title: 'Technology Stack',
-        content: _buildTechSection(context, metadata['detectedTech'], settings),
+        content: _buildTechSection(context, tech),
       ));
     }
     if (metadata['article']?.isNotEmpty == true) {
@@ -122,9 +125,9 @@ class MetadataView extends StatelessWidget {
               _buildStructuredDataSection(context, metadata['structuredData']),
               const SizedBox(height: 24),
             ],
-            if (metadata['detectedTech']?.isNotEmpty == true) ...[
+            if (tech.isNotEmpty) ...[
               _buildSectionTitle(context, 'Tech Stack Confidence'),
-              _buildTechConfidenceSection(context, metadata['detectedTech']),
+              _buildTechConfidenceSection(context, tech),
               const SizedBox(height: 24),
             ],
             ...dynamicSections.expand((section) => [
@@ -709,20 +712,25 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildTechSection(
-      BuildContext context, Map<String, dynamic> tech, AppSettings settings) {
+  String _techLabel(Detection d) =>
+      '${d.category.label}: ${d.name}${d.version != null ? ' ${d.version}' : ''}';
+
+  Widget _buildTechSection(BuildContext context, List<Detection> tech) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: tech.entries.map((e) {
-        return Chip(
+      children: tech.map((d) {
+        return ActionChip(
+          onPressed: () =>
+              showEvidenceSheet(context, _techLabel(d), d.evidence),
           avatar: ServiceLogo(
-              label: e.value.toString(),
+              domain: d.entity.logoDomain,
+              label: d.name,
               fallback: Icons.code,
               color: Theme.of(context).colorScheme.primary,
               size: 18),
           label: Text(
-            '${e.key}: ${e.value}',
+            _techLabel(d),
             style: TextStyle(
               fontFamily: 'Courier',
             ),
@@ -815,14 +823,14 @@ class MetadataView extends StatelessWidget {
   }
 
   Widget _buildTechConfidenceSection(
-      BuildContext context, Map<String, dynamic> tech) {
-    final items = tech.entries.map((entry) {
-      final confidence = _techConfidence(entry.key, entry.value.toString());
+      BuildContext context, List<Detection> tech) {
+    final items = tech.map((d) {
+      final (score, reason) = d.confidence;
       return (
-        label: entry.key,
-        value: entry.value.toString(),
-        score: confidence.$1,
-        reason: confidence.$2,
+        label: _techLabel(d),
+        score: score,
+        reason: reason,
+        sources: d.evidence,
       );
     }).toList()
       ..sort((a, b) => b.score.compareTo(a.score));
@@ -842,87 +850,77 @@ class MetadataView extends StatelessWidget {
                 : item.score >= 60
                     ? Colors.orange
                     : Colors.grey;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 46,
-                    height: 46,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CircularProgressIndicator(
-                          value: item.score / 100,
-                          strokeWidth: 5,
-                          color: color,
-                          backgroundColor: color.withValues(alpha: 0.12),
-                        ),
-                        Center(
-                          child: Text(
-                            '${item.score}',
-                            style: TextStyle(
+            final sources = item.sources;
+            return InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => showEvidenceSheet(context, item.label, sources),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 46,
+                        height: 46,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            CircularProgressIndicator(
+                              value: item.score / 100,
+                              strokeWidth: 5,
                               color: color,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                              backgroundColor: color.withValues(alpha: 0.12),
                             ),
-                          ),
+                            Center(
+                              child: Text(
+                                '${item.score}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.label,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              item.reason,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.64),
+                                fontSize: 11,
+                              ),
+                            ),
+                            if (sources.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              EvidenceList(
+                                  evidence: sources, max: 1, compact: true),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${item.label}: ${item.value}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          item.reason,
-                          style: TextStyle(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.64),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
+                ));
           }).toList(),
         ),
       ),
     );
-  }
-
-  (int, String) _techConfidence(String label, String value) {
-    final combined = '$label $value'.toLowerCase();
-    if (combined.contains('version')) {
-      return (92, 'Version-specific signal from generator/header pattern.');
-    }
-    if (['cdn', 'web server', 'backend', 'platform', 'cache', 'storage']
-        .any(combined.contains)) {
-      return (88, 'Server header or infrastructure marker.');
-    }
-    if (['cms', 'framework', 'static site', 'e-commerce']
-        .any(combined.contains)) {
-      return (78, 'HTML path, script, or generator marker.');
-    }
-    if (combined.contains('css')) {
-      return (64, 'CSS class or stylesheet heuristic.');
-    }
-    return (58, 'Weak heuristic match; inspect source to confirm.');
   }
 
   Widget _buildSectionTitle(BuildContext context, String title) {

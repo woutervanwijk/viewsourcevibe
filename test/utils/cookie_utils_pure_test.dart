@@ -15,8 +15,8 @@ void main() {
   expect(ga.provider, 'Google Analytics', '_ga provider');
 
   // 2. Google Ads
-  final nid = CookieUtils.analyze('NID=12345', 'Server');
-  expect(nid.category, CookieCategory.advertising, 'NID category');
+  final nid = CookieUtils.analyze('_gcl_au=12345', 'Server');
+  expect(nid.category, CookieCategory.advertising, '_gcl_au category');
 
   // 3. AWS
   final aws = CookieUtils.analyze('AWSALB=12345', 'Server');

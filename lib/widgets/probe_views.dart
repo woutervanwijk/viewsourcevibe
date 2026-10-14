@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:view_source_vibe/widgets/service_logo.dart';
+import 'package:view_source_vibe/widgets/evidence_view.dart';
+import 'package:view_source_vibe/models/detection_evidence.dart';
 import 'package:view_source_vibe/services/logo_service.dart';
 
 import 'package:flutter/material.dart';
@@ -1210,7 +1212,18 @@ class ProbeHeadersView extends ProbeViewBase {
     final cors = _corsVerdict(lookup);
     final negotiation = _negotiationVerdict(lookup);
     final validators = _validatorVerdict(lookup);
-    final chips = [cache, compression, cdn, cors, negotiation, validators];
+    // Each insight with the response headers it is based on.
+    final chips = [
+      (cache, ['cache-control', 'age', 'expires']),
+      (compression, ['content-encoding']),
+      (cdn, ['server', 'via', 'cf-cache-status', 'cf-ray', 'x-cache']),
+      (
+        cors,
+        ['access-control-allow-origin', 'access-control-allow-credentials']
+      ),
+      (negotiation, ['vary']),
+      (validators, ['etag', 'last-modified']),
+    ];
 
     return Card(
       elevation: 0,
@@ -1245,8 +1258,23 @@ class ProbeHeadersView extends ProbeViewBase {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children:
-                  chips.map((chip) => _buildHeaderInsightChip(chip)).toList(),
+              children: chips.map((chip) {
+                final (insight, names) = chip;
+                final evidence = [
+                  for (final name in names)
+                    if (lookup[name] != null)
+                      DetectionEvidence(
+                          EvidenceKind.header, 'Response header $name',
+                          detail: '$name: ${lookup[name]}'),
+                ];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => showEvidenceSheet(
+                      context, insight.label, evidence,
+                      description: insight.detail),
+                  child: _buildHeaderInsightChip(insight),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 12),
             ..._headerNotes(lookup).map(

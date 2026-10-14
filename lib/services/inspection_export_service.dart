@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/services/file_system_service.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/detection/engine.dart';
 
 class InspectionExportService {
   static const int packageFormatVersion = 1;
@@ -78,6 +79,7 @@ class InspectionExportService {
         browserProbe: browserProbe,
         metadata: metadata,
         timeline: timeline,
+        services: servicesByCategory(htmlService.detections),
         hasServerSource: serverSource?.isNotEmpty == true,
         hasBrowserSource: browserSource.isNotEmpty,
       ),
@@ -101,6 +103,8 @@ class InspectionExportService {
         htmlService.sovereigntyReport?.toJson() ?? {});
 
     addJson('analysis/metadata.json', metadata ?? {});
+    addJson('analysis/detections.json',
+        [for (final d in htmlService.detections) d.toMap()]);
     addJson('analysis/security-scorecard.json', probe?['security'] ?? {});
     addJson('analysis/certificate.json', probe?['certificate'] ?? {});
     addJson('analysis/robots-sitemap.json', probe?['robotsSitemap'] ?? {});
@@ -181,6 +185,7 @@ class InspectionExportService {
     required Map<String, dynamic>? probe,
     required Map<String, dynamic>? browserProbe,
     required Map<String, dynamic>? metadata,
+    required Map<String, List<String>> services,
     required List<Map<String, dynamic>> timeline,
     required bool hasServerSource,
     required bool hasBrowserSource,
@@ -196,9 +201,6 @@ class InspectionExportService {
     final redirects = _redirectsFrom(probe);
     final pageWeight =
         browserProbe?['pageWeight'] ?? metadata?['pageWeight'] ?? {};
-    final services = metadata?['detectedServices'] is Map
-        ? Map<String, dynamic>.from(metadata!['detectedServices'])
-        : <String, dynamic>{};
     final metadataSummary = _metadataSummaryFrom(metadata);
     final resourceRows = _serviceResourceRows(metadata);
     final securityRows = _securityRows(security);
