@@ -481,18 +481,18 @@ List<Detection> detect({
   return result;
 }
 
-/// Non-tracking third parties the browser contacted (fonts, CDNs, cloud,
-/// payments, consent): they still receive the visitor's IP address and the
-/// page being visited.
+/// Non-tracking third parties that see the visit: services the browser
+/// loads files from (fonts, cloud, payments, consent) and the CDN, proxy or
+/// host serving the site itself (seen in its response headers). They still
+/// receive the visitor's IP address and the page being visited.
 List<Detection> seesVisit(Iterable<Detection> detections) => [
       for (final d in detections)
         if (!d.category.isTracking &&
-            d.hosts.isNotEmpty &&
             !d.hintOnly &&
-            (!d.category.tech ||
-                d.category == DetectionCategory.cdn ||
+            (d.category == DetectionCategory.cdn ||
                 d.category == DetectionCategory.platform ||
-                d.category == DetectionCategory.storage))
+                d.category == DetectionCategory.storage ||
+                (!d.category.tech && d.hosts.isNotEmpty)))
           d
     ]..sort((a, b) {
         final byPings = b.pings.compareTo(a.pings);

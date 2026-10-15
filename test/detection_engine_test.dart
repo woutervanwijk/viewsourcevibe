@@ -72,6 +72,13 @@ void main() {
           visit.first.evidence.first.title, 'Pageview ping to p.typekit.net');
     });
 
+    test('a CDN in front of the site always sees the visit', () {
+      final ds = detect(
+          pageUrl: 'https://fiper.nl/',
+          headers: {'server': 'cloudflare', 'cf-ray': 'a4ad6e058d02d8d2-CDG'});
+      expect(seesVisit(ds).map((d) => d.name), ['Cloudflare']);
+    });
+
     test('a site is not its own tracker', () {
       final ds = detect(
           pageUrl: 'https://www.instagram.com/',
