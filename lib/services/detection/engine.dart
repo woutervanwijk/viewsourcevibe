@@ -14,6 +14,9 @@ class Detection {
   final Set<String> cookies = {};
   int requests = 0;
 
+  /// Requests that report the visit (see [Entity.beacons]).
+  int pings = 0;
+
   /// Found in page code (script, tag attribute, header or generator).
   bool inSource = false;
 
@@ -104,11 +107,21 @@ final _cookieRules = [
     for (final c in e.cookies) (e, c),
 ];
 
-/// Entity for a URL: specific URL patterns (gtag.js?id=AW- is Ads, not
+/// Entities for a URL: specific URL patterns (gtag.js?id=AW- is Ads, not
 /// Tag Manager) win over the host; same-site hosts only match patterns.
-Entity? _entityForUrl(String url, String host, String pageHost) =>
-    _compiled.where((c) => c.$2.hasMatch(url)).firstOrNull?.$1 ??
-    (_sameSite(host, pageHost) ? null : entityForHost(host));
+/// A technology pattern (jquery.min.js) does not hide who serves the file,
+/// so then the host's service (Google Hosted Libraries) is returned too.
+List<Entity> _entitiesForUrl(String url, String host, String pageHost) {
+  final byPattern = _compiled.where((c) => c.$2.hasMatch(url)).firstOrNull?.$1;
+  final byHost = _sameSite(host, pageHost) ? null : entityForHost(host);
+  return [
+    if (byPattern != null) byPattern,
+    if (byHost != null &&
+        byHost != byPattern &&
+        (byPattern == null || byPattern.category.tech))
+      byHost,
+  ];
+}
 
 final _resourcePath = RegExp(
     r'\.(?:m?js|css|json|gif|png|jpe?g|svg|webp|avif|ico|woff2?|php|html?|aspx?)(?:[?#]|$)'
@@ -297,8 +310,8 @@ List<Detection> scanSource({
         .substring(m.end, end < 0 ? html.length : end)
         .replaceAll(r'\/', '/')
         .replaceFirst(RegExp(r'\\+$'), '');
-    final e = _entityForUrl('//$host$path', host, pageHost);
-    if (e == null) continue;
+    final entities = _entitiesForUrl('//$host$path', host, pageHost);
+    if (entities.isEmpty) continue;
     final ctx = source.at(m.start);
     // A URL that is a whole attribute value (src, href, srcset) is used; one
     // inside a JSON blob in an attribute is judged like script data.
@@ -309,9 +322,11 @@ List<Detection> scanSource({
     if (inData && !_usedInScript(html, m.start, path)) {
       continue;
     }
-    record(e, m.start, host, ctx);
-    if (ctx != _Ctx.skip && ctx != _Ctx.comment) {
-      found[e.name]?.hosts.add(host);
+    for (final e in entities) {
+      record(e, m.start, host, ctx);
+      if (ctx != _Ctx.skip && ctx != _Ctx.comment) {
+        found[e.name]?.hosts.add(host);
+      }
     }
   }
 
@@ -406,16 +421,21 @@ List<Detection> detect({
   for (final url in requests.toSet()) {
     final host = _hostOf(url);
     if (host.isEmpty) continue;
-    final e = _entityForUrl(url, host, pageHost);
-    if (e == null) continue;
-    final index = html.isEmpty ? -1 : html.indexOf(url);
-    hit(e)
-      ..requests += 1
-      ..hosts.add(host)
-      ..evidence.removeWhere((x) => x.kind == EvidenceKind.hint)
-      ..add(DetectionEvidence(EvidenceKind.request, 'Request to $host',
+    for (final e in _entitiesForUrl(url, host, pageHost)) {
+      final index = html.isEmpty ? -1 : html.indexOf(url);
+      final ping = e.beacons.any((b) => RegExp(b).hasMatch(url));
+      final d = hit(e)
+        ..requests += 1
+        ..pings += ping ? 1 : 0
+        ..hosts.add(host)
+        ..evidence.removeWhere((x) => x.kind == EvidenceKind.hint);
+      final item = DetectionEvidence(EvidenceKind.request,
+          ping ? 'Pageview ping to $host' : 'Request to $host',
           detail: url,
-          line: index < 0 ? null : DetectionEvidence.htmlAt(html, index).line));
+          line: index < 0 ? null : DetectionEvidence.htmlAt(html, index).line);
+      // The ping is the reason this service is listed, so show it first.
+      ping ? d.evidence.insert(0, item) : d.add(item);
+    }
   }
 
   for (final cookie in cookies) {
@@ -460,6 +480,24 @@ List<Detection> detect({
     });
   return result;
 }
+
+/// Non-tracking third parties the browser contacted (fonts, CDNs, cloud,
+/// payments, consent): they still receive the visitor's IP address and the
+/// page being visited.
+List<Detection> seesVisit(Iterable<Detection> detections) => [
+      for (final d in detections)
+        if (!d.category.isTracking &&
+            d.hosts.isNotEmpty &&
+            !d.hintOnly &&
+            (!d.category.tech ||
+                d.category == DetectionCategory.cdn ||
+                d.category == DetectionCategory.platform ||
+                d.category == DetectionCategory.storage))
+          d
+    ]..sort((a, b) {
+        final byPings = b.pings.compareTo(a.pings);
+        return byPings != 0 ? byPings : a.name.compareTo(b.name);
+      });
 
 /// Third-party services as `{category label: names}`.
 Map<String, List<String>> servicesByCategory(Iterable<Detection> detections) {
