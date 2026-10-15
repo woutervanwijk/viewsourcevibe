@@ -73,6 +73,10 @@ class Entity {
   /// Only detected when this entity is detected too (plugins).
   final String? parent;
 
+  /// URL regexes of requests that report the visit itself (pageview pings),
+  /// for services that are not trackers but still log who visits.
+  final List<String> beacons;
+
   const Entity(
     this.name,
     this.category, {
@@ -85,6 +89,7 @@ class Entity {
     this.logo,
     this.aliases = const [],
     this.parent,
+    this.beacons = const [],
   });
 
   String? get logoDomain => logo ?? hosts.firstOrNull;
@@ -617,6 +622,8 @@ const catalog = <Entity>[
       logo: 'www.google.com'),
   Entity('Adobe Fonts', _C.fonts,
       hosts: ['use.typekit.net', 'p.typekit.net'],
+      // Counts pageviews for licensing: Adobe logs IP, browser and page.
+      beacons: [r'p\.typekit\.net/p\.(?:css|gif)'],
       origin: 'US',
       logo: 'fonts.adobe.com',
       aliases: ['Adobe Fonts (Typekit)']),
@@ -685,6 +692,10 @@ const catalog = <Entity>[
   Entity('cdnjs', _C.cloud,
       hosts: ['cdnjs.cloudflare.com'], origin: 'US', logo: 'cdnjs.com'),
   Entity('unpkg', _C.cloud, hosts: ['unpkg.com'], origin: 'US'),
+  Entity('Google Hosted Libraries', _C.cloud,
+      hosts: ['ajax.googleapis.com'],
+      origin: 'US',
+      logo: 'developers.google.com'),
   Entity('Google reCAPTCHA', _C.cloud,
       hosts: ['recaptcha.net'],
       patterns: [r'google\.com/recaptcha/', r'gstatic\.com/recaptcha/'],

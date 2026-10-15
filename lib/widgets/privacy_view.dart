@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/models/detection_evidence.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 import 'package:view_source_vibe/widgets/evidence_view.dart';
@@ -22,7 +23,7 @@ class PrivacyView extends StatelessWidget {
             Colors.orange
           ),
         DetectionCategory.marketing => (Icons.campaign_outlined, Colors.blue),
-        _ => (Icons.category_outlined, Colors.grey),
+        _ => (Icons.visibility_outlined, Colors.blueGrey),
       };
 
   @override
@@ -37,8 +38,9 @@ class PrivacyView extends StatelessWidget {
 
     final hits =
         htmlService.detections.where((d) => d.category.isTracking).toList();
+    final others = seesVisit(htmlService.detections);
 
-    if (hits.isEmpty) {
+    if (hits.isEmpty && others.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -69,7 +71,9 @@ class PrivacyView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${hits.length} ${hits.length == 1 ? 'tracker follows' : 'trackers follow'} you here',
+              hits.isEmpty
+                  ? 'No known trackers here'
+                  : '${hits.length} ${hits.length == 1 ? 'tracker follows' : 'trackers follow'} you here',
               style: Theme.of(context)
                   .textTheme
                   .titleLarge
@@ -95,6 +99,24 @@ class PrivacyView extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ...e.value.map((hit) => _TrackerTile(hit: hit)),
+            ],
+            if (others.isNotEmpty) ...[
+              const SizedBox(height: 32),
+              Text(
+                'Also sees your visit (${others.length})',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Not trackers, but they serve this site or files on it, so '
+                'they receive your IP address and the page you are on.',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              ...others.map((d) => _TrackerTile(hit: d)),
             ],
             const SizedBox(height: 80),
           ],
@@ -135,9 +157,16 @@ class _TrackerTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final (fallbackIcon, color) = PrivacyView.style(hit.category);
     final details = [
+      if (!hit.category.isTracking) hit.category.label,
+      if (hit.category.tech &&
+          hit.evidence.any((e) => e.kind == EvidenceKind.header))
+        'serves this site',
+      if (hit.pings > 0) 'counts pageviews',
       if (hit.requests > 0)
         '${hit.requests} request${hit.requests == 1 ? '' : 's'}',
-      if (hit.inSource && hit.requests == 0) 'in page source',
+      if (hit.requests == 0 &&
+          hit.evidence.any((e) => e.kind == EvidenceKind.html))
+        'in page source',
       if (hit.hintOnly) 'connection hint only',
       if (hit.cookies.isNotEmpty)
         '${hit.cookies.length} cookie${hit.cookies.length == 1 ? '' : 's'}',

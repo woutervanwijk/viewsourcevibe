@@ -53,6 +53,32 @@ void main() {
       expect(ds.map((d) => d.name), ['SomeAdCo']);
     });
 
+    test('fonts and CDNs see the visit without counting as trackers', () {
+      final ds = detect(pageUrl: 'https://vanwijk.nl/', requests: [
+        'https://use.typekit.net/abc1def.css',
+        'https://use.typekit.net/af/5f7a1e/00000000000000007735a0f7/30/l?fvd=n4&v=3',
+        'https://p.typekit.net/p.gif?s=1&k=abc1def&ht=tk&h=vanwijk.nl&e=js',
+        'https://cdn.jsdelivr.net/npm/x@1/x.js',
+        'https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js',
+        'https://vanwijk.nl/app.js',
+      ]);
+      expect(ds.where((d) => d.category.isTracking), isEmpty);
+      final visit = seesVisit(ds);
+      expect(visit.map((d) => d.name),
+          ['Adobe Fonts', 'Google Hosted Libraries', 'jsDelivr']);
+      expect(ds.map((d) => d.name), contains('jQuery'));
+      expect(visit.first.pings, 1);
+      expect(
+          visit.first.evidence.first.title, 'Pageview ping to p.typekit.net');
+    });
+
+    test('a CDN in front of the site always sees the visit', () {
+      final ds = detect(
+          pageUrl: 'https://fiper.nl/',
+          headers: {'server': 'cloudflare', 'cf-ray': 'a4ad6e058d02d8d2-CDG'});
+      expect(seesVisit(ds).map((d) => d.name), ['Cloudflare']);
+    });
+
     test('a site is not its own tracker', () {
       final ds = detect(
           pageUrl: 'https://www.instagram.com/',
