@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
 import '../utils/format_utils.dart';
+import '../utils/font_url.dart';
 
 /// Sanitizes SVG data by converting percentage coordinates to absolute values
 /// based on the viewBox. This fixes 'Invalid double: 50%' errors.
@@ -579,10 +580,7 @@ class _FontItemState extends State<_FontItem> {
 
   @override
   Widget build(BuildContext context) {
-    final path = Uri.tryParse(_src)?.pathSegments.lastOrNull ?? _src;
-    final dot = path.lastIndexOf('.');
-    final name = Uri.decodeComponent(dot > 0 ? path.substring(0, dot) : path);
-    final format = dot > 0 ? path.substring(dot + 1).toUpperCase() : '';
+    final (name, format) = describeFontUrl(_src);
     final size = widget.font['size'];
     final hasSize = size is Map && (size['decoded'] ?? 0) > 0;
     final scheme = Theme.of(context).colorScheme;
