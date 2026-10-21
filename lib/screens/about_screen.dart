@@ -38,7 +38,7 @@ class AboutScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Source Code Viewer & Page Analyzer',
+                      'Web Page Explorer',
                       style: TextStyle(
                         fontSize: 16,
                         color: Theme.of(context).colorScheme.secondary,
@@ -60,7 +60,7 @@ class AboutScreen extends StatelessWidget {
                           ElevatedButton.icon(
                             onPressed: () {
                               UnifiedSharingService.shareText(
-                                  'Check out View Source Vibe! 🚀 The ultimate web inspector and source code viewer for mobile. Analyze HTML, CSS, JS, and tech stacks on the go.\n\nGet it here: https://github.com/woutervanwijk/viewsourcevibe');
+                                  'Check out View Source Vibe! 🚀 An easy-to-use web page explorer. See the source, tech stack, trackers and hosting of any page.\n\nGet it here: https://github.com/woutervanwijk/viewsourcevibe');
                             },
                             icon: const Icon(Icons.share),
                             label: const Text('Share App'),
@@ -106,7 +106,7 @@ class AboutScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'View Source Vibe is a powerful tool to view source code, browse andinspect web pages, and analyze web technologies. Built with Flutter, it offers a desktop-class inspection experience on your mobile device.',
+                        'View Source Vibe is an easy-to-use web page explorer. Read the source, walk the DOM, and see what a page is built with, which trackers and services it uses, and where it is hosted. Built with Flutter, it offers a desktop-class experience on your phone, tablet and desktop.',
                         style: TextStyle(fontSize: 16),
                       ),
                       const SizedBox(height: 12),
@@ -133,16 +133,21 @@ class AboutScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildFeatureItem('📱 View Source & Inspect web pages'),
-                      _buildFeatureItem('🌳 DOM Tree Inspector'),
                       _buildFeatureItem(
-                          '📖 Reader Mode for distraction-free reading'),
-                      _buildFeatureItem('📡 RSS/Atom Feed Support'),
+                          '📱 Source viewer with syntax highlighting'),
+                      _buildFeatureItem('🌳 DOM Tree explorer'),
                       _buildFeatureItem(
-                          '🔍 Deep Analysis: Metadata, headers, security'),
-                      _buildFeatureItem('🛠️ Tech Stack & CMS Detection'),
+                          '🛠️ Services: CMS, frameworks and third parties'),
+                      _buildFeatureItem(
+                          '🛡️ Privacy: which trackers see your visit'),
+                      _buildFeatureItem(
+                          '🌍 Sovereignty: where a page is hosted'),
+                      _buildFeatureItem('🖼️ Media: images, videos and fonts'),
+                      _buildFeatureItem(
+                          '📡 Network: timeline, headers, cookies, security'),
                       _buildFeatureItem(
                           '🌐 Built-in Browser with "Surf & View Source"'),
+                      _buildFeatureItem('📖 Reader Mode and RSS/Atom feeds'),
                       _buildFeatureItem('📦 Bundle management for bookmarks'),
                     ],
                   ),
@@ -168,7 +173,7 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          'Please note: The detection of services, tech stacks, and cookies is currently in beta and may not be 100% reliable yet.',
+                          'Indication only: detection of services, tech stacks, trackers, cookies and hosting is heuristic and may be incomplete or wrong.',
                           style: TextStyle(
                             fontSize: 14,
                             fontStyle: FontStyle.italic,

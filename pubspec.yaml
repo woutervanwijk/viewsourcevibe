@@ -1,5 +1,5 @@
 name: view_source_vibe
-description: Source code viewer & page analyzer app
+description: Web page explorer - source, tech stack, trackers and hosting
 version: 1.1.4+1140
 
 environment:
