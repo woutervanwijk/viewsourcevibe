@@ -415,7 +415,7 @@ class UnifiedSharingService {
         );
 
         await htmlService.loadFile(htmlFile,
-            switchToTab: htmlService.sourceTabIndex);
+            switchToTab: HtmlService.sourceTab);
         return;
       }
 
@@ -432,8 +432,7 @@ class UnifiedSharingService {
         isShared: true,
       );
 
-      await htmlService.loadFile(htmlFile,
-          switchToTab: htmlService.sourceTabIndex);
+      await htmlService.loadFile(htmlFile, switchToTab: HtmlService.sourceTab);
     } catch (e) {
       debugPrint('UnifiedSharingService: Error handling shared text: $e');
       if (context.mounted) {
