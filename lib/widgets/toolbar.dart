@@ -72,7 +72,7 @@ class Toolbar extends StatelessWidget {
 
         if (context.mounted) {
           await Provider.of<HtmlService>(context, listen: false)
-              .loadFile(htmlFile, switchToTab: 0);
+              .loadFile(htmlFile, switchToTab: HtmlService.viewerTab);
         }
       }
     } catch (e) {

@@ -173,7 +173,8 @@ class MetadataView extends StatelessWidget {
                   onTap: () {
                     final htmlService =
                         Provider.of<HtmlService>(context, listen: false);
-                    htmlService.loadFromUrl(favicon, switchToTab: 0);
+                    htmlService.loadFromUrl(favicon,
+                        switchToTab: HtmlService.viewerTab);
                   },
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
@@ -221,7 +222,8 @@ class MetadataView extends StatelessWidget {
               onTap: () {
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
-                htmlService.loadFromUrl(image, switchToTab: 0);
+                htmlService.loadFromUrl(image,
+                    switchToTab: HtmlService.viewerTab);
               },
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -595,7 +597,7 @@ class MetadataView extends StatelessWidget {
       child: GestureDetector(
         onTap: () {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
-          htmlService.loadFromUrl(image, switchToTab: 0);
+          htmlService.loadFromUrl(image, switchToTab: HtmlService.viewerTab);
         },
         child: ClipRRect(
           borderRadius: const BorderRadius.only(
@@ -695,7 +697,8 @@ class MetadataView extends StatelessWidget {
                     onTap: () {
                       final htmlService =
                           Provider.of<HtmlService>(context, listen: false);
-                      htmlService.loadFromUrl(url.toString(), switchToTab: 0);
+                      htmlService.loadFromUrl(url.toString(),
+                          switchToTab: HtmlService.viewerTab);
                     },
                     onLongPress: () {
                       Clipboard.setData(ClipboardData(text: url.toString()));
@@ -984,7 +987,8 @@ class MetadataView extends StatelessWidget {
                       ? () {
                           final htmlService =
                               Provider.of<HtmlService>(context, listen: false);
-                          htmlService.loadFromUrl(value, switchToTab: 0);
+                          htmlService.loadFromUrl(value,
+                              switchToTab: HtmlService.viewerTab);
                         }
                       : null,
                 ),
@@ -996,7 +1000,8 @@ class MetadataView extends StatelessWidget {
                   if (isUrl) {
                     final htmlService =
                         Provider.of<HtmlService>(context, listen: false);
-                    htmlService.loadFromUrl(value, switchToTab: 0);
+                    htmlService.loadFromUrl(value,
+                        switchToTab: HtmlService.viewerTab);
                   } else {
                     Clipboard.setData(ClipboardData(text: value));
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1091,7 +1096,8 @@ class MetadataView extends StatelessWidget {
               onTap: () {
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
-                htmlService.loadFromUrl(url, switchToTab: 0);
+                htmlService.loadFromUrl(url,
+                    switchToTab: HtmlService.viewerTab);
               },
             ),
           );

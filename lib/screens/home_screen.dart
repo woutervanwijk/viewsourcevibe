@@ -193,8 +193,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return [
       if (shouldShowBrowser && useBrowserByDefault) browserTab,
-      (Icons.code, 'Source'),
-      if (isHtmlOrXml) (Icons.account_tree_outlined, 'DOM Tree'),
       if (showMetadataTabs) ...[
         (Icons.info_outline, 'Metadata'),
         (Icons.layers_outlined, 'Services'),
@@ -202,6 +200,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (showServerTabs) (Icons.public, 'Sovereignty'),
         (Icons.perm_media_outlined, 'Media'),
       ],
+      if (isHtmlOrXml) (Icons.account_tree_outlined, 'DOM Tree'),
+      (Icons.code, 'Source'),
       if (showServerTabs) ...[
         (Icons.cookie_outlined, 'Cookies'),
         (Icons.timeline, 'Timeline'),
@@ -278,25 +278,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     if (!isBrowserSupported) {
       return [
-        sourceView,
+        if (showMetadataTabs) ...[
+          KeepAliveWrapper(
+              child: _buildRefreshable(const MetadataView(), 'metadata')),
+          KeepAliveWrapper(
+              child: _buildRefreshable(const ServicesView(), 'services')),
+          KeepAliveWrapper(
+              child: _buildRefreshable(const PrivacyView(), 'privacy')),
+          if (showServerTabs)
+            KeepAliveWrapper(
+                child:
+                    _buildRefreshable(const SovereigntyView(), 'sovereignty')),
+          KeepAliveWrapper(
+              child: _buildRefreshable(const MediaView(), 'media')),
+        ],
         if (isHtmlOrXml)
           KeepAliveWrapper(
               child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
-        if (showMetadataTabs)
-          KeepAliveWrapper(
-              child: _buildRefreshable(const MetadataView(), 'metadata')),
-        if (showMetadataTabs)
-          KeepAliveWrapper(
-              child: _buildRefreshable(const ServicesView(), 'services')),
-        if (showMetadataTabs)
-          KeepAliveWrapper(
-              child: _buildRefreshable(const PrivacyView(), 'privacy')),
-        if (showMetadataTabs && showServerTabs)
-          KeepAliveWrapper(
-              child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
-        if (showMetadataTabs)
-          KeepAliveWrapper(
-              child: _buildRefreshable(const MediaView(), 'media')),
+        sourceView,
         if (showServerTabs)
           KeepAliveWrapper(
               child: _buildRefreshable(const ProbeCookiesView(), 'cookies')),
@@ -320,43 +319,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return [
       if (shouldShowBrowser && useBrowserByDefault) browserView,
-      sourceView,
+      if (showMetadataTabs) ...[
+        KeepAliveWrapper(
+            key: const ValueKey('tab_metadata'),
+            child: _buildRefreshable(const MetadataView(), 'metadata')),
+        KeepAliveWrapper(
+            key: const ValueKey('tab_services'),
+            child: _buildRefreshable(const ServicesView(), 'services')),
+        KeepAliveWrapper(
+            key: const ValueKey('tab_privacy'),
+            child: _buildRefreshable(const PrivacyView(), 'privacy')),
+        if (showServerTabs)
+          KeepAliveWrapper(
+              key: const ValueKey('tab_sovereignty'),
+              child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
+        KeepAliveWrapper(
+            key: const ValueKey('tab_media'),
+            child: _buildRefreshable(const MediaView(), 'media')),
+      ],
 
-      // 2. DOM Tree (Conditional)
+      // DOM Tree and Source sit right of Media
       if (isHtmlOrXml)
         KeepAliveWrapper(
             key: const ValueKey('tab_dom_tree'),
             child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
-
-      // 3. Metadata (Conditional)
-      if (showMetadataTabs)
-        KeepAliveWrapper(
-            key: const ValueKey('tab_metadata'),
-            child: _buildRefreshable(const MetadataView(), 'metadata')),
-
-      // 4. Services (Conditional)
-      if (showMetadataTabs)
-        KeepAliveWrapper(
-            key: const ValueKey('tab_services'),
-            child: _buildRefreshable(const ServicesView(), 'services')),
-
-      // 5. Privacy (Conditional)
-      if (showMetadataTabs)
-        KeepAliveWrapper(
-            key: const ValueKey('tab_privacy'),
-            child: _buildRefreshable(const PrivacyView(), 'privacy')),
-
-      // Sovereignty (right after Privacy)
-      if (showMetadataTabs && showServerTabs)
-        KeepAliveWrapper(
-            key: const ValueKey('tab_sovereignty'),
-            child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
-
-      // 6. Media (Conditional)
-      if (showMetadataTabs)
-        KeepAliveWrapper(
-            key: const ValueKey('tab_media'),
-            child: _buildRefreshable(const MediaView(), 'media')),
+      sourceView,
 
       // 6. Probe: Cookies
       if (showServerTabs)
@@ -422,7 +409,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         // Handle requested tab switch
         if (structure.requestedTabIndex != null) {
-          final targetIndex = structure.requestedTabIndex!;
+          final targetIndex =
+              htmlService.resolveTabRequest(structure.requestedTabIndex!);
           if (targetIndex < _tabController.length) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {

@@ -402,7 +402,7 @@ class ServicesView extends StatelessWidget {
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
                 htmlService.loadFromUrl(url,
-                    switchToTab: htmlService.sourceTabIndex);
+                    switchToTab: HtmlService.sourceTab);
               },
             ),
           );

@@ -71,7 +71,9 @@ class MediaView extends StatelessWidget {
     final metadata = htmlService.pageMetadata;
 
     // Show loading indicator only if we're still loading or extracting metadata
-    if (htmlService.isLoading || htmlService.isWebViewLoading || htmlService.isExtractingMetadata) {
+    if (htmlService.isLoading ||
+        htmlService.isWebViewLoading ||
+        htmlService.isExtractingMetadata) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -84,7 +86,8 @@ class MediaView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.perm_media_outlined,
-                  size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+                  size: 64,
+                  color: Theme.of(context).colorScheme.outlineVariant),
               const SizedBox(height: 16),
               const Text('No Media Detected'),
               const SizedBox(height: 8),
@@ -94,7 +97,7 @@ class MediaView extends StatelessWidget {
           ),
         );
       }
-      
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -141,6 +144,12 @@ class MediaView extends StatelessWidget {
             .compareTo((mapB['src'] ?? '').toString().toLowerCase());
       });
 
+    bool isInline(dynamic i) =>
+        i['type'] == 'base64' ||
+        (i['src'] as String? ?? '').startsWith('data:');
+    final inlineImages = images.where(isInline).toList();
+    images.removeWhere(isInline);
+
     // Deduplicate videos and sort by size desc, then alphabet
     final List<dynamic> videos = _deduplicateMedia(
       List.from(metadata['media']['videos'] ?? []),
@@ -166,7 +175,10 @@ class MediaView extends StatelessWidget {
       List.from(metadata['media']['fonts'] ?? []),
     );
 
-    if (images.isEmpty && videos.isEmpty && fonts.isEmpty) {
+    if (images.isEmpty &&
+        inlineImages.isEmpty &&
+        videos.isEmpty &&
+        fonts.isEmpty) {
       // Since we already checked for loading states at the beginning,
       // we can directly show the empty state message
       return ConstrainedBox(
@@ -189,7 +201,7 @@ class MediaView extends StatelessWidget {
     }
 
     return Scrollbar(
-      child: SingleChildScrollView(
+        child: SingleChildScrollView(
       primary: true,
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -205,27 +217,31 @@ class MediaView extends StatelessWidget {
             if (fonts.isNotEmpty) ...[
               _buildSectionTitle(context, 'Fonts (${fonts.length})'),
               const SizedBox(height: 8),
-              ...fonts.map((font) => _FontItem(font: font)),
+              LayoutBuilder(builder: (context, constraints) {
+                const gap = 8.0;
+                final cols = (constraints.maxWidth / 360).floor().clamp(1, 4);
+                final w = (constraints.maxWidth - gap * (cols - 1)) / cols;
+                return Wrap(
+                  spacing: gap,
+                  children: [
+                    for (final font in fonts)
+                      SizedBox(width: w, child: _FontItem(font: font)),
+                  ],
+                );
+              }),
               const SizedBox(height: 24),
             ],
             if (images.isNotEmpty) ...[
               _buildSectionTitle(context, 'Images (${images.length})'),
               const SizedBox(height: 8),
-              GridView.builder(
-                primary: false,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent:
-                      200, // Responsive: more columns on wider screens
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.8,
-                ),
-                itemCount: images.length,
-                itemBuilder: (context, index) =>
-                    _buildImageItem(context, images[index]),
-              ),
+              _buildImageGrid(context, images),
+              const SizedBox(height: 24),
+            ],
+            if (inlineImages.isNotEmpty) ...[
+              _buildSectionTitle(
+                  context, 'Inline images (${inlineImages.length})'),
+              const SizedBox(height: 8),
+              _buildImageGrid(context, inlineImages),
             ],
             const SizedBox(height: 80),
           ],
@@ -320,6 +336,22 @@ class MediaView extends StatelessWidget {
     }
   }
 
+  Widget _buildImageGrid(BuildContext context, List<dynamic> items) {
+    return GridView.builder(
+      primary: false,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 200, // Responsive: more columns on wider screens
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.8,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) => _buildImageItem(context, items[index]),
+    );
+  }
+
   Widget _buildSectionTitle(BuildContext context, String title) {
     return Text(
       title,
@@ -359,7 +391,7 @@ class MediaView extends StatelessWidget {
         trailing: const Icon(Icons.open_in_new, size: 16),
         onTap: () {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
-          htmlService.loadFromUrl(src, switchToTab: 0);
+          htmlService.loadFromUrl(src, switchToTab: HtmlService.viewerTab);
         },
         onLongPress: () {
           Clipboard.setData(ClipboardData(text: src));
@@ -409,7 +441,8 @@ class MediaView extends StatelessWidget {
             : () {
                 final htmlService =
                     Provider.of<HtmlService>(context, listen: false);
-                htmlService.loadFromUrl(src, switchToTab: 0);
+                htmlService.loadFromUrl(src,
+                    switchToTab: HtmlService.viewerTab);
               },
         onLongPress: () {
           Clipboard.setData(ClipboardData(text: src));
@@ -486,8 +519,10 @@ class MediaView extends StatelessWidget {
         }
         return LayoutBuilder(
           builder: (context, constraints) {
-            double w = constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            double h = constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            double w =
+                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            double h =
+                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
             if (w.isNaN || w.isInfinite) w = 100.0;
             if (h.isNaN || h.isInfinite) h = 100.0;
             return Center(
@@ -722,8 +757,10 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            double w = constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            double h = constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            double w =
+                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            double h =
+                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
             if (w.isNaN || w.isInfinite) w = 100.0;
             if (h.isNaN || h.isInfinite) h = 100.0;
             return Center(

@@ -148,7 +148,7 @@ class HtmlService extends ChangeNotifier {
   /// The index of the Browser tab in the current tab layout.
   int get browserTabIndex {
     if (_useBrowserByDefault) return 0;
-    int idx = 1; // starts after Source
+    int idx = 1; // Source
     if (isHtmlOrXml) idx += 1; // DOM Tree
     if (showMetadataTabs) idx += 4; // Metadata + Services + Privacy + Media
     if (showServerTabs) {
@@ -157,7 +157,30 @@ class HtmlService extends ChangeNotifier {
     return idx;
   }
 
-  int get sourceTabIndex => _useBrowserByDefault ? 1 : 0;
+  /// Symbolic tab requests, resolved by HomeScreen once the tab layout for
+  /// the newly loaded content is known.
+  static const viewerTab = -1;
+  static const sourceTab = -2;
+
+  int resolveTabRequest(int index) => switch (index) {
+        viewerTab => viewerTabIndex,
+        sourceTab => sourceTabIndex,
+        _ => index,
+      };
+
+  /// Source sits right of DOM Tree, which sits right of the Media tab.
+  int get sourceTabIndex {
+    int idx = _useBrowserByDefault ? 1 : 0; // Browser first
+    if (showMetadataTabs) {
+      idx += 4; // Metadata + Services + Privacy + Media
+      if (showServerTabs) idx += 1; // Sovereignty
+    }
+    if (isHtmlOrXml) idx += 1; // DOM Tree
+    return idx;
+  }
+
+  /// Tab that shows the loaded file itself: Browser if first, else Source.
+  int get viewerTabIndex => _useBrowserByDefault ? 0 : sourceTabIndex;
 
   HtmlFile? get currentFile => _currentFile;
   ScrollController? get scrollController => _verticalScrollController;
@@ -548,7 +571,7 @@ class HtmlService extends ChangeNotifier {
   void revealSourceLine(int line) {
     SourceViewerEditor.pendingRevealLine = line;
     _isBeautifyEnabled = false;
-    _requestedTabIndex = sourceTabIndex;
+    _requestedTabIndex = HtmlService.sourceTab;
     notifyListeners();
   }
 
@@ -874,7 +897,7 @@ class HtmlService extends ChangeNotifier {
   }
 
   void triggerWebViewLoad(String url) {
-    loadUrl(url, switchToTab: 1, forceWebView: true);
+    loadUrl(url, switchToTab: HtmlService.sourceTab, forceWebView: true);
   }
 
   void handleWebViewError(String errorDescription) {
@@ -1834,7 +1857,7 @@ class HtmlService extends ChangeNotifier {
 
     // Switch back to editor if this is a local file
     if (!file.isUrl && switchToTab == null) {
-      _requestedTabIndex = sourceTabIndex;
+      _requestedTabIndex = HtmlService.sourceTab;
     }
 
     // Performance warning for large files
