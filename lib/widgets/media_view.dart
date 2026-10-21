@@ -71,7 +71,9 @@ class MediaView extends StatelessWidget {
     final metadata = htmlService.pageMetadata;
 
     // Show loading indicator only if we're still loading or extracting metadata
-    if (htmlService.isLoading || htmlService.isWebViewLoading || htmlService.isExtractingMetadata) {
+    if (htmlService.isLoading ||
+        htmlService.isWebViewLoading ||
+        htmlService.isExtractingMetadata) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -84,7 +86,8 @@ class MediaView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.perm_media_outlined,
-                  size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+                  size: 64,
+                  color: Theme.of(context).colorScheme.outlineVariant),
               const SizedBox(height: 16),
               const Text('No Media Detected'),
               const SizedBox(height: 8),
@@ -94,7 +97,7 @@ class MediaView extends StatelessWidget {
           ),
         );
       }
-      
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -189,7 +192,7 @@ class MediaView extends StatelessWidget {
     }
 
     return Scrollbar(
-      child: SingleChildScrollView(
+        child: SingleChildScrollView(
       primary: true,
       physics: const AlwaysScrollableScrollPhysics(),
       child: Padding(
@@ -205,7 +208,18 @@ class MediaView extends StatelessWidget {
             if (fonts.isNotEmpty) ...[
               _buildSectionTitle(context, 'Fonts (${fonts.length})'),
               const SizedBox(height: 8),
-              ...fonts.map((font) => _FontItem(font: font)),
+              LayoutBuilder(builder: (context, constraints) {
+                const gap = 8.0;
+                final cols = (constraints.maxWidth / 360).floor().clamp(1, 4);
+                final w = (constraints.maxWidth - gap * (cols - 1)) / cols;
+                return Wrap(
+                  spacing: gap,
+                  children: [
+                    for (final font in fonts)
+                      SizedBox(width: w, child: _FontItem(font: font)),
+                  ],
+                );
+              }),
               const SizedBox(height: 24),
             ],
             if (images.isNotEmpty) ...[
@@ -486,8 +500,10 @@ class MediaView extends StatelessWidget {
         }
         return LayoutBuilder(
           builder: (context, constraints) {
-            double w = constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            double h = constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            double w =
+                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            double h =
+                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
             if (w.isNaN || w.isInfinite) w = 100.0;
             if (h.isNaN || h.isInfinite) h = 100.0;
             return Center(
@@ -722,8 +738,10 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            double w = constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            double h = constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
+            double w =
+                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
+            double h =
+                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
             if (w.isNaN || w.isInfinite) w = 100.0;
             if (h.isNaN || h.isInfinite) h = 100.0;
             return Center(
