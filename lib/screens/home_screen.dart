@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:view_source_vibe/widgets/analysis_disclaimer.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -134,12 +135,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildRefreshable(Widget child, String tag) {
-    return TabPageWrapper(
+    final page = TabPageWrapper(
       tag: tag,
       child: RefreshIndicator(
         onRefresh: _handleRefresh,
         child: child,
       ),
+    );
+    // Analysis tabs get the disclaimer; browser, source and DOM tree show
+    // the page itself.
+    if (const {'browser-content', 'source', 'dom-tree'}.contains(tag)) {
+      return page;
+    }
+    return Column(
+      children: [Expanded(child: page), const AnalysisDisclaimer()],
     );
   }
 
