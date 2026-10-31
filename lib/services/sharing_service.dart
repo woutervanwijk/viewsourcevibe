@@ -5,6 +5,7 @@ import 'package:universal_io/io.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
+import 'package:view_source_vibe/services/file_system_service.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 class SharingService {
@@ -268,35 +269,28 @@ class SharingService {
       }
 
       // Convert file:// URLs to proper file paths
-      String normalizedFilePath = filePath;
-      if (filePath.startsWith('file:///')) {
-        // Standard file:/// URL - remove the scheme
-        normalizedFilePath = filePath.replaceFirst('file:///', '/');
-        debugPrint(
-            'SharingService: Converted file:/// URL to path: $normalizedFilePath');
-      } else if (filePath.startsWith('file///')) {
-        // Non-standard file/// URL (iOS specific) - remove the scheme
-        normalizedFilePath = filePath.replaceFirst('file///', '/');
-        debugPrint(
-            'SharingService: Converted file/// URL to path: $normalizedFilePath');
-      } else if (filePath.startsWith('file://')) {
-        // Standard file:// URL - remove the scheme
-        normalizedFilePath = filePath.replaceFirst('file://', '/');
-        debugPrint(
-            'SharingService: Converted file:// URL to path: $normalizedFilePath');
-      }
+      final normalizedFilePath = normalizeExternalFilePath(filePath);
 
-      // Security: Check if path is absolute and within reasonable bounds
-      if (!normalizedFilePath.startsWith('/')) {
+      // Security: only allow files inside app-owned directories. A shared
+      // file path comes from an external app and must never grant access to
+      // arbitrary local files.
+      if (normalizedFilePath == null) {
         debugPrint('SharingService: Only absolute file paths are supported');
         throw Exception('Only absolute file paths are supported');
+      }
+      final allowedFilePath =
+          await resolveWithinAppDirectories(normalizedFilePath);
+      if (allowedFilePath == null) {
+        debugPrint(
+            'SharingService: Blocked file path outside app directories: $normalizedFilePath');
+        throw Exception('File path is outside the app sandbox');
       }
 
       // Security: Limit maximum file size to prevent memory issues
       const maxFileSize = 10 * 1024 * 1024; // 10MB
 
       // Read file from filesystem
-      final file = File(normalizedFilePath);
+      final file = File(allowedFilePath);
       debugPrint('SharingService: Checking if file exists at: ${file.path}');
 
       if (!await file.exists()) {

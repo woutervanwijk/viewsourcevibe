@@ -4,6 +4,54 @@ import 'package:path_provider/path_provider.dart';
 import 'package:universal_io/io.dart';
 import 'package:path/path.dart' as path;
 
+/// Normalize a raw path or file:// URL coming from an external source
+/// (deep link, share extension) into an absolute filesystem path.
+/// Returns null when the input is not an absolute path or contains NUL.
+String? normalizeExternalFilePath(String rawPath) {
+  var normalized = rawPath;
+  if (normalized.startsWith('file:///')) {
+    normalized = normalized.replaceFirst('file:///', '/');
+  } else if (normalized.startsWith('file///')) {
+    normalized = normalized.replaceFirst('file///', '/');
+  } else if (normalized.startsWith('file://')) {
+    normalized = normalized.replaceFirst('file://', '/');
+  }
+  if (normalized.contains('\u0000') || !path.isAbsolute(normalized)) {
+    return null;
+  }
+  return path.normalize(normalized);
+}
+
+/// Resolve an externally supplied file path to an absolute path, but only
+/// when it points inside an app-owned directory (documents, support,
+/// downloads, temp). External inputs (deep links, share intents) must never
+/// grant access to arbitrary local files.
+Future<String?> resolveWithinAppDirectories(String rawPath) async {
+  final normalized = normalizeExternalFilePath(rawPath);
+  if (normalized == null) return null;
+
+  final allowedRoots = <String>[
+    (await getApplicationDocumentsDirectory()).path,
+    (await getApplicationSupportDirectory()).path,
+    (await getTemporaryDirectory()).path,
+  ];
+  try {
+    final downloads = await getDownloadsDirectory();
+    if (downloads != null) allowedRoots.add(downloads.path);
+  } catch (_) {
+    // Downloads directory is optional on some platforms.
+  }
+
+  for (final root in allowedRoots) {
+    final normalizedRoot = path.normalize(root);
+    if (normalized == normalizedRoot ||
+        normalized.startsWith('$normalizedRoot/')) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
 /// Comprehensive File System Service for handling app data, cache, and documents
 class FileSystemService {
   /// Singleton instance

@@ -104,14 +104,14 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
     if (filePath != null && filePath.isNotEmpty) {
       debugPrint('Opening file from deep link: $filePath');
       try {
-        // Handle file:// URLs by converting to proper file paths
-        String normalizedFilePath = filePath;
-        if (filePath.startsWith('file:///')) {
-          normalizedFilePath = filePath.replaceFirst('file:///', '/');
-        } else if (filePath.startsWith('file///')) {
-          normalizedFilePath = filePath.replaceFirst('file///', '/');
-        } else if (filePath.startsWith('file://')) {
-          normalizedFilePath = filePath.replaceFirst('file://', '/');
+        // Security: only allow files inside app-owned directories. A deep
+        // link is triggerable by any app or web page, so it must never read
+        // arbitrary local files.
+        final normalizedFilePath = await _resolveAllowedDeepLinkFile(filePath);
+        if (normalizedFilePath == null) {
+          debugPrint(
+              'Blocked file deep link outside app directories: $filePath');
+          return;
         }
 
         // Read file from filesystem
@@ -256,6 +256,13 @@ Try these solutions:
 bool get _isDesktopPlatform {
   if (kIsWeb) return false;
   return Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+}
+
+/// Resolve a deep-link file path to an absolute path, but only when it is
+/// inside an app-owned directory. External deep links must never grant
+/// access to arbitrary local files.
+Future<String?> _resolveAllowedDeepLinkFile(String rawPath) {
+  return resolveWithinAppDirectories(rawPath);
 }
 
 void main() async {
