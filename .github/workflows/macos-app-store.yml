@@ -5,15 +5,17 @@ on:
 
 jobs:
   upload-mac-app-store:
+    permissions:
+      contents: read
     runs-on: macos-latest
     env:
       ARCHIVE_PATH: ${{ github.workspace }}/build/Runner.xcarchive
       API_KEY_PATH: ${{ github.workspace }}/build/AuthKey.p8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.47.6'
           cache: true
