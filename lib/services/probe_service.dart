@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:view_source_vibe/services/certificate_security_service.dart';
 
 class ProbeService {
   static Future<Map<String, dynamic>> probeUrl(String url) async {
@@ -19,8 +20,10 @@ class ProbeService {
       client = HttpClient();
       client.badCertificateCallback =
           (X509Certificate cert, String host, int port) {
-        acceptedInvalidCertificate = true;
-        return true;
+        final trusted = CertificateSecurityService
+            .defaultBadCertificateCallback(cert, host, port);
+        if (trusted) acceptedInvalidCertificate = true;
+        return trusted;
       };
       client.connectionTimeout = const Duration(seconds: 10);
 
@@ -43,20 +46,27 @@ class ProbeService {
       HttpClientRequest request;
       HttpClientResponse response;
 
-      try {
-        request = await client.openUrl('HEAD', uri);
-        request.headers.set('User-Agent', userAgent);
-        request.headers.set('Accept', '*/*');
-        request.followRedirects = false;
-        response = await request.close().timeout(const Duration(seconds: 15));
-      } catch (e) {
-        request = await client.openUrl('GET', uri);
-        request.headers.set('User-Agent', userAgent);
-        request.headers.set('Accept', '*/*');
-        request.headers.set('Range', 'bytes=0-0');
-        request.followRedirects = false;
-        response = await request.close().timeout(const Duration(seconds: 15));
+      Future<HttpClientResponse> openRequest() async {
+        try {
+          request = await client.openUrl('HEAD', uri);
+          request.headers.set('User-Agent', userAgent);
+          request.headers.set('Accept', '*/*');
+          request.followRedirects = false;
+          return await request.close().timeout(const Duration(seconds: 15));
+        } catch (e) {
+          request = await client.openUrl('GET', uri);
+          request.headers.set('User-Agent', userAgent);
+          request.headers.set('Accept', '*/*');
+          request.headers.set('Range', 'bytes=0-0');
+          request.followRedirects = false;
+          return await request.close().timeout(const Duration(seconds: 15));
+        }
       }
+
+      response = await CertificateSecurityService.withCertificatePrompt(
+        uri.host,
+        openRequest,
+      );
 
       Map<String, dynamic>? certInfo;
       try {
