@@ -17,7 +17,8 @@ class ProbeService {
 
       final uri = Uri.parse(targetUrl);
       var acceptedInvalidCertificate = false;
-      client = HttpClient();
+      final httpClient = HttpClient();
+      client = httpClient;
       client.badCertificateCallback =
           (X509Certificate cert, String host, int port) {
         final trusted = CertificateSecurityService
@@ -48,13 +49,13 @@ class ProbeService {
 
       Future<HttpClientResponse> openRequest() async {
         try {
-          request = await client.openUrl('HEAD', uri);
+          request = await httpClient.openUrl('HEAD', uri);
           request.headers.set('User-Agent', userAgent);
           request.headers.set('Accept', '*/*');
           request.followRedirects = false;
           return await request.close().timeout(const Duration(seconds: 15));
         } catch (e) {
-          request = await client.openUrl('GET', uri);
+          request = await httpClient.openUrl('GET', uri);
           request.headers.set('User-Agent', userAgent);
           request.headers.set('Accept', '*/*');
           request.headers.set('Range', 'bytes=0-0');
