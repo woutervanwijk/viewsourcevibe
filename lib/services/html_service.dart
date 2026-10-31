@@ -22,6 +22,7 @@ import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
+import 'package:view_source_vibe/services/certificate_security_service.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart'
     hide X509Certificate;
 import 'package:xml/xml.dart' as xml;
@@ -1278,8 +1279,11 @@ class HtmlService extends ChangeNotifier {
       // Use HttpClient to manually handle redirects and capture certificate
       hClient = HttpClient();
       hClient.badCertificateCallback =
-          (X509Certificate cert, String host, int port) => true;
-      final hRequest = await hClient.openUrl('GET', uri);
+          CertificateSecurityService.defaultBadCertificateCallback;
+      final hRequest = await CertificateSecurityService.withCertificatePrompt(
+        uri.host,
+        () => hClient!.openUrl('GET', uri),
+      );
       hRequest.followRedirects = false;
 
       // Add headers to the request
@@ -2246,12 +2250,15 @@ class HtmlService extends ChangeNotifier {
 
       // Manual redirect handling
       final redirectChain = <Map<String, dynamic>>[];
-      final finalUrl = await _getFinalUrlAfterRedirects(
-        uri,
-        client,
-        headers,
-        originalUri: uri,
-        redirectChain: redirectChain,
+      final finalUrl = await CertificateSecurityService.withCertificatePrompt(
+        uri.host,
+        () => _getFinalUrlAfterRedirects(
+          uri,
+          client,
+          headers,
+          originalUri: uri,
+          redirectChain: redirectChain,
+        ),
       );
 
       // Update the input text immediately
@@ -2266,10 +2273,15 @@ class HtmlService extends ChangeNotifier {
       hClient = HttpClient();
       hClient.badCertificateCallback =
           (X509Certificate cert, String host, int port) {
-        acceptedInvalidCertificate = true;
-        return true;
+        final trusted = CertificateSecurityService
+            .defaultBadCertificateCallback(cert, host, port);
+        if (trusted) acceptedInvalidCertificate = true;
+        return trusted;
       };
-      final hRequest = await hClient.openUrl('GET', Uri.parse(finalUrl));
+      final hRequest = await CertificateSecurityService.withCertificatePrompt(
+        Uri.parse(finalUrl).host,
+        () => hClient!.openUrl('GET', Uri.parse(finalUrl)),
+      );
 
       headers.forEach((key, value) {
         hRequest.headers.set(key, value);
@@ -2587,8 +2599,10 @@ Technical details: $e''';
       client = HttpClient();
       client.badCertificateCallback =
           (X509Certificate cert, String host, int port) {
-        acceptedInvalidCertificate = true;
-        return true;
+        final trusted = CertificateSecurityService
+            .defaultBadCertificateCallback(cert, host, port);
+        if (trusted) acceptedInvalidCertificate = true;
+        return trusted;
       };
       client.connectionTimeout = const Duration(seconds: 10);
 
@@ -2615,23 +2629,30 @@ Technical details: $e''';
       HttpClientRequest request;
       HttpClientResponse response;
 
-      try {
-        // Try HEAD request first (most efficient)
-        request = await client.openUrl('HEAD', uri);
-        request.headers.set('User-Agent', userAgent);
-        request.headers.set('Accept', '*/*');
-        request.followRedirects = false;
-        response = await request.close().timeout(const Duration(seconds: 15));
-      } catch (e) {
-        debugPrint('HEAD request failed, trying GET: $e');
-        // Fallback to GET with range
-        request = await client.openUrl('GET', uri);
-        request.headers.set('User-Agent', userAgent);
-        request.headers.set('Accept', '*/*');
-        request.headers.set('Range', 'bytes=0-0');
-        request.followRedirects = false;
-        response = await request.close().timeout(const Duration(seconds: 15));
+      Future<HttpClientResponse> openRequest() async {
+        try {
+          // Try HEAD request first (most efficient)
+          request = await client.openUrl('HEAD', uri);
+          request.headers.set('User-Agent', userAgent);
+          request.headers.set('Accept', '*/*');
+          request.followRedirects = false;
+          return await request.close().timeout(const Duration(seconds: 15));
+        } catch (e) {
+          debugPrint('HEAD request failed, trying GET: $e');
+          // Fallback to GET with range
+          request = await client.openUrl('GET', uri);
+          request.headers.set('User-Agent', userAgent);
+          request.headers.set('Accept', '*/*');
+          request.headers.set('Range', 'bytes=0-0');
+          request.followRedirects = false;
+          return await request.close().timeout(const Duration(seconds: 15));
+        }
       }
+
+      response = await CertificateSecurityService.withCertificatePrompt(
+        uri.host,
+        openRequest,
+      );
 
       // Capture certificate info — must be read before response is fully drained/closed
       Map<String, dynamic>? certInfo;
@@ -2894,9 +2915,12 @@ Technical details: $e''';
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 6);
     client.badCertificateCallback =
-        (X509Certificate cert, String host, int port) => true;
+        CertificateSecurityService.defaultBadCertificateCallback;
     try {
-      final request = await client.openUrl(headOnly ? 'HEAD' : 'GET', uri);
+      final request = await CertificateSecurityService.withCertificatePrompt(
+        uri.host,
+        () => client.openUrl(headOnly ? 'HEAD' : 'GET', uri),
+      );
       request.headers.set('User-Agent', 'ViewSourceVibe/1.0');
       request.followRedirects = true;
       final response =
@@ -4974,7 +4998,7 @@ Technical details: $e''';
   http.Client _createClient() {
     final ioc = HttpClient();
     ioc.badCertificateCallback =
-        (X509Certificate cert, String host, int port) => true;
+        CertificateSecurityService.defaultBadCertificateCallback;
     return IOClient(ioc);
   }
 
