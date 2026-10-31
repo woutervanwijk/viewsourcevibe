@@ -522,14 +522,32 @@ class RssTemplateService {
     // and _stripHtml handles the rest.
   }
 
+  /// Sanitize a URL for use in href/src attributes: only http/https (or a
+  /// plain fragment) are allowed, so javascript:/data: vectors are dropped.
+  static String? _safeUrl(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.startsWith('#')) return trimmed;
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) return null;
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') return null;
+    return trimmed;
+  }
+
   static String _generateHtml(String title, String description, String link,
       String? image, List<Map<String, String>> items, String type) {
     final htmlEscape = const HtmlEscape(HtmlEscapeMode.element);
+    final attrEscape = const HtmlEscape(HtmlEscapeMode.attribute);
 
     // Safety:
-    // - Title, Description, Type: Escaped because they are raw text
-    // - Link: Injected into href attribute, should be safe URI or sanitized
-    // - Image: Injected into src attribute, should be safe URI or sanitized (we trust _resolveUrl generally returns valid URLs)
+    // - Title, Description, Type: escaped as raw text
+    // - Link/Image: scheme-whitelisted (http/https/#) and attribute-escaped
+    final safeLink = attrEscape.convert(_safeUrl(link) ?? '#');
+    final safeImage = _safeUrl(image);
+    final safeImageAttr =
+        safeImage != null ? attrEscape.convert(safeImage) : null;
 
     final safeTitle = htmlEscape.convert(title);
     final safeDescription = htmlEscape.convert(description);
@@ -666,8 +684,8 @@ class RssTemplateService {
 </head>
 <body>
     <div class="header">
-        ${image != null ? '<img src="$image" class="feed-logo" onError="this.style.display=\'none\'" />' : ''}
-        <h1><a href="$link">$safeTitle</a></h1>
+        ${safeImageAttr != null ? '<img src="$safeImageAttr" class="feed-logo" onError="this.style.display=\'none\'" />' : ''}
+        <h1><a href="$safeLink">$safeTitle</a></h1>
         <p class="feed-desc">$safeDescription</p>
         <div class="feed-meta">$safeType Feed</div>
     </div>
@@ -676,7 +694,6 @@ class RssTemplateService {
     ''');
 
     for (var item in items) {
-      final hasImage = item['image']?.isNotEmpty ?? false;
       final itemTitle = htmlEscape.convert(item['title'] ?? '');
       final itemDate = htmlEscape.convert(item['date'] ?? '');
       final itemAuthor = htmlEscape.convert(item['author'] ?? '');
@@ -688,13 +705,17 @@ class RssTemplateService {
       final itemDesc =
           htmlEscape.convert(_stripHtml(item['description']!, limit: 300));
 
-      // Assuming links are roughly valid URLs. If they contain javascript:, that's bad.
-      // But general sanitization of href is separate.
-      final itemLink = item['link'] ?? '#';
+      // Only allow safe http/https links; javascript:/data: are dropped.
+      final itemLink = attrEscape.convert(_safeUrl(item['link']) ?? '#');
+      final itemImage = (item['image'] != null && item['image']!.isNotEmpty)
+          ? _safeUrl(item['image'])
+          : null;
+      final itemImageAttr =
+          itemImage != null ? attrEscape.convert(itemImage) : null;
 
       buffer.write('''
         <article class="item-card">
-            ${hasImage ? '<img src="${item['image']}" class="item-image" loading="lazy" />' : ''}
+            ${itemImageAttr != null ? '<img src="$itemImageAttr" class="item-image" loading="lazy" />' : ''}
             <h2 class="item-title"><a href="$itemLink">$itemTitle</a></h2>
             <div class="item-meta">
                 ${itemDate.isNotEmpty ? '<span>📅 $itemDate</span>' : ''}
@@ -740,7 +761,7 @@ class RssTemplateService {
      <html>
      <body style="font-family: system-ui; padding: 20px; color: #ef4444; background: #fff1f2;">
         <h2>RSS Rendering Error</h2>
-        <p>$message</p>
+        <p>${const HtmlEscape(HtmlEscapeMode.element).convert(message)}</p>
      </body>
      </html>
      ''';
