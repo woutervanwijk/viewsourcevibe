@@ -349,8 +349,10 @@ class _BrowserViewState extends State<BrowserView> {
         final uri = navigationAction.request.url!;
         final url = uri.toString();
 
-        // Block data: and blob: URLs from loading
-        if (url.startsWith('data:') || url.startsWith('blob:')) {
+        // Only http/https navigation is allowed; block data:, blob:, file:,
+        // javascript:, content: and any other scheme in the WebView layer.
+        final scheme = uri.scheme.toLowerCase();
+        if (scheme != 'http' && scheme != 'https') {
           return NavigationActionPolicy.CANCEL;
         }
 
