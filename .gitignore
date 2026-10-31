@@ -46,7 +46,8 @@ app.*.map.json
 
 /ios/build
 /android/build
-*.lock
+# pubspec.lock is intentionally committed for reproducible builds and CVE scanning
+# *.lock
 android/.kotlin/sessions/
 
 # Android signing secrets — never commit these

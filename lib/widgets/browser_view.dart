@@ -180,7 +180,7 @@ class _BrowserViewState extends State<BrowserView> {
         setState(() {});
       },
       initialSettings: InAppWebViewSettings(
-        isInspectable: true,
+        isInspectable: kDebugMode,
         preferredContentMode: UserPreferredContentMode.RECOMMENDED,
         mediaPlaybackRequiresUserGesture: false,
         allowFileAccess: false,
