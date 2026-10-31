@@ -2224,7 +2224,8 @@ class HtmlService extends ChangeNotifier {
       }
 
       // Use the http package with timeout and security settings
-      client = _createClient();
+      final httpClient = _createClient();
+      client = httpClient;
       final stopwatch = Stopwatch()..start();
       String? ipAddress;
 
@@ -2254,7 +2255,7 @@ class HtmlService extends ChangeNotifier {
         uri.host,
         () => _getFinalUrlAfterRedirects(
           uri,
-          client,
+          httpClient,
           headers,
           originalUri: uri,
           redirectChain: redirectChain,
@@ -2596,7 +2597,8 @@ Technical details: $e''';
 
       // Use HttpClient directly to get certificate info
       var acceptedInvalidCertificate = false;
-      client = HttpClient();
+      final httpClient = HttpClient();
+      client = httpClient;
       client.badCertificateCallback =
           (X509Certificate cert, String host, int port) {
         final trusted = CertificateSecurityService
@@ -2632,7 +2634,7 @@ Technical details: $e''';
       Future<HttpClientResponse> openRequest() async {
         try {
           // Try HEAD request first (most efficient)
-          request = await client.openUrl('HEAD', uri);
+          request = await httpClient.openUrl('HEAD', uri);
           request.headers.set('User-Agent', userAgent);
           request.headers.set('Accept', '*/*');
           request.followRedirects = false;
@@ -2640,7 +2642,7 @@ Technical details: $e''';
         } catch (e) {
           debugPrint('HEAD request failed, trying GET: $e');
           // Fallback to GET with range
-          request = await client.openUrl('GET', uri);
+          request = await httpClient.openUrl('GET', uri);
           request.headers.set('User-Agent', userAgent);
           request.headers.set('Accept', '*/*');
           request.headers.set('Range', 'bytes=0-0');
