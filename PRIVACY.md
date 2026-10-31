@@ -23,6 +23,10 @@ The application requires internet access solely to:
 
 Your browsing history and the URLs you visit are stored locally on your device for your convenience (History tab) and are never transmitted to our servers or any third parties.
 
+## Plain HTTP and TLS
+
+View Source Vibe can open plain `http://` URLs on purpose: inspecting the source of non-HTTPS sites is core functionality of the app. On Android this is enabled via `network_security_config.xml` (`cleartextTrafficPermitted`), on Apple platforms via `NSAllowsArbitraryLoads`. This does **not** weaken HTTPS: TLS certificates for `https://` connections are strictly validated against the system trust store. If a server presents an invalid or untrusted certificate, the app asks you explicitly before accepting it, and that acceptance only lasts for the current session. Within the in-app browser only `http:` and `https:` navigation is allowed; `data:`, `blob:`, `file:`, `javascript:` and other schemes are blocked.
+
 ## Changes to This Policy
 
 We may update our Privacy Policy from time to time. Thus, you are advised to review this page periodically for any changes. We will notify you of any changes by posting the new Privacy Policy on this page.

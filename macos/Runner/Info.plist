@@ -30,6 +30,10 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Plain HTTP must stay loadable: viewing the source of http:// sites is
+	     core functionality of this inspector app (deliberate decision, see
+	     PRIVACY.md). TLS certificates remain strictly validated in the Dart
+	     layer (CertificateSecurityService). -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Inspector app: arbitrary HTTP targets must remain loadable for source inspection. -->
+    <!--
+      Inspector app: plain HTTP targets must remain loadable because viewing
+      the source of http:// sites is core functionality. This is a deliberate
+      product decision, documented in PRIVACY.md.
+      The redundant wildcard domain-config (includeSubdomains="*") was removed:
+      base-config already covers all hosts.
+      TLS certificates are still strictly validated by the Dart HttpClient
+      layer (CertificateSecurityService); only cleartext is exempt.
+    -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">*</domain>
-    </domain-config>
 </network-security-config>

@@ -54,6 +54,8 @@ Each page opens into a set of tabs:
   - **Sovereignty:** Where the page and its services are hosted and under which country's law they fall.
   - **Cookies:** Cookies set by the page.
 
+> **Note on HTTP:** the app can open plain `http://` sites on purpose (inspecting non-HTTPS sources is core functionality). HTTPS connections are always strictly TLS-validated; an invalid certificate requires an explicit per-session confirmation from you. See [PRIVACY.md](PRIVACY.md).
+
 - **📡 Network**
   - **Timeline:** The request timeline of the page load.
   - **Probe & Headers:** HTTP details and response headers.
