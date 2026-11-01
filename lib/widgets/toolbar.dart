@@ -216,8 +216,6 @@ class Toolbar extends StatelessWidget {
       final savePath = await FilePicker.saveFile(
         dialogTitle: 'Save Inspection Package',
         fileName: filename,
-        type: FileType.custom,
-        allowedExtensions: const ['zip'],
         bytes: Uint8List.fromList(exportService.buildPackageBytes(htmlService)),
       );
 
