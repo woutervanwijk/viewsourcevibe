@@ -146,6 +146,9 @@ class HtmlService extends ChangeNotifier {
   // Dynamic Tab Indices based on settings
   bool get _useBrowserByDefault => _appSettings?.useBrowserByDefault ?? true;
 
+  /// Whether pages load in the Browser tab by default (browser-first mode).
+  bool get useBrowserByDefault => _useBrowserByDefault;
+
   /// The index of the Browser tab in the current tab layout.
   int get browserTabIndex {
     if (_useBrowserByDefault) return 0;

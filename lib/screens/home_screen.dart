@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _lastShowServerTabs = false;
   bool _lastIsBrowserSupported = true;
   bool _lastShouldShowBrowser = true;
+  int _lastBrowserTabIndex = -1;
   List<String> _tabLabels = const [];
 
   /// Label of the tab the user is on. Tabs come and go while a page loads,
@@ -77,12 +78,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final showServerTabs = htmlService.showServerTabs;
     final isBrowserSupported = htmlService.isBrowserSupported;
     final shouldShowBrowser = htmlService.shouldShowBrowserTab;
+    final browserTabIndex = htmlService.browserTabIndex;
 
     if (isHtmlOrXml == _lastIsHtmlOrXml &&
         showMetadataTabs == _lastShowMetadataTabs &&
         showServerTabs == _lastShowServerTabs &&
         isBrowserSupported == _lastIsBrowserSupported &&
         shouldShowBrowser == _lastShouldShowBrowser &&
+        browserTabIndex == _lastBrowserTabIndex &&
         !force) {
       return;
     }
@@ -108,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _lastShowServerTabs = showServerTabs;
       _lastIsBrowserSupported = isBrowserSupported;
       _lastShouldShowBrowser = shouldShowBrowser;
+      _lastBrowserTabIndex = browserTabIndex;
       if (keep >= 0) {
         // Called during build: notify the service after this frame.
         WidgetsBinding.instance
@@ -403,7 +407,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             structure.showMetadataTabs != _lastShowMetadataTabs ||
             structure.showServerTabs != _lastShowServerTabs ||
             structure.isBrowserSupported != _lastIsBrowserSupported ||
-            structure.shouldShowBrowserTab != _lastShouldShowBrowser) {
+            structure.shouldShowBrowserTab != _lastShouldShowBrowser ||
+            structure.browserTabIndex != _lastBrowserTabIndex) {
           _updateTabs(htmlService);
         }
 
