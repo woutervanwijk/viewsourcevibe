@@ -52,6 +52,17 @@ Future<String?> resolveWithinAppDirectories(String rawPath) async {
   return null;
 }
 
+/// Resolve [subDirectory] against [baseDir] and ensure the result stays
+/// inside [baseDir]. Returns null on traversal attempts or invalid input.
+String? resolveSubDirectory(String baseDir, String subDirectory) {
+  if (subDirectory.isEmpty) return path.normalize(baseDir);
+  if (subDirectory.contains('\u0000')) return null;
+  final resolved = path.normalize(path.join(baseDir, subDirectory));
+  final base = path.normalize(baseDir);
+  if (resolved != base && !resolved.startsWith('$base/')) return null;
+  return resolved;
+}
+
 /// Comprehensive File System Service for handling app data, cache, and documents
 class FileSystemService {
   /// Singleton instance
@@ -204,14 +215,13 @@ class FileSystemService {
 
     // Security: Sanitize filename and subdirectory
     final safeFilename = path.basename(filename);
-    if (subDirectory.contains('..')) {
+    final resolvedSubDir = resolveSubDirectory(dataDir.path, subDirectory);
+    if (resolvedSubDir == null) {
       throw Exception('Invalid subdirectory: Path traversal detected');
     }
 
     // Create subdirectory if specified
-    final targetDir = subDirectory.isNotEmpty
-        ? Directory(path.join(dataDir.path, subDirectory))
-        : dataDir;
+    final targetDir = Directory(resolvedSubDir);
 
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
@@ -234,14 +244,13 @@ class FileSystemService {
 
     // Security: Sanitize filename and subdirectory
     final safeFilename = path.basename(filename);
-    if (subDirectory.contains('..')) {
+    final resolvedSubDir = resolveSubDirectory(dataDir.path, subDirectory);
+    if (resolvedSubDir == null) {
       throw Exception('Invalid subdirectory: Path traversal detected');
     }
 
     // Create subdirectory if specified
-    final targetDir = subDirectory.isNotEmpty
-        ? Directory(path.join(dataDir.path, subDirectory))
-        : dataDir;
+    final targetDir = Directory(resolvedSubDir);
 
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
@@ -265,14 +274,13 @@ class FileSystemService {
 
     // Security: Sanitize filename and subdirectory
     final safeFilename = path.basename(filename);
-    if (subDirectory.contains('..')) {
+    final resolvedSubDir = resolveSubDirectory(downloadsDir.path, subDirectory);
+    if (resolvedSubDir == null) {
       throw Exception('Invalid subdirectory: Path traversal detected');
     }
 
     // Create subdirectory if specified
-    final targetDir = subDirectory.isNotEmpty
-        ? Directory(path.join(downloadsDir.path, subDirectory))
-        : downloadsDir;
+    final targetDir = Directory(resolvedSubDir);
 
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
@@ -295,14 +303,13 @@ class FileSystemService {
 
     // Security: Sanitize filename and subdirectory
     final safeFilename = path.basename(filename);
-    if (subDirectory.contains('..')) {
+    final resolvedSubDir = resolveSubDirectory(downloadsDir.path, subDirectory);
+    if (resolvedSubDir == null) {
       throw Exception('Invalid subdirectory: Path traversal detected');
     }
 
     // Create subdirectory if specified
-    final targetDir = subDirectory.isNotEmpty
-        ? Directory(path.join(downloadsDir.path, subDirectory))
-        : downloadsDir;
+    final targetDir = Directory(resolvedSubDir);
 
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
