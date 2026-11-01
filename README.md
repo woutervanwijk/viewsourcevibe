@@ -3,6 +3,23 @@
 
 Viewing the source of a webpage is sooooo early 2026!! Just use View Source Vibe to easily see what's in the page, without looking at the source. Of course we included a source code viewer and a DOM Tree, but you probably don't need them for most quick glances, because of our easy to use exploring tools.
 
+In a nice user interface you can easily view:
+- Page Metadata like title, description, colors, thumbnail, icon, Open Graph
+- (AD)Trackers and Privacy problems
+- Sovereignty aspects (what is hosted where)
+- Tech Stack
+- Used (external) Services
+- Page Weight
+- Cookies
+- Fonts & Images
+- Timeline for loading
+- Non-browser probe (curl)
+- Http Headers
+- Robots.txt
+- Security Score
+- DOM Tree
+- Plain Html
+
 | iOS | Android |
 |-----|---------|
 | ![iOS Mobile](assets/vibe%20screens/ios/Simulator%20Screenshot%20-%20iPhone%208%20Plus%20-%202026-02-18%20at%2016.46.49.png) | ![Android Tablet](assets/vibe%20screens/android/pixel%20tablet/Screenshot_1771434114.png) |
