@@ -36,9 +36,25 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.dark_mode_outlined,
                   title: 'Theme Mode',
                   description: _getThemeModeDescription(settings.themeMode),
-                  control: _valueControl(
-                      _getThemeModeLabel(settings.themeMode)),
-                  onTap: () => _showThemeModeDialog(context, settings),
+                  control: DropdownButton<ThemeModeOption>(
+                    value: settings.themeMode,
+                    isDense: true,
+                    iconSize: 18,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    onChanged: (value) {
+                      if (value != null) settings.themeMode = value;
+                    },
+                    items: [
+                      for (final mode in ThemeModeOption.values)
+                        DropdownMenuItem(
+                          value: mode,
+                          child: Text(_getThemeModeLabel(mode)),
+                        ),
+                    ],
+                  ),
                 ),
                 _settingsTile(
                   context: context,
@@ -330,44 +346,12 @@ class SettingsScreen extends StatelessWidget {
   String _getThemeModeLabel(ThemeModeOption mode) {
     switch (mode) {
       case ThemeModeOption.system:
-        return 'Follow system settings';
+        return 'System';
       case ThemeModeOption.light:
-        return 'Always light theme';
+        return 'Light Theme';
       case ThemeModeOption.dark:
-        return 'Always dark theme';
+        return 'Dark Theme';
     }
-  }
-
-  void _showThemeModeDialog(BuildContext context, AppSettings settings) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Theme Mode'),
-        content: SingleChildScrollView(
-          child: Column(
-            children: ThemeModeOption.values
-                .map((mode) => ListTile(
-                      title: Text(_getThemeModeLabel(mode)),
-                      subtitle: Text(_getThemeModeDescription(mode)),
-                      trailing: settings.themeMode == mode
-                          ? const Icon(Icons.check, color: Colors.blue)
-                          : null,
-                      onTap: () {
-                        settings.themeMode = mode;
-                        Navigator.of(context).pop();
-                      },
-                    ))
-                .toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
   }
 
   // Helper method to get theme mode description
