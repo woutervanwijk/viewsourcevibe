@@ -30,36 +30,33 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      // Theme Mode Selection
-                      ListTile(
-                        title: const Text('Theme Mode'),
-                        subtitle: Text(_getThemeModeLabel(settings.themeMode)),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () => _showThemeModeDialog(context, settings),
-                      ),
-
-                      // Syntax Highlight Theme
-                      ListTile(
-                        title: const Text('Syntax Highlight Theme'),
-                        subtitle: Text(
-                          AppSettings.isThemePair(AppSettings.getBaseThemeName(
-                                  settings.themeName))
-                              ? '${AppSettings.getThemeMetadata(AppSettings.getBaseThemeName(settings.themeName)).name} (Auto)'
-                              : AppSettings.getThemeMetadata(settings.themeName)
-                                  .name,
-                        ),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () => _showThemeDialog(context, settings),
-                      ),
-                    ],
-                  ),
+              _card([
+                _settingsTile(
+                  context: context,
+                  icon: Icons.dark_mode_outlined,
+                  title: 'Theme Mode',
+                  description: _getThemeModeDescription(settings.themeMode),
+                  control: _valueControl(
+                      _getThemeModeLabel(settings.themeMode)),
+                  onTap: () => _showThemeModeDialog(context, settings),
                 ),
-              ),
+                _settingsTile(
+                  context: context,
+                  icon: Icons.palette_outlined,
+                  title: 'Syntax Highlight Theme',
+                  description: AppSettings.getThemeMetadata(
+                          AppSettings.getBaseThemeName(settings.themeName))
+                      .description,
+                  control: _valueControl(
+                    AppSettings.isThemePair(AppSettings.getBaseThemeName(
+                            settings.themeName))
+                        ? '${AppSettings.getThemeMetadata(AppSettings.getBaseThemeName(settings.themeName)).name} (Auto)'
+                        : AppSettings.getThemeMetadata(settings.themeName)
+                            .name,
+                  ),
+                  onTap: () => _showThemeDialog(context, settings),
+                ),
+              ]),
 
               const SizedBox(height: 24),
 
@@ -70,40 +67,36 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      // Font Size
-                      ListTile(
-                        title: const Text('Font Size'),
-                        subtitle: Text('${settings.fontSize.toInt()}px'),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () => _showFontSizeDialog(context, settings),
-                      ),
-
-                      // Line Numbers Toggle
-                      SwitchListTile(
-                        title: const Text('Show Line Numbers'),
-                        subtitle: const Text('Display line numbers in editor'),
-                        value: settings.showLineNumbers,
-                        onChanged: (value) => settings.showLineNumbers = value,
-                        secondary: const Icon(Icons.format_list_numbered),
-                      ),
-
-                      // Text Wrap Toggle
-                      SwitchListTile(
-                        title: const Text('Wrap Text'),
-                        subtitle: const Text('Enable text wrapping'),
-                        value: settings.wrapText,
-                        onChanged: (value) => settings.wrapText = value,
-                        secondary: const Icon(Icons.wrap_text),
-                      ),
-                    ],
+              _card([
+                _settingsTile(
+                  context: context,
+                  icon: Icons.format_size,
+                  title: 'Font Size',
+                  description: 'Text size used in the source viewer',
+                  control: _valueControl('${settings.fontSize.toInt()}px'),
+                  onTap: () => _showFontSizeDialog(context, settings),
+                ),
+                _settingsTile(
+                  context: context,
+                  icon: Icons.format_list_numbered,
+                  title: 'Show Line Numbers',
+                  description: 'Display line numbers in editor',
+                  control: Switch(
+                    value: settings.showLineNumbers,
+                    onChanged: (value) => settings.showLineNumbers = value,
                   ),
                 ),
-              ),
+                _settingsTile(
+                  context: context,
+                  icon: Icons.wrap_text,
+                  title: 'Wrap Text',
+                  description: 'Enable text wrapping',
+                  control: Switch(
+                    value: settings.wrapText,
+                    onChanged: (value) => settings.wrapText = value,
+                  ),
+                ),
+              ]),
 
               const SizedBox(height: 24),
 
@@ -114,48 +107,50 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      // Browser Default Toggle
-                      SwitchListTile(
-                        title: const Text('Always use Browser'),
-                        subtitle: const Text(
-                            'Load pages in browser immediately. Disable to load source via Curl first (the more pure loading option to see e.g. cookie walls, etc. and when sites block Curl requests)'),
-                        value: settings.useBrowserByDefault,
-                        onChanged: (value) =>
-                            settings.useBrowserByDefault = value,
-                        secondary: const Icon(Icons.public),
+              _card([
+                _settingsTile(
+                  context: context,
+                  icon: Icons.public,
+                  title: 'Always use Browser',
+                  description:
+                      'Load pages in browser immediately. Disable to load source via Curl first (the more pure loading option to see e.g. cookie walls, etc. and when sites block Curl requests)',
+                  control: Switch(
+                    value: settings.useBrowserByDefault,
+                    onChanged: (value) =>
+                        settings.useBrowserByDefault = value,
+                  ),
+                ),
+                _settingsTile(
+                  context: context,
+                  icon: Icons.gavel_outlined,
+                  title: 'Default site jurisdiction',
+                  description:
+                      'Legal home assumed for a site when the Sovereignty tab cannot detect it. You can change it per site.',
+                  control: DropdownButton<String?>(
+                    value: settings.homeJurisdictionSetting,
+                    isDense: true,
+                    iconSize: 18,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    onChanged: (value) =>
+                        settings.homeJurisdictionSetting = value,
+                    items: [
+                      DropdownMenuItem(
+                        value: null,
+                        child: Text(
+                            'Auto (${jurisdictionLabel(defaultHomeJurisdiction())})'),
                       ),
-                      ListTile(
-                        leading: const Icon(Icons.gavel_outlined),
-                        title: const Text('Default site jurisdiction'),
-                        subtitle: const Text(
-                            'Legal home assumed for a site when the Sovereignty tab cannot detect it. You can change it per site.'),
-                        trailing: DropdownButton<String?>(
-                          value: settings.homeJurisdictionSetting,
-                          onChanged: (value) =>
-                              settings.homeJurisdictionSetting = value,
-                          items: [
-                            DropdownMenuItem(
-                              value: null,
-                              child: Text(
-                                  'Automatic (${jurisdictionLabel(defaultHomeJurisdiction())})'),
-                            ),
-                            for (final j in homeJurisdictionChoices)
-                              DropdownMenuItem(
-                                value: j,
-                                child: Text(jurisdictionLabel(j)),
-                              ),
-                          ],
+                      for (final j in homeJurisdictionChoices)
+                        DropdownMenuItem(
+                          value: j,
+                          child: Text(jurisdictionLabel(j)),
                         ),
-                      ),
                     ],
                   ),
                 ),
-              ),
+              ]),
 
               const SizedBox(height: 24),
 
@@ -166,41 +161,35 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ListTile(
-                    title: const Text('Clear History'),
-                    subtitle: const Text('Remove all saved URLs from history'),
-                    trailing: const Icon(Icons.delete_outline),
-                    onTap: () => _confirmClearHistory(context),
-                  ),
+              _card([
+                _settingsTile(
+                  context: context,
+                  icon: Icons.history,
+                  title: 'Clear History',
+                  description: 'Remove all saved URLs from history',
+                  onTap: () => _confirmClearHistory(context),
                 ),
-              ),
+              ]),
 
               const SizedBox(height: 8),
 
-              Card(
-                child: Column(
-                  children: [
-                    ListTile(
-                      title: const Text('Clear Browser Cache'),
-                      subtitle: const Text('Clear cached images and files'),
-                      trailing: const Icon(Icons.cached),
-                      onTap: () => _clearBrowserCache(context),
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      title: const Text('Clear Everything'),
-                      subtitle:
-                          const Text('Clear cache, cookies, and local storage'),
-                      trailing:
-                          const Icon(Icons.delete_forever, color: Colors.red),
-                      onTap: () => _confirmClearEverything(context),
-                    ),
-                  ],
+              _card([
+                _settingsTile(
+                  context: context,
+                  icon: Icons.cached,
+                  title: 'Clear Browser Cache',
+                  description: 'Clear cached images and files',
+                  onTap: () => _clearBrowserCache(context),
                 ),
-              ),
+                _settingsTile(
+                  context: context,
+                  icon: Icons.delete_forever,
+                  iconColor: Colors.red,
+                  title: 'Clear Everything',
+                  description: 'Clear cache, cookies, and local storage',
+                  onTap: () => _confirmClearEverything(context),
+                ),
+              ]),
 
               const SizedBox(height: 24),
               const Text(
@@ -209,18 +198,16 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ListTile(
-                    title: const Text('About View Source Vibe'),
-                    subtitle: const Text(
-                        'Learn more about the app and development process'),
-                    trailing: const Icon(Icons.info_outline),
-                    onTap: () => _navigateToAboutScreen(context),
-                  ),
+              _card([
+                _settingsTile(
+                  context: context,
+                  icon: Icons.info_outline,
+                  title: 'About View Source Vibe',
+                  description:
+                      'Learn more about the app and development process',
+                  onTap: () => _navigateToAboutScreen(context),
                 ),
-              ),
+              ]),
 
               const SizedBox(height: 32),
 
@@ -245,6 +232,97 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _card(List<Widget> tiles) {
+    return Card(
+      child: Column(
+        children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) const Divider(height: 1, indent: 50),
+            tiles[i],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _settingsTile({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    String? description,
+    Widget? control,
+    Widget? trailing,
+    VoidCallback? onTap,
+    Color? iconColor,
+  }) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon,
+                    size: 22, color: iconColor ?? theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (trailing != null)
+                  trailing
+                else if (control == null && onTap != null)
+                  Icon(Icons.arrow_forward_ios,
+                      size: 16, color: theme.colorScheme.onSurfaceVariant),
+              ],
+            ),
+            if (description != null || control != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (description != null)
+                    Expanded(
+                      child: Text(
+                        description,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  if (control != null) ...[
+                    const SizedBox(width: 12),
+                    control,
+                  ],
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _valueControl(String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(value, style: const TextStyle(fontSize: 13)),
+        const Icon(Icons.arrow_forward_ios, size: 14),
+      ],
     );
   }
 
