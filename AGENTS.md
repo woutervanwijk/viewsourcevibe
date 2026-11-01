@@ -1,74 +1,32 @@
 # View Source Vibe - AI Agent Instructions
 
-This file contains the context, architecture guidelines, and coding standards for AI assistants (like Cursor, GitHub Copilot, or Antigravity) working on the **View Source Vibe** project.
+Context, architecture and coding standards for AI assistants working on **View Source Vibe**.
 
-## 📌 Project Overview
-**View Source Vibe** is a cross-platform (iOS, Android, macOS, Windows, Linux) Flutter application used to inspect web pages, view source code (HTML, CSS, JS, XML, JSON), analyze DOM trees, and extract tech stacks/metadata from URLs or local files. It heavily relies on in-app browsers, DOM parsing, and deep linking for seamless sharing capabilities.
+## Project Overview
+Cross-platform (iOS, Android, macOS, Windows, Linux) Flutter app to inspect web pages and view source (HTML, CSS, JS, XML, JSON), analyze DOM trees, and extract tech stacks/metadata from URLs or local files. Relies on in-app browsers, DOM parsing, and deep linking.
 
-## 🛠 Tech Stack
-- **Framework:** Flutter (SDK `>=3.3.0 <4.0.0`)
-- **State Management:** `provider`
-- **Core Packages:** 
-  - `flutter_inappwebview` (Browser, network interception, WebView handling)
-  - `re_editor` & `re_highlight` (Code viewing & syntax highlighting)
-  - `html` & `xml` (DOM tree parsing)
-  - `flutter_fancy_tree_view2` (DOM UI representation)
-  - `shared_preferences` (Persistent local settings)
-  - `app_links` (Deep linking)
+## Tech Stack
+- Flutter (SDK `>=3.3.0 <4.0.0`), state management via `provider`
+- `flutter_inappwebview` (browser, network interception), `re_editor`/`re_highlight` (code viewing), `html`/`xml` (DOM parsing), `flutter_fancy_tree_view2` (DOM UI), `shared_preferences` (settings), `app_links` (deep linking)
 
-## 🚀 Build, Release & Signing
-- Desktop release builds are handled by `.github/workflows/build-desktop.yml`.
-- Pushing a tag matching `v*` builds macOS and Windows artifacts and creates a GitHub Release.
-- The macOS artifact is a DMG built from `flutter build macos --release`, then explicitly signed, notarized, stapled, and uploaded.
-- Do not add `--codesign` to `flutter build macos`; this Flutter command does not support that option in the pinned CI toolchain.
-- macOS signing expects a **Developer ID Application** certificate in the `APPLE_CERTIFICATE_P12` secret. App Store distribution certificates are not interchangeable for the downloadable DMG flow.
-- Required macOS signing/notarization secrets:
-  - `APPLE_CERTIFICATE_P12` - base64-encoded `.p12`
-  - `APPLE_CERTIFICATE_PASSWORD` - `.p12` password
-  - `APPLE_ID` - Apple ID used with `notarytool`
-  - `APPLE_PASSWORD` - app-specific password for the Apple ID
-  - `APPLE_TEAM_ID` - Apple Developer Team ID
-- The workflow temporarily patches `DEVELOPMENT_TEAM` during CI from `APPLE_TEAM_ID`; avoid hard-coding a different team in workflow scripts.
-- Keep `macos/Runner/Release.entitlements` aligned with app capabilities. The signing step passes these entitlements when re-signing the main app bundle.
+## Build, Release & Signing
+- Desktop releases: `.github/workflows/build-desktop.yml`. A `v*` tag builds macOS + Windows artifacts and creates a GitHub Release.
+- macOS artifact = DMG from `flutter build macos --release`, then signed, notarized, stapled, uploaded. Do **not** add `--codesign` (unsupported in the pinned CI toolchain).
+- Signing uses a **Developer ID Application** certificate in the `APPLE_*_P12` secret; App Store certificates don't work for the DMG flow. Required secrets: `APPLE_*_P12`, `APPLE_*_PASSWORD`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`.
+- CI patches `DEVELOPMENT_TEAM` from `APPLE_TEAM_ID`; don't hard-code a team in workflow scripts. Keep `macos/Runner/Release.entitlements` aligned with app capabilities (used when re-signing the bundle).
 
-## 🏗 Architecture & Directory Structure
-The `lib/` directory follows a clean separation of concerns:
-- **`models/`**: Data classes and state representations. Keep them immutable where possible.
-- **`screens/`**: Full-page UI files (e.g., `BrowserScreen`, `SourceViewerScreen`).
-- **`widgets/`**: Reusable UI components (e.g., custom buttons, dialogs, bottom sheets).
-- **`services/`**: Core business logic, network requests, DOM parsing logic, and file handling.
-- **`utils/`**: Helper functions, formatters, extensions, and constants.
-- **`ui/`**: App-wide UI constants, theming, design tokens (colors, typography).
+## Architecture (`lib/`)
+- `models/` immutable data classes/state · `screens/` full pages (`BrowserScreen`, `SourceViewerScreen`) · `widgets/` reusable UI · `services/` business logic, network, DOM parsing, files · `utils/` helpers/formatters/constants · `ui/` theming/design tokens
 
-## 💡 AI Coding Guidelines
+## Coding Guidelines
+1. **Keep it simple ("vibe coding")**: working software over academic purity; no premature optimization. Self-documenting names.
+2. **State (`provider`)**: use `Consumer` / `context.read` / `context.watch`; mutations only in `ChangeNotifier`s in `services/` or `models/`, never in UI.
+3. **UI/UX**: Material/Cupertino per platform; responsive for phones, tablets, desktop (`Expanded`, `Flexible`, `LayoutBuilder`, constraints).
+4. **WebView & parsing**: be careful with `flutter_inappwebview` settings/injected scripts/cache — easily breaks per-platform features. DOM/HTML parsing must handle malformed HTML gracefully.
+5. **Errors & logs**: catch exceptions on file/parse/HTTP; show user-friendly errors (SnackBar/error UI). No raw `print()` in production code.
+6. **Tests**: add/maintain unit tests in `test/` for complex utilities, parsers, sharing logic (e.g. `test_sharing_logic.dart`).
 
-1. **Keep it Simple & Pragmatic ("Vibe Coding")**
-   - The original author prioritizes getting results and working software over overly strict academic purity. Keep code clean, readable, and functional. Avoid premature optimization or unnecessary over-engineering.
-   - Write self-documenting code with clear variable and function names.
-
-2. **State Management (`provider`)**
-   - Use `Consumer` or `context.read<T>()` / `context.watch<T>()`.
-   - Keep business logic strictly outside of the UI components. State mutations should happen inside `ChangeNotifier` classes in the `services/` or `models/` folders.
-
-3. **UI / UX**
-   - Follow Material/Cupertino design guidelines depending on the platform where applicable.
-   - The app must handle varied screen sizes (mobile phones, tablets, and desktop windows). Ensure responsiveness using `Expanded`, `Flexible`, `LayoutBuilder`, or standard constraints.
-
-4. **Web Technologies & Parsing**
-   - Be cautious when making changes to `flutter_inappwebview` logic. Modifying WebView settings, injected scripts, or cache configurations can easily break features on specific platforms.
-   - Ensure DOM/HTML parsing handles malformed HTML gracefully without crashing the app.
-
-5. **Error Handling & Logs**
-   - Catch exceptions when reading files, parsing documents, or making HTTP requests. Show user-friendly error messages (e.g., via SnackBar or Error UI layer) instead of failing silently.
-   - Do not leave raw `print()` statements in production code unless they are temporary for debugging.
-
-6. **Testing**
-   - Ensure unit tests (in `test/`) are maintained or added when writing complex utility functions, parsers, or sharing logic (e.g., `test_sharing_logic.dart`).
-
-## 🔄 AI Assistant Workflow
-- Before implementing a feature, carefully read the related `pubspec.yaml` dependencies and check how similar features are implemented across the `screens/` or `services/`.
-- If a user requests a bug fix related to the browser or tab bar (e.g., `flutter_inappwebview` caching, or `TabController` synchronization), deeply analyze the widget lifecycle (`initState`, `dispose`) to ensure no memory leaks occur.
-- When generating changes, prefer small, focused file edits over rewriting entire massive files.
-
----
-*End of AI instructions. Use this context to inform all future code completion and generation.*
+## Workflow
+- Before implementing: read `pubspec.yaml` and how similar features are built in `screens/`/`services/`.
+- Browser/tab-bar bugs (WebView caching, `TabController` sync): analyze widget lifecycle (`initState`, `dispose`) for memory leaks.
+- Prefer small, focused edits over rewriting large files.
