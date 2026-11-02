@@ -155,7 +155,7 @@ class HtmlService extends ChangeNotifier {
     int idx = 1; // Source
     if (isHtmlOrXml) idx += 1; // DOM Tree
     if (showMetadataTabs) {
-      idx += 5; // Metadata + Size + Services + Privacy + Media
+      idx += 5; // Metadata + Media + Size + Services + Privacy
     }
     if (showServerTabs) {
       idx += 6; // Cookies + Timeline + Probe + Headers + Security + Sovereignty
@@ -174,11 +174,11 @@ class HtmlService extends ChangeNotifier {
         _ => index,
       };
 
-  /// Source sits right of DOM Tree, which sits right of the Media tab.
+  /// Source sits right of DOM Tree, which sits right of the metadata tabs.
   int get sourceTabIndex {
     int idx = _useBrowserByDefault ? 1 : 0; // Browser first
     if (showMetadataTabs) {
-      idx += 5; // Metadata + Size + Services + Privacy + Media
+      idx += 5; // Metadata + Media + Size + Services + Privacy
       if (showServerTabs) idx += 1; // Sovereignty
     }
     if (isHtmlOrXml) idx += 1; // DOM Tree

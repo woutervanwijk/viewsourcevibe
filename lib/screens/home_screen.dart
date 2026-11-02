@@ -200,11 +200,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (shouldShowBrowser && useBrowserByDefault) browserTab,
       if (showMetadataTabs) ...[
         (Icons.info_outline, 'Metadata'),
+        (Icons.perm_media_outlined, 'Media'),
         (Icons.scale_outlined, 'Size'),
         (Icons.layers_outlined, 'Services'),
         (Icons.privacy_tip_outlined, 'Privacy'),
         if (showServerTabs) (Icons.public, 'Sovereignty'),
-        (Icons.perm_media_outlined, 'Media'),
       ],
       if (isHtmlOrXml) (Icons.account_tree_outlined, 'DOM Tree'),
       (Icons.code, 'Source'),
@@ -288,6 +288,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           KeepAliveWrapper(
               child: _buildRefreshable(const MetadataView(), 'metadata')),
           KeepAliveWrapper(
+              child: _buildRefreshable(const MediaView(), 'media')),
+          KeepAliveWrapper(
               child: _buildRefreshable(const PageSizeView(), 'page-size')),
           KeepAliveWrapper(
               child: _buildRefreshable(const ServicesView(), 'services')),
@@ -297,8 +299,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             KeepAliveWrapper(
                 child:
                     _buildRefreshable(const SovereigntyView(), 'sovereignty')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const MediaView(), 'media')),
         ],
         if (isHtmlOrXml)
           KeepAliveWrapper(
@@ -332,6 +332,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             key: const ValueKey('tab_metadata'),
             child: _buildRefreshable(const MetadataView(), 'metadata')),
         KeepAliveWrapper(
+            key: const ValueKey('tab_media'),
+            child: _buildRefreshable(const MediaView(), 'media')),
+        KeepAliveWrapper(
             key: const ValueKey('tab_page_size'),
             child: _buildRefreshable(const PageSizeView(), 'page-size')),
         KeepAliveWrapper(
@@ -344,12 +347,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           KeepAliveWrapper(
               key: const ValueKey('tab_sovereignty'),
               child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_media'),
-            child: _buildRefreshable(const MediaView(), 'media')),
       ],
 
-      // DOM Tree and Source sit right of Media
+      // DOM Tree and Source sit right of the metadata tabs
       if (isHtmlOrXml)
         KeepAliveWrapper(
             key: const ValueKey('tab_dom_tree'),
