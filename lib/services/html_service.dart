@@ -154,7 +154,9 @@ class HtmlService extends ChangeNotifier {
     if (_useBrowserByDefault) return 0;
     int idx = 1; // Source
     if (isHtmlOrXml) idx += 1; // DOM Tree
-    if (showMetadataTabs) idx += 4; // Metadata + Services + Privacy + Media
+    if (showMetadataTabs) {
+      idx += 5; // Metadata + Size + Services + Privacy + Media
+    }
     if (showServerTabs) {
       idx += 6; // Cookies + Timeline + Probe + Headers + Security + Sovereignty
     }
@@ -176,7 +178,7 @@ class HtmlService extends ChangeNotifier {
   int get sourceTabIndex {
     int idx = _useBrowserByDefault ? 1 : 0; // Browser first
     if (showMetadataTabs) {
-      idx += 4; // Metadata + Services + Privacy + Media
+      idx += 5; // Metadata + Size + Services + Privacy + Media
       if (showServerTabs) idx += 1; // Sovereignty
     }
     if (isHtmlOrXml) idx += 1; // DOM Tree
@@ -2277,8 +2279,9 @@ class HtmlService extends ChangeNotifier {
       hClient = HttpClient();
       hClient.badCertificateCallback =
           (X509Certificate cert, String host, int port) {
-        final trusted = CertificateSecurityService
-            .defaultBadCertificateCallback(cert, host, port);
+        final trusted =
+            CertificateSecurityService.defaultBadCertificateCallback(
+                cert, host, port);
         if (trusted) acceptedInvalidCertificate = true;
         return trusted;
       };
@@ -2604,8 +2607,9 @@ Technical details: $e''';
       client = httpClient;
       client.badCertificateCallback =
           (X509Certificate cert, String host, int port) {
-        final trusted = CertificateSecurityService
-            .defaultBadCertificateCallback(cert, host, port);
+        final trusted =
+            CertificateSecurityService.defaultBadCertificateCallback(
+                cert, host, port);
         if (trusted) acceptedInvalidCertificate = true;
         return trusted;
       };

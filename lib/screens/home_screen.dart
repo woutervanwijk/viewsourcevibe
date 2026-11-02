@@ -11,6 +11,7 @@ import 'package:view_source_vibe/widgets/source_viewer.dart';
 import 'package:view_source_vibe/widgets/toolbar.dart';
 import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/widgets/metadata_view.dart';
+import 'package:view_source_vibe/widgets/page_size_view.dart';
 import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/media_view.dart';
 import 'package:view_source_vibe/widgets/privacy_view.dart';
@@ -199,6 +200,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (shouldShowBrowser && useBrowserByDefault) browserTab,
       if (showMetadataTabs) ...[
         (Icons.info_outline, 'Metadata'),
+        (Icons.scale_outlined, 'Size'),
         (Icons.layers_outlined, 'Services'),
         (Icons.privacy_tip_outlined, 'Privacy'),
         if (showServerTabs) (Icons.public, 'Sovereignty'),
@@ -286,6 +288,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           KeepAliveWrapper(
               child: _buildRefreshable(const MetadataView(), 'metadata')),
           KeepAliveWrapper(
+              child: _buildRefreshable(const PageSizeView(), 'page-size')),
+          KeepAliveWrapper(
               child: _buildRefreshable(const ServicesView(), 'services')),
           KeepAliveWrapper(
               child: _buildRefreshable(const PrivacyView(), 'privacy')),
@@ -327,6 +331,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         KeepAliveWrapper(
             key: const ValueKey('tab_metadata'),
             child: _buildRefreshable(const MetadataView(), 'metadata')),
+        KeepAliveWrapper(
+            key: const ValueKey('tab_page_size'),
+            child: _buildRefreshable(const PageSizeView(), 'page-size')),
         KeepAliveWrapper(
             key: const ValueKey('tab_services'),
             child: _buildRefreshable(const ServicesView(), 'services')),
