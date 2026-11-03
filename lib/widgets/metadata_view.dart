@@ -805,10 +805,22 @@ class MetadataView extends StatelessWidget {
   }
 
   String _structuredDataType(dynamic item) {
-    if (item is! Map) return 'Unknown schema';
+    if (item is! Map) return 'JSON-LD';
     final rawType = item['@type'];
-    if (rawType is List) return rawType.join(', ');
-    return rawType?.toString() ?? 'Unknown schema';
+    if (rawType is List) return rawType.map((t) => '$t').join(', ');
+    if (rawType is String && rawType.trim().isNotEmpty) {
+      return rawType.trim();
+    }
+    // No @type on the node: still recognize the vocabulary from @context
+    // (e.g. schema.org) instead of reporting an unknown schema.
+    final context = item['@context'];
+    final vocab = context is List
+        ? context.whereType<String>().join(', ')
+        : context is String
+            ? context
+            : '';
+    if (vocab.contains('schema.org')) return 'schema.org';
+    return vocab.isNotEmpty ? vocab : 'JSON-LD';
   }
 
   String _structuredDataTitle(dynamic item) {

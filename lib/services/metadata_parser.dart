@@ -442,6 +442,29 @@ void _extractJsonLdInfo(dom.Document doc, Map<String, dynamic> metadata) {
   final jsonLdScripts =
       doc.querySelectorAll('script[type="application/ld+json"]');
 
+  // A JSON-LD block is an object, a list of objects, or an object whose
+  // entities live in `@graph` (e.g. www.groningen.nl). Flatten every shape
+  // into the individual schema nodes.
+  final nodes = <Map<String, dynamic>>[];
+
+  void collect(dynamic jsonData, [int depth = 0]) {
+    if (depth > 6) return;
+    if (jsonData is Map<String, dynamic>) {
+      final graph = jsonData['@graph'];
+      if (graph is List) {
+        for (final item in graph) {
+          collect(item, depth + 1);
+        }
+      } else {
+        nodes.add(jsonData);
+      }
+    } else if (jsonData is List) {
+      for (final item in jsonData) {
+        collect(item, depth + 1);
+      }
+    }
+  }
+
   for (final script in jsonLdScripts) {
     try {
       final jsonStr = script.text.trim();
@@ -449,37 +472,49 @@ void _extractJsonLdInfo(dom.Document doc, Map<String, dynamic> metadata) {
 
       // Parse JSON directly instead of regex
       // This is safer and more robust than regex on raw string
-      final dynamic jsonData = jsonDecode(jsonStr);
-
-      if (jsonData is Map<String, dynamic>) {
-        metadata['structuredData'].add(jsonData);
-        _processJsonLdObject(jsonData, metadata);
-      } else if (jsonData is List) {
-        for (final item in jsonData) {
-          if (item is Map<String, dynamic>) {
-            metadata['structuredData'].add(item);
-            _processJsonLdObject(item, metadata);
-          }
-        }
-      }
+      collect(jsonDecode(jsonStr));
     } catch (e) {
       debugPrint('Error parsing JSON-LD: $e');
     }
   }
+
+  // Nodes reference each other by @id ({"@id":"#creator"}), and the
+  // referenced node can appear later in the graph, so index all nodes
+  // before processing any of them.
+  final nodesById = {
+    for (final node in nodes)
+      if (node['@id'] is String && (node['@id'] as String).isNotEmpty)
+        node['@id'] as String: node,
+  };
+  for (final node in nodes) {
+    metadata['structuredData'].add(node);
+    _processJsonLdObject(node, metadata, nodesById);
+  }
 }
 
 void _processJsonLdObject(
-    Map<String, dynamic> json, Map<String, dynamic> metadata) {
+    Map<String, dynamic> json, Map<String, dynamic> metadata,
+    [Map<String, Map<String, dynamic>>? nodesById]) {
   try {
+    // A bare node reference like {"@id":"#creator"} points at another node
+    // in the same graph that carries the actual name.
+    dynamic resolve(dynamic value) {
+      if (value is Map && value['name'] == null && nodesById != null) {
+        final id = value['@id'];
+        if (id is String) return nodesById[id] ?? value;
+      }
+      return value;
+    }
+
     // Author
     if (metadata['article']['Author'] == null) {
-      final author = json['author'];
+      final author = resolve(json['author']);
       if (author is Map) {
         metadata['article']['Author'] = author['name'];
       } else if (author is String) {
         metadata['article']['Author'] = author;
       } else if (author is List && author.isNotEmpty) {
-        final firstAuthor = author.first;
+        final firstAuthor = resolve(author.first);
         if (firstAuthor is Map) {
           metadata['article']['Author'] = firstAuthor['name'];
         } else if (firstAuthor is String) {
@@ -504,7 +539,7 @@ void _processJsonLdObject(
 
     // Publisher
     if (metadata['article']['Publisher'] == null) {
-      final publisher = json['publisher'];
+      final publisher = resolve(json['publisher']);
       if (publisher is Map) {
         metadata['article']['Publisher'] = publisher['name'];
       } else if (publisher is String) {
