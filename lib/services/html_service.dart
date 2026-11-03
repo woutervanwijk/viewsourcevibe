@@ -315,6 +315,8 @@ class HtmlService extends ChangeNotifier {
         contentType.contains('application/xhtml+xml')) {
       return true;
     }
+    // A specific non-HTML content type (JSON, CSS, JS, XML…) is authoritative.
+    if (isNonHtmlContentType(contentType)) return false;
 
     // Secondary check: selected content type or current file extension
     final bool looksLikeHtml = selectedContentType == 'html' ||
@@ -324,24 +326,11 @@ class HtmlService extends ChangeNotifier {
 
     if (looksLikeHtml) return true;
 
+    final fileName = _currentFile?.name.toLowerCase() ?? '';
+    if (_nonHtmlExtensions.any(fileName.endsWith)) return false;
+
     if (_currentFile?.content.isNotEmpty ?? false) {
-      final trimmedContent = _currentFile!.content.trim();
-      final lowerContent = trimmedContent.toLowerCase();
-      final looksLikeXmlContent = lowerContent.startsWith('<') &&
-          !lowerContent.startsWith('<!doctype html') &&
-          !lowerContent.startsWith('<html') &&
-          (trimmedContent.contains('<Channel>') ||
-              lowerContent.contains('<rss') ||
-              lowerContent.contains('<feed') ||
-              lowerContent.contains('<xml'));
-
-      if (looksLikeXmlContent) return false;
-
-      final looksLikeHtmlContent = lowerContent.startsWith('<!doctype html') ||
-          lowerContent.startsWith('<html') ||
-          RegExp(r'<(head|body|title|meta|script|style|div|main|section|article)\b')
-              .hasMatch(lowerContent);
-      if (looksLikeHtmlContent) return true;
+      if (contentLooksLikeHtml(_currentFile!.content)) return true;
     }
 
     // Tertiary check: If we are midway through loading a URL and probe/file are not ready,
@@ -357,65 +346,95 @@ class HtmlService extends ChangeNotifier {
       return true;
     }
 
-    // For HTTP URLs, be conservative when no content/header is available.
-    if (url.startsWith('http')) {
-      final nonHtmlExtensions = [
-        '.rss',
-        '.xml',
-        '.json',
-        '.pdf',
-        '.zip',
-        '.png',
-        '.jpg',
-        '.jpeg',
-        '.gif',
-        '.svg',
-        '.webp',
-        '.bmp',
-        '.tiff',
-        '.ico',
-        '.css',
-        '.js',
-        '.txt',
-        '.csv',
-        '.doc',
-        '.docx',
-        '.xls',
-        '.xlsx',
-        '.ppt',
-        '.pptx',
-        '.mp3',
-        '.mp4',
-        '.avi',
-        '.mov',
-        '.wav',
-        '.ogg',
-        '.webm',
-        '.m4a',
-        '.aac',
-        '.tar',
-        '.gz',
-        '.rar',
-        '.7z',
-        '.iso',
-        '.dmg',
-        '.exe',
-        '.msi',
-        '.apk',
-        '.ipa',
-        '.epub',
-        '.mobi',
-        '.azw3'
-      ];
-
-      if (nonHtmlExtensions.any((ext) => url.endsWith(ext))) {
-        return false;
-      }
-      return false;
-    }
-
     return false;
   }
+
+  /// True for a specific content type that isn't HTML. Generic types
+  /// (text/plain, octet-stream) are not, so the content gets sniffed.
+  static bool isNonHtmlContentType(String contentType) {
+    final type = contentType.split(';').first.trim().toLowerCase();
+    if (type.isEmpty ||
+        type == 'text/plain' ||
+        type == 'application/octet-stream') {
+      return false;
+    }
+    return !type.contains('html');
+  }
+
+  /// Content sniff: an HTML document starts with markup and has HTML tags.
+  /// JS/CSS/JSON that merely contain `<div>` in a string don't count.
+  static bool contentLooksLikeHtml(String content) {
+    final trimmed = content.replaceFirst('\uFEFF', '').trim();
+    final lower = trimmed.toLowerCase();
+    if (!lower.startsWith('<')) return false;
+    if (lower.startsWith('<!doctype html') || lower.startsWith('<html')) {
+      return true;
+    }
+    final looksLikeFeed = trimmed.contains('<Channel>') ||
+        lower.contains('<rss') ||
+        lower.contains('<feed');
+    if (looksLikeFeed) return false;
+    // XHTML may start with an XML declaration.
+    if (lower.startsWith('<?xml')) return lower.contains('<html');
+    return RegExp(
+            r'<(head|body|title|meta|script|style|div|main|section|article)\b')
+        .hasMatch(lower);
+  }
+
+  static const _nonHtmlExtensions = [
+    '.rss',
+    '.xml',
+    '.json',
+    '.pdf',
+    '.zip',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.svg',
+    '.webp',
+    '.bmp',
+    '.tiff',
+    '.ico',
+    '.css',
+    '.js',
+    '.txt',
+    '.csv',
+    '.doc',
+    '.docx',
+    '.xls',
+    '.xlsx',
+    '.ppt',
+    '.pptx',
+    '.mp3',
+    '.mp4',
+    '.avi',
+    '.mov',
+    '.wav',
+    '.ogg',
+    '.webm',
+    '.m4a',
+    '.aac',
+    '.tar',
+    '.gz',
+    '.rar',
+    '.7z',
+    '.iso',
+    '.dmg',
+    '.exe',
+    '.msi',
+    '.apk',
+    '.ipa',
+    '.epub',
+    '.mobi',
+    '.azw3',
+    '.md',
+    '.yaml',
+    '.yml',
+    '.ts',
+    '.mjs',
+    '.map',
+  ];
 
   bool get isSvg {
     final contentType =
