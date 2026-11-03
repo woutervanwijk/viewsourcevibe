@@ -25,8 +25,16 @@ class ResourceSize {
     this.services = const [],
   });
 
-  /// Uncompressed size, falling back to transfer size when unknown.
-  int get size => decoded > 0 ? decoded : transfer;
+  /// Size used for display, sorting and totals.
+  ///
+  /// For images the transfer size is the actual file size: WebKit (iOS)
+  /// reports decodedBodySize for images as the decoded pixel buffer
+  /// (width*height*4), which is megabytes even for small thumbnails.
+  /// For other resources prefer the decoded (uncompressed) size, falling
+  /// back to transfer size when unknown.
+  int get size => type == 'image'
+      ? (transfer > 0 ? transfer : decoded)
+      : (decoded > 0 ? decoded : transfer);
 
   /// Last path segment, or the host for root URLs.
   String get fileName {

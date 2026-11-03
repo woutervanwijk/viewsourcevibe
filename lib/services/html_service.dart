@@ -1743,6 +1743,52 @@ class HtmlService extends ChangeNotifier {
     return false;
   }
 
+  /// Query params that don't change the resource content (cache-busters).
+  static const _cacheBusterParams = {
+    'v',
+    'ver',
+    'version',
+    't',
+    'ts',
+    'timestamp',
+    'hash',
+    '_',
+    'cache',
+    'cachebuster',
+    'cb',
+    'nocache',
+    'rev',
+    'revision',
+  };
+
+  /// Query string with cache-busting params removed, sorted for comparison.
+  static String _queryWithoutCacheBusters(Uri uri) {
+    final params = Map<String, String>.from(uri.queryParameters);
+    params.removeWhere(
+        (key, _) => _cacheBusterParams.contains(key.toLowerCase()));
+    final keys = params.keys.toList()..sort();
+    return keys.map((k) => '$k=${params[k]}').join('&');
+  }
+
+  /// True when [url1] and [url2] point to the same resource: same host and
+  /// path, and query params equal after dropping cache-busters. CDN
+  /// versioning (`?v=1` vs `?v=2`) still matches, but content-changing params
+  /// such as image resize options (`?width=112` vs `?width=264` or none)
+  /// never do.
+  static bool sameResourceModuloCacheBusters(String url1, String url2) {
+    if (url1 == url2) return true;
+    try {
+      final uri1 = Uri.parse(url1);
+      final uri2 = Uri.parse(url2);
+      if (uri1.host.toLowerCase() != uri2.host.toLowerCase()) return false;
+      if (uri1.path != uri2.path) return false;
+      return _queryWithoutCacheBusters(uri1) ==
+          _queryWithoutCacheBusters(uri2);
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Helper to check if two URLs are effectively the same
   /// ignoring trailing slashes, fragments, and minor scheme differences
   bool areUrlsEqual(String url1, String url2) {
@@ -3871,18 +3917,17 @@ Technical details: $e''';
         }
       } catch (_) {}
 
-      // Tier 3: Path-only match (ignore query params — common with CDN versioning)
+      // Tier 3: Same host+path, query equal modulo cache-busters (CDN
+      // versioning like ?v=2 still matches). Content-changing params such as
+      // image resize options (?width=112 vs ?width=264 or none) must NOT
+      // match: they serve different bytes (e.g. thumbnail vs full original).
       try {
         final srcPath = Uri.parse(src).path;
         if (srcPath.length > 3) {
-          match = _resourcePerformanceData!.firstWhere((r) {
-            try {
-              final rPath = Uri.parse(r['name'].toString()).path;
-              return rPath == srcPath;
-            } catch (_) {
-              return false;
-            }
-          }, orElse: () => {});
+          match = _resourcePerformanceData!.firstWhere(
+            (r) => sameResourceModuloCacheBusters(src, r['name'].toString()),
+            orElse: () => {},
+          );
           if (match.isNotEmpty) {
             return {
               'transfer': match['transfer'] as int,
@@ -3892,15 +3937,23 @@ Technical details: $e''';
         }
       } catch (_) {}
 
-      // Tier 4: Strict filename suffix match
+      // Tier 4: Strict filename suffix match, same query modulo cache-busters.
       // Requires the filename to be preceded by '/' so "chunk.js"
       // does NOT match "vendor-chunk.js"
       try {
         final srcFileName = Uri.parse(src).path.split('/').last;
+        final srcQuery = _queryWithoutCacheBusters(Uri.parse(src));
         if (srcFileName.length > 4) {
           match = _resourcePerformanceData!.firstWhere((r) {
             final rName = r['name'].toString();
-            return rName.endsWith('/$srcFileName') || rName == srcFileName;
+            if (!(rName.endsWith('/$srcFileName') || rName == srcFileName)) {
+              return false;
+            }
+            try {
+              return _queryWithoutCacheBusters(Uri.parse(rName)) == srcQuery;
+            } catch (_) {
+              return false;
+            }
           }, orElse: () => {});
           if (match.isNotEmpty) {
             return {
@@ -4932,31 +4985,19 @@ Technical details: $e''';
   }
 
   Future<int> _fetchResourceSize(String url) async {
+    final client = http.Client();
     try {
-      final client = http.Client();
       final uri = Uri.parse(url);
       final headers = {
         'User-Agent':
             'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
       };
 
-      // 1. Try HEAD request first
-      try {
-        final headResponse = await client
-            .head(uri, headers: headers)
-            .timeout(const Duration(seconds: 5));
-        if (headResponse.statusCode >= 200 && headResponse.statusCode < 400) {
-          final contentLength = headResponse.headers['content-length'];
-          if (contentLength != null) {
-            final size = int.tryParse(contentLength);
-            if (size != null && size > 0) return size;
-          }
-        }
-      } catch (e) {
-        // Fallback to Streamed GET if HEAD fails or times out
-      }
-
-      // 2. Fallback to Streamed GET request
+      // 1. Ranged GET first: this runs the same GET pipeline as the browser,
+      //    so query-param transforms on image CDNs (?width=...&height=...)
+      //    are applied and content-range/content-length reflect the bytes a
+      //    browser actually downloads. HEAD can be answered with the
+      //    untransformed origin object's size instead.
       try {
         final request = http.Request('GET', uri);
         request.headers.addAll(headers);
@@ -4970,7 +5011,6 @@ Technical details: $e''';
 
         // Immediately drain the body so we don't hold the connection
         streamedResponse.stream.listen((_) {}).cancel();
-        client.close();
 
         if (streamedResponse.statusCode >= 200 &&
             streamedResponse.statusCode < 400) {
@@ -4988,10 +5028,28 @@ Technical details: $e''';
           }
         }
       } catch (e) {
-        client.close();
+        // Fallback to HEAD if the ranged GET fails or times out
+      }
+
+      // 2. Fallback to HEAD request
+      try {
+        final headResponse = await client
+            .head(uri, headers: headers)
+            .timeout(const Duration(seconds: 5));
+        if (headResponse.statusCode >= 200 && headResponse.statusCode < 400) {
+          final contentLength = headResponse.headers['content-length'];
+          if (contentLength != null) {
+            final size = int.tryParse(contentLength);
+            if (size != null && size > 0) return size;
+          }
+        }
+      } catch (e) {
+        // ignore
       }
     } catch (e) {
       debugPrint('Error getting resource size for \$url: \$e');
+    } finally {
+      client.close();
     }
     return 0;
   }
