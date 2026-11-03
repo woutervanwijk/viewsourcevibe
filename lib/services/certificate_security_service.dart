@@ -85,13 +85,11 @@ class CertificateSecurityService {
     try {
       return await operation();
     } on HandshakeException catch (e) {
-      final accepted =
-          await requestTrustForHost(host, _extractCertificate(e));
+      final accepted = await requestTrustForHost(host, _extractCertificate(e));
       if (!accepted) rethrow;
       return await operation();
     } on CertificateException catch (e) {
-      final accepted =
-          await requestTrustForHost(host, _extractCertificate(e));
+      final accepted = await requestTrustForHost(host, _extractCertificate(e));
       if (!accepted) rethrow;
       return await operation();
     }

@@ -21,8 +21,9 @@ class ProbeService {
       client = httpClient;
       client.badCertificateCallback =
           (X509Certificate cert, String host, int port) {
-        final trusted = CertificateSecurityService
-            .defaultBadCertificateCallback(cert, host, port);
+        final trusted =
+            CertificateSecurityService.defaultBadCertificateCallback(
+                cert, host, port);
         if (trusted) acceptedInvalidCertificate = true;
         return trusted;
       };
@@ -207,7 +208,40 @@ class ProbeService {
     return '-----BEGIN CERTIFICATE-----\n${chunks.join('\n')}\n-----END CERTIFICATE-----';
   }
 
+  static const _typesByExtension = {
+    'script': ['js', 'mjs', 'cjs'],
+    'style': ['css'],
+    'image': [
+      'png', 'jpg', 'jpeg', 'jfif', 'pjpeg', 'gif', 'webp', 'svg', 'ico', //
+      'avif', 'bmp', 'apng', 'tif', 'tiff', 'heic', 'heif',
+      'mp4', 'webm', 'mov', 'm4v', 'ogv', 'mp3', 'ogg', 'wav', 'm4a', 'aac',
+    ],
+    'font': ['woff', 'woff2', 'ttf', 'otf', 'eot'],
+    'document': ['html', 'htm', 'xhtml'],
+  };
+
+  /// Resource type from the URL path's file extension (query and fragment
+  /// ignored): script, style, image (incl. audio/video), font or document.
+  /// Null when the extension is missing or unknown.
+  static String? resourceTypeFromExtension(String url) {
+    final path = (Uri.tryParse(url)?.path ?? url.split(RegExp('[?#]')).first)
+        .toLowerCase();
+    final lastSegment = path.substring(path.lastIndexOf('/') + 1);
+    final dot = lastSegment.lastIndexOf('.');
+    if (dot < 0) return null;
+    final ext = lastSegment.substring(dot + 1);
+    for (final MapEntry(:key, :value) in _typesByExtension.entries) {
+      if (value.contains(ext)) return key;
+    }
+    return null;
+  }
+
   static String categorizeResource(String name, String pageUrl) {
+    final byExtension = resourceTypeFromExtension(name);
+    if (byExtension != null) {
+      return byExtension == 'font' ? 'other' : byExtension;
+    }
+
     name = name.toLowerCase();
     pageUrl = pageUrl.toLowerCase();
 

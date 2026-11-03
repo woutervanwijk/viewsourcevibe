@@ -159,10 +159,11 @@ class SharedContentManager {
           }
         } else {
           // Check if we have file content directly (from Android)
-          if (channelSharedData['type'] == 'file' && 
+          if (channelSharedData['type'] == 'file' &&
               channelSharedData.containsKey('content') &&
               channelSharedData['content'] != null) {
-            debugPrint('SharedContentManager: Android provided file content directly');
+            debugPrint(
+                'SharedContentManager: Android provided file content directly');
             final sharedDataFromChannel = {
               'type': 'file',
               'fileBytes': utf8.encode(channelSharedData['content'] as String),
