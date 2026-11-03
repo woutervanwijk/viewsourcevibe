@@ -64,11 +64,10 @@ class SettingsScreen extends StatelessWidget {
                           AppSettings.getBaseThemeName(settings.themeName))
                       .description,
                   control: _valueControl(
-                    AppSettings.isThemePair(AppSettings.getBaseThemeName(
-                            settings.themeName))
+                    AppSettings.isThemePair(
+                            AppSettings.getBaseThemeName(settings.themeName))
                         ? '${AppSettings.getThemeMetadata(AppSettings.getBaseThemeName(settings.themeName)).name} (Auto)'
-                        : AppSettings.getThemeMetadata(settings.themeName)
-                            .name,
+                        : AppSettings.getThemeMetadata(settings.themeName).name,
                   ),
                   onTap: () => _showThemeDialog(context, settings),
                 ),
@@ -132,8 +131,7 @@ class SettingsScreen extends StatelessWidget {
                       'Load pages in browser immediately. Disable to load source via Curl first (the more pure loading option to see e.g. cookie walls, etc. and when sites block Curl requests)',
                   control: Switch(
                     value: settings.useBrowserByDefault,
-                    onChanged: (value) =>
-                        settings.useBrowserByDefault = value,
+                    onChanged: (value) => settings.useBrowserByDefault = value,
                   ),
                 ),
                 _settingsTile(

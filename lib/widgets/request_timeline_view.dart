@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/utils/format_utils.dart';
 
 class RequestTimelineView extends StatelessWidget {
@@ -645,6 +646,9 @@ class RequestTimelineView extends StatelessWidget {
   }
 
   String _resourceType(String name) {
+    final byExtension = ProbeService.resourceTypeFromExtension(name);
+    if (byExtension != null) return byExtension;
+
     final lower = name.toLowerCase();
     if (lower.endsWith('.js') || lower.contains('.js?')) return 'script';
     if (lower.endsWith('.css') || lower.contains('.css?')) return 'style';

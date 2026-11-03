@@ -65,6 +65,17 @@ void main() {
     expect(result.last.services, isEmpty);
   });
 
+  test('infers type from the extension, ignoring query strings', () {
+    final result = resourcesBySize([
+      {'name': 'https://x.com/photo.jpg?w=400', 'transfer': 5, 'decoded': 5},
+      {'name': 'https://x.com/img/stylish.webp', 'transfer': 4, 'decoded': 4},
+      {'name': 'https://x.com/app.mjs#v2', 'transfer': 3, 'decoded': 3},
+      {'name': 'https://x.com/font.woff2', 'transfer': 2, 'decoded': 2},
+    ], page);
+
+    expect(result.map((r) => r.type), ['image', 'image', 'script', 'other']);
+  });
+
   group('ResourceSize', () {
     test('fileName uses last path segment or host', () {
       ResourceSize r(String url) =>

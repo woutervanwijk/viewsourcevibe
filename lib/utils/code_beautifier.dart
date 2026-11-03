@@ -14,9 +14,12 @@ String _beautifyEntry(BeautifyRequest request) {
 
 class CodeBeautifier {
   static Future<String> beautifyAsync(String content, String type) async {
-    debugPrint('CodeBeautifier: Starting beautification for ${type.toUpperCase()}, content length: ${content.length}');
-    final result = await compute(_beautifyEntry, BeautifyRequest(content, type));
-    debugPrint('CodeBeautifier: Completed beautification for ${type.toUpperCase()}, result length: ${result.length}');
+    debugPrint(
+        'CodeBeautifier: Starting beautification for ${type.toUpperCase()}, content length: ${content.length}');
+    final result =
+        await compute(_beautifyEntry, BeautifyRequest(content, type));
+    debugPrint(
+        'CodeBeautifier: Completed beautification for ${type.toUpperCase()}, result length: ${result.length}');
     return result;
   }
 
@@ -26,7 +29,8 @@ class CodeBeautifier {
     // Safety limits to prevent memory issues and crashes
     const maxSafeLength = 10 * 1024 * 1024; // 10MB
     if (content.length > maxSafeLength) {
-      debugPrint('CodeBeautifier: Content too large (${content.length} chars), skipping beautification');
+      debugPrint(
+          'CodeBeautifier: Content too large (${content.length} chars), skipping beautification');
       return content;
     }
 
@@ -50,11 +54,12 @@ class CodeBeautifier {
           return content;
       }
 
-      // Fallback: if beautification failed for any reason and returned empty, 
+      // Fallback: if beautification failed for any reason and returned empty,
       // but the original wasn't empty, return the original.
       return result.isEmpty ? content : result;
     } catch (e, stackTrace) {
-      debugPrint('CodeBeautifier: Error during beautification: $e\n$stackTrace');
+      debugPrint(
+          'CodeBeautifier: Error during beautification: $e\n$stackTrace');
       // Return original content if beautification fails
       return content;
     }
@@ -62,16 +67,16 @@ class CodeBeautifier {
 
   static String _beautifyHtml(String html) {
     if (html.isEmpty) return html;
-    
+
     // Safety checks for malformed content
     const maxTokens = 100000; // Prevent excessive processing
     const maxOutputLength = 20 * 1024 * 1024; // 20MB output limit
-    
+
     final buffer = StringBuffer();
-    var indent = 0; 
+    var indent = 0;
     var tokenCount = 0;
-    
-    // More robust regex: 
+
+    // More robust regex:
     // 1. Matches tags: <...>
     // 2. Matches text: everything until next <
     // 3. Matches a stray < if it's not starting a tag (though tags part usually catches it)
@@ -81,18 +86,20 @@ class CodeBeautifier {
       // Safety: prevent excessive processing
       tokenCount++;
       if (tokenCount > maxTokens) {
-        debugPrint('CodeBeautifier: Too many tokens ($tokenCount), aborting beautification');
+        debugPrint(
+            'CodeBeautifier: Too many tokens ($tokenCount), aborting beautification');
         return html; // Return original if too complex
       }
-      
+
       // Safety: prevent excessive output size
       if (buffer.length > maxOutputLength) {
-        debugPrint('CodeBeautifier: Output too large (${buffer.length} chars), aborting beautification');
+        debugPrint(
+            'CodeBeautifier: Output too large (${buffer.length} chars), aborting beautification');
         return html; // Return original if output gets too large
       }
-      
+
       final value = token.group(0)!;
-      
+
       try {
         if (value.startsWith('</')) {
           indent = (indent - 1).clamp(0, 50);
@@ -103,11 +110,25 @@ class CodeBeautifier {
             !value.startsWith('<!') &&
             !value.startsWith('<!--') &&
             !value.startsWith('<?')) {
-          
           final tagNameMatch = RegExp(r'<([a-zA-Z0-9]+)').firstMatch(value);
           final tagName = tagNameMatch?.group(1)?.toLowerCase();
-          final selfClosing =
-              {'br', 'hr', 'img', 'input', 'link', 'meta', 'area', 'base', 'col', 'embed', 'keygen', 'param', 'source', 'track', 'wbr'}.contains(tagName);
+          final selfClosing = {
+            'br',
+            'hr',
+            'img',
+            'input',
+            'link',
+            'meta',
+            'area',
+            'base',
+            'col',
+            'embed',
+            'keygen',
+            'param',
+            'source',
+            'track',
+            'wbr'
+          }.contains(tagName);
 
           if (buffer.isNotEmpty) buffer.write('\n');
           buffer.write('${'  ' * indent}$value');
@@ -128,31 +149,33 @@ class CodeBeautifier {
         continue;
       }
     }
-    
+
     // Final safety check
     final result = buffer.toString().trim();
     if (result.length > maxOutputLength) {
-      debugPrint('CodeBeautifier: Final output too large (${result.length} chars), returning original');
+      debugPrint(
+          'CodeBeautifier: Final output too large (${result.length} chars), returning original');
       return html;
     }
-    
+
     return result;
   }
 
   static String _beautifyCss(String css) {
     if (css.isEmpty) return css;
-    
+
     // Safety limits
     const maxLength = 5 * 1024 * 1024; // 5MB
     if (css.length > maxLength) {
-      debugPrint('CodeBeautifier: CSS content too large (${css.length} chars), skipping beautification');
+      debugPrint(
+          'CodeBeautifier: CSS content too large (${css.length} chars), skipping beautification');
       return css;
     }
-    
+
     try {
       final buffer = StringBuffer();
-      var indent = 0; 
-      
+      var indent = 0;
+
       // Simple normalization: collapse whitespace but keep content
       final normalized = css.replaceAll(RegExp(r'\s+'), ' ');
 
@@ -170,10 +193,11 @@ class CodeBeautifier {
         } else {
           buffer.write(char);
         }
-        
+
         // Safety: prevent excessive output
         if (buffer.length > maxLength) {
-          debugPrint('CodeBeautifier: CSS output too large (${buffer.length} chars), aborting');
+          debugPrint(
+              'CodeBeautifier: CSS output too large (${buffer.length} chars), aborting');
           return css;
         }
       }
@@ -186,14 +210,15 @@ class CodeBeautifier {
 
   static String _beautifyJs(String js) {
     if (js.isEmpty) return js;
-    
+
     // Safety limits
     const maxLength = 5 * 1024 * 1024; // 5MB
     if (js.length > maxLength) {
-      debugPrint('CodeBeautifier: JS content too large (${js.length} chars), skipping beautification');
+      debugPrint(
+          'CodeBeautifier: JS content too large (${js.length} chars), skipping beautification');
       return js;
     }
-    
+
     try {
       final buffer = StringBuffer();
       var indent = 0;
@@ -230,10 +255,11 @@ class CodeBeautifier {
         } else {
           buffer.write(char);
         }
-        
+
         // Safety: prevent excessive output
         if (buffer.length > maxLength) {
-          debugPrint('CodeBeautifier: JS output too large (${buffer.length} chars), aborting');
+          debugPrint(
+              'CodeBeautifier: JS output too large (${buffer.length} chars), aborting');
           return js;
         }
       }

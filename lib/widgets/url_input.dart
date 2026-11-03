@@ -34,17 +34,17 @@ class _UrlInputState extends State<UrlInput> {
     if (path.startsWith('file://')) {
       path = path.replaceFirst('file://', '');
     }
-    
+
     // Handle Windows paths (C:\path\to\file)
     if (path.contains('\\') || path.contains(':\\')) {
       return path.split(RegExp(r'[\\/]')).last;
     }
-    
+
     // Handle Unix paths (/path/to/file)
     if (path.startsWith('/')) {
       return path.split('/').last;
     }
-    
+
     // If it's already just a filename, return as-is
     return path;
   }
@@ -74,7 +74,8 @@ class _UrlInputState extends State<UrlInput> {
               _urlController.text = htmlService.currentFile!.path;
             } else {
               // For local files, show only the filename without the full path
-              _urlController.text = _getDisplayNameForPath(htmlService.currentFile!.name);
+              _urlController.text =
+                  _getDisplayNameForPath(htmlService.currentFile!.name);
             }
           }
         }
@@ -111,9 +112,10 @@ class _UrlInputState extends State<UrlInput> {
         await htmlService.reloadCurrentFile();
       } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
         // Handle local file paths - try to find the full path from history
-        final historyService = Provider.of<UrlHistoryService?>(context, listen: false);
+        final historyService =
+            Provider.of<UrlHistoryService?>(context, listen: false);
         final history = historyService?.history ?? [];
-        
+
         // Find the full path that matches this filename
         String? fullPath;
         for (final entry in history) {
@@ -125,7 +127,7 @@ class _UrlInputState extends State<UrlInput> {
             }
           }
         }
-        
+
         if (fullPath != null) {
           // Load the file using the full path
           try {
@@ -147,7 +149,7 @@ class _UrlInputState extends State<UrlInput> {
             debugPrint('Error loading local file: $e');
           }
         }
-        
+
         // If we can't find the file, fall back to URL loading
         await htmlService.loadFromUrl(
           url,
@@ -211,8 +213,9 @@ class _UrlInputState extends State<UrlInput> {
           behavior: HitTestBehavior.opaque,
           onTap: () {
             // Hide keyboard on mobile when tapping outside the text field
-            if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || 
-                        defaultTargetPlatform == TargetPlatform.android)) {
+            if (!kIsWeb &&
+                (defaultTargetPlatform == TargetPlatform.iOS ||
+                    defaultTargetPlatform == TargetPlatform.android)) {
               SystemChannels.textInput.invokeMethod('TextInput.hide');
             }
             // Also unfocus for consistency
@@ -225,155 +228,163 @@ class _UrlInputState extends State<UrlInput> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: RawAutocomplete<String>(
-                      textEditingController: _urlController,
-                      focusNode: _focusNode,
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        final historyService = Provider.of<UrlHistoryService?>(
-                          context,
-                          listen: false,
-                        );
-                        final history = historyService?.history ?? [];
-
-                        if (textEditingValue.text.isEmpty) {
-                          return history;
-                        }
-                        return history.where((String option) {
-                          return option.toLowerCase().contains(
-                                textEditingValue.text.toLowerCase(),
-                              );
-                        });
-                      },
-                      onSelected: (String selection) {
-                        // For local files, use just the filename in the URL bar
-                        final isUrl = selection.startsWith('http://') || selection.startsWith('https://');
-                        _urlController.text = isUrl ? selection : selection.split(RegExp(r'[/\\]')).last;
-                        // Hide keyboard on mobile after selection
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) {
-                            if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || 
-                                        defaultTargetPlatform == TargetPlatform.android)) {
-                              SystemChannels.textInput.invokeMethod('TextInput.hide');
-                            }
-                            FocusScope.of(context).unfocus();
-                          }
-                        });
-                      },
-                      fieldViewBuilder:
-                          (context, controller, focusNode, onFieldSubmitted) {
-                        return KeyboardListener(
-                          focusNode: FocusNode(skipTraversal: true),
-                          onKeyEvent: (event) {
-                            if (event is KeyDownEvent) {
-                              if (event.logicalKey ==
-                                      LogicalKeyboardKey.arrowDown ||
-                                  event.logicalKey ==
-                                      LogicalKeyboardKey.arrowUp) {
-                                if (!_userHasNavigated) {
-                                  setState(() {
-                                    _userHasNavigated = true;
-                                  });
-                                }
-                              }
-                            }
-                          },
-                          child: TextField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            decoration: InputDecoration(
-                              hintText: structure.currentFile != null &&
-                                      structure.currentFile!.isUrl
-                                  ? ''
-                                  : structure.currentFile != null
-                                      ? 'Local file loaded: ${_getDisplayNameForPath(structure.currentFile!.name)}'
-                                      : '',
-                              prefixIcon: IconButton(
-                                icon: const Icon(Icons.link, size: 20),
-                                tooltip: 'Reload',
-                                onPressed: () {
-                                  _loadUrl(
-                                    switchToTab: structure.activeTabIndex,
-                                  );
-                                },
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              suffixIcon: _UrlInputProgress(
-                                  htmlService: htmlService,
-                                  controller: _urlController),
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 10,
-                                horizontal: 12,
-                              ),
-                              isDense: true,
-                            ),
-                            keyboardType: TextInputType.url,
-                            textInputAction: TextInputAction.go,
-                            onSubmitted: (value) {
-                              if (_userHasNavigated) {
-                                onFieldSubmitted();
-                              }
-
-                              _loadUrl(); // stay on the current tab
-                            },
-                          ),
-                        );
-                      },
-                      optionsViewBuilder: (context, onSelected, options) {
-                        return _AutocompleteOptions(
-                          displayStringForOption: (option) => option,
-                          onSelected: onSelected,
-                          onOptionTap: () => _loadUrl(),
-                          options: options,
-                          maxOptionsHeight: 200,
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              if (_errorMessage.isNotEmpty ||
-                  (structure.currentFile?.isError ?? false)) ...[
-                const SizedBox(height: 4),
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        _errorMessage.isNotEmpty
-                            ? _errorMessage
-                            : 'Load failed. See details below.',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontSize: 11,
-                        ),
+                      child: RawAutocomplete<String>(
+                        textEditingController: _urlController,
+                        focusNode: _focusNode,
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          final historyService =
+                              Provider.of<UrlHistoryService?>(
+                            context,
+                            listen: false,
+                          );
+                          final history = historyService?.history ?? [];
+
+                          if (textEditingValue.text.isEmpty) {
+                            return history;
+                          }
+                          return history.where((String option) {
+                            return option.toLowerCase().contains(
+                                  textEditingValue.text.toLowerCase(),
+                                );
+                          });
+                        },
+                        onSelected: (String selection) {
+                          // For local files, use just the filename in the URL bar
+                          final isUrl = selection.startsWith('http://') ||
+                              selection.startsWith('https://');
+                          _urlController.text = isUrl
+                              ? selection
+                              : selection.split(RegExp(r'[/\\]')).last;
+                          // Hide keyboard on mobile after selection
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              if (!kIsWeb &&
+                                  (defaultTargetPlatform ==
+                                          TargetPlatform.iOS ||
+                                      defaultTargetPlatform ==
+                                          TargetPlatform.android)) {
+                                SystemChannels.textInput
+                                    .invokeMethod('TextInput.hide');
+                              }
+                              FocusScope.of(context).unfocus();
+                            }
+                          });
+                        },
+                        fieldViewBuilder:
+                            (context, controller, focusNode, onFieldSubmitted) {
+                          return KeyboardListener(
+                            focusNode: FocusNode(skipTraversal: true),
+                            onKeyEvent: (event) {
+                              if (event is KeyDownEvent) {
+                                if (event.logicalKey ==
+                                        LogicalKeyboardKey.arrowDown ||
+                                    event.logicalKey ==
+                                        LogicalKeyboardKey.arrowUp) {
+                                  if (!_userHasNavigated) {
+                                    setState(() {
+                                      _userHasNavigated = true;
+                                    });
+                                  }
+                                }
+                              }
+                            },
+                            child: TextField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              decoration: InputDecoration(
+                                hintText: structure.currentFile != null &&
+                                        structure.currentFile!.isUrl
+                                    ? ''
+                                    : structure.currentFile != null
+                                        ? 'Local file loaded: ${_getDisplayNameForPath(structure.currentFile!.name)}'
+                                        : '',
+                                prefixIcon: IconButton(
+                                  icon: const Icon(Icons.link, size: 20),
+                                  tooltip: 'Reload',
+                                  onPressed: () {
+                                    _loadUrl(
+                                      switchToTab: structure.activeTabIndex,
+                                    );
+                                  },
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                suffixIcon: _UrlInputProgress(
+                                    htmlService: htmlService,
+                                    controller: _urlController),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                  horizontal: 12,
+                                ),
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.url,
+                              textInputAction: TextInputAction.go,
+                              onSubmitted: (value) {
+                                if (_userHasNavigated) {
+                                  onFieldSubmitted();
+                                }
+
+                                _loadUrl(); // stay on the current tab
+                              },
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return _AutocompleteOptions(
+                            displayStringForOption: (option) => option,
+                            onSelected: onSelected,
+                            onOptionTap: () => _loadUrl(),
+                            options: options,
+                            maxOptionsHeight: 200,
+                          );
+                        },
                       ),
                     ),
-                    if (!kIsWeb)
-                      TextButton.icon(
-                        icon: const Icon(Icons.language, size: 14),
-                        label: const Text(
-                          'Try in Browser Tab',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                        onPressed: _loadViaWebView,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                      ),
                   ],
                 ),
+                if (_errorMessage.isNotEmpty ||
+                    (structure.currentFile?.isError ?? false)) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _errorMessage.isNotEmpty
+                              ? _errorMessage
+                              : 'Load failed. See details below.',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      if (!kIsWeb)
+                        TextButton.icon(
+                          icon: const Icon(Icons.language, size: 14),
+                          label: const Text(
+                            'Try in Browser Tab',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          onPressed: _loadViaWebView,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
   }
 }
 

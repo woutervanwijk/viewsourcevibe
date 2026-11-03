@@ -17,6 +17,10 @@ const _typeFilters = <(String?, String)>[
   ('other', 'Misc. Resources'),
 ];
 
+/// Images/Media files that can't be shown as a thumbnail.
+final _audioVideoPath =
+    RegExp(r'\.(mp4|webm|mov|m4v|ogv|mp3|ogg|wav|m4a|aac)$');
+
 /// Page size/weight: totals, a per-type breakdown and every loaded
 /// file/asset sorted by size.
 class PageSizeView extends StatefulWidget {
@@ -329,7 +333,10 @@ class _PageSizeViewState extends State<PageSizeView>
                     color: resource.isPage ? scheme.primary : scheme.secondary),
               ),
               const SizedBox(width: 8),
-              if (resource.type == 'image') ...[
+              if (resource.type == 'image' &&
+                  !_audioVideoPath.hasMatch(
+                      Uri.tryParse(resource.url)?.path.toLowerCase() ??
+                          '')) ...[
                 _buildThumbnail(context, resource.url),
                 const SizedBox(width: 8),
               ],

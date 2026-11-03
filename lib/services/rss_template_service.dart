@@ -57,22 +57,25 @@ class RssTemplateService {
   static bool _isRssFeedInternal(String content) {
     try {
       // Safety check for extremely large content
-      if (content.length > 10 * 1024 * 1024) { // 10MB
-        debugPrint('RssTemplateService: Content too large for XML parsing (${content.length} chars)');
+      if (content.length > 10 * 1024 * 1024) {
+        // 10MB
+        debugPrint(
+            'RssTemplateService: Content too large for XML parsing (${content.length} chars)');
         return false;
       }
-      
+
       final doc = XmlDocument.parse(content);
       return doc.findElements('rss').isNotEmpty ||
           doc.findAllElements('channel').isNotEmpty ||
           doc.findElements('feed').isNotEmpty ||
           doc.findElements('rdf:RDF').isNotEmpty;
     } catch (e) {
-      debugPrint('RssTemplateService: XML parsing failed for feed detection: $e');
+      debugPrint(
+          'RssTemplateService: XML parsing failed for feed detection: $e');
       // If it looks like a feed but doesn't parse as XML, it might be malformed but we still try
       // Only return true if it actually contains feed-like tags
-      return content.contains('<rss') || 
-          content.contains('<feed') || 
+      return content.contains('<rss') ||
+          content.contains('<feed') ||
           content.contains('<rdf:RDF') ||
           content.contains('<channel') ||
           content.contains('<item');
@@ -95,18 +98,20 @@ class RssTemplateService {
 
     try {
       // Safety check for extremely large content
-      if (xmlContent.length > 10 * 1024 * 1024) { // 10MB
-        debugPrint('RssTemplateService: Content too large for RSS conversion (${xmlContent.length} chars)');
+      if (xmlContent.length > 10 * 1024 * 1024) {
+        // 10MB
+        debugPrint(
+            'RssTemplateService: Content too large for RSS conversion (${xmlContent.length} chars)');
         return _renderError('Feed content is too large to process');
       }
-      
+
       // Safety check for empty content
       final trimmedContent = xmlContent.trim();
       if (trimmedContent.isEmpty) {
         debugPrint('RssTemplateService: Empty content provided');
         return _renderError('Feed content is empty');
       }
-      
+
       try {
         final document = XmlDocument.parse(trimmedContent);
 
@@ -123,16 +128,19 @@ class RssTemplateService {
         } else {
           // Try regex fallback even if XML parse succeeded but structure wasn't found
           // (Unlikely, but possible for some weird XML)
-          debugPrint('RssTemplateService: No feed structure found in parsed XML, using regex fallback');
+          debugPrint(
+              'RssTemplateService: No feed structure found in parsed XML, using regex fallback');
           return _parseWithRegex(xmlContent, feedUrl);
         }
       } catch (e) {
-        debugPrint('RssTemplateService: XML parsing failed for feed conversion: $e');
+        debugPrint(
+            'RssTemplateService: XML parsing failed for feed conversion: $e');
         // XML Parse failed, use Regex Fallback
         return _parseWithRegex(xmlContent, feedUrl);
       }
     } catch (e, stackTrace) {
-      debugPrint('RssTemplateService: Unexpected error in feed conversion: $e\n$stackTrace');
+      debugPrint(
+          'RssTemplateService: Unexpected error in feed conversion: $e\n$stackTrace');
       // Final fallback for any unexpected errors
       return _renderError('Failed to process feed: ${e.toString()}');
     }
@@ -320,14 +328,16 @@ class RssTemplateService {
   static String _parseWithRegex(String content, String feedUrl) {
     try {
       // Safety check for extremely large content
-      if (content.length > 10 * 1024 * 1024) { // 10MB
-        debugPrint('RssTemplateService: Content too large for regex parsing (${content.length} chars)');
+      if (content.length > 10 * 1024 * 1024) {
+        // 10MB
+        debugPrint(
+            'RssTemplateService: Content too large for regex parsing (${content.length} chars)');
         return _renderError('Feed content is too large to process');
       }
 
       // 1. Basic Metadata
-      final titleMatch =
-          RegExp(r'<title[^>]*>(.*?)</title>', dotAll: true).firstMatch(content);
+      final titleMatch = RegExp(r'<title[^>]*>(.*?)</title>', dotAll: true)
+          .firstMatch(content);
 
       // Link: Find all link tags, pick the best one
       String link = feedUrl;
@@ -364,12 +374,14 @@ class RssTemplateService {
       final title = titleMatch?.group(1) != null
           ? _cleanXmlText(titleMatch!.group(1)!)
           : 'Untitled Feed';
-      final description =
-          descMatch?.group(2) != null ? _cleanXmlText(descMatch!.group(2)!) : '';
+      final description = descMatch?.group(2) != null
+          ? _cleanXmlText(descMatch!.group(2)!)
+          : '';
 
       // Logo/Icon
-      final imageMatch = RegExp(r'<(logo|icon|url)[^>]*>(.*?)</\1>', dotAll: true)
-          .firstMatch(content);
+      final imageMatch =
+          RegExp(r'<(logo|icon|url)[^>]*>(.*?)</\1>', dotAll: true)
+              .firstMatch(content);
       final image = imageMatch?.group(2)?.trim();
 
       // 2. Identify Item Blocks (item or entry)
@@ -384,10 +396,11 @@ class RssTemplateService {
       var itemCount = 0;
       for (final match in matches) {
         if (itemCount >= maxItems) {
-          debugPrint('RssTemplateService: Too many items ($itemCount), limiting to $maxItems');
+          debugPrint(
+              'RssTemplateService: Too many items ($itemCount), limiting to $maxItems');
           break;
         }
-        
+
         final itemContent = match.group(2) ?? '';
         items.add(_parseItemRegex(itemContent));
         itemCount++;
@@ -401,7 +414,8 @@ class RssTemplateService {
 
       return _generateHtml(title, description, link, image, items, type);
     } catch (e, stackTrace) {
-      debugPrint('RssTemplateService: Error in regex parsing fallback: $e\n$stackTrace');
+      debugPrint(
+          'RssTemplateService: Error in regex parsing fallback: $e\n$stackTrace');
       return _renderError('Failed to parse feed: ${e.toString()}');
     }
   }
@@ -409,8 +423,10 @@ class RssTemplateService {
   static Map<String, String> _parseItemRegex(String content) {
     try {
       // Safety check for extremely large item content
-      if (content.length > 1 * 1024 * 1024) { // 1MB per item
-        debugPrint('RssTemplateService: Item content too large (${content.length} chars)');
+      if (content.length > 1 * 1024 * 1024) {
+        // 1MB per item
+        debugPrint(
+            'RssTemplateService: Item content too large (${content.length} chars)');
         return {
           'title': 'Item content too large',
           'link': '#',
@@ -468,15 +484,17 @@ class RssTemplateService {
 
       // Media thumbnail/content
       if (image == null) {
-        final mediaMatch = RegExp(r'<media:(content|thumbnail)[^>]+url="([^"]+)"')
-            .firstMatch(content);
+        final mediaMatch =
+            RegExp(r'<media:(content|thumbnail)[^>]+url="([^"]+)"')
+                .firstMatch(content);
         if (mediaMatch != null) image = mediaMatch.group(2);
       }
 
       // HTML image fallback
       if (image == null) {
         final fullText = (contentText ?? '') + (description ?? '');
-        final imgMatch = RegExp(r'<img[^>]+src="([^">]+)"').firstMatch(fullText);
+        final imgMatch =
+            RegExp(r'<img[^>]+src="([^">]+)"').firstMatch(fullText);
         if (imgMatch != null) image = imgMatch.group(1);
       }
 
