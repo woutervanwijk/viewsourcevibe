@@ -1,3 +1,4 @@
+import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
 
 /// One loaded file/asset with the sizes reported by the browser.
@@ -9,11 +10,19 @@ class ResourceSize {
   /// One of: script, style, image, document, other.
   final String type;
 
+  /// The HTML document of the inspected page itself.
+  final bool isPage;
+
+  /// Third-party services this file is loaded from.
+  final List<Entity> services;
+
   const ResourceSize({
     required this.url,
     required this.transfer,
     required this.decoded,
     required this.type,
+    this.isPage = false,
+    this.services = const [],
   });
 
   /// Uncompressed size, falling back to transfer size when unknown.
@@ -28,7 +37,22 @@ class ResourceSize {
     return uri.host.isNotEmpty ? uri.host : url;
   }
 
+  /// File name of the page document, `index` for root URLs.
+  String get pageName {
+    final uri = Uri.tryParse(url);
+    final hasPath = uri?.pathSegments.any((s) => s.isNotEmpty) ?? false;
+    return hasPath ? fileName : 'index';
+  }
+
   String get host => Uri.tryParse(url)?.host ?? '';
+}
+
+/// URL without fragment and trailing slash, for comparing page URLs.
+String _normalizeUrl(String url) {
+  final noFragment = url.split('#').first;
+  return noFragment.endsWith('/')
+      ? noFragment.substring(0, noFragment.length - 1)
+      : noFragment;
 }
 
 /// Converts browser resource-timing entries (`name`/`transfer`/`decoded`)
@@ -37,15 +61,19 @@ class ResourceSize {
 /// keeping the largest reported size.
 List<ResourceSize> resourcesBySize(
     Iterable<Map<String, dynamic>> resources, String pageUrl) {
+  final page = _normalizeUrl(pageUrl);
   final byUrl = <String, ResourceSize>{};
   for (final r in resources) {
     final url = r['name'] as String? ?? '';
     if (url.isEmpty || url.startsWith('data:')) continue;
+    final isPage = page.isNotEmpty && _normalizeUrl(url) == page;
     final entry = ResourceSize(
       url: url,
       transfer: (r['transfer'] as num? ?? 0).toInt(),
       decoded: (r['decoded'] as num? ?? 0).toInt(),
-      type: ProbeService.categorizeResource(url, pageUrl),
+      type: isPage ? 'document' : ProbeService.categorizeResource(url, pageUrl),
+      isPage: isPage,
+      services: externalServicesForUrl(url, pageUrl),
     );
     final existing = byUrl[url];
     if (existing == null || entry.size > existing.size) byUrl[url] = entry;

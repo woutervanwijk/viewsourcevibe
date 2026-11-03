@@ -123,6 +123,19 @@ List<Entity> _entitiesForUrl(String url, String host, String pageHost) {
   ];
 }
 
+/// Third-party services serving [url]; empty for files from the page's own
+/// site (or the service the site itself belongs to).
+List<Entity> externalServicesForUrl(String url, String pageUrl) {
+  final host = _hostOf(url);
+  final pageHost = _hostOf(pageUrl);
+  if (host.isEmpty || _sameSite(host, pageHost)) return const [];
+  final own = pageHost.isEmpty ? null : entityForHost(pageHost);
+  return [
+    for (final e in _entitiesForUrl(url, host, pageHost))
+      if (e != own) e,
+  ];
+}
+
 final _resourcePath = RegExp(
     r'\.(?:m?js|css|json|gif|png|jpe?g|svg|webp|avif|ico|woff2?|php|html?|aspx?)(?:[?#]|$)'
     r'|(?:^|/)(?:js|embed|widgets?|player|sdk|tags?|pixel|collect|sync|ads?|beacon|track(?:ing)?|events?|analytics|load|loader|serve|launcher|getuid)(?:[/?.#]|$)',
