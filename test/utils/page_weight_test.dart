@@ -39,6 +39,32 @@ void main() {
     });
   });
 
+  test('marks the page document and forces its type', () {
+    final result = resourcesBySize([
+      {'name': 'https://example.com/#top', 'transfer': 10, 'decoded': 10},
+      {'name': 'https://example.com/a.js', 'transfer': 5, 'decoded': 5},
+    ], page);
+
+    expect(result.first.isPage, isTrue);
+    expect(result.first.type, 'document');
+    expect(result.first.pageName, 'index');
+    expect(result.last.isPage, isFalse);
+  });
+
+  test('links third-party files to their service, not same-site ones', () {
+    final result = resourcesBySize([
+      {
+        'name': 'https://fonts.gstatic.com/s/roboto.woff2',
+        'transfer': 9,
+        'decoded': 9
+      },
+      {'name': 'https://cdn.example.com/a.js', 'transfer': 1, 'decoded': 1},
+    ], page);
+
+    expect(result.first.services.map((e) => e.name), contains('Google Fonts'));
+    expect(result.last.services, isEmpty);
+  });
+
   group('ResourceSize', () {
     test('fileName uses last path segment or host', () {
       ResourceSize r(String url) =>
