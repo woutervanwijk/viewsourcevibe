@@ -98,3 +98,15 @@ flutter_launcher_icons:
   linux:
     generate: true
     image_path: "assets/icon.webp"
+
+dependency_overrides:
+  flutter_inappwebview_macos:
+    git:
+      url: https://github.com/wangqiang1588/flutter_inappwebview.git
+      ref: fc33a449b9290b127a471808e22eb7b0edebad92
+      path: flutter_inappwebview_macos
+  flutter_inappwebview_ios:
+    git:
+      url: https://github.com/wangqiang1588/flutter_inappwebview.git
+      ref: fc33a449b9290b127a471808e22eb7b0edebad92
+      path: flutter_inappwebview_ios
