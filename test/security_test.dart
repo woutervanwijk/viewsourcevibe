@@ -122,9 +122,9 @@ void main() {
       expect(resolveSubDirectory(base, '../parent'), isNull);
       expect(resolveSubDirectory(base, 'sub/../../..'), isNull);
       expect(resolveSubDirectory(base, '/etc'), isNull);
-      expect(resolveSubDirectory(base, 'sub/\\u0000x'), isNull);
+      expect(resolveSubDirectory(base, 'sub/\u0000x'), isNull);
       // prefix-sibling must not pass a naive startsWith check
-      expect(resolveSubDirectory('/app/Documents', 'DocumentsEvil/x'), isNull);
+      expect(resolveSubDirectory('/app/Documents', '../DocumentsEvil/x'), isNull);
     });
   });
 

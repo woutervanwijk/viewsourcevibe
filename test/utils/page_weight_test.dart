@@ -76,6 +76,40 @@ void main() {
     expect(result.map((r) => r.type), ['image', 'image', 'script', 'other']);
   });
 
+  group('ResourceSize.size for images', () {
+    test('prefers transfer size when decoded is a pixel-buffer artifact', () {
+      // WebKit (iOS) reports decodedBodySize for images as the decoded pixel
+      // buffer (width*height*4), which is megabytes even for tiny thumbnails.
+      final result = resourcesBySize([
+        {
+          'name': 'https://i.regiogroei.cloud/a.jpg?width=112&height=64',
+          'transfer': 4517,
+          'decoded': 1600000,
+        },
+      ], page);
+
+      expect(result.single.type, 'image');
+      expect(result.single.size, 4517);
+    });
+
+    test('falls back to decoded when transfer is unknown (from cache)', () {
+      final result = resourcesBySize([
+        {'name': 'https://cdn.com/b.png', 'transfer': 0, 'decoded': 900},
+      ], page);
+
+      expect(result.single.type, 'image');
+      expect(result.single.size, 900);
+    });
+
+    test('non-image resources still prefer the decoded size', () {
+      final result = resourcesBySize([
+        {'name': 'https://example.com/a.js', 'transfer': 100, 'decoded': 300},
+      ], page);
+
+      expect(result.single.size, 300);
+    });
+  });
+
   group('ResourceSize', () {
     test('fileName uses last path segment or host', () {
       ResourceSize r(String url) =>
