@@ -6,7 +6,7 @@ import 'dart:typed_data';
 class FixtureRoute {
   final int status;
 
-  /// Header values are a String or a List<String> (repeated header).
+  /// Header values are a String or a `List<String>` (repeated header).
   final Map<String, Object> headers;
   final List<int> body;
 
