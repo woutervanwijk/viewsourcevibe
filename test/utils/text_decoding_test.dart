@@ -21,7 +21,7 @@ void main() {
   test('latin-1 with <meta charset> decodes cafe-acute', () {
     final d = decodeText(fixture('latin1_meta.html'));
     expect(d.text, contains('café'));
-    expect(d.charset, 'iso-8859-1');
+    expect(d.charset, 'windows-1252'); // WHATWG label mapping
     expect(d.charsetSource, CharsetSource.meta);
   });
 
@@ -80,10 +80,24 @@ void main() {
     expect(decodeText([0x41, 0x00, 0x42, 0x00, 0x00, 0x43]).isBinary, isTrue);
   });
 
+  test('iso-8859-1 meta + 0x93 decodes as windows-1252 curly quote', () {
+    final bytes = '<meta charset=iso-8859-1>'.codeUnits + [0x93, 0x9F];
+    final d = decodeText(bytes);
+    expect(d.text, endsWith('\u201C\u0178'));
+  });
+
+  test('unsupported charset declared via meta keeps its name', () {
+    final d = decodeText('<meta charset=shift_jis>ab'.codeUnits);
+    expect(d.unsupportedCharset, isTrue);
+    expect(d.declaredCharset, 'shift_jis');
+    expect(d.charsetSource, CharsetSource.fallback);
+  });
+
   test('shift_jis is unsupported and falls back', () {
     final d =
         decodeText([0x41, 0x42], contentType: 'text/html; charset=shift_jis');
     expect(d.unsupportedCharset, isTrue);
+    expect(d.declaredCharset, 'shift_jis');
     expect(d.charsetSource, CharsetSource.fallback);
     expect(d.charset, 'utf-8');
   });

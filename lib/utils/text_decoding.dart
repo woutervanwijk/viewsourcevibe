@@ -10,6 +10,9 @@ class DecodedText {
   final bool isBinary;
   final bool unsupportedCharset;
 
+  /// Charset label as declared by header/meta, set when it is unsupported.
+  final String? declaredCharset;
+
   /// Size of the raw input, never the length of [text].
   final int byteLength;
 
@@ -21,6 +24,7 @@ class DecodedText {
     this.hadMalformed = false,
     this.isBinary = false,
     this.unsupportedCharset = false,
+    this.declaredCharset,
   });
 }
 
@@ -50,10 +54,12 @@ String? _normalize(String name) {
       return 'utf-16le';
     case 'utf-16be':
       return 'utf-16be';
+    // WHATWG: these labels all mean windows-1252.
     case 'iso-8859-1':
     case 'latin1':
     case 'iso_8859-1':
-      return 'iso-8859-1';
+    case 'us-ascii':
+    case 'ascii':
     case 'windows-1252':
     case 'cp1252':
       return 'windows-1252';
@@ -100,6 +106,7 @@ DecodedText decodeText(List<int> bytes, {String? contentType}) {
   String? charset;
   var source = CharsetSource.fallback;
   var unsupported = false;
+  String? declaredName;
 
   if (_startsWith(bytes, [0xEF, 0xBB, 0xBF])) {
     charset = 'utf-8';
@@ -127,6 +134,7 @@ DecodedText decodeText(List<int> bytes, {String? contentType}) {
         source = src;
       } else {
         unsupported = true;
+        declaredName = name;
       }
       break;
     }
@@ -146,6 +154,7 @@ DecodedText decodeText(List<int> bytes, {String? contentType}) {
       byteLength: bytes.length,
       isBinary: true,
       unsupportedCharset: unsupported,
+      declaredCharset: declaredName,
     );
   }
 
@@ -155,8 +164,6 @@ DecodedText decodeText(List<int> bytes, {String? contentType}) {
     case 'utf-16le':
     case 'utf-16be':
       text = _decodeUtf16(body, charset == 'utf-16be', () => malformed = true);
-    case 'iso-8859-1':
-      text = String.fromCharCodes(body);
     case 'windows-1252':
       text = String.fromCharCodes(
           body.map((b) => b >= 0x80 && b <= 0x9F ? _cp1252High[b - 0x80] : b));
@@ -172,6 +179,7 @@ DecodedText decodeText(List<int> bytes, {String? contentType}) {
           byteLength: bytes.length,
           hadMalformed: true,
           unsupportedCharset: unsupported,
+          declaredCharset: declaredName,
         );
       }
   }
@@ -182,5 +190,6 @@ DecodedText decodeText(List<int> bytes, {String? contentType}) {
     byteLength: bytes.length,
     hadMalformed: malformed,
     unsupportedCharset: unsupported,
+    declaredCharset: declaredName,
   );
 }

@@ -12,7 +12,8 @@ Widget host(Observed<int> v) => MaterialApp(
 void main() {
   testWidgets('Present renders formatted value and a source badge',
       (tester) async {
-    await tester.pumpWidget(host(const Present(42, source: DataSource.browser)));
+    await tester
+        .pumpWidget(host(const Present(42, source: DataSource.browser)));
     expect(find.text('42 KB'), findsOneWidget);
     expect(find.text('browser'), findsOneWidget);
 
@@ -27,6 +28,15 @@ void main() {
         source: DataSource.server, provenance: Provenance.estimated)));
     expect(find.textContaining('≈'), findsOneWidget);
     expect(find.textContaining('7 KB'), findsOneWidget);
+  });
+
+  testWidgets('derived shows a marker, measured does not', (tester) async {
+    await tester.pumpWidget(host(const Present(3,
+        source: DataSource.server, provenance: Provenance.derived)));
+    expect(find.text('(derived)'), findsOneWidget);
+    expect(find.textContaining('≈'), findsNothing);
+    await tester.pumpWidget(host(const Present(3, source: DataSource.server)));
+    expect(find.text('(derived)'), findsNothing);
   });
 
   testWidgets('measured has no approx prefix', (tester) async {

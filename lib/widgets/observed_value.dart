@@ -30,6 +30,11 @@ class ObservedValue<T> extends StatelessWidget {
           spacing: 6,
           children: [
             Text('$prefix${format(value)}'),
+            if (provenance == Provenance.derived)
+              Tooltip(
+                message: 'Derived from other data',
+                child: Text('(derived)', style: muted),
+              ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
