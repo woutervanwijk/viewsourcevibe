@@ -1,0 +1,13 @@
+{"_synthetic":true,"_note":"Models WebKit (iOS): cross-origin resources without Timing-Allow-Origin report transferSize/encodedBodySize/decodedBodySize 0; same-origin image decodedBodySize is the pixel buffer.",
+"v":1,"url":"https://www.rtvutrecht.nl/","contentType":"text/html",
+"timing":{"ok":true,"now":15234.5,"timeOrigin":1760000000000},
+"dom":{"ok":true,"value":"<!DOCTYPE html>\n<html><head><title>RTV Utrecht</title></head><body><p>hi</p></body></html>","iframes":1,"shadowRoots":0},
+"resources":{"ok":true,"bootstrap":true,"dropped":0,"observer":[
+{"n":"https://www.rtvutrecht.nl/static/app.css","it":"link","st":50.0,"du":80.0,"tx":12000,"enc":11800,"dec":50000},
+{"n":"https://cdn.example.net/lib.js","it":"script","st":60.0,"du":200.0,"tx":0,"enc":0,"dec":0},
+{"n":"https://images.example.net/hero.jpg","it":"img","st":70.0,"du":300.0,"tx":0,"enc":0,"dec":0},
+{"n":"https://www.rtvutrecht.nl/img/logo.png","it":"img","st":75.0,"du":40.0,"tx":5000,"enc":4800,"dec":4000000}],
+"patch":[]},
+"navigation":{"ok":true,"responseStart":120.5,"domInteractive":400.2,"domContentLoaded":420.0,"loadEnd":900.1,"protocol":"h2"},
+"storage":{"local":{"ok":true,"count":2,"items":[{"k":"theme","v":"dark"},{"k":"consent","v":"é€"}],"truncated":false},"session":{"ok":true,"count":0,"items":[],"truncated":false}},
+"cookies":{"ok":true,"raw":"a=1; b=two"}}

@@ -1,0 +1,10 @@
+{"_synthetic":true,"_note":"Models macOS WebKit, simple same-origin page with an observer entry and a patch-only API call.",
+"v":1,"url":"https://example.com/index.html","contentType":"text/html",
+"timing":{"ok":true,"now":2000.0,"timeOrigin":1760000000000},
+"dom":{"ok":true,"value":"<!DOCTYPE html>\n<html><body>x</body></html>","iframes":0,"shadowRoots":2},
+"resources":{"ok":true,"bootstrap":true,"dropped":0,"observer":[
+{"n":"https://example.com/main.js","it":"script","st":5.0,"du":20.0,"tx":2000,"enc":1900,"dec":7000}],
+"patch":[{"n":"https://example.com/api/items","it":"fetch","cl":812,"st":1500.0}]},
+"navigation":{"ok":true,"responseStart":30.0,"domInteractive":100.0,"domContentLoaded":110.0,"loadEnd":0,"protocol":"http/1.1"},
+"storage":{"local":{"ok":true,"count":0,"items":[],"truncated":false},"session":{"ok":true,"count":0,"items":[],"truncated":false}},
+"cookies":{"ok":true,"raw":"sid=abc"}}

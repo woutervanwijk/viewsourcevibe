@@ -1,0 +1,7 @@
+{"_synthetic":true,"_note":"An HTML page (contentType text/html) containing a <pre>, no DOCTYPE; the DOM must stay unchanged. 'raw' is deliberately absent as JS only sets it for non-HTML documents.",
+"v":1,"url":"https://example.com/readme","contentType":"text/html",
+"timing":{"ok":true,"now":500.0,"timeOrigin":1760000000000},
+"dom":{"ok":true,"value":"<html><head></head><body><h1>Readme</h1><pre>a &lt; b &amp;&amp; c</pre><p>more</p></body></html>","iframes":0,"shadowRoots":0},
+"resources":{"ok":true,"bootstrap":true,"dropped":0,"observer":[],"patch":[]},
+"navigation":{"ok":true,"responseStart":120.5,"domInteractive":400.2,"domContentLoaded":420.0,"loadEnd":900.1,"protocol":"h2"},"storage":{"local":{"ok":true,"count":0,"items":[],"truncated":false},"session":{"ok":true,"count":0,"items":[],"truncated":false}},
+"cookies":{"ok":true,"raw":""}}
