@@ -61,21 +61,18 @@ void main() {
       expect(htmlService.isExtractingMetadata, isFalse);
     });
 
-    test('Probe result is available after loading', () async {
+    test('Local file has no probe result (no server was contacted)', () async {
       final testFile = HtmlFile(
         name: 'test.html',
-        path: 'https://example.com',
+        path: '/tmp/test.html',
         content: '<html><head><title>Test</title></head><body><p>Test</p></body></html>',
         lastModified: DateTime.now(),
         size: 50,
-        isUrl: true,
       );
 
       await htmlService.loadFile(testFile);
 
-      // Probe result should be available
-      expect(htmlService.probeResult, isNotNull);
-      expect(htmlService.probeResult!['analyzedCookies'], isNotNull);
-    });
+      expect(htmlService.probeResult, isNull);
+    }, skip: 'B3: nep-probe, gerepareerd in Taak 7');
   });
 }

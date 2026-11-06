@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
-import 'package:view_source_vibe/services/platform_sharing_handler.dart';
-import 'package:view_source_vibe/services/shared_content_manager.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -44,23 +42,6 @@ void main() {
               'not-a-url'.startsWith('www.'),
           false);
     });
-
-    test('Platform sharing handler setup works', () {
-      // Test that the platform handler can be setup without errors
-      expect(() => PlatformSharingHandler.setup(), returnsNormally);
-    });
-
-    test('Shared content manager can be initialized', () {
-      // Test that shared content manager can be created
-      expect(SharedContentManager.triggerTestSharedContent, isNotNull);
-    });
-
-    test('Platform sharing handler methods are defined', () {
-      // Test that all required methods exist
-      expect(PlatformSharingHandler.checkForInitialSharedContent, isNotNull);
-      expect(PlatformSharingHandler.registerSharedContentHandler, isNotNull);
-      expect(PlatformSharingHandler.processSharedContent, isNotNull);
-    });
   });
 
   group('Sharing Content Handling Tests', () {
@@ -86,9 +67,9 @@ void main() {
 
     testWidgets('shared text is loaded as a file', (tester) async {
       final (context, htmlService) = await pumpContext(tester);
-      await tester.runAsync(() => SharingService.handleSharedContent(
+      await tester.runAsync(() => UnifiedSharingService.handleSharedContent(
             context,
-            sharedText: 'Hello World',
+            {'type': 'text', 'content': 'Hello World'},
           ));
       expect(htmlService.currentFile?.content, 'Hello World');
       expect(htmlService.currentFile?.isUrl, isFalse);
@@ -96,38 +77,25 @@ void main() {
 
     testWidgets('shared file bytes are loaded as a file', (tester) async {
       final (context, htmlService) = await pumpContext(tester);
-      await tester.runAsync(() => SharingService.handleSharedContent(
+      await tester.runAsync(() => UnifiedSharingService.handleSharedContent(
             context,
-            fileBytes: [72, 101, 108, 108, 111], // 'Hello'
-            fileName: 'test.txt',
+            {
+              'type': 'file',
+              'fileBytes': <int>[72, 101, 108, 108, 111], // 'Hello'
+              'fileName': 'test.txt',
+            },
           ));
       expect(htmlService.currentFile?.content, 'Hello');
     });
 
     testWidgets('shared URL is opened as a URL', (tester) async {
       final (context, htmlService) = await pumpContext(tester);
-      await tester.runAsync(() => SharingService.handleSharedContent(
+      await tester.runAsync(() => UnifiedSharingService.handleSharedContent(
             context,
-            sharedUrl: 'https://example.com',
+            {'type': 'url', 'content': 'https://example.com'},
           ));
       expect(htmlService.currentFile?.path, startsWith('https://example.com'));
       expect(htmlService.currentFile?.isUrl, isTrue);
-    });
-  });
-
-  group('Platform Integration Tests', () {
-    test('Platform sharing handler has public methods', () {
-      // Test that public methods are available
-      expect(PlatformSharingHandler.setup, isNotNull);
-      expect(PlatformSharingHandler.checkForInitialSharedContent, isNotNull);
-      expect(PlatformSharingHandler.registerSharedContentHandler, isNotNull);
-      expect(PlatformSharingHandler.processSharedContent, isNotNull);
-    });
-
-    test('Shared content manager has public methods', () {
-      // Test that public methods are available
-      expect(SharedContentManager.initialize, isNotNull);
-      expect(SharedContentManager.triggerTestSharedContent, isNotNull);
     });
   });
 }

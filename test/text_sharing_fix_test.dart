@@ -5,7 +5,7 @@ void main() {
   group('Text Sharing Fix Tests', () {
     
     test('Text sharing priority order verification', () async {
-      // This test verifies that the priority order in SharingService.handleSharedContent
+      // This test verifies that the priority order in UnifiedUnifiedSharingService.handleSharedContent
       // has been correctly updated to prioritize text content over URL detection
       
       // The new priority order should be:
@@ -22,7 +22,6 @@ void main() {
       // Verify that the sharing service methods exist and are callable
       // This is a basic smoke test to ensure the service is working
       
-      expect(SharingService.handleSharedContent, isNotNull);
       expect(SharingService.isUrl, isNotNull);
       expect(SharingService.isFilePath, isNotNull);
     });

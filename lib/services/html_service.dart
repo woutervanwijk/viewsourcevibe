@@ -508,33 +508,6 @@ class HtmlService extends ChangeNotifier {
     return false;
   }
 
-  /// Try to detect if content looks like XML
-  bool _tryDetectXmlContent(String content) {
-    if (content.isEmpty) return false;
-
-    final trimmed = content.trim();
-    // Must start with a tag
-    if (!trimmed.startsWith('<')) return false;
-
-    // Must not start with HTML-specific tags
-    if (trimmed.startsWith('<!DOCTYPE html') ||
-        trimmed.startsWith('<html') ||
-        trimmed.startsWith('<HTML')) {
-      return false;
-    }
-
-    // Check for XML-specific patterns
-    final hasXmlTags = trimmed.contains('<Channel>') ||
-        trimmed.contains('<rss') ||
-        trimmed.contains('<feed') ||
-        trimmed.contains('<xml') ||
-        trimmed.contains('<Channel') ||
-        trimmed.contains('<item') ||
-        trimmed.contains('<entry');
-
-    return hasXmlTags;
-  }
-
   /// DOM Tree and Probe tabs are useful for any structured markup
   bool get isHtmlOrXml => isHtml || isXml;
 
@@ -940,52 +913,6 @@ class HtmlService extends ChangeNotifier {
     _isWebViewLoading = false;
     _isLoading = false;
     _webViewLoadingProgress = 0.0; // Reset progress bar
-    notifyListeners();
-  }
-
-  Future<void> completeWebViewLoad(String html, String url) async {
-    _isWebViewLoading = false;
-    _webViewLoadingUrl = null;
-
-    // Construct a basic probe result for the WebView load
-    final probeResult = {
-      'statusCode': 200,
-      'reasonPhrase': 'OK (via Browser)',
-      'headers': <String, String>{'content-type': 'text/html'},
-      'finalUrl': url,
-      'isRedirect': false,
-      'ipAddress': 'N/A',
-      'responseTime': 0,
-    };
-
-    final filename = generateDescriptiveFilename(Uri.parse(url), html);
-    // Determine appropriate content type based on actual content
-    String determinedContentType = 'text/html'; // default
-    if (_tryDetectXmlContent(html)) {
-      determinedContentType = 'application/xml';
-    }
-
-    final processedFilename = await detectFileTypeAndGenerateFilename(
-      filename,
-      html,
-      contentType: determinedContentType,
-    );
-
-    final file = HtmlFile(
-      name: processedFilename,
-      path: url,
-      content: html,
-      lastModified: DateTime.now(),
-      size: html.length,
-      isUrl: true,
-      probeResult: probeResult,
-    );
-
-    // Note: _probeResult will be updated by loadFile(file)
-    _isProbing = false;
-
-    await loadFile(file);
-    _isLoading = false;
     notifyListeners();
   }
 
@@ -4276,7 +4203,7 @@ Technical details: $e''';
     // Update URL bar immediately
     if (_currentInputText != url) {
       _currentInputText = url;
-      // which is handled by onPageStarted/onUrlChange in BrowserView calling updateWebViewUrl
+      // which is handled by onPageStarted/onUrlChange in BrowserView
     }
 
     // Trigger probe for the new URL if not already probing it or if it's different from the result
@@ -5086,69 +5013,6 @@ Technical details: $e''';
     ioc.badCertificateCallback =
         CertificateSecurityService.defaultBadCertificateCallback;
     return IOClient(ioc);
-  }
-
-  void updateWebViewUrl(String url) {
-    if (_currentInputText != url) {
-      _resetLoadState(newUrl: url);
-
-      // Ensure the WebView remains mounted in HomeScreen during its discovery phase
-      _isWebViewLoading = true;
-      _webViewLoadingUrl = url; // Set this so BrowserView knows it's the target
-
-      notifyListeners();
-
-      // Trigger probe for the new URL to update Headers, Security, etc.
-      probeUrl(url).ignore();
-    }
-  }
-
-  Future<void> extractCurrentWebViewContent() async {
-    if (activeWebViewController == null) return;
-
-    try {
-      final webUri = await activeWebViewController!.getUrl();
-      final url = webUri?.toString();
-      final html = await activeWebViewController!.evaluateJavascript(
-        source: 'document.documentElement.outerHTML',
-      ) as String;
-
-      // Unquote if needed (standard JS result processing)
-      String finalHtml = _unquoteHtml(html);
-
-      if (url != null) {
-        final processedFilename = await detectFileTypeAndGenerateFilename(
-          url,
-          finalHtml,
-        );
-
-        final htmlFile = HtmlFile(
-          name: processedFilename,
-          path: url,
-          content: finalHtml,
-          lastModified: DateTime.now(),
-          size: finalHtml.length,
-          isUrl: true,
-        );
-
-        _currentFile = htmlFile;
-        _currentInputText = url;
-        // Stay on whatever tab the user is on.
-
-        // Clear cache and reset beautify on new file load
-        _beautifiedCache.clear();
-        _isBeautifyEnabled = false;
-
-        notifyListeners();
-
-        // Trigger metadata extraction in background
-        _extractMetadata().then((_) => notifyListeners()).ignore();
-
-        _autoSave();
-      }
-    } catch (e) {
-      debugPrint('Error extracting WebView content: $e');
-    }
   }
 }
 

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/shared_content_manager.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:view_source_vibe/services/sharing_service.dart';
 
 void main() {
@@ -61,7 +61,7 @@ void main() {
         expect(SharingService.isFilePath(filePath), true);
         
         // Test file name extraction
-        final fileName = SharedContentManager.extractFileNameFromPath(filePath);
+        final fileName = UnifiedSharingService.extractFileNameFromPath(filePath);
         expect(fileName.isNotEmpty, true);
         expect(fileName.contains('/'), false); // Should not contain path separators
       }
@@ -131,7 +131,7 @@ void main() {
       expect(SharingService.isFilePath(complexFilePath), true);
       
       // Test 3: File name extraction from complex paths
-      final fileName = SharedContentManager.extractFileNameFromPath(complexFilePath);
+      final fileName = UnifiedSharingService.extractFileNameFromPath(complexFilePath);
       expect(fileName, 'source code.html');
     });
 
@@ -191,7 +191,7 @@ void main() {
         expect(SharingService.isFilePath(filePath), true);
         
         // Test file name extraction
-        final fileName = SharedContentManager.extractFileNameFromPath(filePath);
+        final fileName = UnifiedSharingService.extractFileNameFromPath(filePath);
         expect(fileName, 'file.html');
       }
     });

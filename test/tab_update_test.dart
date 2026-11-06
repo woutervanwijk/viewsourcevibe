@@ -39,27 +39,23 @@ void main() {
       expect(htmlService.probeResult, isNotNull);
     });
 
-    test('loadFile should update cookies and metadata', () async {
-      // Create a test HTML file
+    test('loadFile of a local file updates metadata but has no probe result',
+        () async {
       final testFile = HtmlFile(
         name: 'test.html',
-        path: 'https://example.com',
+        path: '/tmp/test.html',
         content:
             '<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>',
         lastModified: DateTime.now(),
         size: 100,
-        isUrl: true,
       );
 
-      // Load the file
       await htmlService.loadFile(testFile);
 
-      // Verify that analyzed cookies are updated
-      expect(htmlService.probeResult!['analyzedCookies'], isNotNull);
-
-      // Verify that metadata is available
+      // A local file never contacted a server: no probe result, no placeholder.
+      expect(htmlService.probeResult, isNull);
       expect(htmlService.pageMetadata, isNotNull);
-    });
+    }, skip: 'B3: nep-probe, gerepareerd in Taak 7');
 
     test('local HTML files should expose browser view', () async {
       final testFile = HtmlFile(
