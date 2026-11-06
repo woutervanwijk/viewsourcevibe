@@ -4974,7 +4974,7 @@ Technical details: $e''';
         // ignore
       }
     } catch (e) {
-      debugPrint('Error getting resource size for \$url: \$e');
+      debugPrint('Error getting resource size for $url: $e');
     } finally {
       client.close();
     }
