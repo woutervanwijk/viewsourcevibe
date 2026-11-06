@@ -106,9 +106,10 @@ class IoServerFetcher implements ServerFetcher {
           finalUrl: finalUrl,
           body: body,
           timingMs: Present(sw.elapsedMilliseconds, source: DataSource.server),
-          certificate: hops.isEmpty
+          // Only for a completed chain; per-hop certificates stay on the hops.
+          certificate: hops.isEmpty || finalUrl is! Present<Uri>
               ? const Unavailable(
-                  UnavailableReason.notApplicable, 'no response')
+                  UnavailableReason.notApplicable, 'no completed response')
               : hops.last.certificate,
         );
 
@@ -174,12 +175,37 @@ class IoServerFetcher implements ServerFetcher {
     }
   }
 
+  /// Header values joined with ', ' (a repeated header must not throw).
+  static String _joined(HttpClientResponse r, String name) =>
+      (r.headers[name] ?? const <String>[]).join(', ');
+
+  /// Content-Length from raw header values. Repeated identical values are
+  /// fine; conflicting or unparsable ones are Unavailable.
+  static Observed<int> parseContentLength(List<String>? values) {
+    if (values == null || values.isEmpty) {
+      return const Unavailable(UnavailableReason.notReportedByServer);
+    }
+    final parsed = values
+        .expand((v) => v.split(','))
+        .map((v) => int.tryParse(v.trim()))
+        .toSet();
+    if (parsed.length != 1) {
+      return const Unavailable(
+          UnavailableReason.notReportedByServer, 'conflicting content-length');
+    }
+    final n = parsed.single;
+    if (n == null || n < 0) {
+      return const Unavailable(
+          UnavailableReason.notReportedByServer, 'invalid content-length');
+    }
+    return Present(n, source: DataSource.server);
+  }
+
   Future<Observed<ServerBody>> _readBody(
       HttpClientResponse response, int maxBytes) async {
-    final encoding =
-        (response.headers.value(HttpHeaders.contentEncodingHeader) ?? '')
-            .trim()
-            .toLowerCase();
+    final encoding = _joined(response, HttpHeaders.contentEncodingHeader)
+        .trim()
+        .toLowerCase();
     Stream<List<int>> Function(Stream<List<int>>)? decode;
     switch (encoding) {
       case '':
@@ -227,19 +253,17 @@ class IoServerFetcher implements ServerFetcher {
     }
     if (error != null) return Failed(_describe(error!));
 
-    final lengthHeader =
-        response.headers.value(HttpHeaders.contentLengthHeader);
-    final declared = int.tryParse(lengthHeader ?? '');
+    final declaredLength =
+        parseContentLength(response.headers[HttpHeaders.contentLengthHeader]);
+    final typeHeader = _joined(response, HttpHeaders.contentTypeHeader);
     final decoded = decodeText(buf.takeBytes(),
-        contentType: response.headers.value(HttpHeaders.contentTypeHeader));
+        contentType: typeHeader.isEmpty ? null : typeHeader);
     return Present(
       ServerBody(
         decoded: decoded,
         transferLength: wire,
         truncated: truncated,
-        contentLength: declared == null
-            ? const Unavailable(UnavailableReason.notReportedByServer)
-            : Present(declared, source: DataSource.server),
+        contentLength: declaredLength,
         contentEncoding: encoding.isEmpty ? null : encoding,
       ),
       source: DataSource.server,
@@ -319,6 +343,19 @@ class IoServerFetcher implements ServerFetcher {
       );
     }
     final text = body.value.decoded.text;
+    if (body.value.truncated) {
+      // Partial file: counts would look exact but are not.
+      const d = 'robots.txt larger than 256 KB';
+      return RobotsInfo(
+        robotsStatus: p(status),
+        robotsText: p(text),
+        robotsTruncated: true,
+        disallowCount: const Unavailable(UnavailableReason.exceedsLimit, d),
+        allowCount: const Unavailable(UnavailableReason.exceedsLimit, d),
+        sitemaps: const Unavailable(UnavailableReason.exceedsLimit, d),
+        sitemapStatus: sitemapStatus,
+      );
+    }
     var disallow = 0, allow = 0;
     final sitemaps = <String>[];
     for (final raw in text.split(RegExp(r'\r?\n|\r'))) {

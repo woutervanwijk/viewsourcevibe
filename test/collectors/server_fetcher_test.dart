@@ -231,7 +231,49 @@ void main() {
     expect(snap.hops, isEmpty);
   });
 
+  test('certificate is Unavailable when the chain failed', () async {
+    final dead = await start({});
+    final deadUrl = dead.url('/x');
+    await dead.close();
+    final s = await start({'/': FixtureRoute.redirect(deadUrl.toString())});
+    final snap = await fetcher().fetch(s.url(), userAgent: ua);
+    expect(snap.hops, hasLength(1));
+    expect(snap.certificate, isA<Unavailable<Map<String, dynamic>>>());
+  });
+
+  test('repeated Content-Type / Content-Length headers do not throw', () async {
+    final s = await start({
+      '/': FixtureRoute(headers: {
+        'content-type': ['text/html', 'text/plain'],
+        'content-length': ['2', '2'],
+      }, body: utf8.encode('hi'), sendContentLength: false),
+    });
+    final snap = await fetcher().fetch(s.url(), userAgent: ua);
+    expect(snap.hops, hasLength(1));
+    expect(snap.body, anyOf(isA<Present<ServerBody>>(), isA<Failed>()));
+  });
+
+  test('parseContentLength handles repeated values', () {
+    expect(present(IoServerFetcher.parseContentLength(['5', '5'])), 5);
+    final bad = IoServerFetcher.parseContentLength(['5', '6']) as Unavailable;
+    expect(bad.detail, 'conflicting content-length');
+    expect(bad.reason, UnavailableReason.notReportedByServer);
+    expect(IoServerFetcher.parseContentLength(null), isA<Unavailable<int>>());
+    expect(IoServerFetcher.parseContentLength(['x']), isA<Unavailable<int>>());
+  });
+
   group('fetchRobots', () {
+    test('robots.txt over 256 KB: counts Unavailable(exceedsLimit)', () async {
+      final big = utf8.encode('Disallow: /a\n' * 25000); // ~325 KB
+      final s = await start({'/robots.txt': FixtureRoute(body: big)});
+      final r = await fetcher().fetchRobots(s.url('/'), userAgent: ua);
+      expect(r.robotsTruncated, isTrue);
+      expect(present(r.robotsText).length, 256 * 1024);
+      for (final o in [r.disallowCount, r.allowCount, r.sitemaps]) {
+        expect((o as Unavailable).reason, UnavailableReason.exceedsLimit);
+      }
+    });
+
     test('parses counts and sitemaps; sitemap status via HEAD', () async {
       final s = await start({
         '/robots.txt': FixtureRoute(

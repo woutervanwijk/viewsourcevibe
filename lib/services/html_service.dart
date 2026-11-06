@@ -1709,8 +1709,7 @@ class HtmlService extends ChangeNotifier {
       final uri2 = Uri.parse(url2);
       if (uri1.host.toLowerCase() != uri2.host.toLowerCase()) return false;
       if (uri1.path != uri2.path) return false;
-      return _queryWithoutCacheBusters(uri1) ==
-          _queryWithoutCacheBusters(uri2);
+      return _queryWithoutCacheBusters(uri1) == _queryWithoutCacheBusters(uri2);
     } catch (_) {
       return false;
     }

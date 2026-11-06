@@ -41,6 +41,7 @@ class ServerBody {
   int get byteLength => decoded.byteLength;
 
   /// Bytes received on the wire for the body (compressed size if compressed).
+  /// When [truncated], only the bytes read before the cutoff are counted.
   final int transferLength;
 
   /// True when the body was cut off at the byte limit.
@@ -64,6 +65,10 @@ class RobotsInfo {
   final Observed<int> robotsStatus;
   final Observed<String> robotsText;
 
+  /// True when robots.txt exceeded the size limit: [robotsText] is only the
+  /// first part and the counts/sitemaps are Unavailable.
+  final bool robotsTruncated;
+
   /// Counts over all user-agent groups.
   final Observed<int> disallowCount;
   final Observed<int> allowCount;
@@ -77,6 +82,7 @@ class RobotsInfo {
     required this.allowCount,
     required this.sitemaps,
     required this.sitemapStatus,
+    this.robotsTruncated = false,
   });
 }
 
