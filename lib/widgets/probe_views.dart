@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 import 'package:view_source_vibe/widgets/evidence_view.dart';
 import 'package:view_source_vibe/models/detection_evidence.dart';
@@ -7,6 +6,9 @@ import 'package:view_source_vibe/services/logo_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/utils/format_utils.dart';
 
@@ -68,456 +70,483 @@ abstract class ProbeViewBase extends StatelessWidget {
 
   Widget buildContent(BuildContext context, HtmlService htmlService,
       Map<String, dynamic> result);
+}
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 128,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+// ---------------------------------------------------------------------------
+// Shared pieces of the migrated probe tabs
+// ---------------------------------------------------------------------------
+
+Widget _detailRow(String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 128,
+          child: Text(
+            '$label:',
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          Expanded(
-            child: SelectableText(FormatUtils.formatHumanData(value)),
-          ),
-        ],
+        ),
+        Expanded(
+          child: SelectableText(FormatUtils.formatHumanData(value)),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _chip(IconData icon, String label, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withValues(alpha: 0.24)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 14),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _cardTitle(BuildContext context, IconData icon, String title,
+    {Color? color}) {
+  return Row(
+    children: [
+      Icon(icon,
+          size: 20, color: color ?? Theme.of(context).colorScheme.primary),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          title,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
       ),
-    );
+    ],
+  );
+}
+
+Widget _card(BuildContext context, List<Widget> children,
+    {Color? border, bool filled = false}) {
+  final scheme = Theme.of(context).colorScheme;
+  return Card(
+    elevation: 0,
+    color:
+        filled ? scheme.surfaceContainerHighest.withValues(alpha: 0.3) : null,
+    shape: RoundedRectangleBorder(
+      side: BorderSide(color: border ?? scheme.outlineVariant),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    ),
+  );
+}
+
+/// The body of a card whose value is not there: loading, failed or
+/// unavailable, each with its own text.
+Widget _notThere<T>(Observed<T> state, String pendingText) {
+  switch (state) {
+    case Pending<T>():
+      return Row(
+        children: [
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Text(pendingText,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12))),
+        ],
+      );
+    case Failed<T>(:final error):
+      return SelectableText(error,
+          style: const TextStyle(color: Colors.red, fontSize: 12));
+    case Unavailable<T>(:final reason, :final detail):
+      return Text(unavailableMessage(reason, detail),
+          style: const TextStyle(color: Colors.grey, fontSize: 12));
+    case Present<T>():
+      return const SizedBox.shrink();
   }
 }
 
-class ProbeGeneralView extends ProbeViewBase {
+/// The message of a tab that has nothing to show for this target.
+Widget _tabMessage(String text, {bool error = false}) {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: SelectableText(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: error ? Colors.red : Colors.grey),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Shows a tab's top-level state: the model builder runs for Present only.
+Widget _tabBody<T>(Observed<T> state, Widget Function(T) present) {
+  return switch (state) {
+    Present<T>(:final value) => present(value),
+    Pending<T>() => const Center(child: CircularProgressIndicator()),
+    Failed<T>(:final error) => _tabMessage('Error: $error', error: true),
+    Unavailable<T>(:final detail, :final reason) =>
+      _tabMessage(detail.isEmpty ? unavailableMessage(reason, detail) : detail),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// General
+// ---------------------------------------------------------------------------
+
+class ProbeGeneralView extends StatelessWidget {
   const ProbeGeneralView({super.key});
 
-  @override
-  @override
-  Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    // Check if we have browser probe results
-    final browserResult = htmlService.browserProbeResult;
-    final hasBrowserProbe = browserResult != null && browserResult.isNotEmpty;
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    final state = context
+        .select<HtmlService, Observed<GeneralModel>>((s) => s.generalView);
+    return _tabBody(state, (m) => _content(context, m));
+  }
+
+  Widget _content(BuildContext context, GeneralModel m) {
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.bold,
+        );
+    final status = m.status;
     return Scrollbar(
         child: ListView(
       primary: true,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
-        if (hasBrowserProbe) ...[
-          // Section Header for CURL Probe
-          Text(
-            'Curl Probe (Server-Side)',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-        ],
-        _buildStatusCard(context, htmlService, result),
-        const SizedBox(height: 16),
-        _buildContentTypeTruthCard(context, htmlService, result),
-        const SizedBox(height: 16),
-        _buildSourceDiffCard(context, htmlService),
-        const SizedBox(height: 16),
-        if (_redirectChainFrom(result).isNotEmpty) ...[
-          _buildRedirectChainView(
-              context, htmlService, _redirectChainFrom(result)),
+        Text('Curl Probe (Server-Side)', style: titleStyle),
+        const SizedBox(height: 8),
+        _buildStatusCard(context, status),
+        if (m.divergences.isNotEmpty) ...[
           const SizedBox(height: 16),
+          _buildDivergences(context, m.divergences),
         ],
-        _buildRobotsSitemapCard(context, htmlService, result),
         const SizedBox(height: 16),
-        _buildStorageInspector(context, browserResult),
+        _buildContentTypeTruthCard(context, m.contentType),
         const SizedBox(height: 16),
-        _buildNetworkInfoCard(context, result),
-        if (hasBrowserProbe || htmlService.isWebViewLoading) ...[
-          const SizedBox(height: 24),
-          const Divider(),
+        _buildSourceDiffCard(context, m.diff),
+        if (status is Present<ServerStatus> &&
+            status.value.redirects.isNotEmpty) ...[
           const SizedBox(height: 16),
-          Text(
-            'Browser Probe (Client-Side)',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-          if (hasBrowserProbe)
-            _buildBrowserProbeCard(context, browserResult)
-          else
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: CircularProgressIndicator(),
-              ),
-            ),
+          _buildRedirectChainView(context, status.value.redirects),
         ],
+        const SizedBox(height: 16),
+        _buildRobotsSitemapCard(context, m.robots),
+        const SizedBox(height: 16),
+        _buildNetworkInfoCard(context, m.network),
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 16),
+        Text('Browser Probe (Client-Side)', style: titleStyle),
+        const SizedBox(height: 8),
+        _buildBrowserProbeCard(context, m.browser),
+        const SizedBox(height: 16),
+        _buildStorageInspector(context, m.storage),
       ],
     ));
   }
 
-  Widget _buildContentTypeTruthCard(BuildContext context,
-      HtmlService htmlService, Map<String, dynamic> result) {
-    final headers = result['headers'] as Map?;
-    final rawContentType = headers?['content-type']?.toString() ??
-        headers?['Content-Type']?.toString() ??
-        '';
-    final declaredMime = rawContentType.split(';').first.trim().toLowerCase();
-    final content = htmlService.currentFile?.content ?? '';
-    final filename =
-        htmlService.currentFile?.name ?? result['finalUrl']?.toString();
-    final sniffed = _sniffContentType(content, filename);
-    final status = _contentTypeTruthStatus(declaredMime, sniffed);
-    final color = status.$1;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: color.withValues(alpha: 0.36)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+  Widget _buildDivergences(BuildContext context, List<Divergence> items) {
+    return _card(
+      context,
+      [
+        _cardTitle(context, Icons.compare_arrows,
+            "The app's request and the browser differ",
+            color: Colors.orange),
+        const SizedBox(height: 10),
+        for (final d in items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(status.$2, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Content-Type Truth Check',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildDetailRow(
-                'Declared', declaredMime.isEmpty ? 'N/A' : rawContentType),
-            _buildDetailRow('Sniffed', sniffed),
-            _buildDetailRow('Verdict', status.$3),
-          ],
-        ),
-      ),
-    );
-  }
-
-  (Color, IconData, String) _contentTypeTruthStatus(
-      String declaredMime, String sniffed) {
-    if (declaredMime.isEmpty) {
-      return (
-        Colors.orange,
-        Icons.help_outline,
-        'No Content-Type header to compare.'
-      );
-    }
-    if (_mimeMatchesSniff(declaredMime, sniffed)) {
-      return (
-        Colors.green,
-        Icons.check_circle_outline,
-        'Header and content look aligned.'
-      );
-    }
-    return (
-      Colors.red,
-      Icons.warning_amber_rounded,
-      'Header does not match the loaded content shape.'
-    );
-  }
-
-  bool _mimeMatchesSniff(String mime, String sniffed) {
-    if (sniffed == 'empty') return true;
-    if (mime.contains('html')) return sniffed == 'html';
-    if (mime.contains('xml') || mime.contains('svg')) return sniffed == 'xml';
-    if (mime.contains('json')) return sniffed == 'json';
-    if (mime.contains('javascript') || mime.contains('ecmascript')) {
-      return sniffed == 'javascript' || sniffed == 'text';
-    }
-    if (mime == 'text/css') return sniffed == 'css' || sniffed == 'text';
-    if (mime == 'text/plain') return sniffed == 'text';
-    if (mime.startsWith('text/')) {
-      return sniffed == 'text';
-    }
-    return true;
-  }
-
-  String _sniffContentType(String content, String? filename) {
-    final trimmed = content.trimLeft();
-    final lowerName = filename?.toLowerCase() ?? '';
-    if (trimmed.isEmpty) return 'empty';
-
-    final lower = trimmed.toLowerCase();
-    final withoutLeadingComments = lower.replaceFirst(
-      RegExp(r'^(<!--.*?-->\s*)+', dotAll: true),
-      '',
-    );
-
-    // HTML wins before CSS/JS. Full documents and fragments often contain
-    // inline <style> or <script> blocks that look like standalone CSS/JS.
-    if (withoutLeadingComments.startsWith('<!doctype html') ||
-        withoutLeadingComments.startsWith('<html') ||
-        RegExp(r'<(head|body|title|meta|script|style|div|main|section|article)\b')
-            .hasMatch(lower)) {
-      return 'html';
-    }
-
-    if (lower.startsWith('<?xml') ||
-        lower.startsWith('<rss') ||
-        lower.startsWith('<feed') ||
-        lower.startsWith('<svg')) {
-      return 'xml';
-    }
-
-    if (_looksLikeJson(trimmed)) return 'json';
-
-    if (lowerName.endsWith('.css') || _looksLikeStandaloneCss(trimmed)) {
-      return 'css';
-    }
-    if (lowerName.endsWith('.js') ||
-        lowerName.endsWith('.mjs') ||
-        _looksLikeStandaloneJavascript(trimmed)) {
-      return 'javascript';
-    }
-    return 'text';
-  }
-
-  bool _looksLikeJson(String content) {
-    final trimmed = content.trimLeft();
-    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) return false;
-    try {
-      jsonDecode(trimmed);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  bool _looksLikeStandaloneCss(String content) {
-    final trimmed = content.trimLeft();
-    final lower = trimmed.toLowerCase();
-    if (lower.contains('<style') || lower.contains('<script')) return false;
-    if (RegExp(r'^(const|let|var|function|class|import|export)\b')
-        .hasMatch(lower)) {
-      return false;
-    }
-    if (lower.startsWith('@charset') ||
-        lower.startsWith('@import') ||
-        lower.startsWith('@media') ||
-        lower.startsWith('@font-face') ||
-        lower.startsWith('@keyframes')) {
-      return true;
-    }
-    return RegExp(r'^[.#]?[a-z0-9_:\-\*\[\]="\s,>+~]+\{[^}]*:[^}]*\}',
-            caseSensitive: false, dotAll: true)
-        .hasMatch(trimmed);
-  }
-
-  bool _looksLikeStandaloneJavascript(String content) {
-    final trimmed = content.trimLeft();
-    final lower = trimmed.toLowerCase();
-    if (lower.contains('<script') || lower.contains('<style')) return false;
-    return RegExp(
-      r'^(import\s|export\s|const\s|let\s|var\s|function\s|class\s|async\s+function\s|\(\s*function|\w+\s*=>)',
-      caseSensitive: false,
-    ).hasMatch(trimmed);
-  }
-
-  Widget _buildRobotsSitemapCard(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    final discovery = result['robotsSitemap'] as Map<String, dynamic>?;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.travel_explore,
-                    size: 20, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Robots / Sitemap Discovery',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (discovery == null)
-              const Text('Discovery is running or unavailable for this URL.',
-                  style: TextStyle(color: Colors.grey, fontSize: 12))
-            else ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildDiscoveryChip(
-                    discovery['robotsPresent'] == true
-                        ? Icons.check_circle_outline
+                Icon(
+                    d.lowSeverity
+                        ? Icons.info_outline
                         : Icons.warning_amber_rounded,
-                    'robots ${discovery['robotsStatus'] ?? 'N/A'}',
-                    discovery['robotsPresent'] == true
-                        ? Colors.green
-                        : Colors.orange,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.map_outlined,
-                    '${(discovery['sitemaps'] as List? ?? []).length} sitemap${(discovery['sitemaps'] as List? ?? []).length == 1 ? '' : 's'}',
-                    Colors.blue,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.block,
-                    '${discovery['disallowCount'] ?? 0} disallow',
-                    Colors.red,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.done_outline,
-                    '${discovery['allowCount'] ?? 0} allow',
-                    Colors.green,
-                  ),
-                ],
+                    size: 15,
+                    color: d.lowSeverity ? Colors.grey : Colors.orange),
+                const SizedBox(width: 7),
+                Expanded(
+                    child:
+                        Text(d.message, style: const TextStyle(fontSize: 12))),
+              ],
+            ),
+          ),
+      ],
+      border: Colors.orange.withValues(alpha: 0.4),
+    );
+  }
+
+  Widget _buildStatusCard(BuildContext context, Observed<ServerStatus> state) {
+    if (state is! Present<ServerStatus>) {
+      return _card(
+          context,
+          [
+            _cardTitle(context, Icons.dns_outlined, 'Server response'),
+            const SizedBox(height: 12),
+            _notThere(state, 'Fetching…'),
+          ],
+          filled: true);
+    }
+    final s = state.value;
+    final code = s.last.status;
+    var statusColor = Colors.green;
+    if (code >= 300 && code < 400) statusColor = Colors.orange;
+    if (code >= 400) statusColor = Colors.red;
+    final htmlService = context.read<HtmlService>();
+
+    return _card(
+      context,
+      [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: statusColor),
               ),
-              const SizedBox(height: 12),
-              _buildDetailRow(
-                  'Robots URL', discovery['robotsUrl']?.toString() ?? 'N/A'),
-              if ((discovery['sitemaps'] as List? ?? []).isNotEmpty) ...[
-                const SizedBox(height: 8),
-                ...(discovery['sitemaps'] as List).map((url) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      leading:
-                          const Icon(Icons.account_tree_outlined, size: 18),
-                      title: Text(
-                        url.toString(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12, fontFamily: 'monospace'),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 12),
-                      onTap: () => htmlService.loadFromUrl(url.toString()),
-                    )),
-              ],
-              if ((discovery['sampleDisallow'] as List? ?? []).isNotEmpty) ...[
-                const Divider(height: 20),
-                Text(
-                  'Sample disallow rules',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                  ),
+              child: Text(
+                s.finalStatusText,
+                style:
+                    TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (s.isRedirect)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.blue),
                 ),
-                const SizedBox(height: 6),
-                ...(discovery['sampleDisallow'] as List).map(
-                  (rule) => Text(rule.toString(),
-                      style: const TextStyle(
-                          fontSize: 12, fontFamily: 'monospace')),
-                ),
-              ],
-            ],
+                child: const Text('Redirect',
+                    style: TextStyle(
+                        color: Colors.blue, fontWeight: FontWeight.bold)),
+              ),
           ],
         ),
-      ),
+        const SizedBox(height: 4),
+        const Text('Answer to the app\'s own request, not the browser\'s',
+            style: TextStyle(color: Colors.grey, fontSize: 11)),
+        const SizedBox(height: 12),
+        _detailRow('Content-Type', s.contentType ?? 'not sent by the server'),
+        _detailRow('Final URL', s.finalUrlLabel),
+        if (s.redirectTo != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(
+                  width: 128,
+                  child: Text('Redirect to:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => htmlService.loadFromUrl(s.redirectTo!),
+                    child: Text(
+                      s.redirectTo!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        _detailRow('Content Length', s.contentLengthLabel),
+        _detailRow('Body received', s.bodyLabel),
+        _detailRow('User-Agent', s.userAgent),
+      ],
+      filled: true,
     );
+  }
+
+  Widget _buildContentTypeTruthCard(
+      BuildContext context, Observed<ContentTypeTruth> state) {
+    if (state is! Present<ContentTypeTruth>) {
+      return _card(context, [
+        _cardTitle(context, Icons.help_outline, 'Content-Type Truth Check'),
+        const SizedBox(height: 12),
+        _notThere(state, 'Waiting for the server response…'),
+      ]);
+    }
+    final c = state.value;
+    final (color, icon) = switch (c.verdict) {
+      ContentTypeVerdict.aligned => (Colors.green, Icons.check_circle_outline),
+      ContentTypeVerdict.mismatch => (Colors.red, Icons.warning_amber_rounded),
+      ContentTypeVerdict.noHeader => (Colors.orange, Icons.help_outline),
+    };
+    return _card(
+      context,
+      [
+        _cardTitle(context, icon, 'Content-Type Truth Check', color: color),
+        const SizedBox(height: 12),
+        _detailRow('Declared', c.declared ?? 'not sent by the server'),
+        _detailRow('Sniffed', '${c.sniffed} (server response)'),
+        _detailRow('Verdict', c.verdictText),
+      ],
+      border: color.withValues(alpha: 0.36),
+    );
+  }
+
+  Widget _buildRobotsSitemapCard(
+      BuildContext context, Observed<RobotsCard> state) {
+    if (state is! Present<RobotsCard>) {
+      return _card(context, [
+        _cardTitle(context, Icons.travel_explore, 'Robots / Sitemap Discovery'),
+        const SizedBox(height: 12),
+        _notThere(state, 'Checking robots.txt and sitemap.xml…'),
+      ]);
+    }
+    final r = state.value;
+    final htmlService = context.read<HtmlService>();
+    return _card(context, [
+      _cardTitle(context, Icons.travel_explore, 'Robots / Sitemap Discovery'),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _chip(
+            r.robotsFound == true
+                ? Icons.check_circle_outline
+                : Icons.warning_amber_rounded,
+            r.robotsLabel,
+            r.robotsFound == true ? Colors.green : Colors.orange,
+          ),
+          _chip(Icons.map_outlined, r.sitemapsLabel, Colors.blue),
+          _chip(Icons.block, r.disallowLabel, Colors.red),
+          _chip(Icons.done_outline, r.allowLabel, Colors.green),
+        ],
+      ),
+      const SizedBox(height: 12),
+      _detailRow('Robots URL', r.robotsUrl),
+      if (r.truncatedNote != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(r.truncatedNote!,
+              style: const TextStyle(color: Colors.orange, fontSize: 12)),
+        ),
+      if (r.sitemaps.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        ...r.sitemaps.map((url) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: const Icon(Icons.account_tree_outlined, size: 18),
+              title: Text(
+                url,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+              onTap: () => htmlService.loadFromUrl(url),
+            )),
+      ],
+      if (r.sampleDisallow.isNotEmpty) ...[
+        const Divider(height: 20),
+        Text(
+          'Sample disallow rules',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 6),
+        ...r.sampleDisallow.map(
+          (rule) => Text(rule,
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
+        ),
+      ],
+    ]);
   }
 
   Widget _buildStorageInspector(
-      BuildContext context, Map<String, dynamic>? browserResult) {
-    final storage = browserResult?['storage'] as Map<String, dynamic>?;
-    final local = storage?['localStorage'] as Map<String, dynamic>?;
-    final session = storage?['sessionStorage'] as Map<String, dynamic>?;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
+      BuildContext context, Observed<StorageCard> state) {
+    if (state is! Present<StorageCard>) {
+      return _card(context, [
+        _cardTitle(context, Icons.inventory_2_outlined, 'Storage Inspector'),
+        const SizedBox(height: 12),
+        _notThere(state, 'Waiting for the browser…'),
+      ]);
+    }
+    final s = state.value;
+    return _card(context, [
+      _cardTitle(context, Icons.inventory_2_outlined, 'Storage Inspector'),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (s.local != null) ...[
+            _chip(Icons.storage, s.local!.countLabel, Colors.blue),
+            _chip(Icons.memory, s.local!.sizeLabel, Colors.blue),
+          ] else
+            _chip(
+                Icons.storage, 'localStorage: ${s.localUnknown}', Colors.grey),
+          if (s.session != null) ...[
+            _chip(Icons.tab, s.session!.countLabel, Colors.purple),
+            _chip(Icons.memory, s.session!.sizeLabel, Colors.purple),
+          ] else
+            _chip(
+                Icons.tab, 'sessionStorage: ${s.sessionUnknown}', Colors.grey),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.inventory_2_outlined,
-                    color: Theme.of(context).colorScheme.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Storage Inspector',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (storage == null)
-              const Text(
-                'Open or reload the Browser tab to collect localStorage and sessionStorage.',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              )
-            else ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildDiscoveryChip(
-                    Icons.storage,
-                    'local ${local?['count'] ?? 0} keys',
-                    Colors.blue,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.memory,
-                    FormatUtils.formatBytes(
-                        (local?['bytes'] as num? ?? 0).toInt()),
-                    Colors.blue,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.tab,
-                    'session ${session?['count'] ?? 0} keys',
-                    Colors.purple,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.memory,
-                    FormatUtils.formatBytes(
-                        (session?['bytes'] as num? ?? 0).toInt()),
-                    Colors.purple,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _buildStorageKeyList(context, 'localStorage', local),
-              _buildStorageKeyList(context, 'sessionStorage', session),
-            ],
-          ],
-        ),
-      ),
-    );
+      const SizedBox(height: 12),
+      if (s.local != null)
+        _buildStorageKeyList(context, 'localStorage', s.local!),
+      if (s.session != null)
+        _buildStorageKeyList(context, 'sessionStorage', s.session!),
+    ]);
   }
 
   Widget _buildStorageKeyList(
-      BuildContext context, String label, Map<String, dynamic>? storage) {
-    final items = storage?['items'] as List? ?? const [];
-    if (items.isEmpty) return const SizedBox.shrink();
+      BuildContext context, String label, StorageAreaCard area) {
+    if (area.items.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -531,596 +560,228 @@ class ProbeGeneralView extends ProbeViewBase {
           ),
         ),
         const SizedBox(height: 4),
-        ...items.take(8).map((item) {
-          final map = item as Map;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 3),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    map['k']?.toString() ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        ...area.items.take(8).map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.key,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontFamily: 'monospace', fontSize: 12),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  FormatUtils.formatBytes((map['s'] as num? ?? 0).toInt()),
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-              ],
-            ),
-          );
-        }),
+                  const SizedBox(width: 8),
+                  Text(
+                    item.size,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            )),
       ],
     );
   }
 
-  Widget _buildSourceDiffCard(BuildContext context, HtmlService htmlService) {
-    final serverSource = htmlService.serverSource;
-    final browserSource = htmlService.currentFile?.content;
-    final hasBrowserSource = browserSource != null && browserSource.isNotEmpty;
-    final hasServerSource = serverSource != null && serverSource.isNotEmpty;
+  Widget _buildSourceDiffCard(BuildContext context, SourceDiffCard card) {
+    final diff = card.diff;
+    final changed = diff?.changed ?? 0;
+    final color = diff == null
+        ? Theme.of(context).colorScheme.primary
+        : changed == 0
+            ? Colors.green
+            : changed < 30
+                ? Colors.orange
+                : Colors.red;
+    final muted =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.68);
 
-    if (!hasServerSource || !hasBrowserSource) {
-      return Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(12),
+    return _card(
+      context,
+      [
+        _cardTitle(context, Icons.difference_outlined, 'Diff Two Sources',
+            color: color),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final side in card.sides)
+              _chip(
+                side.ready ? Icons.check_circle_outline : Icons.hourglass_empty,
+                '${side.name}: ${side.status}',
+                side.ready ? Colors.green : Colors.orange,
+              ),
+          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        if (diff == null) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Both the server HTML and the rendered DOM are needed to compare them.',
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.difference_outlined,
-                      color: Theme.of(context).colorScheme.primary, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Diff Two Sources',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                !hasBrowserSource
-                    ? 'Open or reload the Browser tab first so there is a rendered DOM snapshot to compare.'
-                    : 'Fetch the original server source to compare it with the browser DOM snapshot.',
-                style: TextStyle(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.68),
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildDiscoveryChip(
-                    hasServerSource
-                        ? Icons.check_circle_outline
-                        : Icons.download_outlined,
-                    hasServerSource
-                        ? 'server source ready'
-                        : 'server source missing',
-                    hasServerSource ? Colors.green : Colors.orange,
-                  ),
-                  _buildDiscoveryChip(
-                    hasBrowserSource
-                        ? Icons.check_circle_outline
-                        : Icons.web_asset_off_outlined,
-                    hasBrowserSource
-                        ? 'browser DOM ready'
-                        : 'browser DOM missing',
-                    hasBrowserSource ? Colors.green : Colors.orange,
-                  ),
-                ],
-              ),
-              if (hasBrowserSource && !hasServerSource) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    icon: htmlService.isLoading
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.download_outlined, size: 16),
-                    label: const Text('Fetch server source'),
-                    onPressed: htmlService.isLoading
-                        ? null
-                        : () => htmlService.loadServerSourceForDiff(),
-                  ),
-                ),
-              ],
+              _chip(Icons.dns, '${diff.serverLines} server lines', Colors.blue),
+              _chip(Icons.web, '${diff.browserLines} DOM lines', Colors.purple),
+              _chip(Icons.add, '+${diff.addedLines}', Colors.green),
+              _chip(Icons.remove, '-${diff.removedLines}', Colors.red),
+              _chip(Icons.percent, '${diff.similarity}% similar', color),
             ],
           ),
-        ),
-      );
-    }
-
-    final diff = _sourceDiff(serverSource, browserSource);
-    final changed = diff.addedLines + diff.removedLines;
-    final color = changed == 0
-        ? Colors.green
-        : changed < 30
-            ? Colors.orange
-            : Colors.red;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: color.withValues(alpha: 0.34)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.difference_outlined, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Diff Two Sources',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+          const SizedBox(height: 12),
+          Text(
+            changed == 0
+                ? 'Server HTML and rendered DOM look identical.'
+                : 'Compact line-level diff between the server HTML (-) and the rendered DOM (+).',
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+          if (diff.samples.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildDiscoveryChip(
-                    Icons.dns, '${diff.serverLines} server lines', Colors.blue),
-                _buildDiscoveryChip(Icons.web,
-                    '${diff.browserLines} browser lines', Colors.purple),
-                _buildDiscoveryChip(
-                    Icons.add, '+${diff.addedLines}', Colors.green),
-                _buildDiscoveryChip(
-                    Icons.remove, '-${diff.removedLines}', Colors.red),
-                _buildDiscoveryChip(
-                    Icons.percent, '${diff.similarity}% similar', color),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              changed == 0
-                  ? 'Server source and browser DOM snapshot look identical.'
-                  : 'Shows a compact line-level diff between curl/server HTML and the browser DOM snapshot.',
-              style: TextStyle(
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
                 color: Theme.of(context)
                     .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.68),
-                fontSize: 12,
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SelectableText(
+                diff.samples.join('\n'),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
               ),
             ),
-            if (diff.samples.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SelectableText(
-                  diff.samples.join('\n'),
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                ),
-              ),
-            ],
           ],
-        ),
-      ),
-    );
-  }
-
-  _SourceDiffSummary _sourceDiff(String serverSource, String browserSource) {
-    final serverLines = _normalizedLines(serverSource);
-    final browserLines = _normalizedLines(browserSource);
-    final serverSet = serverLines.toSet();
-    final browserSet = browserLines.toSet();
-    final removed =
-        serverLines.where((line) => !browserSet.contains(line)).toList();
-    final added =
-        browserLines.where((line) => !serverSet.contains(line)).toList();
-    final shared = serverSet.intersection(browserSet).length;
-    final total = serverSet.union(browserSet).length;
-    final similarity = total == 0 ? 100 : ((shared / total) * 100).round();
-
-    final samples = <String>[
-      ...removed.take(4).map((line) => '- ${_shortDiffLine(line)}'),
-      ...added.take(4).map((line) => '+ ${_shortDiffLine(line)}'),
-    ];
-
-    return _SourceDiffSummary(
-      serverLines: serverLines.length,
-      browserLines: browserLines.length,
-      addedLines: added.length,
-      removedLines: removed.length,
-      similarity: similarity,
-      samples: samples,
-    );
-  }
-
-  List<String> _normalizedLines(String source) {
-    return source
-        .split(RegExp(r'\r?\n'))
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-  }
-
-  String _shortDiffLine(String line) {
-    final collapsed = line.replaceAll(RegExp(r'\s+'), ' ');
-    return collapsed.length > 140
-        ? '${collapsed.substring(0, 137)}...'
-        : collapsed;
-  }
-
-  Widget _buildDiscoveryChip(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 14),
-          const SizedBox(width: 5),
-          Text(label,
-              style: TextStyle(
-                  color: color, fontSize: 11, fontWeight: FontWeight.bold)),
         ],
-      ),
+      ],
+      border: color.withValues(alpha: 0.34),
     );
   }
 
-  Widget _buildRedirectChainView(BuildContext context, HtmlService htmlService,
-      List<Map<String, dynamic>> redirects) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.alt_route,
-                    size: 20, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Redirect Chain View',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+  Widget _buildRedirectChainView(
+      BuildContext context, List<RedirectStep> redirects) {
+    final htmlService = context.read<HtmlService>();
+    return _card(context, [
+      _cardTitle(context, Icons.alt_route, 'Redirect Chain View'),
+      const SizedBox(height: 12),
+      ...redirects.asMap().entries.map((entry) {
+        final step = entry.value;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 13,
+                backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                child: Text(
+                  '${entry.key + 1}',
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...redirects.asMap().entries.map((entry) {
-              final redirect = entry.value;
-              final status = redirect['statusCode']?.toString() ?? '3xx';
-              final from = redirect['from']?.toString() ?? '';
-              final to = redirect['to']?.toString() ?? '';
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 13,
-                      backgroundColor: Colors.orange.withValues(alpha: 0.15),
-                      child: Text(
-                        '${entry.key + 1}',
+                    Text(step.statusText,
                         style: const TextStyle(
-                          color: Colors.orange,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(status,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 13)),
-                          const SizedBox(height: 3),
-                          SelectableText(from,
-                              style: const TextStyle(fontSize: 11)),
-                          const SizedBox(height: 3),
-                          InkWell(
-                            onTap: () => htmlService.loadFromUrl(to),
-                            child: Text(
-                              to,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontSize: 11,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Map<String, dynamic>> _redirectChainFrom(Map<String, dynamic> result) {
-    final raw = result['redirectChain'];
-    if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-    final redirectLocation = result['redirectLocation']?.toString();
-    if (redirectLocation == null || redirectLocation.isEmpty) return [];
-    return [
-      {
-        'from': result['url'],
-        'to': redirectLocation,
-        'statusCode': result['statusCode'],
-        'reasonPhrase': result['reasonPhrase'],
-      }
-    ];
-  }
-
-  Widget _buildBrowserProbeCard(
-      BuildContext context, Map<String, dynamic> result) {
-    final pageWeight = result['pageWeight'] as Map<String, dynamic>? ?? {};
-    final totalTx = pageWeight['totalTransfer'] as int? ?? 0;
-    final totalDec = pageWeight['totalDecoded'] as int? ?? 0;
-    final mainDocTx = pageWeight['mainDocumentTransfer'] as int? ?? 0;
-    final mainDocDec = pageWeight['mainDocumentDecoded'] as int? ?? 0;
-    final resourceCount = result['resourceCount'] as int? ?? 0;
-    final url = result['url'] as String? ?? 'N/A';
-    final statusCode = result['serverStatusCode'];
-
-    return Card(
-      elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.3),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDetailRow('Effective URL', url),
-            if (statusCode != null)
-              _buildDetailRow('HTTP Status', statusCode.toString()),
-            const SizedBox(height: 8),
-            const Divider(),
-            const SizedBox(height: 8),
-            _buildDetailRow(
-                'Document Size',
-                mainDocDec > 0
-                    ? FormatUtils.formatBytesWithTransfer(
-                        {'decoded': mainDocDec, 'transfer': mainDocTx})
-                    : 'N/A'),
-            const Divider(),
-            _buildDetailRow('Total Resources', '$resourceCount requests'),
-            _buildDetailRow(
-                'Total Size',
-                totalDec > 0
-                    ? FormatUtils.formatBytesWithTransfer(
-                        {'decoded': totalDec, 'transfer': totalTx})
-                    : 'N/A'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusCard(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    final status = result['statusCode'];
-    final reason = result['reasonPhrase'];
-    final isRedirect = result['isRedirect'] == true;
-
-    Color statusColor = Colors.green;
-    if (status != null) {
-      if (status >= 300 && status < 400) statusColor = Colors.orange;
-      if (status >= 400) statusColor = Colors.red;
-    }
-
-    return Card(
-      elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.3),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor),
-                  ),
-                  child: Text(
-                    '$status $reason'.trim(),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                if (isRedirect)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blue),
-                    ),
-                    child: const Text(
-                      'Redirect',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (result['headers']?['content-type'] != null)
-              _buildDetailRow(
-                  'Content-Type', result['headers']['content-type']),
-            _buildDetailRow('Final URL', result['finalUrl'] ?? 'N/A'),
-            if (isRedirect && result['redirectLocation'] != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      width: 128,
-                      child: Text(
-                        'Redirect to:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          // Load the redirect URL
-                          final redirectUrl = result['redirectLocation'];
-                          Provider.of<HtmlService>(context, listen: false)
-                              .loadFromUrl(redirectUrl);
-                        },
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 3),
+                    SelectableText(step.from,
+                        style: const TextStyle(fontSize: 11)),
+                    const SizedBox(height: 3),
+                    if (step.to == null)
+                      const Text('no Location header',
+                          style: TextStyle(color: Colors.grey, fontSize: 11))
+                    else
+                      InkWell(
+                        onTap: () => htmlService.loadFromUrl(step.to!),
                         child: Text(
-                          result['redirectLocation'],
+                          step.to!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.primary,
+                            fontSize: 11,
                             decoration: TextDecoration.underline,
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
-            if (result['contentLength'] != null ||
-                (htmlService.currentFile?.content.isNotEmpty ?? false))
-              _buildDetailRow(
-                'Content Length',
-                () {
-                  final probeLength = result['contentLength'] ?? 0;
-                  final fileLength =
-                      htmlService.currentFile?.content.length ?? 0;
-                  if (fileLength > 0) {
-                    return '$probeLength ($fileLength bytes loaded)';
-                  }
-                  return '$probeLength bytes';
-                }(),
-              ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      }),
+    ]);
+  }
+
+  Widget _buildBrowserProbeCard(
+      BuildContext context, Observed<BrowserCard> state) {
+    if (state is! Present<BrowserCard>) {
+      return _card(context, [_notThere(state, 'Waiting for the browser…')],
+          filled: true);
+    }
+    final b = state.value;
+    return _card(
+      context,
+      [
+        _detailRow('Effective URL', b.url),
+        _detailRow('Environment', b.environment),
+        const SizedBox(height: 8),
+        const Divider(),
+        const SizedBox(height: 8),
+        _detailRow('Document Size', b.documentSizeLabel),
+        const Divider(),
+        _detailRow('Total Resources', b.resourcesLabel),
+        _detailRow('Total Size', b.totalSizeLabel),
+      ],
+      filled: true,
     );
   }
 
   Widget _buildNetworkInfoCard(
-      BuildContext context, Map<String, dynamic> result) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Network & Performance',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            if (result['ipAddress'] != null)
-              _buildDetailRow('Server IP', result['ipAddress']),
-            if (result['responseTime'] != null)
-              _buildDetailRow('Response Time', '${result['responseTime']} ms'),
-            if (result['headers']?['server'] != null)
-              _buildDetailRow('Server Software', result['headers']['server']),
-            if (result['headers']?['via'] != null)
-              _buildDetailRow('Proxy/Via', result['headers']['via']),
-          ],
-        ),
-      ),
+      BuildContext context, Observed<NetworkCard> state) {
+    final title = Text(
+      'Network & Performance',
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.primary,
+          ),
     );
+    if (state is! Present<NetworkCard>) {
+      return _card(context, [
+        title,
+        const SizedBox(height: 12),
+        _notThere(state, 'Fetching…'),
+      ]);
+    }
+    final n = state.value;
+    return _card(context, [
+      title,
+      const SizedBox(height: 12),
+      _detailRow('Remote address', n.remoteAddress),
+      _detailRow('Response Time', n.responseTime),
+      if (n.serverSoftware != null)
+        _detailRow('Server Software', n.serverSoftware!),
+      if (n.via != null) _detailRow('Proxy/Via', n.via!),
+      for (final (label, value) in n.browserTiming)
+        _detailRow(label, '$value (measured by the browser)'),
+    ]);
   }
 }
 
@@ -2920,24 +2581,6 @@ class _CookiePrivacyNote {
   final String text;
 
   const _CookiePrivacyNote(this.icon, this.color, this.text);
-}
-
-class _SourceDiffSummary {
-  final int serverLines;
-  final int browserLines;
-  final int addedLines;
-  final int removedLines;
-  final int similarity;
-  final List<String> samples;
-
-  const _SourceDiffSummary({
-    required this.serverLines,
-    required this.browserLines,
-    required this.addedLines,
-    required this.removedLines,
-    required this.similarity,
-    required this.samples,
-  });
 }
 
 enum _CspSeverity {

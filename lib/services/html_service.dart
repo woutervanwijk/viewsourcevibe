@@ -31,6 +31,7 @@ import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
@@ -693,6 +694,20 @@ class HtmlService extends ChangeNotifier {
       _divergences = deriveDivergences(current);
     }
     return _divergences!;
+  }
+
+  Observed<GeneralModel>? _general;
+  PageInspection? _generalFor;
+
+  /// The General probe tab: server response, content-type check, source
+  /// diff, robots, storage, network and browser cards.
+  Observed<GeneralModel> get generalView {
+    final current = store.current;
+    if (_general == null || !identical(current, _generalFor)) {
+      _generalFor = current;
+      _general = deriveGeneral(current, divergences: divergences);
+    }
+    return _general!;
   }
 
   Observed<PageSizeModel>? _pageSize;
