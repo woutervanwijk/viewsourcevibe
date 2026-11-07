@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/html_file.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 
 // Mock class for testing
-class MockSharingService extends Mock implements SharingService {}
+class MockSharingService extends Mock implements UnifiedSharingService {}
 
-@GenerateMocks([SharingService])
+@GenerateMocks([UnifiedSharingService])
 void main() {
   group('Source Code Sharing Tests', () {
     
@@ -118,7 +118,7 @@ void main() {
     
     test('ShareHtml method signature is correct', () async {
       // Verify the shareHtml method exists and has correct parameters
-      expect(SharingService.shareHtml, isNotNull);
+      expect(UnifiedSharingService.shareHtml, isNotNull);
       
       // The method should accept html content and optional filename
       // We can't call it directly in tests as it requires native platform,
@@ -127,7 +127,7 @@ void main() {
     
     test('ShareUrl method still exists for compatibility', () async {
       // Verify shareUrl still exists (though we're not using it for source code)
-      expect(SharingService.shareUrl, isNotNull);
+      expect(UnifiedSharingService.shareUrl, isNotNull);
     });
   });
 }

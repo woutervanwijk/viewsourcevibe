@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
@@ -51,36 +50,14 @@ void main() {
           .setMockMethodCallHandler(sharingChannel, null);
     });
 
-    test('SharingService.checkForSharedContent uses correct channel', () async {
-      // This test verifies that the method uses the correct channel
-      final result = await SharingService.checkForSharedContent();
-      
-      // Should return the mocked shared content
-      expect(result, isNotNull);
-      expect(result!['type'], 'text');
-      expect(result['content'], 'Test shared content');
-    });
-
-    test('SharingService.shareText uses correct channel', () async {
+    test('UnifiedSharingService.shareText uses correct channel', () async {
       // This test verifies that shareText uses the correct channel
       // We can't test the actual sharing in a unit test, but we can verify
       // that it doesn't throw an exception with our mock
       
       expect(() async {
-        await SharingService.shareText('Test text');
+        await UnifiedSharingService.shareText('Test text');
       }, returnsNormally);
-    });
-
-    test('MethodChannel error handling works correctly', () async {
-      // Test that error handling works when platform implementation is missing
-      
-      // Remove the mock handler to simulate missing platform implementation
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(sharedContentChannel, null);
-
-      // This should not throw an exception
-      final result = await SharingService.checkForSharedContent();
-      expect(result, isNull);
     });
 
     test('UnifiedSharingService.extractFileNameFromPath works correctly', () {

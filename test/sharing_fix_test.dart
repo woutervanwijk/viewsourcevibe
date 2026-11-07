@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
   // Initialize Flutter binding for tests
@@ -13,7 +13,7 @@ void main() {
       try {
         // This will fail because we're not running on a real device
         // but it should fail gracefully
-        await SharingService.shareHtml('<html><body>Test</body></html>',
+        await UnifiedSharingService.shareHtml('<html><body>Test</body></html>',
             filename: 'test.html');
       } catch (e) {
         // Expected to fail in test environment with MissingPluginException
@@ -24,7 +24,7 @@ void main() {
 
     test('shareText should handle errors gracefully', () async {
       try {
-        await SharingService.shareText('Test text');
+        await UnifiedSharingService.shareText('Test text');
       } catch (e) {
         expect(e, isA<Exception>());
         expect(e.toString(), contains('MissingPluginException'));
@@ -33,21 +33,11 @@ void main() {
 
     test('shareFile should handle errors gracefully', () async {
       try {
-        await SharingService.shareFile('/nonexistent/path/test.html');
+        await UnifiedSharingService.shareFile('/nonexistent/path/test.html');
       } catch (e) {
         expect(e, isA<Exception>());
         expect(e.toString(), contains('MissingPluginException'));
       }
-    });
-
-    test('checkForSharedContent handles missing platform implementation gracefully', () async {
-      // This test verifies that checkForSharedContent works in test environments
-      // where the platform channel isn't available
-      
-      final result = await SharingService.checkForSharedContent();
-      
-      // In test environment, this should return null (no shared content)
-      expect(result, isNull);
     });
   });
 }

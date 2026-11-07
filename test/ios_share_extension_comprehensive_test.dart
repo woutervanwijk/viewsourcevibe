@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
 
 void main() {
   group('iOS Share Extension Comprehensive Tests', () {
@@ -58,7 +57,7 @@ void main() {
       ];
       
       for (final filePath in iosFilePaths) {
-        expect(SharingService.isFilePath(filePath), true);
+        expect(UnifiedSharingService.isFilePath(filePath), true);
         
         // Test file name extraction
         final fileName = UnifiedSharingService.extractFileNameFromPath(filePath);
@@ -98,9 +97,9 @@ void main() {
       
       for (final contentType in contentTypes) {
         if (contentType['type'] == 'file') {
-          expect(SharingService.isFilePath(contentType['filePath'] as String), true);
+          expect(UnifiedSharingService.isFilePath(contentType['filePath'] as String), true);
         } else if (contentType['type'] == 'url') {
-          expect(SharingService.isUrl(contentType['content'] as String), true);
+          expect(UnifiedSharingService.isUrl(contentType['content'] as String), true);
         }
       }
     });
@@ -114,7 +113,7 @@ void main() {
       
       for (final errorCase in errorCases) {
         // Empty strings and whitespace should not be detected as URLs
-        expect(SharingService.isUrl(errorCase), false);
+        expect(UnifiedSharingService.isUrl(errorCase), false);
       }
     });
 
@@ -123,12 +122,12 @@ void main() {
       
       // Test 1: File path that contains URL-like parts - should be detected as file path
       final filePathWithUrl = '/Users/test/www.example.com/file.html';
-      expect(SharingService.isFilePath(filePathWithUrl), true);
-      expect(SharingService.isUrl(filePathWithUrl), false);
+      expect(UnifiedSharingService.isFilePath(filePathWithUrl), true);
+      expect(UnifiedSharingService.isUrl(filePathWithUrl), false);
       
       // Test 2: Complex file path with spaces and special characters
       final complexFilePath = '/Users/test/My Documents/Project Files/source code.html';
-      expect(SharingService.isFilePath(complexFilePath), true);
+      expect(UnifiedSharingService.isFilePath(complexFilePath), true);
       
       // Test 3: File name extraction from complex paths
       final fileName = UnifiedSharingService.extractFileNameFromPath(complexFilePath);
@@ -153,11 +152,11 @@ void main() {
       
       for (final data in iosSharedData) {
         if (data.containsKey('url')) {
-          expect(SharingService.isUrl(data['url'] as String), true);
+          expect(UnifiedSharingService.isUrl(data['url'] as String), true);
         } else if (data.containsKey('text')) {
           expect((data['text'] as String).isNotEmpty, true);
         } else if (data.containsKey('file')) {
-          expect(SharingService.isFilePath(data['file'] as String), true);
+          expect(UnifiedSharingService.isFilePath(data['file'] as String), true);
         }
       }
     });
@@ -188,7 +187,7 @@ void main() {
       
       for (final filePath in filePaths) {
         // Test that file paths are properly detected
-        expect(SharingService.isFilePath(filePath), true);
+        expect(UnifiedSharingService.isFilePath(filePath), true);
         
         // Test file name extraction
         final fileName = UnifiedSharingService.extractFileNameFromPath(filePath);

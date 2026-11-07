@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
 
 void main() {
   group('URL to File Conversion Tests', () {
@@ -9,7 +8,7 @@ void main() {
       // Test the actual case from the error
       final fileUrl = 'file:///Users/wouter/Library/Developer/CoreSimulator/Devices/2C19D11B-BEF5-45B1-81FD-0919B6BFB505/data/Containers/Data/Application/DDE7D1D9-790B-429E-A07B-BCAE79AADB4F/tmp/info.wouter.sourceviewer-Inbox/sample.py';
       
-      expect(SharingService.isFilePath(fileUrl), true);
+      expect(UnifiedSharingService.isFilePath(fileUrl), true);
     });
 
     test('Should extract file name from file URL', () {
@@ -76,7 +75,7 @@ void main() {
       final iosFilePath = 'file:///Users/wouter/Library/Developer/CoreSimulator/Devices/2C19D11B-BEF5-45B1-81FD-0919B6BFB505/data/Containers/Data/Application/DDE7D1D9-790B-429E-A07B-BCAE79AADB4F/tmp/info.wouter.sourceviewer-Inbox/sample.py';
       
       // Verify it's detected as a file path
-      expect(SharingService.isFilePath(iosFilePath), true);
+      expect(UnifiedSharingService.isFilePath(iosFilePath), true);
       
       // Verify file name extraction
       final fileName = UnifiedSharingService.extractFileNameFromPath(iosFilePath);
@@ -91,7 +90,7 @@ void main() {
       ];
       
       for (final webUrl in webUrls) {
-        expect(SharingService.isFilePath(webUrl), false);
+        expect(UnifiedSharingService.isFilePath(webUrl), false);
       }
     });
 

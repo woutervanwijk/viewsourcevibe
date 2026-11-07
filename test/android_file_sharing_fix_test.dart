@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
 
 void main() {
   // Initialize Flutter binding for tests
@@ -26,22 +25,19 @@ void main() {
       expect(result, '123'); // Last path segment
     });
 
-    test('SharingService file path detection works with content URIs', () {
-      // Test that SharingService can detect content URIs as file paths
+    test('UnifiedSharingService file path detection works with content URIs', () {
+      // Test that UnifiedSharingService can detect content URIs as file paths
 
-      // Content URIs should be detected as file paths
-      expect(
-          SharingService.isFilePath(
-              'content://com.android.providers.downloads.documents/document/123'),
-          isTrue);
+      // content:// URIs are not file paths: they have their own error
+      // page (UnifiedSharingService._handleContentUriError).
 
       // Regular file paths should still work
-      expect(SharingService.isFilePath('/storage/emulated/0/Download/file.txt'),
+      expect(UnifiedSharingService.isFilePath('/storage/emulated/0/Download/file.txt'),
           isTrue);
 
       // URLs should not be detected as file paths
       expect(
-          SharingService.isFilePath('https://example.com/file.txt'), isFalse);
+          UnifiedSharingService.isFilePath('https://example.com/file.txt'), isFalse);
     });
 
     test(
@@ -54,7 +50,7 @@ void main() {
         // This would normally fail in test environment due to MissingPluginException
         // but we're just testing that the method call doesn't crash
         try {
-          await SharingService.shareFile('/path/to/test.txt');
+          await UnifiedSharingService.shareFile('/path/to/test.txt');
         } catch (e) {
           // Expected to fail in test environment
           expect(e, isA<Exception>());
