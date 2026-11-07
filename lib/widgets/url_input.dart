@@ -4,9 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
-import 'dart:io';
-import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
-import 'package:view_source_vibe/services/collectors/file_loader.dart';
+import 'package:view_source_vibe/utils/path_name.dart';
 
 class UrlInput extends StatefulWidget {
   const UrlInput({super.key});
@@ -38,7 +36,7 @@ class _UrlInputState extends State<UrlInput> {
 
     // Handle Windows paths (C:\path\to\file)
     if (path.contains('\\') || path.contains(':\\')) {
-      return path.split(RegExp(r'[\\/]')).last;
+      return fileNameOfPath(path);
     }
 
     // Handle Unix paths (/path/to/file)
@@ -105,60 +103,7 @@ class _UrlInputState extends State<UrlInput> {
     try {
       final htmlService = Provider.of<HtmlService>(context, listen: false);
 
-      // Check if we are incorrectly reloading a local file by its name
-      // This prevents "index.html" -> "https://index.html" conversion in loadUrl
-      if (htmlService.currentFile != null &&
-          !htmlService.currentFile!.isUrl &&
-          url == htmlService.currentFile!.name) {
-        await htmlService.reloadCurrentFile();
-      } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        // Handle local file paths - try to find the full path from history
-        final historyService =
-            Provider.of<UrlHistoryService?>(context, listen: false);
-        final history = historyService?.history ?? [];
-
-        // Find the full path that matches this filename
-        String? fullPath;
-        for (final entry in history) {
-          if (!entry.startsWith('http://') && !entry.startsWith('https://')) {
-            final parts = entry.split(RegExp(r'[/\\]'));
-            if (parts.isNotEmpty && parts.last == url) {
-              fullPath = entry;
-              break;
-            }
-          }
-        }
-
-        if (fullPath != null) {
-          // Load the file using the full path
-          try {
-            final file = File(fullPath);
-            if (await file.exists()) {
-              // Path comes from the app's own history: trusted.
-              final snapshot = await FileLoader.fromPath(fullPath,
-                  origin: FileOrigin.restore, enforceSandbox: false);
-              final htmlFile = snapshot.toHtmlFile().copyWith(name: url);
-              await htmlService.loadFile(htmlFile, switchToTab: switchToTab);
-              return;
-            }
-          } catch (e) {
-            debugPrint('Error loading local file: $e');
-          }
-        }
-
-        // If we can't find the file, fall back to URL loading
-        await htmlService.loadFromUrl(
-          url,
-          switchToTab: switchToTab,
-          forceReload: true,
-        );
-      } else {
-        await htmlService.loadFromUrl(
-          url,
-          switchToTab: switchToTab,
-          forceReload: true,
-        );
-      }
+      await htmlService.openInputText(url, switchToTab: switchToTab);
 
       // Clear the input after successful load
       // _urlController.clear();
@@ -253,7 +198,7 @@ class _UrlInputState extends State<UrlInput> {
                               selection.startsWith('https://');
                           _urlController.text = isUrl
                               ? selection
-                              : selection.split(RegExp(r'[/\\]')).last;
+                              : fileNameOfPath(selection);
                           // Hide keyboard on mobile after selection
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) {
@@ -468,10 +413,7 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
                   option.startsWith('http://') || option.startsWith('https://');
 
               if (!isUrl) {
-                final parts = option.split(RegExp(r'[/\\]'));
-                if (parts.isNotEmpty) {
-                  displayName = 'File: ${parts.last}';
-                }
+                displayName = 'File: ${fileNameOfPath(option)}';
               }
 
               return Container(

@@ -522,6 +522,46 @@ void main() {
     });
   });
 
+  group('reloading a local file (B32)', () {
+    late Directory dir;
+    late File f;
+    setUp(() async {
+      dir = await Directory.systemTemp.createTemp('reload32');
+      f = File('${dir.path}/index.html')..writeAsStringSync('<p>old</p>');
+      await service
+          .loadFile(localFile('index.html', '<p>old</p>', path: f.path));
+    });
+    tearDown(() => dir.delete(recursive: true));
+
+    test('refresh() re-reads the file and never goes to the network',
+        () async {
+      f.writeAsStringSync('<p>new</p>');
+      await service.refresh();
+
+      expect(service.currentFile!.content, '<p>new</p>');
+      expect(service.currentFile!.isUrl, isFalse);
+      expect(fetcher.calls, isEmpty);
+      expect(browser.calls, isEmpty);
+    });
+
+    test('typing the file name in the URL bar reloads it, not https://name',
+        () async {
+      f.writeAsStringSync('<p>again</p>');
+      await service.openInputText('index.html');
+
+      expect(service.currentFile!.content, '<p>again</p>');
+      expect(fetcher.calls, isEmpty);
+      expect(browser.calls, isEmpty);
+    });
+
+    test('refresh() of a URL still loads that URL', () async {
+      await service.loadUrl('https://a.test/');
+      fetcher.calls.clear();
+      await service.refresh();
+      expect(fetcher.calls, [Uri.parse('https://a.test/')]);
+    });
+  });
+
   group('metadata extraction', () {
     test('a slow extraction for an older generation is dropped', () async {
       final gate = Completer<void>();

@@ -1858,24 +1858,71 @@ Technical details: $message''';
         a.query == b.query;
   }
 
-  Future<void> reloadCurrentFile() async {
+  Future<void> reloadCurrentFile({int? switchToTab}) async {
     if (_currentFile == null) return;
 
     if (_currentFile!.isUrl) {
-      return loadUrl(_currentFile!.path, forceReload: true);
+      return loadUrl(_currentFile!.path,
+          forceReload: true, switchToTab: switchToTab);
     } else {
-      // Local file reload
+      // Local file reload: always from disk, never as https://<name> (B32).
       if (_currentFile!.path.isNotEmpty) {
         try {
           final snapshot = await FileLoader.fromPath(_currentFile!.path,
               origin: FileOrigin.restore, enforceSandbox: false);
           await loadFile(snapshot.toHtmlFile(),
-              clearProbe: true, snapshot: snapshot);
+              clearProbe: true, snapshot: snapshot, switchToTab: switchToTab);
         } catch (e) {
           debugPrint('Error reloading local file: $e');
         }
       }
     }
+  }
+
+  /// Pull-to-refresh: reloads what is open. A local file is re-read from
+  /// disk; a URL is loaded again. A file without a path (picked or shared
+  /// bytes) cannot be re-read and stays as it is.
+  Future<void> refresh({int? switchToTab}) async {
+    final file = _currentFile;
+    if (file != null && !file.isUrl) {
+      return reloadCurrentFile(switchToTab: switchToTab);
+    }
+    final url = _currentInputText;
+    if (url != null && url.isNotEmpty) {
+      await loadUrl(url, switchToTab: switchToTab);
+    }
+  }
+
+  /// What the URL bar submits. A name that is the open local file, or a local
+  /// file from the history, is read from disk; only the rest is a URL. A local
+  /// name therefore never turns into `https://index.html`.
+  Future<void> openInputText(String text, {int? switchToTab}) async {
+    final input = text.trim();
+    final file = _currentFile;
+    if (file != null && !file.isUrl && input == file.name) {
+      return reloadCurrentFile(switchToTab: switchToTab);
+    }
+    if (!input.startsWith('http://') && !input.startsWith('https://')) {
+      for (final entry in _urlHistoryService?.history ?? const <String>[]) {
+        if (entry.startsWith('http://') || entry.startsWith('https://')) {
+          continue;
+        }
+        if (entry.replaceAll('\\', '/').split('/').last != input) continue;
+        try {
+          // The path comes from the app's own history: trusted.
+          final snapshot = await FileLoader.fromPath(entry,
+              origin: FileOrigin.restore, enforceSandbox: false);
+          await loadFile(snapshot.toHtmlFile().copyWith(name: input),
+              switchToTab: switchToTab, snapshot: snapshot);
+          return;
+        } on FileLoadException catch (e) {
+          // Gone from disk: fall through to the URL attempt, as before.
+          debugPrint('Error loading local file: ${e.message}');
+        }
+        break;
+      }
+    }
+    await loadUrl(input, switchToTab: switchToTab, forceReload: true);
   }
 
   void triggerWebViewLoad(String url) {

@@ -141,10 +141,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _handleRefresh() async {
     final htmlService = Provider.of<HtmlService>(context, listen: false);
-    final url = htmlService.currentInputText;
-    if (url != null && url.isNotEmpty) {
-      await htmlService.loadUrl(url, switchToTab: _tabController.index);
-    }
+    await htmlService.refresh(switchToTab: _tabController.index);
   }
 
   Widget _buildRefreshable(Widget child, String tag) {
