@@ -31,6 +31,7 @@ import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
@@ -708,6 +709,19 @@ class HtmlService extends ChangeNotifier {
       _general = deriveGeneral(current, divergences: divergences);
     }
     return _general!;
+  }
+
+  Observed<HeadersModel>? _headers;
+  PageInspection? _headersFor;
+
+  /// The Headers tab: insights from the final response, headers per hop.
+  Observed<HeadersModel> get headersView {
+    final current = store.current;
+    if (_headers == null || !identical(current, _headersFor)) {
+      _headersFor = current;
+      _headers = deriveHeaders(current);
+    }
+    return _headers!;
   }
 
   Observed<PageSizeModel>? _pageSize;

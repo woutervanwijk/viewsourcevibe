@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/utils/format_utils.dart';
@@ -785,292 +786,261 @@ class ProbeGeneralView extends StatelessWidget {
   }
 }
 
-class ProbeHeadersView extends ProbeViewBase {
+// ---------------------------------------------------------------------------
+// Headers
+// ---------------------------------------------------------------------------
+
+Color _toneColor(InsightTone tone) => switch (tone) {
+      InsightTone.good => Colors.green,
+      InsightTone.warn => Colors.orange,
+      InsightTone.bad => Colors.red,
+      InsightTone.neutral => Colors.grey,
+      InsightTone.info => Colors.blue,
+      InsightTone.brand => Colors.purple,
+    };
+
+class ProbeHeadersView extends StatelessWidget {
   const ProbeHeadersView({super.key});
 
-  @override
-  Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    final Map<String, dynamic> headers = result['headers'] ?? {};
-    final sortedKeys = headers.keys.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    final state = context
+        .select<HtmlService, Observed<HeadersModel>>((s) => s.headersView);
+    return _tabBody(state, (m) => _content(context, m));
+  }
+
+  Widget _content(BuildContext context, HeadersModel m) {
     return Scrollbar(
       child: ListView(
         primary: true,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         children: [
-          _buildHeaderIntelligence(context, headers),
-          const SizedBox(height: 16),
-          _buildHeaderCategorySection(context, headers),
-          const SizedBox(height: 16),
-          Text(
-            'All Response Headers',
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              side: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: sortedKeys.asMap().entries.map((entry) {
-                final index = entry.key;
-                final key = entry.value;
-                final value = headers[key]!;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (index > 0) const Divider(height: 1),
-                    ListTile(
-                      title: Text(
-                        key,
-                        style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(
-                        FormatUtils.formatHumanData(value),
-                        style: const TextStyle(
-                            fontFamily: 'monospace', fontSize: 13),
-                      ),
-                      dense: true,
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: '$key: $value'));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Header copied to clipboard'),
-                              duration: Duration(milliseconds: 500)),
-                        );
-                      },
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderIntelligence(
-      BuildContext context, Map<String, dynamic> headers) {
-    final lookup = _headerLookup(headers);
-    final cache = _cacheVerdict(lookup);
-    final compression = _compressionVerdict(lookup);
-    final cdn = _cdnVerdict(lookup);
-    final cors = _corsVerdict(lookup);
-    final negotiation = _negotiationVerdict(lookup);
-    final validators = _validatorVerdict(lookup);
-    // Each insight with the response headers it is based on.
-    final chips = [
-      (cache, ['cache-control', 'age', 'expires']),
-      (compression, ['content-encoding']),
-      (cdn, ['server', 'via', 'cf-cache-status', 'cf-ray', 'x-cache']),
-      (
-        cors,
-        ['access-control-allow-origin', 'access-control-allow-credentials']
-      ),
-      (negotiation, ['vary']),
-      (validators, ['etag', 'last-modified']),
-    ];
-
-    return Card(
-      elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.28),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.rule_folder_outlined,
-                    color: Theme.of(context).colorScheme.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Header Intelligence',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: chips.map((chip) {
-                final (insight, names) = chip;
-                final evidence = [
-                  for (final name in names)
-                    if (lookup[name] != null)
-                      DetectionEvidence(
-                          EvidenceKind.header, 'Response header $name',
-                          detail: '$name: ${lookup[name]}'),
-                ];
-                return InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => showEvidenceSheet(
-                      context, insight.label, evidence,
-                      description: insight.detail),
-                  child: _buildHeaderInsightChip(insight),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            ..._headerNotes(lookup).map(
-              (note) => Padding(
-                padding: const EdgeInsets.only(top: 5),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(note.icon, size: 15, color: note.color),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child:
-                          Text(note.text, style: const TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          if (!m.known) ...[
+            _card(context, [
+              if (m.loading)
+                _notThere<Object>(const Pending(), m.stateNote ?? 'Fetching…')
+              else
+                _notThere<Object>(Failed(m.stateNote ?? 'No response'), ''),
+            ]),
+            const SizedBox(height: 16),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderCategorySection(
-      BuildContext context, Map<String, dynamic> headers) {
-    final categories = <String, List<String>>{
-      'Caching': [
-        'cache-control',
-        'etag',
-        'last-modified',
-        'expires',
-        'age',
-      ],
-      'Delivery': [
-        'server',
-        'via',
-        'x-cache',
-        'cf-cache-status',
-        'x-served-by',
-        'content-encoding',
-      ],
-      'Negotiation': [
-        'vary',
-        'content-type',
-        'content-language',
-        'accept-ranges',
-      ],
-      'CORS': [
-        'access-control-allow-origin',
-        'access-control-allow-methods',
-        'access-control-allow-headers',
-        'access-control-allow-credentials',
-      ],
-    };
-    final lookup = _headerLookup(headers);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          _buildHeaderIntelligence(context, m),
+          if (m.groups.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildHeaderCategorySection(context, m.groups),
+          ],
+          if (m.hops.isNotEmpty) ...[
+            const SizedBox(height: 16),
             Text(
-              'Header Groups',
+              'All Response Headers',
               style: Theme.of(context)
                   .textTheme
                   .titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
-            ...categories.entries.map((category) {
-              final present = category.value
-                  .where((key) => (lookup[key] ?? '').isNotEmpty)
-                  .toList();
-              if (present.isEmpty) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category.key,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Wrap(
-                      spacing: 7,
-                      runSpacing: 7,
-                      children: present.map((key) {
-                        return Tooltip(
-                          message: lookup[key]!,
-                          child: Chip(
-                            visualDensity: VisualDensity.compact,
-                            label: Text(key),
-                            avatar: const Icon(Icons.label_outline, size: 15),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              );
-            }),
+            const SizedBox(height: 8),
+            for (final hop in m.hops.reversed) ...[
+              _buildHopHeaders(context, hop, isFinal: hop == m.hops.last),
+              const SizedBox(height: 8),
+            ],
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildHeaderInsightChip(_HeaderInsight insight) {
+  Widget _buildHopHeaders(BuildContext context, HopHeaders hop,
+      {required bool isFinal}) {
+    final rows = Column(
+      children: hop.lines.asMap().entries.map((entry) {
+        final line = entry.value;
+        final value = line.values.join('\n');
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (entry.key > 0) const Divider(height: 1),
+            ListTile(
+              title: Text(
+                line.name,
+                style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                value,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              ),
+              dense: true,
+              onTap: () {
+                Clipboard.setData(ClipboardData(
+                    text:
+                        line.values.map((v) => '${line.name}: $v').join('\n')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Header copied to clipboard'),
+                      duration: Duration(milliseconds: 500)),
+                );
+              },
+            ),
+          ],
+        );
+      }).toList(),
+    );
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: isFinal
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Text(hop.title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+                if (hop.lines.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: Text('The server sent no headers.',
+                        style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  )
+                else
+                  rows,
+              ],
+            )
+          : ExpansionTile(
+              title: Text(hop.title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 12)),
+              subtitle: Text(hop.url,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11)),
+              children: [rows],
+            ),
+    );
+  }
+
+  Widget _buildHeaderIntelligence(BuildContext context, HeadersModel m) {
+    return _card(
+      context,
+      [
+        _cardTitle(context, Icons.rule_folder_outlined, 'Header Intelligence'),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: m.insights.map((insight) {
+            final evidence = [
+              for (final (name, value) in insight.evidence)
+                DetectionEvidence(EvidenceKind.header, 'Response header $name',
+                    detail: '$name: $value'),
+            ];
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => showEvidenceSheet(context, insight.label, evidence,
+                  description: insight.detail),
+              child: _buildHeaderInsightChip(insight),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        ...m.notes.map(
+          (note) => Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(note.icon, size: 15, color: _toneColor(note.tone)),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(note.text, style: const TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+      filled: true,
+    );
+  }
+
+  Widget _buildHeaderCategorySection(
+      BuildContext context, List<HeaderGroup> groups) {
+    return _card(context, [
+      Text(
+        'Header Groups',
+        style: Theme.of(context)
+            .textTheme
+            .titleSmall
+            ?.copyWith(fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 12),
+      ...groups.map((group) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  group.name,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: group.headers.map((h) {
+                    return Tooltip(
+                      message: h.$2,
+                      child: Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(h.$1),
+                        avatar: const Icon(Icons.label_outline, size: 15),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          )),
+    ]);
+  }
+
+  Widget _buildHeaderInsightChip(HeaderInsight insight) {
+    final color = _toneColor(insight.tone);
     return Tooltip(
       message: insight.detail,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
-          color: insight.color.withValues(alpha: 0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: insight.color.withValues(alpha: 0.24)),
+          border: Border.all(color: color.withValues(alpha: 0.24)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(insight.icon, color: insight.color, size: 15),
+            Icon(insight.icon, color: color, size: 15),
             const SizedBox(width: 5),
             Text(
               insight.label,
               style: TextStyle(
-                color: insight.color,
+                color: color,
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
@@ -1079,189 +1049,6 @@ class ProbeHeadersView extends ProbeViewBase {
         ),
       ),
     );
-  }
-
-  Map<String, String> _headerLookup(Map<String, dynamic> headers) {
-    return {
-      for (final entry in headers.entries)
-        entry.key.toString().toLowerCase(): entry.value.toString(),
-    };
-  }
-
-  _HeaderInsight _cacheVerdict(Map<String, String> headers) {
-    final cacheControl = headers['cache-control']?.toLowerCase() ?? '';
-    final age = headers['age'];
-    if (cacheControl.contains('no-store')) {
-      return const _HeaderInsight(
-        'No-store',
-        Icons.lock_outline,
-        Colors.orange,
-        'Response should not be stored by caches.',
-      );
-    }
-    final maxAge = RegExp(r'max-age=(\d+)').firstMatch(cacheControl);
-    if (maxAge != null) {
-      final seconds = int.tryParse(maxAge.group(1) ?? '') ?? 0;
-      return _HeaderInsight(
-        seconds >= 86400 ? 'Cacheable' : 'Short cache',
-        Icons.cached,
-        seconds >= 86400 ? Colors.green : Colors.orange,
-        'Cache-Control max-age is ${seconds}s${age == null ? '' : ', Age is $age'}.',
-      );
-    }
-    return const _HeaderInsight(
-      'No cache policy',
-      Icons.help_outline,
-      Colors.grey,
-      'No explicit Cache-Control max-age/no-store directive found.',
-    );
-  }
-
-  _HeaderInsight _compressionVerdict(Map<String, String> headers) {
-    final encoding = headers['content-encoding']?.toLowerCase();
-    if (encoding == null || encoding.isEmpty) {
-      return const _HeaderInsight(
-        'No compression',
-        Icons.compress,
-        Colors.orange,
-        'No Content-Encoding header found.',
-      );
-    }
-    return _HeaderInsight(
-      encoding.toUpperCase(),
-      Icons.compress,
-      Colors.green,
-      'Response uses Content-Encoding: $encoding.',
-    );
-  }
-
-  _HeaderInsight _cdnVerdict(Map<String, String> headers) {
-    final server = '${headers['server'] ?? ''} ${headers['via'] ?? ''} '
-            '${headers['cf-cache-status'] ?? ''} ${headers['x-cache'] ?? ''}'
-        .toLowerCase();
-    if (server.contains('cloudflare') ||
-        headers.containsKey('cf-cache-status')) {
-      return const _HeaderInsight(
-        'Cloudflare',
-        Icons.cloud_outlined,
-        Colors.purple,
-        'Cloudflare headers detected.',
-      );
-    }
-    if (server.contains('hit')) {
-      return const _HeaderInsight(
-        'Cache hit',
-        Icons.speed,
-        Colors.green,
-        'Proxy/cache header suggests a cache hit.',
-      );
-    }
-    if (headers.containsKey('via') || headers.containsKey('x-cache')) {
-      return const _HeaderInsight(
-        'Proxy/CDN',
-        Icons.hub_outlined,
-        Colors.blue,
-        'Proxy or cache headers detected.',
-      );
-    }
-    return const _HeaderInsight(
-      'Origin-ish',
-      Icons.dns_outlined,
-      Colors.grey,
-      'No obvious CDN/proxy headers detected.',
-    );
-  }
-
-  _HeaderInsight _corsVerdict(Map<String, String> headers) {
-    final origin = headers['access-control-allow-origin'];
-    final credentials =
-        headers['access-control-allow-credentials']?.toLowerCase() == 'true';
-    if (origin == null || origin.isEmpty) {
-      return const _HeaderInsight(
-        'No CORS',
-        Icons.public_off,
-        Colors.grey,
-        'No Access-Control-Allow-Origin header found.',
-      );
-    }
-    if (origin == '*' && credentials) {
-      return const _HeaderInsight(
-        'Risky CORS',
-        Icons.warning_amber_rounded,
-        Colors.red,
-        'Wildcard origin with credentials is unsafe and usually rejected.',
-      );
-    }
-    return _HeaderInsight(
-      origin == '*' ? 'Open CORS' : 'CORS set',
-      Icons.public,
-      origin == '*' ? Colors.orange : Colors.green,
-      'Access-Control-Allow-Origin: $origin.',
-    );
-  }
-
-  _HeaderInsight _negotiationVerdict(Map<String, String> headers) {
-    final vary = headers['vary'];
-    if (vary == null || vary.isEmpty) {
-      return const _HeaderInsight(
-        'No Vary',
-        Icons.swap_vert,
-        Colors.grey,
-        'No Vary header found.',
-      );
-    }
-    return _HeaderInsight(
-      'Vary: ${vary.split(',').length}',
-      Icons.swap_vert,
-      Colors.blue,
-      'Vary controls cache variants: $vary.',
-    );
-  }
-
-  _HeaderInsight _validatorVerdict(Map<String, String> headers) {
-    final hasEtag = (headers['etag'] ?? '').isNotEmpty;
-    final hasLastModified = (headers['last-modified'] ?? '').isNotEmpty;
-    if (hasEtag || hasLastModified) {
-      return _HeaderInsight(
-        hasEtag && hasLastModified ? '2 validators' : 'Validator',
-        Icons.verified_outlined,
-        Colors.green,
-        'Conditional request validator is present.',
-      );
-    }
-    return const _HeaderInsight(
-      'No validator',
-      Icons.remove_circle_outline,
-      Colors.orange,
-      'No ETag or Last-Modified header found.',
-    );
-  }
-
-  List<_HeaderNote> _headerNotes(Map<String, String> headers) {
-    final notes = <_HeaderNote>[];
-    if ((headers['content-type'] ?? '').isEmpty) {
-      notes.add(const _HeaderNote(Icons.warning_amber_rounded, Colors.orange,
-          'Missing Content-Type makes content sniffing more likely.'));
-    }
-    if ((headers['x-content-type-options'] ?? '').toLowerCase() != 'nosniff') {
-      notes.add(const _HeaderNote(Icons.security, Colors.orange,
-          'X-Content-Type-Options: nosniff is not present.'));
-    }
-    if ((headers['server'] ?? '').isNotEmpty ||
-        (headers['x-powered-by'] ?? '').isNotEmpty) {
-      notes.add(const _HeaderNote(Icons.badge_outlined, Colors.grey,
-          'Server technology is disclosed in response headers.'));
-    }
-    if ((headers['content-length'] ?? '').isEmpty &&
-        (headers['transfer-encoding'] ?? '').isNotEmpty) {
-      notes.add(const _HeaderNote(Icons.alt_route, Colors.blue,
-          'Transfer-Encoding is used instead of a fixed Content-Length.'));
-    }
-    if (notes.isEmpty) {
-      notes.add(const _HeaderNote(Icons.check_circle_outline, Colors.green,
-          'No obvious header hygiene notes.'));
-    }
-    return notes.take(4).toList();
   }
 }
 
@@ -2616,23 +2403,6 @@ class _CspFinding {
   final String text;
 
   const _CspFinding(this.severity, this.text);
-}
-
-class _HeaderInsight {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final String detail;
-
-  const _HeaderInsight(this.label, this.icon, this.color, this.detail);
-}
-
-class _HeaderNote {
-  final IconData icon;
-  final Color color;
-  final String text;
-
-  const _HeaderNote(this.icon, this.color, this.text);
 }
 
 class _SecurityHeaderCheck {
