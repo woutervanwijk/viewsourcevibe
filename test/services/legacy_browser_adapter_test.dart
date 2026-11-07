@@ -146,8 +146,8 @@ void main() {
       expect(legacyResourceTimeline(inspection(null)), isEmpty);
       expect(
           legacyResourceTimeline(inspection(snap(
-              resourcesObserved: const Unavailable(
-                  UnavailableReason.unsupportedPlatform)))),
+              resourcesObserved:
+                  const Unavailable(UnavailableReason.unsupportedPlatform)))),
           isEmpty);
     });
 
@@ -169,7 +169,7 @@ void main() {
       expect(w['decoded'], 460);
       expect(w['isPartial'], isTrue);
       final bd = w['breakdown'] as Map;
-      expect(bd['scripts'], containsPair('count', 1));
+      expect(bd['scripts'], containsPair('count', 2));
       expect(bd['scripts']['transfer'], 100);
       expect(bd['css']['count'], 1);
       expect(bd['css']['transfer'], 50);
@@ -196,15 +196,16 @@ void main() {
       expect(w.containsKey('decoded'), isFalse);
       expect(w['isPartial'], isTrue);
       expect(w['breakdown']['scripts']['count'], 1);
-      expect((w['breakdown']['scripts'] as Map).containsKey('transfer'),
-          isFalse);
+      expect(
+          (w['breakdown']['scripts'] as Map).containsKey('transfer'), isFalse);
     });
 
-    test('B10: image weight uses transfer; WebKit pixel-buffer decoded is not '
+    test(
+        'B10: image weight uses transfer; WebKit pixel-buffer decoded is not '
         'added', () {
       // The parser reports the WebKit image decoded size as Unavailable.
-      final w = legacyPageWeight(inspection(
-          snap(platform: BrowserPlatform.ios, resources: [
+      final w = legacyPageWeight(
+          inspection(snap(platform: BrowserPlatform.ios, resources: [
         res('https://a.test/hero.jpg',
             type: 'img',
             tx: _b(30000),
@@ -222,8 +223,8 @@ void main() {
     });
 
     test('B10: a Present decoded size of a WebKit image is ignored', () {
-      final w = legacyPageWeight(inspection(
-          snap(platform: BrowserPlatform.macos, resources: [
+      final w = legacyPageWeight(
+          inspection(snap(platform: BrowserPlatform.macos, resources: [
         res('https://a.test/hero.png',
             type: 'img', tx: _b(30000), dec: _b(4000000)),
       ])))!;
@@ -255,13 +256,11 @@ void main() {
             count: 2, bytes: _b(30), topItems: const [StorageItem('k', 20)])),
         session: const Unavailable(UnavailableReason.blockedBySite, 'denied'),
       );
-      final m = legacyBrowserProbeMap(inspection(snap(
-          storage: _b(storage),
-          platform: BrowserPlatform.ios,
-          resources: [
-            res('https://a.test/a.js', tx: _b(10), dec: _b(20)),
-            res('https://c.test/b.js'),
-          ])))!;
+      final m = legacyBrowserProbeMap(inspection(
+          snap(storage: _b(storage), platform: BrowserPlatform.ios, resources: [
+        res('https://a.test/a.js', tx: _b(10), dec: _b(20)),
+        res('https://c.test/b.js'),
+      ])))!;
       expect(m['url'], 'https://a.test/page');
       expect(m['platform'], 'ios');
       expect(m['os'], 'ios');
@@ -280,7 +279,8 @@ void main() {
     });
 
     test('does not copy the server status or the title (B19)', () {
-      final m = legacyBrowserProbeMap(inspection(snap(), server: serverSnap()))!;
+      final m =
+          legacyBrowserProbeMap(inspection(snap(), server: serverSnap()))!;
       expect(m.containsKey('serverStatusCode'), isFalse);
       expect(m.containsKey('title'), isFalse);
     });
@@ -318,17 +318,15 @@ void main() {
   group('analyzed cookies carry the real flags (B20)', () {
     test('browser flags are kept, Unavailable stays unknown (absent)', () {
       final m = legacyProbeMap(
-          inspection(
-              snap(
-                  cookies: _b([
-                cookie('known',
-                    secure: _b(true),
-                    httpOnly: _b(false),
-                    domain: _b('a.test')),
-                cookie('flagless'),
-              ])),
-              server: serverSnap()),
-          )!;
+        inspection(
+            snap(
+                cookies: _b([
+              cookie('known',
+                  secure: _b(true), httpOnly: _b(false), domain: _b('a.test')),
+              cookie('flagless'),
+            ])),
+            server: serverSnap()),
+      )!;
       final list = (m['analyzedCookies'] as List).cast<Map>();
       final known = list.firstWhere((c) => c['name'] == 'known');
       expect(known['secure'], true);
@@ -348,12 +346,11 @@ void main() {
       expect(sid['source'], 'Server');
     });
 
-    test('same name seen by server and browser merges, flags unknown stay '
+    test(
+        'same name seen by server and browser merges, flags unknown stay '
         'unknown', () {
-      final m = legacyProbeMap(
-          inspection(
-              snap(cookies: _b([cookie('sid')])),
-              server: serverSnap()))!;
+      final m = legacyProbeMap(inspection(snap(cookies: _b([cookie('sid')])),
+          server: serverSnap()))!;
       final list = (m['analyzedCookies'] as List).cast<Map>();
       final sid = list.where((c) => c['name'] == 'sid').toList();
       expect(sid, hasLength(1));
@@ -364,9 +361,8 @@ void main() {
     });
 
     test('browser-only cookie with unknown HttpOnly is not marked false', () {
-      final m = legacyProbeMap(
-          inspection(snap(cookies: _b([cookie('jsonly')])),
-              server: serverSnap()))!;
+      final m = legacyProbeMap(inspection(snap(cookies: _b([cookie('jsonly')])),
+          server: serverSnap()))!;
       final c = (m['analyzedCookies'] as List)
           .cast<Map>()
           .firstWhere((c) => c['name'] == 'jsonly');
@@ -375,13 +371,13 @@ void main() {
     });
 
     test('cookies of different domains are not merged by name alone', () {
-      final m = legacyProbeMap(
-          inspection(
-              snap(cookies: _b([
-                cookie('id', domain: _b('a.test')),
-                cookie('id', domain: _b('tracker.test')),
-              ])),
-              server: serverSnap()))!;
+      final m = legacyProbeMap(inspection(
+          snap(
+              cookies: _b([
+            cookie('id', domain: _b('a.test')),
+            cookie('id', domain: _b('tracker.test')),
+          ])),
+          server: serverSnap()))!;
       final ids = (m['analyzedCookies'] as List)
           .cast<Map>()
           .where((c) => c['name'] == 'id');

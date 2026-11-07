@@ -92,7 +92,7 @@ class InspectionStore extends ChangeNotifier {
     if (!_accepts(gen)) return;
     final old = _current.browser;
     // Nothing Present to accept over an existing Present result: no change.
-    if (old is Present<BrowserSnapshot> && !_hasPresentSection(snap)) return;
+    if (old is Present<BrowserSnapshot> && !snap.hasPresentSection) return;
     final merged =
         old is Present<BrowserSnapshot> ? _merge(old.value, snap) : snap;
     _set(_current.copyWith(
@@ -112,15 +112,6 @@ class InspectionStore extends ChangeNotifier {
     _set(_current.copyWith(primaryDocumentPreference: s));
   }
 }
-
-bool _hasPresentSection(BrowserSnapshot b) =>
-    b.contentType is Present ||
-    b.renderedDom is Present ||
-    b.resources is Present ||
-    b.cookies is Present ||
-    b.storage is Present ||
-    b.navigation is Present ||
-    b.snapshotTimeMs is Present;
 
 Observed<T> _fresher<T>(Observed<T> old, Observed<T> fresh) =>
     fresh is Present<T> || old is! Present<T> ? fresh : old;

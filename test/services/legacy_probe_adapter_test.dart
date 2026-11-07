@@ -153,7 +153,8 @@ void main() {
       expect(m['cookies'], ['a=1; Path=/', 'b=2; Path=/']);
     });
 
-    test('analyzedCookies lists the server cookies (browser cookies are '
+    test(
+        'analyzedCookies lists the server cookies (browser cookies are '
         'covered in legacy_browser_adapter_test)', () {
       final m = legacyProbeMap(_inspection(_p(threeHops)))!;
       final names =

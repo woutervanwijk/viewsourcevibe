@@ -167,6 +167,33 @@ class BrowserSnapshot {
     this.rawPayload,
   });
 
+  /// True when at least one section holds a value.
+  bool get hasPresentSection =>
+      contentType is Present ||
+      renderedDom is Present ||
+      resources is Present ||
+      cookies is Present ||
+      storage is Present ||
+      navigation is Present ||
+      snapshotTimeMs is Present;
+
+  /// A copy with [cookies] replaced (e.g. by the native cookie manager's).
+  BrowserSnapshot withCookies(Observed<List<BrowserCookie>> cookies) =>
+      BrowserSnapshot(
+        url: url,
+        platform: platform,
+        contentType: contentType,
+        renderedDom: renderedDom,
+        resources: resources,
+        cookies: cookies,
+        storage: storage,
+        navigation: navigation,
+        snapshotTimeMs: snapshotTimeMs,
+        resourcesTruncated: resourcesTruncated,
+        resourcesDropped: resourcesDropped,
+        rawPayload: rawPayload,
+      );
+
   /// Every section [Unavailable] with the same reason.
   factory BrowserSnapshot.unavailable(
     Uri url,

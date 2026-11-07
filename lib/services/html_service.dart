@@ -5,7 +5,6 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
@@ -30,7 +29,10 @@ import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
 import 'package:view_source_vibe/services/legacy_probe_adapter.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
+import 'package:view_source_vibe/services/collectors/browser_payload.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Extracts page metadata from source (isolate in production, a fake in tests).
@@ -55,7 +57,14 @@ class HtmlService extends ChangeNotifier {
   Future<void> Function()? debugAfterServerFileBuilt;
 
   @visibleForTesting
-  Map<String, dynamic>? get lastPageWeight => _lastPageWeight;
+  Map<String, dynamic>? get lastPageWeight => _pageWeight;
+
+  /// Weight from the browser's resources when it reported them, else the
+  /// document's own size from the server body.
+  Map<String, dynamic>? get _pageWeight {
+    _deriveBrowserData();
+    return _browserWeight ?? _lastPageWeight;
+  }
 
   /// The central inspection data (server, browser and file cores).
   final InspectionStore store;
@@ -63,7 +72,53 @@ class HtmlService extends ChangeNotifier {
   final ServerFetcher _serverFetcher;
   late final BrowserLoader _browserLoader;
   final MetadataExtractor _metadataExtractor;
+  final BrowserCollect? _browserCollectOverride;
+  final NativeCookieReader _nativeCookies;
+  final ResourceSizeLookup _sizeLookup;
+  final BrowserPlatform _platform;
+  final List<Duration> _refreshDelays;
+  final Duration _spaSettleDelay;
+  final List<Timer> _refreshTimers = [];
   bool _disposed = false;
+
+  /// The raw payload of the last collect and the generation it belongs to
+  /// (debug export, so real-device fixtures can be recorded).
+  ({int gen, String raw})? _lastRawPayload;
+
+  /// What the last collector call returned for the current navigation.
+  String? get browserDebugPayload {
+    final last = _lastRawPayload;
+    return last != null && last.gen == store.current.generation
+        ? last.raw
+        : null;
+  }
+
+  // Legacy views of the browser data, recomputed when the store's browser or
+  // server result changes.
+  Observed<BrowserSnapshot>? _derivedBrowser;
+  Observed<ServerSnapshot>? _derivedServer;
+  List<Map<String, dynamic>> _timeline = const [];
+  Map<String, dynamic>? _browserProbe;
+  Map<String, dynamic>? _browserWeight;
+
+  void _deriveBrowserData() {
+    final current = store.current;
+    if (identical(current.browser, _derivedBrowser) &&
+        identical(current.server, _derivedServer)) {
+      return;
+    }
+    _derivedBrowser = current.browser;
+    _derivedServer = current.server;
+    _timeline = legacyResourceTimeline(current);
+    _browserProbe = legacyBrowserProbeMap(current);
+    _browserWeight = legacyPageWeight(current);
+  }
+
+  bool get _browserReachable =>
+      _browserCollectOverride != null || activeWebViewController != null;
+
+  Future<Object?> _collect(String url) =>
+      (_browserCollectOverride ?? _collectViaController)(url);
 
   /// The server fetch of the current navigation (null when none runs).
   Future<void>? _serverFetch;
@@ -106,17 +161,14 @@ class HtmlService extends ChangeNotifier {
   // Probe state: the server side lives in [store]; these are browser-derived.
   SovereigntyReport? _sovereigntyReport;
   bool _isAnalyzingSovereignty = false;
-  Map<String, dynamic>?
-      _browserProbeResult; // Store separate browser probe data
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
-  Map<String, dynamic>? _lastPageWeight; // Store weights: transfer and decoded
-  List<Map<String, dynamic>>?
-      _resourcePerformanceData; // Store detailed resource data
+  // The document's own wire/decoded size from the server body; used while
+  // the browser has no numbers. Browser numbers come from the store.
+  Map<String, dynamic>? _lastPageWeight;
   bool _isExtractingMetadata = false;
-  String _lastBrowserCookies = '';
 
   double _webViewLoadingProgress = 0.0;
   double get webViewLoadingProgress => _webViewLoadingProgress;
@@ -245,8 +297,11 @@ class HtmlService extends ChangeNotifier {
     return _probeCache;
   }
 
-  Map<String, dynamic>? get browserProbeResult =>
-      _browserProbeResult; // Expose browser probe result
+  /// What the browser reported about the page; null until it did.
+  Map<String, dynamic>? get browserProbeResult {
+    _deriveBrowserData();
+    return _browserProbe;
+  }
 
   /// The HTML exactly as the server sent it; null while unknown.
   String? get serverSource {
@@ -259,8 +314,11 @@ class HtmlService extends ChangeNotifier {
     return body.value.decoded.text;
   }
 
-  List<Map<String, dynamic>> get resourceTimelineData =>
-      List.unmodifiable(_resourcePerformanceData ?? const []);
+  /// The browser's resources; a size or time it did not report is null.
+  List<Map<String, dynamic>> get resourceTimelineData {
+    _deriveBrowserData();
+    return _timeline;
+  }
 
   List<Detection>? _detections;
   Object? _detectionsKey;
@@ -271,8 +329,8 @@ class HtmlService extends ChangeNotifier {
     final cookies = _probeResult?['analyzedCookies'] as List?;
     final key = (
       identityHashCode(_pageMetadata),
-      identityHashCode(_resourcePerformanceData),
-      _resourcePerformanceData?.length,
+      identityHashCode(resourceTimelineData),
+      resourceTimelineData.length,
       identityHashCode(cookies),
       cookies?.length,
     );
@@ -662,16 +720,6 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
-  /// Main document size as reported by the browser for [url], or 0 if unknown.
-  int _browserDocSizeFor(String url) {
-    final probeUrl = _browserProbeResult?['url'] as String?;
-    if (probeUrl == null || !_sameUrlString(probeUrl, url)) return 0;
-    return (_browserProbeResult?['pageWeight']?['mainDocumentDecoded']
-                as num? ??
-            0)
-        .toInt();
-  }
-
   /// Trigger a browser reload if the URL has changed and the browser tab is visible
   Future<void> triggerBrowserReload() async {
     final controller = activeWebViewController;
@@ -723,8 +771,24 @@ class HtmlService extends ChangeNotifier {
     BrowserLoader? browserLoader,
     MetadataExtractor? metadataExtractor,
     SovereigntyAnalyzer? sovereigntyAnalyzer,
+    BrowserCollect? browserCollect,
+    NativeCookieReader? nativeCookies,
+    ResourceSizeLookup? sizeLookup,
+    BrowserPlatform? browserPlatform,
+    List<Duration> browserRefreshDelays = const [
+      Duration(seconds: 4),
+      Duration(seconds: 14),
+    ],
+    Duration spaSettleDelay = const Duration(milliseconds: 400),
   })  : _sovereigntyAnalyzer =
             sovereigntyAnalyzer ?? SovereigntyService.analyze,
+        _browserCollectOverride = browserCollect,
+        _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
+        _sizeLookup = sizeLookup ?? _lookupResourceSize,
+        _platform =
+            browserPlatform ?? browserPlatformFor(defaultTargetPlatform),
+        _refreshDelays = browserRefreshDelays,
+        _spaSettleDelay = spaSettleDelay,
         store = store ?? InspectionStore(),
         _ownsStore = store == null,
         _serverFetcher = serverFetcher ?? const IoServerFetcher(),
@@ -736,22 +800,44 @@ class HtmlService extends ChangeNotifier {
   }
 
   /// Forget everything measured by the browser for the previous page.
+  /// What the browser measured lives in the store and goes with its
+  /// generation; this clears the rest.
   void _clearBrowserDerivedData() {
-    _browserProbeResult = null;
+    _cancelBrowserRefreshes();
     _lastPageWeight = null;
-    _resourcePerformanceData = null;
     _sovereigntyReport = null;
-    _lastBrowserCookies = '';
+    _lastRawPayload = null;
   }
 
   @visibleForTesting
   void seedBrowserDataForTest() {
-    _browserProbeResult = {'url': 'seed'};
+    const known = Present<int>(1, source: DataSource.browser);
+    const unknown = Unavailable<int>(UnavailableReason.notApplicable);
+    const noTime = Unavailable<double>(UnavailableReason.notApplicable);
+    const none = Unavailable<Never>(UnavailableReason.notApplicable);
+    store.applyBrowser(
+        store.current.generation,
+        BrowserSnapshot(
+          url: Uri.parse('https://seed.test/'),
+          platform: BrowserPlatform.android,
+          contentType: none,
+          renderedDom: none,
+          resources: Present([
+            ResourceEntry(
+                url: 'https://seed.test/a.js',
+                type: 'script',
+                source: ResourceSource.observer,
+                startTime: noTime,
+                duration: noTime,
+                transfer: known,
+                decoded: unknown)
+          ], source: DataSource.browser),
+          cookies: none,
+          storage: none,
+          navigation: none,
+          snapshotTimeMs: none,
+        ));
     _lastPageWeight = {'transfer': 1, 'decoded': 2};
-    _resourcePerformanceData = [
-      {'name': 'https://seed.test/a.js'}
-    ];
-    _lastBrowserCookies = 'seed=1';
   }
 
   /// Reset all loading and result state before a new URL load
@@ -912,6 +998,7 @@ class HtmlService extends ChangeNotifier {
   /// in the background. With [adoptBody] the body becomes the current file
   /// when none has content yet (browser-first).
   int _startInspection(Uri uri, {required bool adoptBody}) {
+    _cancelBrowserRefreshes();
     final gen = store.beginUrl(uri);
     if (uri.scheme != 'http' && uri.scheme != 'https') {
       const na = Unavailable<Never>(
@@ -990,9 +1077,13 @@ class HtmlService extends ChangeNotifier {
     if (current != null && (!current.isUrl || current.content.isNotEmpty)) {
       return;
     }
+    // The browser's DOM is the document once it is there; the server body
+    // only fills in until then.
+    if (_browserHasDom) return;
     final built = await _fileFromServer(target.url, server);
     if (_disposed ||
         gen != store.current.generation ||
+        _browserHasDom ||
         (_currentFile?.content.isNotEmpty ?? false)) {
       return;
     }
@@ -1010,9 +1101,15 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
+  bool get _browserHasDom {
+    final b = store.current.browser;
+    return b is Present<BrowserSnapshot> &&
+        b.value.renderedDom is Present<RenderedDom>;
+  }
+
   /// Without browser numbers, the document's own wire and decoded size.
   void _applyPageWeight(Map<String, dynamic>? weight) {
-    if (weight != null && _browserProbeResult == null) _lastPageWeight = weight;
+    if (weight != null && browserProbeResult == null) _lastPageWeight = weight;
   }
 
   static bool _sameUrlString(String a, String b) {
@@ -1232,6 +1329,7 @@ Technical details: $message''';
   @override
   void dispose() {
     _disposed = true;
+    _cancelBrowserRefreshes();
     store.removeListener(notifyListeners);
     if (_ownsStore) store.dispose();
     _autoSaveTimer?.cancel();
@@ -2168,6 +2266,7 @@ Technical details: $message''';
         _noteBrowserUrl(uri);
         return;
       }
+      _cancelBrowserRefreshes();
       final gen = store.beginUrl(uri);
       const no = Unavailable<Never>(
           UnavailableReason.notApplicable, 'no server fetch for this document');
@@ -3273,7 +3372,8 @@ Technical details: $message''';
 
         _pageMetadata = metadata;
         if (metadata != null) {
-          if (_lastPageWeight != null) metadata['pageWeight'] = _lastPageWeight;
+          final weight = _pageWeight;
+          if (weight != null) metadata['pageWeight'] = weight;
           // Correlate resource sizes with metadata
           _enrichMetadataWithSizes(baseUrl);
           _fetchMissingMetadataSizesAsync().ignore();
@@ -3286,44 +3386,58 @@ Technical details: $message''';
     }
   }
 
+  /// The size of a timeline entry for the metadata lists; null when the
+  /// browser reported none. Images are judged by their transfer size: WebKit's
+  /// decoded size for them is the pixel buffer, so it is not reported.
+  static Map<String, dynamic>? _sizeOf(Map match) {
+    final tx = match['transfer'] as int?;
+    final dec = match['decoded'] as int?;
+    if (tx == null && dec == null) return null;
+    if (dec == null) {
+      final isImage = match['initiatorType'] == 'img' ||
+          match['initiatorType'] == 'image' ||
+          ProbeService.categorizeResource('${match['name']}', '') == 'image';
+      if (isImage) {
+        return {'transfer': tx, 'decoded': tx, 'decodedFromTransfer': true};
+      }
+    }
+    return {'transfer': tx, 'decoded': dec};
+  }
+
   /// Matches extracted metadata links with performance resource data to find sizes
   void _enrichMetadataWithSizes(String baseUrl) {
     if (_pageMetadata == null) return;
 
     // Helper to find size using a 4-tier lookup strategy
-    Map<String, int>? findSize(String? src) {
+    final timeline = resourceTimelineData;
+    Map<String, dynamic>? findSize(String? src) {
       if (src == null || src.isEmpty) return null;
 
       // Tier 0: Data URIs / inline SVGs — size is the content itself
       if (src.startsWith('data:') || src.startsWith('<svg')) {
-        return {'transfer': src.length, 'decoded': src.length};
+        final bytes = utf8.encode(src).length;
+        return {'transfer': bytes, 'decoded': bytes};
       }
 
-      if (_resourcePerformanceData == null) return null;
+      if (timeline.isEmpty) return null;
 
       // Tier 1: Exact string match
-      var match = _resourcePerformanceData!.firstWhere(
+      var match = timeline.firstWhere(
         (r) => r['name'] == src,
         orElse: () => {},
       );
       if (match.isNotEmpty) {
-        return {
-          'transfer': match['transfer'] as int,
-          'decoded': match['decoded'] as int,
-        };
+        return _sizeOf(match);
       }
 
       // Tier 2: URL-normalised match (handles trailing slashes, case)
       try {
-        match = _resourcePerformanceData!.firstWhere(
+        match = timeline.firstWhere(
           (r) => areUrlsEqual(r['name'].toString(), src),
           orElse: () => {},
         );
         if (match.isNotEmpty) {
-          return {
-            'transfer': match['transfer'] as int,
-            'decoded': match['decoded'] as int,
-          };
+          return _sizeOf(match);
         }
       } catch (_) {}
 
@@ -3334,15 +3448,12 @@ Technical details: $message''';
       try {
         final srcPath = Uri.parse(src).path;
         if (srcPath.length > 3) {
-          match = _resourcePerformanceData!.firstWhere(
+          match = timeline.firstWhere(
             (r) => sameResourceModuloCacheBusters(src, r['name'].toString()),
             orElse: () => {},
           );
           if (match.isNotEmpty) {
-            return {
-              'transfer': match['transfer'] as int,
-              'decoded': match['decoded'] as int,
-            };
+            return _sizeOf(match);
           }
         }
       } catch (_) {}
@@ -3354,7 +3465,7 @@ Technical details: $message''';
         final srcFileName = Uri.parse(src).path.split('/').last;
         final srcQuery = _queryWithoutCacheBusters(Uri.parse(src));
         if (srcFileName.length > 4) {
-          match = _resourcePerformanceData!.firstWhere((r) {
+          match = timeline.firstWhere((r) {
             final rName = r['name'].toString();
             if (!(rName.endsWith('/$srcFileName') || rName == srcFileName)) {
               return false;
@@ -3366,10 +3477,7 @@ Technical details: $message''';
             }
           }, orElse: () => {});
           if (match.isNotEmpty) {
-            return {
-              'transfer': match['transfer'] as int,
-              'decoded': match['decoded'] as int,
-            };
+            return _sizeOf(match);
           }
         }
       } catch (_) {}
@@ -3506,7 +3614,7 @@ Technical details: $message''';
     // Fonts: taken from the resources the browser actually loaded
     if (_pageMetadata!['media'] != null) {
       _pageMetadata!['media']['fonts'] = [
-        for (final r in _resourcePerformanceData ?? const [])
+        for (final r in timeline)
           if (isFontUrl(r['name'] as String? ?? ''))
             {
               'src': r['name'],
@@ -3554,896 +3662,322 @@ Technical details: $message''';
     }
   }
 
+  /// Whether a metadata item still has no size at all.
+  static bool _sizeUnknown(Map item) {
+    final size = item['size'];
+    return size is! Map ||
+        (size['transfer'] == null && size['decoded'] == null);
+  }
+
+  // One own request per URL and navigation, however often the metadata is
+  // rebuilt (new document, later refreshes).
+  int? _sizeCacheGen;
+  final Map<String, Future<int?>> _sizeCache = {};
+
+  Future<int?> _cachedSizeLookup(int gen, String url) {
+    if (_sizeCacheGen != gen) {
+      _sizeCache.clear();
+      _sizeCacheGen = gen;
+    }
+    return _sizeCache.putIfAbsent(url, () => _sizeLookup(url));
+  }
+
+  /// Own requests for the sizes the browser could not report (metadata items
+  /// with an unknown size). Only after the browser answered for this
+  /// navigation, so a gap really is a gap. Results are marked `estimated`
+  /// (our request, may differ from the browser's), are dropped when the
+  /// navigation or metadata has moved on, and never replace a known size.
   Future<void> _fetchMissingMetadataSizesAsync() async {
-    if (_pageMetadata == null) return;
+    final metadata = _pageMetadata;
+    if (metadata == null) return;
+    if (store.current.browser is! Present<BrowserSnapshot>) return;
+    final gen = store.current.generation;
+    bool stale() =>
+        _disposed ||
+        gen != store.current.generation ||
+        !identical(_pageMetadata, metadata);
 
     final List<Map> itemsToFetch = [];
 
-    // JS Links
-    if (_pageMetadata!['jsLinks'] != null) {
-      final List list = _pageMetadata!['jsLinks'];
-      for (int i = 0; i < list.length; i++) {
+    void collect(List list, String key, {bool convertStrings = false}) {
+      for (var i = 0; i < list.length; i++) {
         var item = list[i];
-        if (item is String && !item.startsWith('data:')) {
-          // Create a placeholder map so we can fetch and update
-          final map = {'src': item};
-          list[i] = map; // Replace string with map
-          itemsToFetch.add(map);
-        } else if (item is Map) {
-          final size = item['size'];
-          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
-            final url = item['src'] as String?;
-            if (url != null && !url.startsWith('data:')) {
-              itemsToFetch.add(item);
-            }
-          }
+        if (item is String && convertStrings) {
+          item = <String, dynamic>{key: item};
+          list[i] = item;
         }
+        if (item is! Map || !_sizeUnknown(item)) continue;
+        final url = item[key];
+        if (url is String && url.startsWith('http')) itemsToFetch.add(item);
       }
     }
 
-    // CSS Links
-    if (_pageMetadata!['cssLinks'] != null) {
-      final List list = _pageMetadata!['cssLinks'];
-      for (int i = 0; i < list.length; i++) {
-        var item = list[i];
-        if (item is String && !item.startsWith('data:')) {
-          final map = {'href': item};
-          list[i] = map;
-          itemsToFetch.add(map);
-        } else if (item is Map) {
-          final size = item['size'];
-          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
-            final url = item['href'] as String?;
-            if (url != null && !url.startsWith('data:')) {
-              itemsToFetch.add(item);
-            }
-          }
-        }
-      }
+    if (metadata['jsLinks'] is List) {
+      collect(metadata['jsLinks'], 'src', convertStrings: true);
     }
-
-    // Images
-    if (_pageMetadata!['media'] != null &&
-        _pageMetadata!['media']['images'] != null) {
-      final List list = _pageMetadata!['media']['images'];
-      for (var item in list) {
-        if (item is Map) {
-          final size = item['size'];
-          if (size == null || ((size['decoded'] as int?) ?? 0) == 0) {
-            final url = item['src'] as String?;
-            if (url != null && !url.startsWith('data:')) {
-              itemsToFetch.add(item);
-            }
-          }
-        }
-      }
+    if (metadata['cssLinks'] is List) {
+      collect(metadata['cssLinks'], 'href', convertStrings: true);
+    }
+    final media = metadata['media'];
+    if (media is Map && media['images'] is List) {
+      collect(media['images'], 'src');
     }
 
     if (itemsToFetch.isEmpty) return;
 
-    // Fetch in batches (HEAD requests should be fast, but limit concurrency)
     const int batchSize = 5;
-    bool hasUpdates = false;
-
     for (var i = 0; i < itemsToFetch.length; i += batchSize) {
-      if (_currentFile == null) break; // Stop if navigation happened
-
-      final end = (i + batchSize < itemsToFetch.length)
-          ? i + batchSize
-          : itemsToFetch.length;
-      final batch = itemsToFetch.sublist(i, end);
-
-      await Future.wait(
-        batch.map((item) async {
-          String? url;
-          if (item['src'] is String) {
-            url = item['src'];
-          } else if (item['href'] is String) {
-            url = item['href'];
-          }
-
-          if (url != null) {
-            final size = await _fetchResourceSize(url);
-            if (size > 0) {
-              item['size'] = {'transfer': size, 'decoded': size};
-              hasUpdates = true;
-            }
-          }
-        }),
-      );
-
-      // Update UI progressively
-      if (hasUpdates) {
+      if (stale()) return;
+      final batch = itemsToFetch.skip(i).take(batchSize);
+      var changed = false;
+      await Future.wait(batch.map((item) async {
+        final url = (item['src'] ?? item['href']) as String;
+        int? size;
+        try {
+          size = await _cachedSizeLookup(gen, url);
+        } catch (e) {
+          debugPrint('Size lookup failed for $url: $e');
+        }
+        if (size == null || stale() || !_sizeUnknown(item)) return;
+        item['size'] = {'transfer': size, 'decoded': size, 'estimated': true};
+        changed = true;
+      }));
+      if (changed && !stale()) {
         _sortMetadataLists();
         notifyListeners();
       }
     }
   }
 
-  String _unquoteHtml(String html) {
-    if (html.startsWith('"') && html.endsWith('"')) {
-      try {
-        // Use jsonDecode to robustly handle all escape sequences (\n, \", \uXXXX, etc.)
-        return jsonDecode(html) as String;
-      } catch (e) {
-        debugPrint('Error unquoting HTML via jsonDecode: $e');
-        // Fallback to manual unquoting if jsonDecode fails
-        return html
-            .substring(1, html.length - 1)
-            .replaceAll('\\"', '"')
-            .replaceAll('\\\\', '\\')
-            .replaceAll('\\n', '\n')
-            .replaceAll('\\r', '\r')
-            .replaceAll('\\t', '\t');
-      }
-    }
-    return html;
-  }
+  /// A fresh collect for [gen], merged into the store by the store itself.
+  /// Everything that comes back after the navigation moved on is dropped.
+  Future<void> _collectAndApply(int gen, String url, Uri uri) async {
+    bool stale() => _disposed || gen != store.current.generation;
 
-  Future<void> syncWebViewState(String url, {bool isPartial = false}) async {
-    if (activeWebViewController == null) return;
-    debugPrint('syncwv $url - $_currentInputText');
-    // Update URL bar immediately
-    if (_currentInputText != url) {
-      _currentInputText = url;
-      // which is handled by onPageStarted/onUrlChange in BrowserView
-    }
-
-    // Server side of the page the browser is on (headers, redirects, robots).
-    // A page the current navigation covers is not fetched again.
-    probeUrl(url).ignore();
-
+    Object? raw;
     try {
-      // 1. Critical: Get Content (HTML or Raw)
-      String content = '';
-      try {
-        final html = await activeWebViewController!.evaluateJavascript(
-          source: '''
-              (function() {
-                var doc = document;
-                var contentType = doc.contentType;
-                
-                // If it's an XML/RSS/SVG file, return serialized XML
-                if (contentType && (contentType.includes('xml') || contentType.includes('rss') || contentType.includes('svg'))) {
-                  try {
-                    return new XMLSerializer().serializeToString(doc);
-                  } catch (e) {}
-                }
-                
-                // For HTML, reconstruction to include DOCTYPE and nodes outside <html>
-                var content = "";
-                try {
-                  var child = doc.firstChild;
-                  while (child) {
-                    if (child.nodeType === Node.DOCUMENT_TYPE_NODE) {
-                      content += new XMLSerializer().serializeToString(child) + "\\n";
-                    } else if (child.nodeType === Node.ELEMENT_NODE) {
-                      content += child.outerHTML;
-                    } else if (child.nodeType === Node.COMMENT_NODE) {
-                      content += "<!--" + child.nodeValue + "-->";
-                    } else if (child.nodeType === Node.TEXT_NODE) {
-                      content += child.nodeValue;
-                    }
-                    child = child.nextSibling;
-                  }
-                } catch (e) {
-                  // Fallback to current element if full serialization fails
-                  content = doc.documentElement ? doc.documentElement.outerHTML : "";
-                }
-                
-                // If still empty (shadow DOM or similar), fallback to simple string
-                return content || (doc.documentElement ? doc.documentElement.outerHTML : "");
-              })();
-            ''',
-        );
-
-        if (html is String) {
-          content = _unquoteHtml(html);
-
-          // Workaround for raw files (JS/CSS/JSON) wrapped in <pre> by the browser
-          if (content.trim().startsWith('<html') &&
-              content.contains('<body') &&
-              content.contains('<pre')) {
-            try {
-              // More robust regex for PRE tags, allowing for varied style strings or none
-              final preMatch = RegExp(
-                r'<pre[^>]*>(.*?)<\/pre>',
-                dotAll: true,
-                caseSensitive: false,
-              ).firstMatch(content);
-
-              if (preMatch != null) {
-                String rawContent = preMatch.group(1) ?? '';
-                rawContent = rawContent
-                    .replaceAll('&lt;', '<')
-                    .replaceAll('&gt;', '>')
-                    .replaceAll('&amp;', '&')
-                    .replaceAll('&quot;', '"')
-                    .replaceAll('&#39;', "'");
-
-                content = rawContent;
-                debugPrint(
-                  'HTML Service: Extracted raw content from PRE tag for $url',
-                );
-              }
-            } catch (e) {
-              debugPrint('HTML Service: Error parsing PRE tag content: $e');
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Error getting content from WebView: $e');
-        if (content.isEmpty) {
-          content = '<!-- Error syncing content: $e -->';
-        }
-      }
-
-      // 2. Optional: Get Page Weight & Cookies
-      try {
-        final storageRaw = await activeWebViewController!.evaluateJavascript(
-          source: '''
-              (function() {
-                function collectStorage(storage) {
-                  var items = [];
-                  var total = 0;
-                  try {
-                    for (var i = 0; i < storage.length; i++) {
-                      var key = storage.key(i);
-                      var value = storage.getItem(key) || "";
-                      total += key.length + value.length;
-                      items.push({k: key, s: value.length});
-                    }
-                  } catch (e) {}
-                  items.sort(function(a, b) { return b.s - a.s; });
-                  return {count: items.length, bytes: total, items: items.slice(0, 30)};
-                }
-                return JSON.stringify({
-                  localStorage: collectStorage(window.localStorage),
-                  sessionStorage: collectStorage(window.sessionStorage)
-                });
-              })();
-            ''',
-        );
-
-        String storageJson = '';
-        if (storageRaw is String) {
-          storageJson = _unquoteHtml(storageRaw);
-        }
-
-        Map<String, dynamic>? storageData;
-        if (storageJson.isNotEmpty) {
-          final dynamic decodedStorage = jsonDecode(storageJson);
-          if (decodedStorage is Map) {
-            storageData = Map<String, dynamic>.from(decodedStorage);
-          }
-        }
-
-        final weightRaw = await activeWebViewController!.evaluateJavascript(
-          source:
-              // Use the __vsv_res accumulator set up by the injected user script.
-              // It captures ALL resources via PerformanceObserver (including lazy chunks),
-              // then falls back to getEntriesByType for anything missed before observer attached.
-              '(function() {'
-              ' var tTx=0; var tDec=0;'
-              ' var acc=window.__vsv_res||{};'
-              ' var list=[]; var seen=new Set();'
-              ' for(var name in acc) {'
-              '   var e=acc[name]; var tx=e.t||0; var dec=e.d||0; var st=e.s||0; var du=e.u||0;'
-              '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
-              '   list.push({n:name,t:tx,d:dec,s:st,u:du}); seen.add(name);'
-              ' }'
-              ' var r=performance.getEntriesByType("resource");'
-              ' for(var i=0;i<r.length;i++) {'
-              '   var name=r[i].name; if(seen.has(name)) continue;'
-              '   var tx=r[i].transferSize||0; var dec=r[i].decodedBodySize||0; var st=r[i].startTime||0; var du=r[i].duration||0;'
-              '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
-              '   list.push({n:name,t:tx,d:dec,s:st,u:du}); seen.add(name);'
-              ' }'
-              ' var nav=performance.getEntriesByType("navigation")[0];'
-              ' var nTx=0; var nDec=0;'
-              ' if(nav && !seen.has(nav.name)) {'
-              '   nTx=nav.transferSize||0; nDec=nav.decodedBodySize||0;'
-              '   if(nDec===0) nDec=document.documentElement.outerHTML.length;'
-              '   tTx+=nTx; tDec+=nDec;'
-              '   list.push({n:nav.name,t:nTx,d:nDec,s:nav.startTime||0,u:nav.duration||0});'
-              ' } else if(!nav && !seen.has(document.location.href)) {'
-              '   var sz=document.documentElement.outerHTML.length;'
-              '   nTx=sz; nDec=sz; tTx+=sz; tDec+=sz;'
-              '   list.push({n:document.location.href,t:sz,d:sz,s:0,u:0});'
-              ' }'
-              ' return JSON.stringify({tx:tTx,dec:tDec,nTx:nTx,nDec:nDec,list:list,cookies:document.cookie});'
-              ' })();',
-        );
-
-        String jsonStr = '';
-        if (weightRaw is String) {
-          jsonStr = _unquoteHtml(weightRaw);
-        }
-
-        if (jsonStr.isNotEmpty) {
-          final dynamic decoded = jsonDecode(jsonStr);
-          if (decoded is Map) {
-            final weightMap = Map<String, dynamic>.from(decoded);
-
-            // Extract cookies via native CookieManager (captures HttpOnly cookies unlike JS document.cookie)
-            try {
-              final nativeCookiesList =
-                  await CookieManager.instance().getCookies(url: WebUri(url));
-              String nativeCookies = nativeCookiesList
-                  .where((c) => c.name.isNotEmpty)
-                  .map((c) => '${c.name}=${c.value}')
-                  .join('; ');
-
-              final jsCookies = weightMap['cookies']?.toString() ?? '';
-
-              // If native lookup returned nothing, try a broader lookup by origin as a fallback
-              if (nativeCookies.isEmpty && url.startsWith('http')) {
-                try {
-                  final uri = Uri.parse(url);
-                  final originUrl = '${uri.scheme}://${uri.host}/';
-                  final originCookiesList = await CookieManager.instance()
-                      .getCookies(url: WebUri(originUrl));
-                  nativeCookies = originCookiesList
-                      .where((c) => c.name.isNotEmpty)
-                      .map((c) => '${c.name}=${c.value}')
-                      .join('; ');
-                } catch (_) {}
-              }
-
-              // Prefer native cookies (which include HttpOnly), but fallback to JS cookies if native is empty
-              // And if both are empty, we might have had some from a previous partial sync - don't overwrite with empty
-              // unless we are sure. But usually a full sync should replace.
-              if (nativeCookies.isNotEmpty) {
-                _lastBrowserCookies = nativeCookies;
-              } else if (jsCookies.isNotEmpty) {
-                _lastBrowserCookies = jsCookies;
-              }
-            } catch (e) {
-              debugPrint('Error getting native cookies: $e');
-              _lastBrowserCookies = weightMap['cookies']?.toString() ?? '';
-            }
-            // analyzedCookies is derived from _lastBrowserCookies on read.
-
-            // Parse detailed resource data
-            if (weightMap['list'] != null && weightMap['list'] is List) {
-              _resourcePerformanceData = List<Map<String, dynamic>>.from(
-                (weightMap['list'] as List).map(
-                  (e) => {
-                    'name': e['n'],
-                    'transfer': (e['t'] as num? ?? 0).toInt(),
-                    'decoded': (e['d'] as num? ?? 0).toInt(),
-                    'startTime': (e['s'] as num? ?? 0).toDouble(),
-                    'duration': (e['u'] as num? ?? 0).toDouble(),
-                  },
-                ),
-              );
-            }
-
-            // Calculate totals and breakdown
-            int totalTx = (weightMap['tx'] as num? ?? 0).toInt();
-            int totalDec = (weightMap['dec'] as num? ?? 0).toInt();
-            int mainDocTx = (weightMap['nTx'] as num? ?? 0).toInt();
-            int mainDocDec = (weightMap['nDec'] as num? ?? 0).toInt();
-
-            int scriptCount = 0, scriptTx = 0, scriptDec = 0;
-            int cssCount = 0, cssTx = 0, cssDec = 0;
-            int imgCount = 0, imgTx = 0, imgDec = 0;
-            int htmlCount = 0, htmlTx = 0, htmlDec = 0;
-            int otherCount = 0, otherTx = 0, otherDec = 0;
-
-            if (_resourcePerformanceData != null) {
-              for (var r in _resourcePerformanceData!) {
-                final String name = (r['name'] as String? ?? '').toLowerCase();
-                final int mTx = (r['transfer'] as num? ?? 0).toInt();
-                final int mDec = (r['decoded'] as num? ?? 0).toInt();
-
-                final type = _categorizeResource(name, url.toLowerCase());
-                final bool isInline =
-                    name.startsWith('data:') || name.startsWith('<svg');
-
-                switch (type) {
-                  case 'script':
-                    scriptCount++;
-                    if (!isInline) {
-                      scriptTx += mTx;
-                      scriptDec += mDec;
-                    }
-                    break;
-                  case 'style':
-                    cssCount++;
-                    if (!isInline) {
-                      cssTx += mTx;
-                      cssDec += mDec;
-                    }
-                    break;
-                  case 'image':
-                    imgCount++;
-                    if (!isInline) {
-                      imgTx += mTx;
-                      imgDec += mDec;
-                    }
-                    break;
-                  case 'document':
-                    htmlCount++;
-                    if (!isInline) {
-                      htmlTx += mTx;
-                      htmlDec += mDec;
-                    }
-                    break;
-                  default:
-                    otherCount++;
-                    if (!isInline) {
-                      otherTx += mTx;
-                      otherDec += mDec;
-                    }
-                    break;
-                }
-              }
-            }
-
-            // Populate Browser Probe Result
-            _browserProbeResult = {
-              'browser': 'InAppWebView',
-              'os': Platform.operatingSystem,
-              'device': Platform.isAndroid
-                  ? 'Android'
-                  : Platform.isIOS
-                      ? 'iOS'
-                      : 'Desktop',
-              'date': DateTime.now().toIso8601String(),
-              'url': url,
-              'title': _pageMetadata?['title'],
-              'serverStatusCode': _probeResult?['statusCode'],
-              'pageWeight': {
-                'totalTransfer': totalTx,
-                'totalDecoded': totalDec,
-                'mainDocumentTransfer': mainDocTx,
-                'mainDocumentDecoded': mainDocDec,
-                'breakdown': {
-                  'scripts': {
-                    'count': scriptCount,
-                    'transfer': scriptTx,
-                    'decoded': scriptDec,
-                  },
-                  'css': {
-                    'count': cssCount,
-                    'transfer': cssTx,
-                    'decoded': cssDec,
-                  },
-                  'images': {
-                    'count': imgCount,
-                    'transfer': imgTx,
-                    'decoded': imgDec,
-                  },
-                  'html': {
-                    'count': htmlCount,
-                    'transfer': htmlTx,
-                    'decoded': htmlDec,
-                  },
-                  'other': {
-                    'count': otherCount,
-                    'transfer': otherTx,
-                    'decoded': otherDec,
-                  },
-                },
-              },
-              'resourceCount': _resourcePerformanceData?.length ?? 0,
-              if (storageData != null) 'storage': storageData,
-            };
-
-            // Update _lastPageWeight for Metadata tab compatibility
-            _lastPageWeight = {
-              'transfer': totalTx,
-              'decoded': totalDec,
-              'breakdown': _browserProbeResult!['pageWeight']['breakdown'],
-            };
-
-            if (_pageMetadata != null) {
-              _pageMetadata!['pageWeight'] = _lastPageWeight;
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Error getting weight/cookies: $e');
-      }
-
-      _enrichResourceSizes().ignore();
-
-      // 3. Update the File State
-      String filename = 'Page';
-      try {
-        filename = generateDescriptiveFilename(Uri.parse(url), content);
-      } catch (_) {}
-
-      // Use browser-reported main document size for the file size if available,
-      // as it represents the official network response size.
-      // Fallback to content.length (the length of the extracted DOM string).
-      final int browserDocSize = _browserDocSizeFor(url);
-
-      final file = HtmlFile(
-        name: filename,
-        path: url,
-        content: content,
-        lastModified: DateTime.now(),
-        size: browserDocSize > 0 ? browserDocSize : content.length,
-        isUrl: true,
-        probeResult: _probeResult,
-      );
-
-      await loadFile(file, clearProbe: false, isPartial: isPartial);
-
-      // Schedule a delayed re-query to catch deferred/lazy-loaded resources
-      // (analytics scripts, lazy images, etc. that load after onLoadStop).
-      debugPrint(
-          'pageWeight: scheduling refresh, isPartial=$isPartial url=$url');
-      if (!isPartial) {
-        _refreshPageWeightAfterDelay(url).ignore();
-      }
+      raw = await _collect(url);
     } catch (e) {
-      debugPrint('Error syncing WebView state: $e');
-    } finally {
-      if (!isPartial) {
-        _isLoading = false;
+      if (!stale()) {
+        store.applyBrowserFailure(gen, Failed('Browser collection failed: $e'));
       }
-      // Update all tab data to ensure consistency
-      await _updateAllTabData(isPartial: isPartial);
-      // Ensure webview loading state is reset when sync completes
-      _isWebViewLoading = false;
-      _webViewLoadingUrl = null;
-      notifyListeners();
+      return;
     }
-  }
 
-  Future<void> _refreshPageWeightAfterDelay(String url) async {
-    // Two passes: catch fast lazy loaders at 4s, slow PWA hydration at 14s.
-    for (final delay in [
-      const Duration(seconds: 4),
-      const Duration(seconds: 10),
-    ]) {
-      await Future.delayed(delay);
-      debugPrint(
-          'pageWeight delayed check: controller=${activeWebViewController != null}, currentPath=${_currentFile?.path}, url=$url');
-      if (activeWebViewController == null) return;
-      if (_currentFile?.path != url) return; // user navigated away
-      await _doPageWeightRefresh(url);
-    }
-  }
-
-  static const String _weightQueryJs = '(function() {'
-      ' var tTx=0; var tDec=0;'
-      ' var acc=window.__vsv_res||{};'
-      ' var list=[]; var seen=new Set();'
-      ' for(var name in acc) {'
-      '   var e=acc[name]; var tx=e.t||0; var dec=e.d||0; var st=e.s||0; var du=e.u||0;'
-      '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
-      '   list.push({n:name,t:tx,d:dec,s:st,u:du}); seen.add(name);'
-      ' }'
-      // Fallback: pick up anything from before the observer was attached
-      ' var r=performance.getEntriesByType("resource");'
-      ' for(var i=0;i<r.length;i++) {'
-      '   var name=r[i].name; if(seen.has(name)) continue;'
-      '   var tx=r[i].transferSize||0; var dec=r[i].decodedBodySize||0; var st=r[i].startTime||0; var du=r[i].duration||0;'
-      '   if(!name.startsWith("data:")) { tTx+=tx; tDec+=dec; }'
-      '   list.push({n:name,t:tx,d:dec,s:st,u:du}); seen.add(name);'
-      ' }'
-      ' var nav=performance.getEntriesByType("navigation")[0];'
-      ' if(nav && !seen.has(nav.name)) {'
-      '   var nTx=nav.transferSize||0; var nDec=nav.decodedBodySize||0;'
-      '   if(nDec===0) nDec=document.documentElement.outerHTML.length;'
-      '   tTx+=nTx; tDec+=nDec;'
-      '   list.push({n:nav.name,t:nTx,d:nDec,s:nav.startTime||0,u:nav.duration||0});'
-      ' }'
-      ' return JSON.stringify({tx:tTx,dec:tDec,list:list});'
-      ' })();';
-
-  Future<void> _doPageWeightRefresh(String url) async {
+    // The native cookie manager also sees HttpOnly cookies and their flags.
+    List<BrowserCookie>? nativeCookies;
     try {
-      final weightRaw = await activeWebViewController!
-          .evaluateJavascript(source: _weightQueryJs);
-
-      String jsonStr = '';
-      if (weightRaw is String) jsonStr = _unquoteHtml(weightRaw);
-      debugPrint(
-          'pageWeight _doRefresh: jsonStr empty=${jsonStr.isEmpty}, rawType=${weightRaw.runtimeType}');
-      if (jsonStr.isEmpty) return;
-
-      final dynamic decoded = jsonDecode(jsonStr);
-      if (decoded is! Map) return;
-
-      final newTx = (decoded['tx'] as num? ?? 0).toInt();
-      final newDec = (decoded['dec'] as num? ?? 0).toInt();
-      final newList = decoded['list'];
-      if (newList is! List) return;
-
-      final prevTx = (_lastPageWeight?['transfer'] as num? ?? 0).toInt();
-      final prevDec = (_lastPageWeight?['decoded'] as num? ?? 0).toInt();
-      debugPrint(
-          'pageWeight _doRefresh: newTx=$newTx newDec=$newDec prevTx=$prevTx prevDec=$prevDec');
-
-      // SPAs (e.g. Next.js) often call performance.clearResourceTimings() which can
-      // make the new snapshot look smaller than what we already captured. Always merge
-      // the lists so we keep the union of all resources seen across all snapshots.
-      final existing = <String, Map<String, dynamic>>{
-        for (final r in (_resourcePerformanceData ?? []))
-          (r['name'] as String? ?? ''): r,
-      };
-      bool anyNew = false;
-      for (final e in newList) {
-        final name = e['n'] as String? ?? '';
-        if (name.isEmpty) continue;
-        final tx = (e['t'] as num? ?? 0).toInt();
-        final dec = (e['d'] as num? ?? 0).toInt();
-        final prev = existing[name];
-        if (prev == null) {
-          existing[name] = {'name': name, 'transfer': tx, 'decoded': dec};
-          anyNew = true;
-        } else if (dec > (prev['decoded'] as num? ?? 0)) {
-          existing[name] = {'name': name, 'transfer': tx, 'decoded': dec};
-          anyNew = true;
-        }
-      }
-      if (!anyNew) return;
-
-      _resourcePerformanceData = existing.values.toList();
-
-      // Recompute totals from the merged list (never let them go below what we had).
-      int sumTx = 0, sumDec = 0;
-      for (final r in _resourcePerformanceData!) {
-        final name = r['name'] as String? ?? '';
-        if (name.startsWith('data:')) continue;
-        sumTx += (r['transfer'] as num? ?? 0).toInt();
-        sumDec += (r['decoded'] as num? ?? 0).toInt();
-      }
-      final totalTx = sumTx > prevTx ? sumTx : prevTx;
-      final totalDec = sumDec > prevDec ? sumDec : prevDec;
-      if (totalTx == prevTx && totalDec == prevDec) return;
-
-      debugPrint('pageWeight refresh: ${prevTx}B → ${totalTx}B transfer');
-
-      if (_lastPageWeight != null) {
-        _lastPageWeight!['transfer'] = totalTx;
-        _lastPageWeight!['decoded'] = totalDec;
-      }
-
-      await _enrichResourceSizes();
+      nativeCookies = parseNativeCookies(await _nativeCookies(url), _platform);
     } catch (e) {
-      debugPrint('Error in delayed page weight refresh: $e');
+      debugPrint('Native cookies unavailable: $e');
     }
+    if (stale()) return;
+
+    _lastRawPayload = (gen: gen, raw: raw is String ? raw : '$raw');
+    BrowserSnapshot snapshot;
+    try {
+      snapshot = parseBrowserPayload(raw, _platform, pageUrl: uri);
+    } catch (e) {
+      store.applyBrowserFailure(gen, Failed('Payload could not be read: $e'));
+      return;
+    }
+    if (nativeCookies != null &&
+        (nativeCookies.isNotEmpty || snapshot.cookies is! Present)) {
+      snapshot = snapshot
+          .withCookies(Present(nativeCookies, source: DataSource.browser));
+    }
+    if (!snapshot.hasPresentSection) {
+      store.applyBrowserFailure(
+          gen,
+          switch (snapshot.renderedDom) {
+            Failed<RenderedDom>(error: final e) => Failed(e),
+            Unavailable<RenderedDom>(reason: final r, detail: final d) =>
+              Unavailable(r, d),
+            _ => const Failed('The browser returned no data'),
+          });
+      return;
+    }
+    store.applyBrowser(gen, snapshot);
   }
 
-  /// Fetches content-length
-  Future<void> _enrichResourceSizes() async {
-    if (_resourcePerformanceData == null) return;
-
-    final resourcesToUpdate = _resourcePerformanceData!
-        .where(
-          (r) =>
-              (r['transfer'] as int) == 0 &&
-              (r['name'] as String).startsWith('http'),
-        )
-        .toList();
-
-    if (resourcesToUpdate.isEmpty) return;
-
-    // Limit concurrency to avoid choking the network
-    const int batchSize = 5;
-    for (var i = 0; i < resourcesToUpdate.length; i += batchSize) {
-      final end = (i + batchSize < resourcesToUpdate.length)
-          ? i + batchSize
-          : resourcesToUpdate.length;
-      final batch = resourcesToUpdate.sublist(i, end);
-
-      await Future.wait(
-        batch.map((resource) async {
-          try {
-            final url = resource['name'] as String;
-            final size = await _fetchResourceSize(url);
-            if (size > 0) {
-              resource['transfer'] = size;
-              resource['decoded'] = size;
-            }
-          } catch (e) {
-            // ignore
-          }
-        }),
-      );
-    }
-
-    // Deduplicate resource list by URL
-    final Map<String, Map<String, dynamic>> uniqueResources = {};
-    for (var r in _resourcePerformanceData!) {
-      final name = r['name'] as String? ?? '';
-      if (name.isNotEmpty) {
-        // Keep the entry with the larger decoded size (prefer non-cached data)
-        final existing = uniqueResources[name];
-        if (existing == null ||
-            (r['decoded'] as num? ?? 0) > (existing['decoded'] as num? ?? 0)) {
-          uniqueResources[name] = r;
-        }
-      }
-    }
-    _resourcePerformanceData = uniqueResources.values.toList();
-
-    // Recalculate breakdown counts. For totals, prefer the original browser-reported
-    // value since cached resources are already included there.
-    int scriptCount = 0, scriptTx = 0, scriptDec = 0;
-    int cssCount = 0, cssTx = 0, cssDec = 0;
-    int imgCount = 0, imgTx = 0, imgDec = 0;
-    int htmlCount = 0, htmlTx = 0, htmlDec = 0;
-    int otherCount = 0, otherTx = 0, otherDec = 0;
-
-    final url = _currentFile?.path.toLowerCase() ?? '';
-
-    for (var r in _resourcePerformanceData!) {
-      final String name = (r['name'] as String? ?? '').toLowerCase();
-      final int mTx = (r['transfer'] as num? ?? 0).toInt();
-      final int mDec = (r['decoded'] as num? ?? 0).toInt();
-
-      final type = _categorizeResource(name, url);
-      final bool isInline = name.startsWith('data:') || name.startsWith('<svg');
-
-      switch (type) {
-        case 'script':
-          scriptCount++;
-          if (!isInline) {
-            scriptTx += mTx;
-            scriptDec += mDec;
-          }
-          break;
-        case 'style':
-          cssCount++;
-          if (!isInline) {
-            cssTx += mTx;
-            cssDec += mDec;
-          }
-          break;
-        case 'image':
-          imgCount++;
-          if (!isInline) {
-            imgTx += mTx;
-            imgDec += mDec;
-          }
-          break;
-        case 'document':
-          htmlCount++;
-          if (!isInline) {
-            htmlTx += mTx;
-            htmlDec += mDec;
-          }
-          break;
-        default:
-          otherCount++;
-          if (!isInline) {
-            otherTx += mTx;
-            otherDec += mDec;
-          }
-          break;
-      }
-    }
-
-    // For the overall total, prefer the previously stored browser-reported value
-    // (which includes cached resources) over summing from the resource list.
-    // Only override if we have a meaningfully larger sum (e.g., after fetching missing sizes).
-    final sumTx = scriptTx + cssTx + imgTx + htmlTx + otherTx;
-    final sumDec = scriptDec + cssDec + imgDec + htmlDec + otherDec;
-    final prevTx = (_lastPageWeight?['transfer'] as num? ?? 0).toInt();
-    final prevDec = (_lastPageWeight?['decoded'] as num? ?? 0).toInt();
-    final totalTransferSize = sumTx > prevTx ? sumTx : prevTx;
-    final totalDecodedSize = sumDec > prevDec ? sumDec : prevDec;
-
-    // Detect if any resources have size=0 (cross-origin without Timing-Allow-Origin)
-    final hasUnknownSizes = _resourcePerformanceData!.any((r) {
-      final name = r['name'] as String? ?? '';
-      return !name.startsWith('data:') &&
-          (r['transfer'] as num? ?? 0) == 0 &&
-          (r['decoded'] as num? ?? 0) == 0;
-    });
-
-    _lastPageWeight = {
-      'transfer': totalTransferSize,
-      'decoded': totalDecodedSize,
-      'isPartial': hasUnknownSizes,
-      'resources': _resourcePerformanceData,
-      'breakdown': {
-        'scripts': {
-          'count': scriptCount,
-          'transfer': scriptTx,
-          'decoded': scriptDec,
-        },
-        'css': {'count': cssCount, 'transfer': cssTx, 'decoded': cssDec},
-        'images': {'count': imgCount, 'transfer': imgTx, 'decoded': imgDec},
-        'html': {'count': htmlCount, 'transfer': htmlTx, 'decoded': htmlDec},
-        'other': {
-          'count': otherCount,
-          'transfer': otherTx,
-          'decoded': otherDec,
-        },
-      },
-    };
-
-    // Update the parent metadata object if it exists
-    if (_pageMetadata != null) {
-      _pageMetadata!['pageWeight'] = _lastPageWeight;
-    }
-
-    // Re-enrich metadata so the Media/Services tabs update with the new sizes
-    final baseUrl = _currentFile?.isUrl == true ? _currentFile!.path : '';
-    _enrichMetadataWithSizes(baseUrl);
-    notifyListeners();
+  Future<Object?> _collectViaController(String url) {
+    final controller = activeWebViewController;
+    if (controller == null) throw StateError('no browser view');
+    return controller.evaluateJavascript(source: 'window.__vsv_collect()');
   }
 
-  String _categorizeResource(String name, String pageUrl) {
-    return ProbeService.categorizeResource(name, pageUrl);
+  static Future<List<Map>> _nativeCookiesFromManager(String url) async {
+    final cookies = await CookieManager.instance().getCookies(url: WebUri(url));
+    return [for (final c in cookies) c.toMap()];
   }
 
-  Future<int> _fetchResourceSize(String url) async {
+  /// Ranged GET (then HEAD) for a resource's size. A size is only reported
+  /// when the server states one; 0 and failures are "unknown" (null).
+  static Future<int?> _lookupResourceSize(String url) async {
     final client = http.Client();
     try {
       final uri = Uri.parse(url);
-      final headers = {
-        'User-Agent':
-            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
-      };
+      final headers = {'User-Agent': kServerUserAgent};
 
-      // 1. Ranged GET first: this runs the same GET pipeline as the browser,
-      //    so query-param transforms on image CDNs (?width=...&height=...)
-      //    are applied and content-range/content-length reflect the bytes a
-      //    browser actually downloads. HEAD can be answered with the
-      //    untransformed origin object's size instead.
+      // A ranged GET runs the same pipeline as the browser's GET, so query
+      // transforms on image CDNs are applied; HEAD can report the origin
+      // object's size instead.
       try {
         final request = http.Request('GET', uri);
         request.headers.addAll(headers);
         request.headers['Range'] = 'bytes=0-0';
-
-        final streamedResponse =
+        final response =
             await client.send(request).timeout(const Duration(seconds: 5));
-
-        final contentLengthStr = streamedResponse.headers['content-length'];
-        final contentRangeStr = streamedResponse.headers['content-range'];
-
-        // Immediately drain the body so we don't hold the connection
-        streamedResponse.stream.listen((_) {}).cancel();
-
-        if (streamedResponse.statusCode >= 200 &&
-            streamedResponse.statusCode < 400) {
-          if (contentRangeStr != null) {
-            final parts = contentRangeStr.split('/');
-            if (parts.length == 2) {
-              final size = int.tryParse(parts[1]);
-              if (size != null && size > 0) return size;
-            }
-          }
-
-          if (contentLengthStr != null) {
-            final size = int.tryParse(contentLengthStr);
+        final contentLength = response.headers['content-length'];
+        final contentRange = response.headers['content-range'];
+        response.stream.listen((_) {}).cancel();
+        if (response.statusCode >= 200 && response.statusCode < 400) {
+          final parts = contentRange?.split('/');
+          if (parts != null && parts.length == 2) {
+            final size = int.tryParse(parts[1]);
             if (size != null && size > 0) return size;
           }
+          final size = int.tryParse(contentLength ?? '');
+          if (size != null && size > 0) return size;
         }
-      } catch (e) {
-        // Fallback to HEAD if the ranged GET fails or times out
+      } catch (_) {
+        // Fall back to HEAD.
       }
 
-      // 2. Fallback to HEAD request
       try {
-        final headResponse = await client
+        final head = await client
             .head(uri, headers: headers)
             .timeout(const Duration(seconds: 5));
-        if (headResponse.statusCode >= 200 && headResponse.statusCode < 400) {
-          final contentLength = headResponse.headers['content-length'];
-          if (contentLength != null) {
-            final size = int.tryParse(contentLength);
-            if (size != null && size > 0) return size;
-          }
+        if (head.statusCode >= 200 && head.statusCode < 400) {
+          final size = int.tryParse(head.headers['content-length'] ?? '');
+          if (size != null && size > 0) return size;
         }
-      } catch (e) {
-        // ignore
+      } catch (_) {
+        // unknown
       }
     } catch (e) {
       debugPrint('Error getting resource size for $url: $e');
     } finally {
       client.close();
     }
-    return 0;
+    return null;
+  }
+
+  /// The browser reported a URL change (history API / SPA route, redirect).
+  /// The same document as the current navigation (R20) is nothing new; any
+  /// other URL is a navigation of its own: a new generation with its own
+  /// server fetch, then a sync of what the browser shows.
+  Future<void> handleBrowserUrlChange(String url) async {
+    if (_disposed || !_browserReachable) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
+    if (store.current.target is! UrlTarget) return;
+    if (_storeCovers(uri)) {
+      _noteBrowserUrl(uri);
+      return;
+    }
+    _clearBrowserDerivedData();
+    final gen = _startInspection(uri, adoptBody: false);
+    // Let the SPA render the new route before its DOM is read.
+    await Future<void>.delayed(_spaSettleDelay);
+    if (_disposed || gen != store.current.generation) return;
+    await syncWebViewState(url);
+  }
+
+  /// Reads the page from the WebView (one collector call) and puts it in the
+  /// store. A page the current navigation does not cover starts a new
+  /// generation first; anything that comes back after the navigation moved on
+  /// is dropped. Does nothing for a local file.
+  Future<void> syncWebViewState(String url, {bool isPartial = false}) async {
+    if (_disposed || !_browserReachable) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
+    // A local file shown through the WebView stays a file (scan bug 16), and
+    // with nothing loaded there is nothing to attach a page to.
+    if (store.current.target is! UrlTarget) return;
+
+    if (_currentInputText != url) _currentInputText = url;
+
+    // Server side of the page the browser is on (headers, redirects, robots).
+    // A page the current navigation covers is not fetched again; any other
+    // starts a new generation, synchronously, before the gen is read below.
+    probeUrl(url).ignore();
+    final gen = store.current.generation;
+    bool stale() => _disposed || gen != store.current.generation;
+
+    if (!isPartial) _cancelBrowserRefreshes();
+    await _collectAndApply(gen, url, uri);
+    if (stale()) return;
+
+    try {
+      final browser = store.current.browser;
+      if (browser is Present<BrowserSnapshot>) {
+        String filename = 'Page';
+        final dom = browser.value.renderedDom;
+        try {
+          filename = generateDescriptiveFilename(
+              uri, dom is Present<RenderedDom> ? dom.value.text : '');
+        } catch (_) {}
+        final file = legacyDomFile(browser.value,
+            name: filename, probeResult: _probeResult);
+        if (file != null) {
+          await loadFile(file, clearProbe: false, isPartial: isPartial);
+          if (stale()) return;
+        } else {
+          // No DOM from the browser: whatever the server gave stays.
+          await _adoptServerBodyIfEmpty(gen);
+          if (stale()) return;
+          _applyBrowserDerivedToMetadata();
+        }
+        if (!isPartial) _scheduleBrowserRefreshes(gen, url, uri);
+      }
+    } catch (e) {
+      debugPrint('Error syncing WebView state: $e');
+    } finally {
+      if (!stale()) {
+        if (!isPartial) _isLoading = false;
+        _isWebViewLoading = false;
+        _webViewLoadingUrl = null;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Later passes catch resources that load after onLoadStop (lazy images,
+  /// analytics, slow hydration). Each is another collect; the store merges it
+  /// into what it has.
+  void _scheduleBrowserRefreshes(int gen, String url, Uri uri) {
+    _cancelBrowserRefreshes();
+    for (final delay in _refreshDelays) {
+      _refreshTimers.add(Timer(delay, () async {
+        if (_disposed || gen != store.current.generation) return;
+        if (!_browserReachable) return;
+        await _collectAndApply(gen, url, uri);
+        if (_disposed || gen != store.current.generation) return;
+        _applyBrowserDerivedToMetadata();
+      }));
+    }
+  }
+
+  void _cancelBrowserRefreshes() {
+    for (final t in _refreshTimers) {
+      t.cancel();
+    }
+    _refreshTimers.clear();
+  }
+
+  /// New browser numbers: update the weight in the metadata and re-match the
+  /// sizes of its links.
+  void _applyBrowserDerivedToMetadata() {
+    final metadata = _pageMetadata;
+    if (metadata != null) {
+      final weight = _pageWeight;
+      if (weight != null) metadata['pageWeight'] = weight;
+      _enrichMetadataWithSizes(
+          _currentFile?.isUrl == true ? _currentFile!.path : '');
+      _fetchMissingMetadataSizesAsync().ignore();
+    }
+    notifyListeners();
   }
 
   /// Clear the WebView cache (excluding cookies/localStorage if possible, but WebViewController.clearCache usually does disk cache)
@@ -4465,9 +3999,14 @@ Technical details: $message''';
     // Clear cookies using the static/singleton CookieManager
     await CookieManager.instance().deleteAllCookies();
 
-    // Browser cookies are gone; the server's own data stays valid.
-    _lastBrowserCookies = '';
+    // Browser cookies are gone; the server's own data stays valid. Read the
+    // browser again so its cookies in the store are the empty ones.
     _pageMetadata = null;
+    final target = store.current.target;
+    if (target is UrlTarget && _browserReachable) {
+      await _collectAndApply(store.current.generation,
+          _currentFile?.path ?? target.url.toString(), target.url);
+    }
 
     debugPrint('Browser storage (cache, local storage, cookies) cleared');
     notifyListeners();

@@ -4435,7 +4435,8 @@ class CookieUtils {
     return x == null || y == null || x == y;
   }
 
-  static bool? _anyTrue(bool? a, bool? b) => a == true || b == true ? true : a ?? b;
+  static bool? _anyTrue(bool? a, bool? b) =>
+      a == true || b == true ? true : a ?? b;
 
   /// Set-Cookie headers of the server plus the cookies the browser holds.
   /// The same cookie seen by both is merged; cookies of the same name on
