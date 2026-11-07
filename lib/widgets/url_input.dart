@@ -133,6 +133,7 @@ class _UrlInputState extends State<UrlInput> {
         currentFile: service.currentFile,
         isLoading: service.isLoading,
         activeTabIndex: service.activeTabIndex,
+        fileNotice: service.fileNotice,
       ),
       builder: (context, structure, child) {
         final htmlService = Provider.of<HtmlService>(context, listen: false);
@@ -289,6 +290,7 @@ class _UrlInputState extends State<UrlInput> {
                   ],
                 ),
                 if (_errorMessage.isNotEmpty ||
+                    structure.fileNotice != null ||
                     (structure.currentFile?.isError ?? false)) ...[
                   const SizedBox(height: 4),
                   Row(
@@ -297,7 +299,8 @@ class _UrlInputState extends State<UrlInput> {
                         child: Text(
                           _errorMessage.isNotEmpty
                               ? _errorMessage
-                              : 'Load failed. See details below.',
+                              : structure.fileNotice ??
+                                  'Load failed. See details below.',
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.error,
                             fontSize: 11,
@@ -517,12 +520,14 @@ class _UrlInputStructure {
       currentFile; // Use dynamic to avoid deep dependency check if not needed
   final bool isLoading;
   final int activeTabIndex;
+  final String? fileNotice;
 
   const _UrlInputStructure({
     this.currentInputText,
     this.currentFile,
     required this.isLoading,
     required this.activeTabIndex,
+    this.fileNotice,
   });
 
   @override
@@ -533,14 +538,16 @@ class _UrlInputStructure {
           currentInputText == other.currentInputText &&
           currentFile == other.currentFile &&
           isLoading == other.isLoading &&
-          activeTabIndex == other.activeTabIndex;
+          activeTabIndex == other.activeTabIndex &&
+          fileNotice == other.fileNotice;
 
   @override
   int get hashCode =>
       currentInputText.hashCode ^
       currentFile.hashCode ^
       isLoading.hashCode ^
-      activeTabIndex.hashCode;
+      activeTabIndex.hashCode ^
+      fileNotice.hashCode;
 }
 
 @immutable

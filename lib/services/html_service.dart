@@ -45,6 +45,7 @@ import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
+import 'package:view_source_vibe/utils/path_name.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_payload.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1465,6 +1466,7 @@ class HtmlService extends ChangeNotifier {
     bool forceReload = false,
   }) async {
     if (url.isEmpty) return;
+    _fileNotice = null;
 
     // Block data: and blob: URLs
     if (url.startsWith('data:') || url.startsWith('blob:')) {
@@ -1876,24 +1878,41 @@ Technical details: $message''';
         a.query == b.query;
   }
 
-  Future<void> reloadCurrentFile({int? switchToTab}) async {
-    if (_currentFile == null) return;
+  /// Why the last reload/open of a local file failed; null otherwise. The
+  /// old content stays on screen, marked stale by this notice (shown under
+  /// the URL bar). Cleared by the next load.
+  String? _fileNotice;
+  String? get fileNotice => _fileNotice;
 
-    if (_currentFile!.isUrl) {
-      return loadUrl(_currentFile!.path,
-          forceReload: true, switchToTab: switchToTab);
-    } else {
-      // Local file reload: always from disk, never as https://<name> (B32).
-      if (_currentFile!.path.isNotEmpty) {
-        try {
-          final snapshot = await FileLoader.fromPath(_currentFile!.path,
-              origin: FileOrigin.restore, enforceSandbox: false);
-          await loadFile(snapshot.toHtmlFile(),
-              clearProbe: true, snapshot: snapshot, switchToTab: switchToTab);
-        } catch (e) {
-          debugPrint('Error reloading local file: $e');
-        }
-      }
+  void _setFileNotice(String message) {
+    _fileNotice = message;
+    notifyListeners();
+  }
+
+  static String _errorText(Object e) =>
+      (e is FileLoadException ? e.message : '$e')
+          .replaceFirst('Exception: ', '');
+
+  Future<void> reloadCurrentFile({int? switchToTab}) async {
+    final file = _currentFile;
+    if (file == null) return;
+
+    if (file.isUrl) {
+      return loadUrl(file.path, forceReload: true, switchToTab: switchToTab);
+    }
+    // Local file reload: always from disk, never as https://<name> (B32).
+    if (file.path.isEmpty) {
+      _setFileNotice(
+          'This file was opened without a path and cannot be reloaded');
+      return;
+    }
+    try {
+      final snapshot = await FileLoader.fromPath(file.path,
+          origin: FileOrigin.restore, enforceSandbox: false);
+      await loadFile(snapshot.toHtmlFile(),
+          clearProbe: true, snapshot: snapshot, switchToTab: switchToTab);
+    } catch (e) {
+      _setFileNotice('Could not reload ${file.name}: ${_errorText(e)}');
     }
   }
 
@@ -1925,19 +1944,22 @@ Technical details: $message''';
         if (entry.startsWith('http://') || entry.startsWith('https://')) {
           continue;
         }
-        if (entry.replaceAll('\\', '/').split('/').last != input) continue;
+        if (fileNameOfPath(entry) != input) continue;
         try {
           // The path comes from the app's own history: trusted.
           final snapshot = await FileLoader.fromPath(entry,
               origin: FileOrigin.restore, enforceSandbox: false);
           await loadFile(snapshot.toHtmlFile().copyWith(name: input),
               switchToTab: switchToTab, snapshot: snapshot);
-          return;
         } on FileLoadException catch (e) {
-          // Gone from disk: fall through to the URL attempt, as before.
-          debugPrint('Error loading local file: ${e.message}');
+          _setFileNotice(e.notFound
+              ? 'File no longer available: $input'
+              : 'Could not open $input: ${e.message}');
+        } catch (e) {
+          _setFileNotice('Could not open $input: ${_errorText(e)}');
         }
-        break;
+        // A name from the file history is never a host name.
+        return;
       }
     }
     await loadUrl(input, switchToTab: switchToTab, forceReload: true);
@@ -2688,6 +2710,7 @@ Technical details: $message''';
     int? switchToTab,
     FileSnapshot? snapshot,
   }) async {
+    _fileNotice = null;
     _syncStoreWithFile(file, snapshot);
     if (!isPartial) {
       _isBeautifyEnabled = false; // Reset beautify mode on new file

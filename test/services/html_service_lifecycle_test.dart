@@ -10,6 +10,8 @@ import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/url_history_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
@@ -534,6 +536,7 @@ void main() {
     late Directory dir;
     late File f;
     setUp(() async {
+      SharedPreferences.setMockInitialValues({});
       dir = await Directory.systemTemp.createTemp('reload32');
       f = File('${dir.path}/index.html')..writeAsStringSync('<p>old</p>');
       await service
@@ -559,6 +562,41 @@ void main() {
       expect(service.currentFile!.content, '<p>again</p>');
       expect(fetcher.calls, isEmpty);
       expect(browser.calls, isEmpty);
+    });
+
+    test('a vanished history file is an error, never https://<name> (I1)',
+        () async {
+      final history = UrlHistoryService(await SharedPreferences.getInstance());
+      service.setUrlHistoryService(history);
+      history.addUrl('${dir.path}/gone.html');
+      await service.openInputText('gone.html');
+
+      expect(fetcher.calls, isEmpty);
+      expect(browser.calls, isEmpty);
+      expect(service.fileNotice, 'File no longer available: gone.html');
+      expect(service.currentFile!.name, 'index.html'); // untouched
+    });
+
+    test('a deleted file cannot be reloaded: notice, old content kept (I2)',
+        () async {
+      f.deleteSync();
+      await service.refresh();
+      expect(service.fileNotice, startsWith('Could not reload index.html: '));
+      expect(service.currentFile!.content, '<p>old</p>');
+      expect(fetcher.calls, isEmpty);
+
+      // The next successful load clears it.
+      await service
+          .loadFile(localFile('index.html', '<p>x</p>', path: f.path));
+      expect(service.fileNotice, isNull);
+    });
+
+    test('a file without a path says it cannot be reloaded (I2)', () async {
+      await service.loadFile(localFile('picked.txt', 'abc', path: ''));
+      await service.refresh();
+      expect(service.fileNotice,
+          'This file was opened without a path and cannot be reloaded');
+      expect(service.currentFile!.content, 'abc');
     });
 
     test('refresh() of a URL still loads that URL', () async {
