@@ -31,6 +31,7 @@ import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
@@ -199,6 +200,27 @@ class HtmlService extends ChangeNotifier {
   int? _metadataStateRevision;
   PageInspection? _metadataStateFor;
   bool? _metadataStateExtracting;
+
+  Observed<MediaModel>? _mediaState;
+  Observed<MetadataModel>? _mediaStateFor;
+
+  /// The Media tab's data (images, videos, fonts of the analysed document),
+  /// or why there is none. "Empty" only when the extraction succeeded.
+  Observed<MediaModel> get mediaState {
+    final m = metadataState;
+    if (_mediaState == null || !identical(m, _mediaStateFor)) {
+      _mediaStateFor = m;
+      _mediaState = switch (m) {
+        Present<MetadataModel>(value: final v) =>
+          Present(deriveMedia(v), source: v.docSource),
+        Pending<MetadataModel>() => const Pending(),
+        Failed<MetadataModel>(error: final e) => Failed(e),
+        Unavailable<MetadataModel>(reason: final r, detail: final d) =>
+          Unavailable(r, d),
+      };
+    }
+    return _mediaState!;
+  }
 
   /// Why a link has no size when the browser said nothing about it.
   String _sizeUnknownReason() {

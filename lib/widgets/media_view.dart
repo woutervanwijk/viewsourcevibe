@@ -1,204 +1,84 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/media.dart';
+import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
-import '../utils/format_utils.dart';
 import '../utils/font_url.dart';
-
-/// Sanitizes SVG data by converting percentage coordinates to absolute values
-/// based on the viewBox. This fixes 'Invalid double: 50%' errors.
-Uint8List _sanitizeSvgData(Uint8List bytes) {
-  try {
-    String content = utf8.decode(bytes, allowMalformed: true).trim();
-    if (content.isEmpty) return bytes;
-
-    // Check if dimensions are present
-    final hasDim = content.contains(
-        RegExp('\\b(width|height|viewBox)\\s*=', caseSensitive: false));
-
-    if (!hasDim) {
-      // Add a fallback viewBox if missing to prevent 'Bad state' error
-      content = content.replaceFirst(
-          RegExp('<svg\\b', caseSensitive: false), '<svg viewBox="0 0 24 24"');
-    }
-
-    // Find viewBox="x y w h" - allow commas as well as spaces
-    final vbRegex = RegExp(
-        'viewBox\\s*=\\s*["\']\\s*(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)\\s*["\']',
-        caseSensitive: false);
-    final viewBoxMatch = vbRegex.firstMatch(content);
-
-    if (viewBoxMatch != null) {
-      final double vbWidth = double.tryParse(viewBoxMatch.group(3)!) ?? 100.0;
-      final double vbHeight = double.tryParse(viewBoxMatch.group(4)!) ?? 100.0;
-
-      // Replace 50% / 100% in cx, cy, x, y, width, height, r, rx, ry
-      final attrRegex = RegExp(
-          '\\b(cx|cy|x|y|width|height|r|rx|ry)\\s*=\\s*["\']\\s*(\\d+\\.?\\d*)\\s*%\\s*["\']',
-          caseSensitive: false);
-      content = content.replaceAllMapped(attrRegex, (match) {
-        final attr = match.group(1);
-        final percentString = match.group(2);
-        final percent = double.tryParse(percentString!) ?? 0.0;
-        final base = (attr == 'cx' ||
-                attr == 'x' ||
-                attr == 'width' ||
-                attr == 'r' ||
-                attr == 'rx')
-            ? vbWidth
-            : vbHeight;
-        final absolute = (percent / 100.0) * base;
-        return '$attr="$absolute"';
-      });
-    }
-
-    return utf8.encode(content);
-  } catch (e) {
-    debugPrint('Error sanitizing SVG: $e');
-    return bytes;
-  }
-}
 
 class MediaView extends StatelessWidget {
   const MediaView({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    final htmlService = Provider.of<HtmlService>(context);
-    final metadata = htmlService.pageMetadata;
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
-    // Show loading indicator only if we're still loading or extracting metadata
-    if (htmlService.isLoading ||
-        htmlService.isWebViewLoading ||
-        htmlService.isExtractingMetadata) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    // Show message if no media detected or metadata is not available
-    if (metadata == null || metadata['media'] == null) {
-      // For XML files, we should never show progress - they don't have media
-      if (htmlService.isXml) {
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.perm_media_outlined,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.outlineVariant),
-              const SizedBox(height: 16),
-              const Text('No Media Detected'),
-              const SizedBox(height: 8),
-              const Text('Media is not available for XML content.',
-                  style: TextStyle(color: Colors.grey)),
-            ],
-          ),
-        );
-      }
-
-      return Center(
+  Widget _status(BuildContext context, Widget lead, String title,
+      {String? text, bool error = false}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.perm_media_outlined,
-                size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+            lead,
             const SizedBox(height: 16),
-            const Text('No Media Detected'),
-            const SizedBox(height: 8),
-            const Text('Load an HTML page to view detected media.',
-                style: TextStyle(color: Colors.grey)),
+            Text(title, textAlign: TextAlign.center),
+            if (text != null) ...[
+              const SizedBox(height: 8),
+              Text(text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: error ? scheme.error : Colors.grey)),
+            ],
           ],
         ),
-      );
-    }
-
-    // Deduplicate images based on normalized URLs
-    final List<dynamic> images = _deduplicateMedia(
-      List.from(metadata['media']['images'] ?? []),
-    )..sort((a, b) {
-        final mapA = a as Map;
-        final mapB = b as Map;
-
-        // Highest Priority: Move inline SVGs (base64) to the bottom
-        final isInlineA = mapA['type'] == 'base64' ||
-            (mapA['src'] as String? ?? '').startsWith('data:');
-        final isInlineB = mapB['type'] == 'base64' ||
-            (mapB['src'] as String? ?? '').startsWith('data:');
-        if (isInlineA != isInlineB) {
-          return isInlineA ? 1 : -1;
-        }
-
-        final sizeA = mapA['size']?['decoded'] ?? 0;
-        final sizeB = mapB['size']?['decoded'] ?? 0;
-
-        // Secondary: Sort by file size descending
-        if (sizeB != sizeA) {
-          return (sizeB as num).compareTo(sizeA as num);
-        }
-
-        return (mapA['src'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((mapB['src'] ?? '').toString().toLowerCase());
-      });
-
-    bool isInline(dynamic i) =>
-        i['type'] == 'base64' ||
-        (i['src'] as String? ?? '').startsWith('data:');
-    final inlineImages = images.where(isInline).toList();
-    images.removeWhere(isInline);
-
-    // Deduplicate videos and sort by size desc, then alphabet
-    final List<dynamic> videos = _deduplicateMedia(
-      List.from(metadata['media']['videos'] ?? []),
-    )..sort((a, b) {
-        final mapA = a as Map;
-        final mapB = b as Map;
-
-        final sizeA = mapA['size']?['decoded'] ?? 0;
-        final sizeB = mapB['size']?['decoded'] ?? 0;
-
-        // Sort by file size descending
-        if (sizeB != sizeA) {
-          return (sizeB as num).compareTo(sizeA as num);
-        }
-
-        return (mapA['src'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((mapB['src'] ?? '').toString().toLowerCase());
-      });
-
-    final List<dynamic> fonts = _deduplicateMedia(
-      List.from(metadata['media']['fonts'] ?? []),
+      ),
     );
+  }
 
-    if (images.isEmpty &&
-        inlineImages.isEmpty &&
-        videos.isEmpty &&
-        fonts.isEmpty) {
-      // Since we already checked for loading states at the beginning,
-      // we can directly show the empty state message
-      return ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: MediaQuery.of(context).size.height * 0.6,
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.perm_media_outlined,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.outlineVariant),
-              const SizedBox(height: 16),
-              const Text('No Images, Videos or Fonts found'),
-            ],
-          ),
-        ),
-      );
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    final state =
+        context.select<HtmlService, Observed<MediaModel>>((s) => s.mediaState);
+    final icon = Icon(Icons.perm_media_outlined,
+        size: 64, color: Theme.of(context).colorScheme.outlineVariant);
+
+    switch (state) {
+      case Pending<MediaModel>():
+        return _status(context, const CircularProgressIndicator(),
+            'Reading the page metadata…');
+      case Failed<MediaModel>(:final error):
+        return _status(
+            context,
+            Icon(Icons.error_outline,
+                size: 64, color: Theme.of(context).colorScheme.error),
+            'Media could not be read',
+            text: error,
+            error: true);
+      case Unavailable<MediaModel>():
+        return _status(context, icon, 'No Media Detected',
+            text: 'Load an HTML page to view detected media.');
+      case Present<MediaModel>(value: final model):
+        if (model.isEmpty) {
+          // The extraction succeeded and found nothing.
+          return _status(context, icon, 'No Images, Videos or Fonts found',
+              text: 'Checked: ${documentLabel(model.docSource)}');
+        }
+        return _buildModel(context, model);
     }
+  }
+
+  Widget _buildModel(BuildContext context, MediaModel model) {
+    final images = model.images;
+    final inlineImages = model.inlineImages;
+    final videos = model.videos;
+    final fonts = model.fonts;
 
     return Scrollbar(
         child: SingleChildScrollView(
@@ -225,7 +105,10 @@ class MediaView extends StatelessWidget {
                   spacing: gap,
                   children: [
                     for (final font in fonts)
-                      SizedBox(width: w, child: _FontItem(font: font)),
+                      SizedBox(
+                          key: ValueKey('font:${font.src}'),
+                          width: w,
+                          child: _FontItem(font: font)),
                   ],
                 );
               }),
@@ -250,93 +133,7 @@ class MediaView extends StatelessWidget {
     ));
   }
 
-  /// Deduplicate media items based on normalized URLs
-  /// This catches duplicates that may have slipped through initial parsing
-  /// or have slight variations (e.g., different query parameters, fragments, etc.)
-  List<dynamic> _deduplicateMedia(List<dynamic> items) {
-    final seen = <String>{};
-    final deduplicated = <dynamic>[];
-
-    for (final item in items) {
-      final src = item['src']?.toString() ?? '';
-      if (src.isEmpty) continue;
-
-      // For data URIs, use the full string as the key
-      final key = src.startsWith('data:') ? src : _normalizeUrl(src);
-
-      if (!seen.contains(key)) {
-        seen.add(key);
-        deduplicated.add(item);
-      }
-    }
-
-    return deduplicated;
-  }
-
-  /// Normalize a URL for comparison by:
-  /// - Removing fragments (#...)
-  /// - Removing trailing slashes
-  /// - Removing default ports (80 for http, 443 for https)
-  /// - Removing common cache-busting query parameters
-  /// - Converting to lowercase for case-insensitive comparison
-  String _normalizeUrl(String url) {
-    try {
-      final uri = Uri.parse(url);
-
-      // Remove fragment
-      final withoutFragment = uri.removeFragment();
-
-      // Remove cache-busting parameters
-      final cleanParams =
-          Map<String, String>.from(withoutFragment.queryParameters);
-      const cacheBusters = {
-        'v',
-        'ver',
-        'version',
-        't',
-        'ts',
-        'timestamp',
-        'hash',
-        '_',
-        'cache',
-        'cachebuster',
-        'cb',
-        'nocache',
-        'rev',
-        'revision',
-      };
-      cleanParams
-          .removeWhere((key, _) => cacheBusters.contains(key.toLowerCase()));
-
-      // Rebuild URI without fragment and with cleaned params
-      var normalized = withoutFragment.replace(
-        queryParameters: cleanParams.isEmpty ? null : cleanParams,
-      );
-
-      // Remove default ports
-      if ((normalized.scheme == 'http' && normalized.port == 80) ||
-          (normalized.scheme == 'https' && normalized.port == 443)) {
-        normalized = normalized.replace(port: null);
-      }
-
-      // Convert to string and remove trailing slash
-      var result = normalized.toString();
-      if (result.endsWith('/') && result.length > 1) {
-        // Don't remove slash if it's just the root path
-        final pathStart = result.indexOf('/', result.indexOf('://') + 3);
-        if (pathStart != result.length - 1) {
-          result = result.substring(0, result.length - 1);
-        }
-      }
-
-      return result.toLowerCase();
-    } catch (e) {
-      // If URL parsing fails, return the original URL lowercased
-      return url.toLowerCase();
-    }
-  }
-
-  Widget _buildImageGrid(BuildContext context, List<dynamic> items) {
+  Widget _buildImageGrid(BuildContext context, List<MediaItem> items) {
     return GridView.builder(
       primary: false,
       shrinkWrap: true,
@@ -348,7 +145,9 @@ class MediaView extends StatelessWidget {
         childAspectRatio: 0.8,
       ),
       itemCount: items.length,
-      itemBuilder: (context, index) => _buildImageItem(context, items[index]),
+      itemBuilder: (context, index) => KeyedSubtree(
+          key: ValueKey('image:${items[index].src}'),
+          child: _buildImageItem(context, items[index])),
     );
   }
 
@@ -362,9 +161,10 @@ class MediaView extends StatelessWidget {
     );
   }
 
-  Widget _buildVideoItem(BuildContext context, Map<String, dynamic> video) {
-    final src = video['src'] ?? 'Unknown Source';
-    final provider = video['provider'];
+  Widget _buildVideoItem(BuildContext context, MediaItem video) {
+    final src = video.src;
+    final provider = video.provider;
+    final unresolved = video.unresolvedNote;
 
     return Card(
       elevation: 0,
@@ -382,17 +182,35 @@ class MediaView extends StatelessWidget {
           provider != null ? '$provider Video' : 'Direct Video',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(
-          src,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              src,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+            ),
+            Text(
+              unresolved == null
+                  ? video.sizeLabel
+                  : '$unresolved; ${video.sizeLabel}',
+              style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
         ),
-        trailing: const Icon(Icons.open_in_new, size: 16),
-        onTap: () {
-          final htmlService = Provider.of<HtmlService>(context, listen: false);
-          htmlService.loadFromUrl(src, switchToTab: HtmlService.viewerTab);
-        },
+        trailing:
+            unresolved == null ? const Icon(Icons.open_in_new, size: 16) : null,
+        onTap: unresolved != null
+            ? null
+            : () {
+                final htmlService =
+                    Provider.of<HtmlService>(context, listen: false);
+                htmlService.loadFromUrl(src,
+                    switchToTab: HtmlService.viewerTab);
+              },
         onLongPress: () {
           Clipboard.setData(ClipboardData(text: src));
           ScaffoldMessenger.of(context).showSnackBar(
@@ -403,11 +221,11 @@ class MediaView extends StatelessWidget {
     );
   }
 
-  Widget _buildImageItem(BuildContext context, Map<String, dynamic> image) {
-    final src = image['src'] ?? '';
-    final alt = image['alt'] ?? '';
-    final type = image['type'];
-    final isInline = type == 'base64' || src.startsWith('data:');
+  Widget _buildImageItem(BuildContext context, MediaItem image) {
+    final src = image.src;
+    final alt = image.alt;
+    final isInline = image.inline;
+    final unresolved = image.unresolvedNote;
 
     // Decode data URI if present
     Uint8List? dataBytes;
@@ -436,7 +254,7 @@ class MediaView extends StatelessWidget {
       ),
       child: InkWell(
         // Disable tap for inline images as requested
-        onTap: isInline
+        onTap: isInline || unresolved != null
             ? null
             : () {
                 final htmlService =
@@ -463,7 +281,10 @@ class MediaView extends StatelessWidget {
                       ? Colors.grey[900]!
                       : const Color(0xFFFFFFFF),
                 ),
-                child: _buildImageContent(src, isInline, dataBytes),
+                child: unresolved != null
+                    ? const Center(
+                        child: Icon(Icons.link_off, color: Colors.grey))
+                    : _buildImageContent(src, isInline, dataBytes),
               ),
             ),
             Container(
@@ -478,19 +299,21 @@ class MediaView extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (image['size'] != null &&
-                      (image['size']['decoded'] ?? 0) > 0) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      FormatUtils.formatBytesWithTransfer(
-                          Map<String, dynamic>.from(image['size'] as Map)),
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    unresolved == null
+                        ? image.sizeLabel
+                        : '$unresolved; ${image.sizeLabel}',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: image.sizeBytes == null
+                          ? Theme.of(context).colorScheme.onSurfaceVariant
+                          : Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
@@ -512,7 +335,7 @@ class MediaView extends StatelessWidget {
           header.toLowerCase().contains('<svg');
 
       if (isSvg) {
-        final sanitizedData = _sanitizeSvgData(dataBytes);
+        final sanitizedData = sanitizeSvgData(dataBytes);
         if (sanitizedData.isEmpty) {
           return const Center(
               child: Icon(Icons.broken_image, color: Colors.grey));
@@ -583,7 +406,7 @@ class MediaView extends StatelessWidget {
 /// and renders a sample. Falls back to name-only if the format can't be loaded
 /// (e.g. WOFF2 on some native platforms).
 class _FontItem extends StatefulWidget {
-  final Map font;
+  final MediaItem font;
   const _FontItem({required this.font});
 
   @override
@@ -592,9 +415,10 @@ class _FontItem extends StatefulWidget {
 
 class _FontItemState extends State<_FontItem> {
   static int _counter = 0;
-  late final String _src = widget.font['src'].toString();
-  final String _family = 'vsv_font_${_counter++}';
+  String _family = 'vsv_font_${_counter++}';
   bool _loaded = false;
+
+  String get _src => widget.font.src;
 
   @override
   void initState() {
@@ -602,12 +426,26 @@ class _FontItemState extends State<_FontItem> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(_FontItem old) {
+    super.didUpdateWidget(old);
+    // A different font file: forget the previous preview.
+    if (old.font.src != widget.font.src) {
+      _family = 'vsv_font_${_counter++}';
+      _loaded = false;
+      _load();
+    }
+  }
+
   Future<void> _load() async {
+    final src = _src;
+    if (widget.font.unresolvedNote != null) return;
     try {
-      final data = await NetworkAssetBundle(Uri.parse(_src)).load('');
+      final data = await NetworkAssetBundle(Uri.parse(src)).load('');
+      if (!mounted || src != _src) return;
       final loader = FontLoader(_family)..addFont(Future.value(data));
       await loader.load();
-      if (mounted) setState(() => _loaded = true);
+      if (mounted && src == _src) setState(() => _loaded = true);
     } catch (e) {
       debugPrint('Font preview unavailable for $_src: $e');
     }
@@ -616,8 +454,7 @@ class _FontItemState extends State<_FontItem> {
   @override
   Widget build(BuildContext context) {
     final (name, format) = describeFontUrl(_src);
-    final size = widget.font['size'];
-    final hasSize = size is Map && (size['decoded'] ?? 0) > 0;
+    final unresolved = widget.font.unresolvedNote;
     final scheme = Theme.of(context).colorScheme;
 
     return Card(
@@ -653,9 +490,8 @@ class _FontItemState extends State<_FontItem> {
               Text(
                 [
                   if (format.isNotEmpty) format,
-                  if (hasSize)
-                    FormatUtils.formatBytesWithTransfer(
-                        Map<String, dynamic>.from(size)),
+                  widget.font.sizeLabel,
+                  if (unresolved != null) unresolved,
                 ].join(' · '),
                 style: TextStyle(
                     fontSize: 11,
@@ -734,7 +570,7 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
         return null; // Invalid SVG
       }
 
-      return _sanitizeSvgData(bytes);
+      return sanitizeSvgData(bytes);
     } catch (e) {
       debugPrint('Error loading SVG: $e');
       return null;

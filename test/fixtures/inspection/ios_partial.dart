@@ -48,7 +48,8 @@ PageInspection iosPartialWithLinks() {
       '<script src="https://cdn.other.net/lib.js"></script>'
       '<script src="https://example.org/own.js"></script>'
       '<script src="https://www.google-analytics.com/analytics.js"></script></head>'
-      '<body><img src="https://example.org/pic.png"></body></html>';
+      '<body><img src="https://example.org/pic.png" alt="Pic">'
+      '<img src="https://cdn.other.net/x.png" alt="Hidden"></body></html>';
   const blocked = Unavailable<int>(UnavailableReason.blockedByPlatform,
       'cross-origin without Timing-Allow-Origin');
   return urlInspection(
@@ -64,6 +65,8 @@ PageInspection iosPartialWithLinks() {
         resource('https://example.org/own.js', 'script',
             transfer: browser(2048), decoded: blocked),
         resource('https://www.google-analytics.com/analytics.js', 'script',
+            transfer: blocked, decoded: blocked),
+        resource('https://cdn.other.net/x.png', 'img',
             transfer: blocked, decoded: blocked),
         resource('https://example.org/pic.png', 'img',
             transfer: browser(5000),
