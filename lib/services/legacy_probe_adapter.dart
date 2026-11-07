@@ -1,15 +1,17 @@
+import '../models/inspection/browser_snapshot.dart';
 import '../models/inspection/observed.dart';
 import '../models/inspection/page_inspection.dart';
 import '../models/inspection/server_snapshot.dart';
 import '../utils/cookie_utils.dart';
 
 /// The old `probeResult` map, built from the store's server data (and
-/// robots), so widgets that still read the map keep working.
+/// robots), so widgets that still read the map keep working. The analyzed
+/// cookies also include the cookies the browser reported, with their real
+/// flags.
 ///
 /// Returns null unless the server fetch is Present. Any value that is not
 /// Present is left out of the map: unknown is never 0, '' or a placeholder.
-Map<String, dynamic>? legacyProbeMap(PageInspection p,
-    {String browserCookies = ''}) {
+Map<String, dynamic>? legacyProbeMap(PageInspection p) {
   final server = p.server;
   if (server is! Present<ServerSnapshot>) return null;
   final s = server.value;
@@ -84,16 +86,22 @@ Map<String, dynamic>? legacyProbeMap(PageInspection p,
     map['robotsSitemap'] = _robotsMap(s.requestedUrl, robots.value);
   }
 
+  final browser = p.browser;
+  final browserCookies = browser is Present<BrowserSnapshot> &&
+          browser.value.cookies is Present<List<BrowserCookie>>
+      ? (browser.value.cookies as Present<List<BrowserCookie>>).value
+      : const <BrowserCookie>[];
   map['analyzedCookies'] = [
     for (final c in CookieUtils.mergeCookies(cookies, browserCookies))
       {
         'name': c.name,
         'value': c.value,
-        'domain': c.domain,
-        'expires': c.expires,
-        'sameSite': c.sameSite,
-        'secure': c.secure,
-        'httpOnly': c.httpOnly,
+        if (c.domain != null) 'domain': c.domain,
+        if (c.expires != null) 'expires': c.expires,
+        if (c.sameSite != null) 'sameSite': c.sameSite,
+        // Unknown flags are left out, never reported as false.
+        if (c.secure != null) 'secure': c.secure,
+        if (c.httpOnly != null) 'httpOnly': c.httpOnly,
         'category': c.category.toString().split('.').last,
         'provider': c.provider,
         'source': c.source,

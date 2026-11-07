@@ -71,7 +71,6 @@ class HtmlService extends ChangeNotifier {
   // Cached legacy probe map, rebuilt when the store or browser cookies change.
   Map<String, dynamic>? _probeCache;
   PageInspection? _probeCacheFor;
-  String? _probeCacheCookies;
 
   bool _metadataRerunQueued = false;
 
@@ -239,12 +238,9 @@ class HtmlService extends ChangeNotifier {
   Map<String, dynamic>? get probeResult => _probeResult;
   Map<String, dynamic>? get _probeResult {
     final current = store.current;
-    if (!identical(current, _probeCacheFor) ||
-        _lastBrowserCookies != _probeCacheCookies) {
-      _probeCache =
-          legacyProbeMap(current, browserCookies: _lastBrowserCookies);
+    if (!identical(current, _probeCacheFor)) {
+      _probeCache = legacyProbeMap(current);
       _probeCacheFor = current;
-      _probeCacheCookies = _lastBrowserCookies;
     }
     return _probeCache;
   }

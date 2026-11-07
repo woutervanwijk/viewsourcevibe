@@ -153,12 +153,12 @@ void main() {
       expect(m['cookies'], ['a=1; Path=/', 'b=2; Path=/']);
     });
 
-    test('analyzedCookies merges server and browser cookies', () {
-      final m = legacyProbeMap(_inspection(_p(threeHops)),
-          browserCookies: 'c=3; d=4')!;
+    test('analyzedCookies lists the server cookies (browser cookies are '
+        'covered in legacy_browser_adapter_test)', () {
+      final m = legacyProbeMap(_inspection(_p(threeHops)))!;
       final names =
           (m['analyzedCookies'] as List).map((c) => (c as Map)['name']).toSet();
-      expect(names, containsAll(['a', 'b', 'c', 'd']));
+      expect(names, containsAll(['a', 'b']));
     });
 
     test('unknown values are absent, not 0 or empty', () {

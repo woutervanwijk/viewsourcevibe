@@ -1,3 +1,5 @@
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 
 enum CookieCategory {
@@ -19,8 +21,10 @@ class CookieInfo {
 
   final String? expires;
   final String? sameSite;
-  final bool secure;
-  final bool httpOnly;
+
+  /// null = unknown (the browser did not expose the flag); never assumed false.
+  final bool? secure;
+  final bool? httpOnly;
 
   CookieInfo({
     required this.name,
@@ -31,8 +35,8 @@ class CookieInfo {
     required this.source,
     this.expires,
     this.sameSite,
-    this.secure = false,
-    this.httpOnly = false,
+    this.secure,
+    this.httpOnly,
   });
 }
 
@@ -4396,52 +4400,86 @@ class CookieUtils {
     );
   }
 
-  static List<CookieInfo> parseBrowserCookies(String documentCookie) {
-    if (documentCookie.isEmpty) return [];
-
-    return documentCookie
-        .split(';')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .map((s) => analyze(s, 'Browser'))
-        .toList();
+  /// A cookie the browser reported, with its real flags: a flag the browser
+  /// does not expose stays null (unknown), never false.
+  static CookieInfo fromBrowser(BrowserCookie c) {
+    final base = analyze('${c.name}=${c.value}', 'Browser');
+    String? text<T>(Observed<T> o, String Function(T) f) =>
+        o is Present<T> ? f(o.value) : null;
+    bool? flag(Observed<bool> o) => o is Present<bool> ? o.value : null;
+    return CookieInfo(
+      name: c.name,
+      value: c.value,
+      domain: text<String>(c.domain, (v) => v),
+      expires: text<DateTime>(c.expires, (v) => v.toUtc().toIso8601String()),
+      sameSite: text<String>(c.sameSite, (v) => v),
+      secure: flag(c.isSecure),
+      httpOnly: flag(c.isHttpOnly),
+      category: base.category,
+      provider: base.provider,
+      source: 'Browser',
+    );
   }
 
+  static String? _bareDomain(String? d) {
+    if (d == null || d.isEmpty) return null;
+    final lower = d.toLowerCase();
+    return lower.startsWith('.') ? lower.substring(1) : lower;
+  }
+
+  /// True when two cookies with the same name can be the same cookie: a
+  /// domain that is unknown on either side does not tell them apart.
+  static bool _sameCookie(CookieInfo a, CookieInfo b) {
+    if (a.name != b.name) return false;
+    final x = _bareDomain(a.domain), y = _bareDomain(b.domain);
+    return x == null || y == null || x == y;
+  }
+
+  static bool? _anyTrue(bool? a, bool? b) => a == true || b == true ? true : a ?? b;
+
+  /// Set-Cookie headers of the server plus the cookies the browser holds.
+  /// The same cookie seen by both is merged; cookies of the same name on
+  /// different domains stay separate.
   static List<CookieInfo> mergeCookies(
-      List<String> serverCookies, String browserCookies) {
-    final Map<String, CookieInfo> merged = {};
+      List<String> serverCookies, List<BrowserCookie> browserCookies) {
+    final merged = <CookieInfo>[];
 
-    // process server headers first
-    for (var sc in serverCookies) {
-      final firstPart = sc.split(';')[0];
-      final name = firstPart.split('=')[0].trim();
+    for (final sc in serverCookies) {
+      final name = sc.split(';')[0].split('=')[0].trim();
       if (name.isEmpty) continue;
-      merged[name] = analyze(sc, 'Server');
-    }
-
-    final browserList = parseBrowserCookies(browserCookies);
-    for (var bc in browserList) {
-      if (merged.containsKey(bc.name)) {
-        final existing = merged[bc.name]!;
-        merged[bc.name] = CookieInfo(
-          name: bc.name,
-          value: bc.value,
-          domain: existing.domain ?? bc.domain,
-          expires: existing.expires ?? bc.expires,
-          sameSite: existing.sameSite ?? bc.sameSite,
-          secure: existing.secure || bc.secure,
-          httpOnly: existing.httpOnly || bc.httpOnly,
-          category: existing.category == CookieCategory.unknown
-              ? bc.category
-              : existing.category,
-          provider: existing.provider ?? bc.provider,
-          source: 'Server + Browser',
-        );
+      final info = analyze(sc, 'Server');
+      final i = merged.indexWhere((m) => _sameCookie(m, info));
+      if (i >= 0) {
+        merged[i] = info; // a later Set-Cookie for the same cookie wins
       } else {
-        merged[bc.name] = bc;
+        merged.add(info);
       }
     }
 
-    return merged.values.toList();
+    for (final b in browserCookies) {
+      if (b.name.isEmpty) continue;
+      final bc = fromBrowser(b);
+      final i = merged.indexWhere((m) => _sameCookie(m, bc));
+      if (i < 0) {
+        merged.add(bc);
+        continue;
+      }
+      final existing = merged[i];
+      merged[i] = CookieInfo(
+        name: bc.name,
+        value: bc.value,
+        domain: existing.domain ?? bc.domain,
+        expires: existing.expires ?? bc.expires,
+        sameSite: existing.sameSite ?? bc.sameSite,
+        secure: _anyTrue(existing.secure, bc.secure),
+        httpOnly: _anyTrue(existing.httpOnly, bc.httpOnly),
+        category: existing.category == CookieCategory.unknown
+            ? bc.category
+            : existing.category,
+        provider: existing.provider ?? bc.provider,
+        source: 'Server + Browser',
+      );
+    }
+    return merged;
   }
 }
