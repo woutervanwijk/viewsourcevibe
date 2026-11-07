@@ -113,7 +113,7 @@ class InspectionExportService {
         browserProbe?['pageWeight'] ?? metadata?['pageWeight'] ?? {});
 
     // The raw collector payload of the last sync, so real-device fixtures can
-    // be recorded later. It holds the page's storage values and cookie string.
+    // be recorded later. Cookie and storage values are redacted (R22).
     final browserPayload = htmlService.browserDebugPayload;
     if (browserPayload != null) {
       addString('debug/browser-payload.json', _payloadJson(browserPayload));
@@ -122,15 +122,66 @@ class InspectionExportService {
     return ZipEncoder().encode(archive);
   }
 
-  /// The payload as pretty JSON; a payload that is not JSON is wrapped, so the
-  /// file is always valid JSON and nothing is lost.
+  /// The payload as pretty JSON with cookie and storage values removed (names
+  /// and UTF-8 byte lengths stay), so the package can be shared. A payload
+  /// that is not JSON is reduced to its length.
   static String _payloadJson(String raw) {
     const encoder = JsonEncoder.withIndent('  ');
     try {
-      return encoder.convert(jsonDecode(raw));
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) throw const FormatException('not an object');
+      return encoder
+          .convert(_redactPayload(Map<String, dynamic>.from(decoded)));
     } catch (_) {
-      return encoder.convert({'unparsablePayload': raw});
+      return encoder.convert({
+        'unparsablePayload': {'type': 'text', 'length': raw.length}
+      });
     }
+  }
+
+  static int _bytes(Object? v) => utf8.encode('${v ?? ''}').length;
+
+  static Map<String, dynamic> _redactPayload(Map<String, dynamic> p) {
+    final out = Map<String, dynamic>.from(p);
+    final cookies = p['cookies'];
+    if (cookies is Map) {
+      final c = Map<String, dynamic>.from(cookies);
+      final rawCookies = c.remove('raw');
+      if (rawCookies is String) {
+        c['redacted'] = [
+          for (final part in rawCookies.split(';'))
+            if (part.trim().isNotEmpty)
+              {
+                'name': part.trim().split('=').first,
+                'bytes': _bytes(part.trim().contains('=')
+                    ? part.trim().substring(part.trim().indexOf('=') + 1)
+                    : ''),
+              }
+        ];
+      }
+      out['cookies'] = c;
+    }
+    final storage = p['storage'];
+    if (storage is Map) {
+      final st = <String, dynamic>{};
+      storage.forEach((area, value) {
+        if (value is Map) {
+          final a = Map<String, dynamic>.from(value);
+          final items = a['items'];
+          if (items is List) {
+            a['items'] = [
+              for (final i in items)
+                if (i is Map) {'k': i['k'], 'bytes': _bytes(i['v'])}
+            ];
+          }
+          st['$area'] = a;
+        } else {
+          st['$area'] = value;
+        }
+      });
+      out['storage'] = st;
+    }
+    return out;
   }
 
   static String buildPackageFilename(HtmlFile file) {

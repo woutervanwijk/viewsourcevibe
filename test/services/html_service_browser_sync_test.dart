@@ -374,6 +374,7 @@ void main() {
     test('a different path is a new generation, a server fetch and a sync',
         () async {
       await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/'); // full load done
       final genBefore = store.current.generation;
       collectCalls.clear();
 
@@ -421,6 +422,67 @@ void main() {
       await service.handleBrowserUrlChange('about:blank');
       await service.handleBrowserUrlChange('data:text/html,hi');
       expect(store.current.generation, gen2);
+    });
+  });
+
+  group('fix round 1', () {
+    test('M1: an estimated lookup leaves decoded unknown', () async {
+      service.dispose();
+      service = HtmlService(
+        store: store,
+        serverFetcher: fetcher,
+        browserLoader: loader,
+        metadataExtractor: (html, baseUrl, {headers}) async => {
+          'jsLinks': ['https://cdn.test/unknown.js'],
+        },
+        browserCollect: (url) async => payload(url: url, observer: [
+          {
+            'n': 'https://cdn.test/unknown.js',
+            'it': 'script',
+            'st': 1.0,
+            'du': 2.0,
+            'tx': 0,
+            'enc': 0,
+            'dec': 0
+          }
+        ]),
+        nativeCookies: (u) async => [],
+        browserPlatform: BrowserPlatform.macos,
+        browserRefreshDelays: const [],
+        spaSettleDelay: Duration.zero,
+        sizeLookup: (url) async => 777,
+      );
+      service.setAppSettings(AppSettings()..useBrowserByDefault = true);
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final js = (service.pageMetadata!['jsLinks'] as List).single as Map;
+      expect(js['size']['transfer'], 777);
+      expect(js['size']['decoded'], isNull);
+      expect(js['size']['estimated'], true);
+    });
+
+    test('M2: a URL outside the server chain gets a browser sync', () async {
+      await service.loadUrl('https://a.test/');
+      // The browser reports another document while the fetch is pending.
+      // (Not covered: the note is rechecked when the chain arrives.)
+      service.debugNoteBrowserUrl(Uri.parse('https://elsewhere.test/x'));
+      collectCalls.clear();
+      fetcher.pending.last
+          .complete(okSnapshot('https://a.test/', '<html>S</html>'));
+      await pumpEventQueue();
+      expect(fetcher.calls.last, Uri.parse('https://elsewhere.test/x'));
+      expect(collectCalls, ['https://elsewhere.test/x']);
+    });
+
+    test('M4: no SPA handling while a full load is in progress', () async {
+      await service.loadUrl('https://a.test/'); // sets isWebViewLoading
+      expect(service.isWebViewLoading, isTrue);
+      final gen = store.current.generation;
+      await service.handleBrowserUrlChange('https://a.test/other');
+      expect(store.current.generation, gen);
+      expect(collectCalls, isEmpty);
     });
   });
 

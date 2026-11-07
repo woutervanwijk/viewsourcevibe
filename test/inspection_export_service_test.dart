@@ -112,5 +112,57 @@ void main() {
           InspectionExportService().buildPackageBytes(htmlService));
       expect(archive.findFile('debug/browser-payload.json'), isNull);
     });
+
+    test('R22: the debug payload redacts cookie and storage values', () async {
+      const raw = '{"v":1,"url":"https://example.com/","dom":{"ok":true,'
+          '"value":"<html></html>","iframes":0,"shadowRoots":0},'
+          '"storage":{"local":{"ok":true,"count":1,"items":'
+          '[{"k":"authToken","v":"SECRET-STORAGE-é"}],"truncated":false},'
+          '"session":{"ok":true,"count":0,"items":[],"truncated":false}},'
+          '"cookies":{"ok":true,"raw":"sid=SECRET-COOKIE; theme=dark"}}';
+      final htmlService = HtmlService(
+        store: InspectionStore(),
+        browserPlatform: BrowserPlatform.macos,
+        browserCollect: (url) async => raw,
+        nativeCookies: (url) async => [],
+        browserRefreshDelays: const [],
+      );
+      addTearDown(htmlService.dispose);
+      await htmlService.loadUrl('https://example.com/', skipWebViewLoad: true);
+      await htmlService.syncWebViewState('https://example.com/');
+      final archive = ZipDecoder().decodeBytes(
+          InspectionExportService().buildPackageBytes(htmlService));
+      final text = utf8
+          .decode(archive.findFile('debug/browser-payload.json')!.readBytes()!);
+      expect(text, isNot(contains('SECRET')));
+      expect(text, isNot(contains('dark')));
+      expect(text, contains('authToken'));
+      expect(text, contains('sid'));
+      expect(text, contains('theme'));
+      final j = jsonDecode(text) as Map;
+      final item = j['storage']['local']['items'].single as Map;
+      expect(item['bytes'], utf8.encode('SECRET-STORAGE-é').length);
+      final cookies = j['cookies']['redacted'] as List;
+      expect(cookies.first['bytes'], 'SECRET-COOKIE'.length);
+    });
+
+    test('R22: an unparsable payload keeps only its length', () async {
+      final htmlService = HtmlService(
+        store: InspectionStore(),
+        browserPlatform: BrowserPlatform.macos,
+        browserCollect: (url) async => 'password=hunter2 {broken',
+        nativeCookies: (url) async => [],
+        browserRefreshDelays: const [],
+      );
+      addTearDown(htmlService.dispose);
+      await htmlService.loadUrl('https://example.com/', skipWebViewLoad: true);
+      await htmlService.syncWebViewState('https://example.com/');
+      final archive = ZipDecoder().decodeBytes(
+          InspectionExportService().buildPackageBytes(htmlService));
+      final text = utf8
+          .decode(archive.findFile('debug/browser-payload.json')!.readBytes()!);
+      expect(text, isNot(contains('hunter2')));
+      expect(text, contains('24'));
+    });
   });
 }

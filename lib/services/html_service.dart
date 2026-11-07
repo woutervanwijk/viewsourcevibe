@@ -1037,6 +1037,8 @@ class HtmlService extends ChangeNotifier {
     final noted = _browserUrlDuringFetch;
     if (noted != null && noted.$1 == gen && !_storeCovers(noted.$2)) {
       _startInspection(noted.$2, adoptBody: false);
+      // The browser is on that page: it needs its own browser data.
+      if (_browserReachable) syncWebViewState(noted.$2.toString()).ignore();
       return;
     }
     if (adoptBody) await _adoptServerBodyIfEmpty(gen);
@@ -1260,6 +1262,10 @@ Technical details: $message''';
   /// The last URL the browser reported while the fetch of this navigation
   /// was running; checked again when the chain is known.
   (int, Uri)? _browserUrlDuringFetch;
+
+  @visibleForTesting
+  void debugNoteBrowserUrl(Uri uri) =>
+      _browserUrlDuringFetch = (store.current.generation, uri);
 
   void _noteBrowserUrl(Uri uri) {
     if (store.current.server is Pending<ServerSnapshot>) {
@@ -3739,7 +3745,8 @@ Technical details: $message''';
           debugPrint('Size lookup failed for $url: $e');
         }
         if (size == null || stale() || !_sizeUnknown(item)) return;
-        item['size'] = {'transfer': size, 'decoded': size, 'estimated': true};
+        // Content-Length is the wire size; the decoded size stays unknown.
+        item['size'] = {'transfer': size, 'decoded': null, 'estimated': true};
         changed = true;
       }));
       if (changed && !stale()) {
@@ -3872,6 +3879,9 @@ Technical details: $message''';
     final uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
     if (store.current.target is! UrlTarget) return;
+    // History updates at the start of an ordinary full load are not SPA
+    // routes; onLoadStop syncs those.
+    if (_isWebViewLoading) return;
     if (_storeCovers(uri)) {
       _noteBrowserUrl(uri);
       return;
