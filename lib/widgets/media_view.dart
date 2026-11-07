@@ -540,20 +540,6 @@ class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
 
   Future<Uint8List?> _loadSvg() async {
     try {
-      // Use HtmlService's platform-agnostic HTTP client if possible, but for simple
-      // check we can stick to basic logic or use the existing HtmlService from context if I could access it.
-      // But creating a new Client is safer for isolation.
-      // Note: We need to import http package
-      // Since I cannot easily add imports in this tool call without replacing the top,
-      // I will assume I can add the import in a separate call or use a workaround.
-      // Actually, I should add the import first.
-
-      // Since I can't add import here, I will depend on HtmlService helper?
-      // No, HtmlService doesn't expose a simple "getBytes" for arbitrary URL easily without side effects.
-
-      // I'll assume standard http GET for now and fix imports in next step.
-      // Or I can use NetworkAssetBundle which is available in Flutter.
-
       final bundle = NetworkAssetBundle(Uri.parse(widget.url));
       final data = await bundle.load("");
       final bytes = data.buffer.asUint8List();

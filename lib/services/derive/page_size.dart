@@ -37,6 +37,9 @@ class PageSizeRow {
   /// script, style, image, document or other.
   final String type;
   final bool isPage;
+
+  /// An audio/video file: no thumbnail can be shown for it.
+  final bool isAudioVideo;
   final List<Entity> services;
   final int? size;
   final int? transfer;
@@ -51,6 +54,7 @@ class PageSizeRow {
     required this.url,
     required this.type,
     required this.isPage,
+    required this.isAudioVideo,
     required this.services,
     required this.size,
     required this.transfer,
@@ -85,6 +89,9 @@ class PageSizeModel {
   int get knownRowTotal => rows.fold<int>(0, (a, r) => a + (r.size ?? 0));
 }
 
+final _audioVideoPath =
+    RegExp(r'\.(mp4|webm|mov|m4v|ogv|mp3|ogg|wav|m4a|aac)$');
+
 String _normalizeUrl(String url) {
   final noFragment = url.split('#').first;
   return noFragment.endsWith('/')
@@ -94,10 +101,14 @@ String _normalizeUrl(String url) {
 
 String _reasonWord(Observed<int> o) => switch (o) {
       Unavailable<int>(reason: final r, detail: final d) => switch (r) {
+          // "cross-origin" only when the collector said so.
           UnavailableReason.blockedByPlatform ||
           UnavailableReason.blockedBySite ||
-          UnavailableReason.notExposedToPage =>
-            d.contains('cross-origin') || d.isEmpty ? 'cross-origin' : d,
+          UnavailableReason.notExposedToPage when d.contains('cross-origin') =>
+            'cross-origin',
+          UnavailableReason.blockedByPlatform => 'blocked by the platform',
+          UnavailableReason.blockedBySite => 'blocked by the site',
+          UnavailableReason.notExposedToPage => 'not exposed to the page',
           UnavailableReason.servedFromCache => 'served from cache',
           _ => 'not reported by the platform',
         },
@@ -156,6 +167,8 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
               url: url,
               type: type,
               isPage: isPage,
+              isAudioVideo: _audioVideoPath
+                  .hasMatch(Uri.tryParse(url)?.path.toLowerCase() ?? ''),
               services: externalServicesForUrl(url, pageUrl),
               size: size,
               transfer: tx,

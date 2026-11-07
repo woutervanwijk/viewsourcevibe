@@ -7,6 +7,7 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/widgets/page_size_view.dart';
 
+import '../derive/fixtures.dart' show inspection, browserSnap, res, b;
 import '../fixtures/inspection/builders.dart';
 import '../fixtures/inspection/full_page.dart';
 import '../fixtures/inspection/ios_partial.dart';
@@ -14,6 +15,44 @@ import '../fixtures/inspection/local_file.dart';
 import '../fixtures/inspection/pump.dart';
 
 void main() {
+  group('derivePageSize reasons and media flag', () {
+    PageSizeModel model(List<ResourceEntry> r) =>
+        (derivePageSize(inspection(browser: browserSnap(resources: r)))
+                as Present<PageSizeModel>)
+            .value;
+
+    test('the note is the reason itself, not a guess', () {
+      Unavailable<int> u(UnavailableReason r, [String d = '']) =>
+          Unavailable<int>(r, d);
+      final m = model([
+        res('https://a.test/1.js', tx: u(UnavailableReason.blockedByPlatform)),
+        res('https://a.test/2.js', tx: u(UnavailableReason.notExposedToPage)),
+        res('https://a.test/3.js', tx: u(UnavailableReason.blockedBySite)),
+        res('https://a.test/4.js',
+            tx: u(UnavailableReason.blockedByPlatform,
+                'cross-origin without Timing-Allow-Origin')),
+      ]);
+      String note(String n) =>
+          m.rows.singleWhere((r) => r.url.endsWith(n)).sizeNote!;
+      expect(note('1.js'), 'blocked by the platform');
+      expect(note('2.js'), 'not exposed to the page');
+      expect(note('3.js'), 'blocked by the site');
+      expect(note('4.js'), contains('cross-origin'));
+      expect(m.missingNote, isNot(contains('cross-origin, ')));
+    });
+
+    test('isAudioVideo is set by the deriver', () {
+      final m = model([
+        res('https://a.test/v.mp4', type: 'video', tx: b(10), dec: b(10)),
+        res('https://a.test/p.png', type: 'img', tx: b(10), dec: b(10)),
+      ]);
+      expect(m.rows.singleWhere((r) => r.url.endsWith('.mp4')).isAudioVideo,
+          isTrue);
+      expect(m.rows.singleWhere((r) => r.url.endsWith('.png')).isAudioVideo,
+          isFalse);
+    });
+  });
+
   group('derivePageSize', () {
     test('the full page: totals and rows equal the fixture', () {
       final m = (derivePageSize(fullPage()) as Present<PageSizeModel>).value;
