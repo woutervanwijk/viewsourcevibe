@@ -354,7 +354,14 @@ class HostInfo {
   final String host;
   final Set<String> roles = {};
   int requests = 0;
-  int bytes = 0;
+
+  /// Transfer bytes of the requests whose size is known; null when none is
+  /// (never 0 for "unknown").
+  int? bytes;
+
+  /// True when some of the requests have no known size, so [bytes] is a
+  /// lower bound.
+  bool bytesPartial = false;
   String? ip;
   int? asn;
   String? asnHolder;
@@ -381,6 +388,7 @@ class HostInfo {
         'roles': roles.toList(),
         'requests': requests,
         'bytes': bytes,
+        'bytesPartial': bytesPartial,
         'ip': ip,
         'asn': asn,
         'asnHolder': asnHolder,
@@ -441,8 +449,9 @@ class SovereigntyReport {
     return pillarMax[pillar]! * earned / totalWeight;
   }
 
-  /// 0–100 over the pillars that could be verified.
-  int get score {
+  /// 0–100 over the pillars that could be verified; null when none could be
+  /// (an unverifiable report has no score, not a score of 0).
+  int? get score {
     var earned = 0.0, max = 0;
     for (final p in Pillar.values) {
       final s = pillarScore(p);
@@ -450,14 +459,18 @@ class SovereigntyReport {
       earned += s;
       max += pillarMax[p]!;
     }
-    return max == 0 ? 0 : (100 * earned / max).round();
+    return max == 0 ? null : (100 * earned / max).round();
   }
 
-  String get grade => score >= 80
-      ? 'Good'
-      : score >= 50
-          ? 'Fair'
-          : 'Poor';
+  String? get grade {
+    final s = score;
+    if (s == null) return null;
+    return s >= 80
+        ? 'Good'
+        : s >= 50
+            ? 'Fair'
+            : 'Poor';
+  }
 
   int count(CheckStatus status) =>
       checks.where((c) => c.status == status).length;
@@ -519,6 +532,68 @@ class SovereigntyService {
   static final Map<String, ({int? asn, String? holder})> _asnCache = {};
   static final Map<String, String?> _countryCache = {};
 
+  /// The hosts the page talks to, the main host first, then by number of
+  /// requests. A resource without a known transfer size adds a request but
+  /// no bytes.
+  static List<HostInfo> collectHosts({
+    required String pageUrl,
+    required List<Map<String, dynamic>> resources,
+    Map<String, dynamic>? metadata,
+  }) {
+    final mainHost = Uri.tryParse(pageUrl)?.host ?? '';
+    final hosts = <String, HostInfo>{};
+    final withUnknownSize = <String>{};
+
+    void add(String url, int? bytes, String role) {
+      final host = Uri.tryParse(url)?.host ?? '';
+      if (host.isEmpty) return;
+      final info = hosts.putIfAbsent(host, () => HostInfo(host));
+      info.requests++;
+      if (bytes == null) {
+        // Only a loaded resource can have a size; the document itself and
+        // static links are not measured here.
+        if (role != 'document') withUnknownSize.add(host);
+      } else {
+        info.bytes = (info.bytes ?? 0) + bytes;
+      }
+      info.roles.add(role);
+    }
+
+    if (mainHost.isNotEmpty) add(pageUrl, null, 'document');
+    for (final r in resources) {
+      final name = r['name']?.toString() ?? '';
+      if (!name.startsWith('http')) continue;
+      add(
+        name,
+        (r['transfer'] as num?)?.toInt(),
+        ProbeService.categorizeResource(name, pageUrl),
+      );
+    }
+    // Static links as fallback when no runtime resource data exists.
+    if (resources.isEmpty && metadata != null) {
+      for (final key in ['externalJsLinks', 'jsLinks']) {
+        for (final u in (metadata[key] as List? ?? const [])) {
+          add(u.toString(), null, 'script');
+        }
+      }
+      for (final key in ['externalCssLinks', 'cssLinks']) {
+        for (final u in (metadata[key] as List? ?? const [])) {
+          add(u.toString(), null, 'style');
+        }
+      }
+    }
+
+    for (final h in hosts.values) {
+      h.bytesPartial = h.bytes != null && withUnknownSize.contains(h.host);
+    }
+    return hosts.values.toList()
+      ..sort((a, b) {
+        if (a.host == mainHost) return -1;
+        if (b.host == mainHost) return 1;
+        return b.requests.compareTo(a.requests);
+      });
+  }
+
   static Future<SovereigntyReport> analyze({
     required String pageUrl,
     required Map<String, dynamic>? probeResult,
@@ -530,47 +605,8 @@ class SovereigntyService {
   }) async {
     final mainUri = Uri.tryParse(pageUrl);
     final mainHost = mainUri?.host ?? '';
-    final hosts = <String, HostInfo>{};
-
-    void add(String url, int bytes, String role) {
-      final host = Uri.tryParse(url)?.host ?? '';
-      if (host.isEmpty) return;
-      final info = hosts.putIfAbsent(host, () => HostInfo(host));
-      info.requests++;
-      info.bytes += bytes;
-      info.roles.add(role);
-    }
-
-    if (mainHost.isNotEmpty) add(pageUrl, 0, 'document');
-    for (final r in resources) {
-      final name = r['name']?.toString() ?? '';
-      if (!name.startsWith('http')) continue;
-      add(
-        name,
-        (r['transfer'] as num? ?? 0).toInt(),
-        ProbeService.categorizeResource(name, pageUrl),
-      );
-    }
-    // Static links as fallback when no runtime resource data exists.
-    if (resources.isEmpty && metadata != null) {
-      for (final key in ['externalJsLinks', 'jsLinks']) {
-        for (final u in (metadata[key] as List? ?? const [])) {
-          add(u.toString(), 0, 'script');
-        }
-      }
-      for (final key in ['externalCssLinks', 'cssLinks']) {
-        for (final u in (metadata[key] as List? ?? const [])) {
-          add(u.toString(), 0, 'style');
-        }
-      }
-    }
-
-    final ordered = hosts.values.toList()
-      ..sort((a, b) {
-        if (a.host == mainHost) return -1;
-        if (b.host == mainHost) return 1;
-        return b.requests.compareTo(a.requests);
-      });
+    final ordered = collectHosts(
+        pageUrl: pageUrl, resources: resources, metadata: metadata);
     final analyzed = ordered.take(_maxHosts).toList();
 
     await Future.wait(analyzed.map(_enrichHost));

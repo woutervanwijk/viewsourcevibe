@@ -181,6 +181,17 @@ class HtmlService extends ChangeNotifier {
   SovereigntyReport? _sovereigntyReport;
   bool _isAnalyzingSovereignty = false;
 
+  /// Generation the report / error belong to.
+  int? _sovereigntyGen;
+
+  /// The legal home the report was asked for (not read back from the report,
+  /// so an analyzer that answers with another home cannot cause a loop).
+  String? _sovereigntyHome;
+  String? _sovereigntyError;
+  int _sovereigntyWatchers = 0;
+  bool _sovereigntyScheduled = false;
+  Observed<SovereigntyReport>? _sovereigntyPresent;
+
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
@@ -784,11 +795,102 @@ class HtmlService extends ChangeNotifier {
   }
 
   bool get isProbing => store.current.server is Pending<ServerSnapshot>;
-  SovereigntyReport? get sovereigntyReport => _sovereigntyReport;
+
+  /// The report of the current navigation; null while there is none.
+  SovereigntyReport? get sovereigntyReport =>
+      _sovereigntyGen == store.current.generation ? _sovereigntyReport : null;
   bool get isAnalyzingSovereignty => _isAnalyzingSovereignty;
 
-  String get _sovereigntyHost =>
-      Uri.tryParse(_currentFile?.path ?? '')?.host ?? '';
+  /// The Sovereignty tab's data: the report, still pending, failed (with the
+  /// error), or why there is nothing to analyse.
+  Observed<SovereigntyReport> get sovereigntyState {
+    final current = store.current;
+    switch (current.target) {
+      case NoTarget():
+        return const Unavailable(UnavailableReason.notApplicable,
+            'Load a URL to analyze where it is hosted.');
+      case FileTarget():
+        return const Unavailable(UnavailableReason.notApplicable,
+            'A local file has no host to analyze.');
+      case UrlTarget():
+        break;
+    }
+    final report = sovereigntyReport;
+    if (report != null) {
+      final cached = _sovereigntyPresent;
+      if (cached is Present<SovereigntyReport> &&
+          identical(cached.value, report)) {
+        return cached;
+      }
+      return _sovereigntyPresent = Present(report,
+          source: DataSource.server, provenance: Provenance.derived);
+    }
+    final error = _sovereigntyError;
+    if (error != null && _sovereigntyGen == current.generation) {
+      return Failed(error);
+    }
+    return const Pending();
+  }
+
+  /// The Sovereignty tab calls this when it appears (+1) and disappears
+  /// (-1). While a tab watches, the service runs the analysis by itself once
+  /// the page is loaded, and again for a new page or a new legal home.
+  void watchSovereignty(bool watching) {
+    _sovereigntyWatchers =
+        (_sovereigntyWatchers + (watching ? 1 : -1)).clamp(0, 1 << 20);
+    if (watching) _scheduleSovereignty();
+  }
+
+  /// The URL the analysis is about: where the browser is, else where the
+  /// app's own request ended, else what was asked for. From the store only.
+  Uri? get _sovereigntyUri {
+    final current = store.current;
+    final target = current.target;
+    if (target is! UrlTarget) return null;
+    final browser = current.browser;
+    if (browser is Present<BrowserSnapshot>) return browser.value.url;
+    final server = current.server;
+    if (server is Present<ServerSnapshot>) {
+      final fin = server.value.finalUrl;
+      if (fin is Present<Uri>) return fin.value;
+    }
+    return target.url;
+  }
+
+  String get _sovereigntyHost => _sovereigntyUri?.host ?? '';
+
+  bool get _sovereigntyReady {
+    final uri = _sovereigntyUri;
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        store.current.server is! Pending<ServerSnapshot> &&
+        !_isLoading &&
+        !_isWebViewLoading &&
+        !_isExtractingMetadata;
+  }
+
+  void _scheduleSovereignty() {
+    if (_disposed ||
+        _sovereigntyWatchers == 0 ||
+        _sovereigntyScheduled ||
+        _isAnalyzingSovereignty ||
+        !_sovereigntyReady) {
+      return;
+    }
+    final gen = store.current.generation;
+    if (_sovereigntyGen == gen) {
+      if (_sovereigntyError != null) return; // shown; "Re-run" tries again
+      if (_sovereigntyReport != null &&
+          _sovereigntyHome == siteJurisdiction.jurisdiction) {
+        return;
+      }
+    }
+    _sovereigntyScheduled = true;
+    scheduleMicrotask(() {
+      _sovereigntyScheduled = false;
+      analyzeSovereignty().ignore();
+    });
+  }
 
   /// Registrable domain the per-site jurisdiction choice is stored under.
   String get sovereigntyDomain =>
@@ -825,31 +927,42 @@ class HtmlService extends ChangeNotifier {
   void setSiteJurisdiction(String? jurisdiction) =>
       _appSettings?.setSiteJurisdiction(sovereigntyDomain, jurisdiction);
 
-  /// Where is this page hosted, and by whom? Lazily run by the Sovereignty tab.
-
+  /// Where is this page hosted, and by whom? Run by the service while the
+  /// Sovereignty tab is showing (see [watchSovereignty]).
   Future<void> analyzeSovereignty() async {
-    final url = _currentFile?.path;
-    if (_isAnalyzingSovereignty || url == null || !url.startsWith('http')) {
+    final uri = _sovereigntyUri;
+    if (_isAnalyzingSovereignty ||
+        uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
       return;
     }
     _isAnalyzingSovereignty = true;
+    _sovereigntyError = null;
     final gen = store.current.generation;
+    final home = siteJurisdiction.jurisdiction;
     notifyListeners();
     try {
       final report = await _sovereigntyAnalyzer(
-        pageUrl: url,
+        pageUrl: uri.toString(),
         probeResult: _probeResult,
         resources: resourceTimelineData,
         metadata: _pageMetadata,
         detections: detections,
-        html: _currentFile?.content,
-        home: siteJurisdiction.jurisdiction,
+        html: sourceView.textOrNull,
+        home: home,
       );
       if (!_disposed && gen == store.current.generation) {
         _sovereigntyReport = report;
+        _sovereigntyHome = home;
+        _sovereigntyGen = gen;
       }
     } catch (e) {
       debugPrint('Sovereignty analysis failed: $e');
+      if (!_disposed && gen == store.current.generation) {
+        _sovereigntyReport = null;
+        _sovereigntyError = '$e'.replaceFirst('Exception: ', '');
+        _sovereigntyGen = gen;
+      }
     } finally {
       _isAnalyzingSovereignty = false;
       notifyListeners();
@@ -1265,6 +1378,8 @@ class HtmlService extends ChangeNotifier {
     _cancelBrowserRefreshes();
     _lastPageWeight = null;
     _sovereigntyReport = null;
+    _sovereigntyError = null;
+    _sovereigntyGen = null;
     _lastRawPayload = null;
   }
 
@@ -1788,7 +1903,9 @@ Technical details: $message''';
   // Async work (loads, extraction) may finish after dispose; ignore it.
   @override
   void notifyListeners() {
-    if (!_disposed) super.notifyListeners();
+    if (_disposed) return;
+    super.notifyListeners();
+    _scheduleSovereignty();
   }
 
   @override

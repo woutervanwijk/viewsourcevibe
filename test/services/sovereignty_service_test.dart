@@ -926,4 +926,60 @@ void main() {
       }
     });
   });
+
+  group('unknown is never 0 (10c)', () {
+    SovereigntyReport report(List<SovereigntyCheck> checks,
+            {List<HostInfo> hosts = const []}) =>
+        SovereigntyReport(
+          mainHost: 'a',
+          hosts: hosts,
+          cdn: null,
+          nameServers: const [],
+          mailServers: const [],
+          tlsIssuer: null,
+          tlsProvider: null,
+          checks: checks,
+        );
+
+    test('nothing verifiable: no score and no grade, not "0 / Poor"', () {
+      final r = report([
+        const SovereigntyCheck(Pillar.security, 'c', CheckStatus.unknown, ''),
+      ]);
+      expect(r.score, isNull);
+      expect(r.grade, isNull);
+      expect(r.toJson()['score'], isNull);
+      expect(r.toJson()['grade'], isNull);
+    });
+
+    test('a verified failing report really scores 0', () {
+      final r = report([
+        const SovereigntyCheck(Pillar.security, 'c', CheckStatus.fail, ''),
+      ]);
+      expect(r.score, 0);
+      expect(r.grade, 'Poor');
+    });
+
+    test('host bytes: unknown stays null, known sums, mixed is partial', () {
+      final hosts = SovereigntyService.collectHosts(
+        pageUrl: 'https://a.test/',
+        resources: [
+          {'name': 'https://cdn.test/a.js', 'transfer': null},
+          {'name': 'https://cdn.test/b.js', 'transfer': 100},
+          {'name': 'https://img.test/c.png', 'transfer': null},
+          {'name': 'https://ok.test/d.css', 'transfer': 50},
+          {'name': 'https://ok.test/e.css', 'transfer': 25},
+        ],
+        metadata: null,
+      );
+      HostInfo of(String h) => hosts.singleWhere((x) => x.host == h);
+      expect(of('img.test').bytes, isNull);
+      expect(of('img.test').bytesPartial, isFalse);
+      expect(of('cdn.test').bytes, 100);
+      expect(of('cdn.test').bytesPartial, isTrue);
+      expect(of('ok.test').bytes, 75);
+      expect(of('ok.test').bytesPartial, isFalse);
+      expect(of('a.test').bytes, isNull); // the document itself: no size here
+      expect(hosts.first.host, 'a.test');
+    });
+  });
 }

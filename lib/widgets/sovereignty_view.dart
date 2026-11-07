@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/sovereignty_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
@@ -9,62 +11,109 @@ import 'package:view_source_vibe/utils/format_utils.dart';
 class SovereigntyView extends StatefulWidget {
   const SovereigntyView({super.key});
 
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
+
   @override
   State<SovereigntyView> createState() => _SovereigntyViewState();
 }
 
 class _SovereigntyViewState extends State<SovereigntyView> {
-  String? _analyzedFor;
+  late final HtmlService _service = context.read<HtmlService>();
+  bool _watching = false;
 
-  /// Runs the (network-heavy) analysis lazily, once the page's resources are known.
-  void _maybeAnalyze(HtmlService service) {
-    final url = service.currentFile?.path;
-    final ready = !service.isLoading &&
-        !service.isWebViewLoading &&
-        !service.isExtractingMetadata &&
-        service.probeResult != null;
-    if (!ready || url == null || service.isAnalyzingSovereignty) return;
-    final report = service.sovereigntyReport;
-    if (report != null &&
-        _analyzedFor == url &&
-        report.home == service.siteJurisdiction.jurisdiction) {
-      return;
-    }
-    _analyzedFor = url;
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => service.analyzeSovereignty());
+  @override
+  void initState() {
+    super.initState();
+    // Tell the service a tab is showing; the service decides when to run the
+    // (network-heavy) analysis. Not from build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _watching = true;
+      _service.watchSovereignty(true);
+    });
   }
 
   @override
-  Widget build(BuildContext context) {
-    final service = context.watch<HtmlService>();
-    _maybeAnalyze(service);
-    final report = service.sovereigntyReport;
+  void dispose() {
+    if (_watching) _service.watchSovereignty(false);
+    super.dispose();
+  }
 
-    if (report == null) {
-      return Center(
-        child: service.isAnalyzingSovereignty ||
-                service.isLoading ||
-                service.isWebViewLoading
-            ? const CircularProgressIndicator()
-            : const Text('Load a URL to analyze where it is hosted.',
-                style: TextStyle(color: Colors.grey)),
+  Widget _message(Widget child) => Center(
+        child: Padding(padding: const EdgeInsets.all(24), child: child),
       );
-    }
 
+  @override
+  Widget build(BuildContext context) {
+    SovereigntyView.builds++;
+    final (state, analyzing) =
+        context.select<HtmlService, (Observed<SovereigntyReport>, bool)>(
+      (s) => (s.sovereigntyState, s.isAnalyzingSovereignty),
+    );
+    final service = context.read<HtmlService>();
+
+    switch (state) {
+      case Unavailable<SovereigntyReport>(:final detail, :final reason):
+        return _message(Text(
+            detail.isEmpty ? unavailableMessage(reason, detail) : detail,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.grey)));
+      case Pending<SovereigntyReport>():
+        return _message(Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(
+              analyzing
+                  ? 'Analysing hosting, DNS and requests…'
+                  : 'Waiting for the page to finish loading…',
+              style: const TextStyle(color: Colors.grey),
+            ),
+          ],
+        ));
+      case Failed<SovereigntyReport>(:final error):
+        return _message(Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 40),
+            const SizedBox(height: 12),
+            const Text('The sovereignty analysis failed',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            SelectableText(error,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontSize: 12)),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: analyzing ? null : service.analyzeSovereignty,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try again'),
+            ),
+          ],
+        ));
+      case Present<SovereigntyReport>(value: final report):
+        return _buildReport(context, service, report, analyzing);
+    }
+  }
+
+  Widget _buildReport(BuildContext context, HtmlService service,
+      SovereigntyReport report, bool analyzing) {
+    final summary = summarizeSovereignty(report);
     return Scrollbar(
       child: ListView(
         primary: true,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         children: [
-          if (service.isAnalyzingSovereignty)
-            const LinearProgressIndicator(minHeight: 2),
-          _siteJurisdictionCard(context, service, report),
-          _scoreCard(context, report),
+          if (analyzing) const LinearProgressIndicator(minHeight: 2),
+          _siteJurisdictionCard(context, service, analyzing),
+          _scoreCard(context, summary, report),
           for (final pillar in Pillar.values)
             _pillarSection(context, report, pillar),
           _title(context, 'Where requests go'),
-          _summaryCard(context, report),
+          _summaryCard(context, report, summary),
           _title(context, 'Infrastructure'),
           _infraCard(context, report),
           _title(context, 'Hosts (${report.hosts.length})'),
@@ -72,9 +121,7 @@ class _SovereigntyViewState extends State<SovereigntyView> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: service.isAnalyzingSovereignty
-                  ? null
-                  : service.analyzeSovereignty,
+              onPressed: analyzing ? null : service.analyzeSovereignty,
               icon: const Icon(Icons.refresh),
               label: const Text('Re-run analysis'),
             ),
@@ -121,53 +168,82 @@ class _SovereigntyViewState extends State<SovereigntyView> {
       );
 
   Widget _siteJurisdictionCard(
-      BuildContext context, HtmlService service, SovereigntyReport report) {
-    final site = service.siteJurisdiction;
+      BuildContext context, HtmlService service, bool analyzing) {
+    final site = context
+        .select<HtmlService, SiteJurisdiction>((s) => s.siteJurisdiction);
+    final domain =
+        context.select<HtmlService, String>((s) => s.sovereigntyDomain);
     final manual = site.source == 'Set manually';
     final choices = {...homeJurisdictionChoices, site.jurisdiction};
     return _card(
       context,
-      Row(children: [
-        const Icon(Icons.gavel_outlined, size: 20),
-        const SizedBox(width: 12),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Legal home of ${service.sovereigntyDomain}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text(site.source,
-                style: const TextStyle(color: Colors.grey, fontSize: 12)),
-          ]),
-        ),
-        DropdownButton<String>(
-          value: site.jurisdiction,
-          onChanged: service.isAnalyzingSovereignty
-              ? null
-              : (value) => service.setSiteJurisdiction(value),
-          items: [
-            for (final j in choices)
-              DropdownMenuItem(value: j, child: Text(jurisdictionLabel(j))),
-          ],
-        ),
-        if (manual)
-          IconButton(
-            tooltip: 'Back to detected / default',
-            icon: const Icon(Icons.restart_alt),
-            onPressed: service.isAnalyzingSovereignty
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.gavel_outlined, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Legal home of $domain',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                  manual
+                      ? site.source
+                      : site.derived
+                          ? '${site.source} (derived, not confirmed)'
+                          : site.source,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            ]),
+          ),
+          DropdownButton<String>(
+            value: site.jurisdiction,
+            onChanged: analyzing
                 ? null
-                : () => service.setSiteJurisdiction(null),
+                : (value) => service.setSiteJurisdiction(value),
+            items: [
+              for (final j in choices)
+                DropdownMenuItem(value: j, child: Text(jurisdictionLabel(j))),
+            ],
+          ),
+          if (manual)
+            IconButton(
+              tooltip: 'Back to detected / default',
+              icon: const Icon(Icons.restart_alt),
+              onPressed:
+                  analyzing ? null : () => service.setSiteJurisdiction(null),
+            ),
+        ]),
+        if (site.warning != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    size: 15, color: Colors.orange),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(site.warning!,
+                      style:
+                          const TextStyle(color: Colors.orange, fontSize: 12)),
+                ),
+              ],
+            ),
           ),
       ]),
     );
   }
 
-  Widget _scoreCard(BuildContext context, SovereigntyReport report) {
-    final score = report.score;
-    final color = score >= 80
-        ? Colors.green
-        : score >= 50
-            ? Colors.orange
-            : Colors.red;
+  Widget _scoreCard(BuildContext context, SovereigntySummary summary,
+      SovereigntyReport report) {
+    final score = summary.score;
+    final color = score == null
+        ? Colors.grey
+        : score >= 80
+            ? Colors.green
+            : score >= 50
+                ? Colors.orange
+                : Colors.red;
     final counters = {
       CheckStatus.pass: 'passed',
       CheckStatus.warn: 'warnings',
@@ -180,20 +256,27 @@ class _SovereigntyViewState extends State<SovereigntyView> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$score',
+          if (score == null)
+            Text('No score: nothing could be verified',
                 style: Theme.of(context)
                     .textTheme
-                    .displaySmall
-                    ?.copyWith(color: color, fontWeight: FontWeight.bold),
-              ),
-              const Text(' / 100  '),
-              Text(report.grade, style: TextStyle(color: color)),
-            ],
-          ),
+                    .titleMedium
+                    ?.copyWith(color: color, fontWeight: FontWeight.bold))
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '$score',
+                  style: Theme.of(context)
+                      .textTheme
+                      .displaySmall
+                      ?.copyWith(color: color, fontWeight: FontWeight.bold),
+                ),
+                const Text(' / 100  '),
+                Text(summary.grade!, style: TextStyle(color: color)),
+              ],
+            ),
           const SizedBox(height: 4),
           Wrap(spacing: 12, children: [
             for (final e in counters.entries)
@@ -205,31 +288,33 @@ class _SovereigntyViewState extends State<SovereigntyView> {
               ]),
           ]),
           const SizedBox(height: 12),
-          for (final pillar in Pillar.values)
+          for (final line in summary.pillars)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(children: [
                 SizedBox(
                   width: 160,
-                  child: Text(pillarLabels[pillar]!,
-                      style: const TextStyle(fontSize: 12)),
+                  child: Text(line.name, style: const TextStyle(fontSize: 12)),
                 ),
                 Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: (report.pillarScore(pillar) ?? 0) /
-                          pillarMax[pillar]!,
-                      minHeight: 8,
-                      color: color,
-                    ),
-                  ),
+                  child: line.fraction == null
+                      ? const SizedBox.shrink()
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: line.fraction,
+                            minHeight: 8,
+                            color: color,
+                          ),
+                        ),
                 ),
                 SizedBox(
-                  width: 44,
-                  child: Text(_pillarScoreLabel(report, pillar),
+                  width: line.fraction == null ? 100 : 44,
+                  child: Text(line.label,
                       textAlign: TextAlign.end,
-                      style: const TextStyle(fontSize: 12)),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: line.fraction == null ? Colors.grey : null)),
                 ),
               ]),
             ),
@@ -240,7 +325,9 @@ class _SovereigntyViewState extends State<SovereigntyView> {
 
   String _pillarScoreLabel(SovereigntyReport report, Pillar pillar) {
     final score = report.pillarScore(pillar);
-    return score == null ? 'n/a' : '${score.round()}/${pillarMax[pillar]}';
+    return score == null
+        ? 'not verifiable'
+        : '${score.round()}/${pillarMax[pillar]}';
   }
 
   Widget _statusIcon(CheckStatus status, {double size = 18}) =>
@@ -325,12 +412,9 @@ class _SovereigntyViewState extends State<SovereigntyView> {
     );
   }
 
-  Widget _summaryCard(BuildContext context, SovereigntyReport report) {
+  Widget _summaryCard(BuildContext context, SovereigntyReport report,
+      SovereigntySummary summary) {
     final relations = report.relationShare();
-    final outside = ((relations[Relation.adequate] ?? 0) +
-            (relations[Relation.foreign] ?? 0)) *
-        100;
-    final home = jurisdictionLabel(report.home);
 
     return _card(
       context,
@@ -338,9 +422,7 @@ class _SovereigntyViewState extends State<SovereigntyView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            outside == 0
-                ? 'All requests stay with companies in the site\'s jurisdiction ($home)'
-                : '${outside.round()}% of requests go to companies outside the site\'s jurisdiction ($home)',
+            summary.headline,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
@@ -542,7 +624,7 @@ class _SovereigntyViewState extends State<SovereigntyView> {
                   style: const TextStyle(color: Colors.grey, fontSize: 12)),
             Text(
               '${host.requests} request${host.requests == 1 ? '' : 's'}'
-              '${host.bytes > 0 ? ' · ${FormatUtils.formatBytes(host.bytes)}' : ''}'
+              '${host.bytes != null ? ' · ${host.bytesPartial ? '≥ ' : ''}${FormatUtils.formatBytes(host.bytes!)}' : ' · size unknown'}'
               ' · ${(host.roles.toList()..sort()).join(', ')}',
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
