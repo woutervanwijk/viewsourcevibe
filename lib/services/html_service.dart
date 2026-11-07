@@ -31,6 +31,7 @@ import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
+import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
@@ -544,6 +545,20 @@ class HtmlService extends ChangeNotifier {
       _divergences = deriveDivergences(current);
     }
     return _divergences!;
+  }
+
+  Observed<PageSizeModel>? _pageSize;
+  PageInspection? _pageSizeFor;
+
+  /// The Page size tab's data: totals, breakdown and per-file sizes from the
+  /// browser's resources, or the state that says why there are none.
+  Observed<PageSizeModel> get pageSize {
+    final current = store.current;
+    if (_pageSize == null || !identical(current, _pageSizeFor)) {
+      _pageSizeFor = current;
+      _pageSize = derivePageSize(current);
+    }
+    return _pageSize!;
   }
 
   bool get isProbing => store.current.server is Pending<ServerSnapshot>;
