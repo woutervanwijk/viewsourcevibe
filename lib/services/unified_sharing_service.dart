@@ -978,7 +978,16 @@ If you're the app developer, please update the native iOS Share Extension code.'
   /// host such as `example.com` / `www.example.com/path`. Text that merely
   /// contains a URL, or code such as `a{b:c}.d{e:f}`, stays content (B24).
   static String? urlFromSharedText(String text) {
-    final trimmed = text.trim();
+    var trimmed = text.trim();
+    // Strip one pair of wrapping <> or quotes.
+    if (trimmed.length > 2) {
+      final f = trimmed[0], l = trimmed[trimmed.length - 1];
+      if ((f == '<' && l == '>') ||
+          (f == '"' && l == '"') ||
+          (f == "'" && l == "'")) {
+        trimmed = trimmed.substring(1, trimmed.length - 1).trim();
+      }
+    }
     if (trimmed.isEmpty || RegExp(r'\s').hasMatch(trimmed)) return null;
 
     final uri = Uri.tryParse(trimmed);

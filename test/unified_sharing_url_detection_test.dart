@@ -127,6 +127,13 @@ void sharedTextUrlTests() {
           'www.example.org/x');
     });
 
+    test('one pair of wrapping <> or quotes is stripped', () {
+      expect(UnifiedSharingService.urlFromSharedText('<https://example.com>'),
+          'https://example.com');
+      expect(UnifiedSharingService.urlFromSharedText('"https://example.com"'),
+          'https://example.com');
+    });
+
     test('HTML that merely contains a URL stays text', () {
       expect(
           UnifiedSharingService.urlFromSharedText(

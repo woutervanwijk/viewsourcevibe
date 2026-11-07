@@ -118,6 +118,78 @@ void main() {
     });
   });
 
+  group('share from Android shared storage (R16)', () {
+    tearDown(() => FileLoader.isAndroid = () => false);
+
+    // Nonexistent files: accepted means "got past the sandbox", i.e. notFound.
+    Matcher accepted() => throwsA(isA<FileLoadException>()
+        .having((e) => e.outsideSandbox, 'outsideSandbox', isFalse)
+        .having((e) => e.notFound, 'notFound', isTrue));
+    Matcher refused() => throwsA(isA<FileLoadException>()
+        .having((e) => e.outsideSandbox, 'outsideSandbox', isTrue));
+
+    test('accepted for share on Android', () async {
+      FileLoader.isAndroid = () => true;
+      await expectLater(
+          FileLoader.fromPath('/storage/emulated/0/Download/x.html',
+              origin: FileOrigin.share),
+          accepted());
+      await expectLater(
+          FileLoader.fromPath('/sdcard/x.html', origin: FileOrigin.share),
+          accepted());
+    });
+
+    test('refused elsewhere on Android, and traversal', () async {
+      FileLoader.isAndroid = () => true;
+      for (final bad in [
+        '/data/data/other.app/files/x.html',
+        '/etc/passwd',
+        '/storage/emulated/0/../../data/x',
+      ]) {
+        await expectLater(
+            FileLoader.fromPath(bad, origin: FileOrigin.share), refused(),
+            reason: bad);
+      }
+    });
+
+    test('not allowed off Android, nor for deep links', () async {
+      FileLoader.isAndroid = () => false;
+      await expectLater(
+          FileLoader.fromPath('/storage/emulated/0/x.html',
+              origin: FileOrigin.share),
+          refused());
+      FileLoader.isAndroid = () => true;
+      await expectLater(
+          FileLoader.fromPath('/storage/emulated/0/x.html',
+              origin: FileOrigin.deepLink),
+          refused());
+    });
+  });
+
+  group('fromDeepLinkPath', () {
+    test('outside path becomes a visible isError file', () async {
+      final f = File('${outside.path}/secret.txt')..writeAsStringSync('s');
+      final s = await FileLoader.fromDeepLinkPath(f.path);
+      expect(s.isError, isTrue);
+      expect(s.text.text,
+          "File outside the app's folders was not opened: secret.txt");
+      expect(s.toHtmlFile().isError, isTrue);
+    });
+
+    test('missing file becomes "File not found"', () async {
+      final s = await FileLoader.fromDeepLinkPath('${docs.path}/gone.html');
+      expect(s.isError, isTrue);
+      expect(s.text.text, 'File not found: gone.html');
+    });
+
+    test('good file loads normally', () async {
+      final f = File('${docs.path}/ok.html')..writeAsStringSync('<p>');
+      final s = await FileLoader.fromDeepLinkPath(f.path);
+      expect(s.isError, isFalse);
+      expect(s.text.text, '<p>');
+    });
+  });
+
   group('fromBytes', () {
     test('shared UTF-8 bytes decode correctly (not fromCharCodes)', () {
       final bytes = utf8.encode('<p>héllo €</p>');

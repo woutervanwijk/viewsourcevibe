@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:path/path.dart' as p;
+import 'package:flutter/foundation.dart';
 import 'package:universal_io/io.dart';
 
 import '../../models/inspection/file_snapshot.dart';
@@ -28,6 +29,32 @@ class FileLoadException implements Exception {
 class FileLoader {
   const FileLoader._();
 
+  /// Whether we run on Android; replaceable in tests.
+  @visibleForTesting
+  static bool Function() isAndroid = () => !kIsWeb && Platform.isAndroid;
+
+  /// Android user-visible shared storage, readable for shared (not deep
+  /// link) paths because the share intent hands the user's own file over.
+  static const _androidSharedRoots = ['/storage/emulated/', '/sdcard/'];
+
+  static Future<String?> _resolveSharedStorage(String raw) async {
+    if (!isAndroid()) return null;
+    var normalized = normalizeExternalFilePath(raw);
+    if (normalized == null) return null;
+    bool inRoots(String x) => _androidSharedRoots.any(x.startsWith);
+    if (!inRoots(normalized)) return null;
+    try {
+      // Resolve symlinks so a link inside shared storage cannot escape it.
+      if (await File(normalized).exists()) {
+        normalized = await File(normalized).resolveSymbolicLinks();
+        if (!inRoots(normalized)) return null;
+      }
+    } catch (_) {
+      return null;
+    }
+    return normalized;
+  }
+
   /// Reads [path] as bytes and decodes it by charset.
   ///
   /// With [enforceSandbox] (default) the path must be inside the app
@@ -40,7 +67,10 @@ class FileLoader {
   }) async {
     var resolved = path;
     if (enforceSandbox) {
-      final allowed = await resolveWithinAppDirectories(path);
+      var allowed = await resolveWithinAppDirectories(path);
+      if (allowed == null && origin == FileOrigin.share) {
+        allowed = await _resolveSharedStorage(path);
+      }
       if (allowed == null) {
         throw const FileLoadException(
             'File is outside the app directories and cannot be opened',
@@ -61,6 +91,26 @@ class FileLoader {
       bytes: bytes,
       lastModified: Present(modified, source: DataSource.file),
     );
+  }
+
+  /// Loads a deep-link file. A refused or missing file becomes a visible
+  /// error snapshot (isError) instead of a silent failure.
+  static Future<FileSnapshot> fromDeepLinkPath(String path) async {
+    try {
+      return await fromPath(path, origin: FileOrigin.deepLink);
+    } on FileLoadException catch (e) {
+      final name = p.basename(path);
+      final message = e.outsideSandbox
+          ? "File outside the app's folders was not opened: $name"
+          : e.notFound
+              ? 'File not found: $name'
+              : 'Could not open file: $name';
+      return fromText(message,
+          origin: FileOrigin.deepLink,
+          name: 'File Error',
+          path: path,
+          isError: true);
+    }
   }
 
   /// Bytes delivered by the OS (file picker, share extension). The platform
