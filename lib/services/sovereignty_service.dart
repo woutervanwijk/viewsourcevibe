@@ -1190,39 +1190,29 @@ class SovereigntyService {
 
   /// RIPEstat is rate limited: at most this many requests in flight.
   static const ripeConcurrency = 6;
-  static int _ripeInFlight = 0;
-  static final List<Completer<void>> _ripeWaiting = [];
+  static final _Gate _ripeGate = _Gate(ripeConcurrency);
 
-  static Future<T> _ripeLimited<T>(Future<T> Function() task) async {
-    while (_ripeInFlight >= ripeConcurrency) {
-      final c = Completer<void>();
-      _ripeWaiting.add(c);
-      await c.future;
-    }
-    _ripeInFlight++;
-    try {
-      return await task();
-    } finally {
-      _ripeInFlight--;
-      if (_ripeWaiting.isNotEmpty) _ripeWaiting.removeAt(0).complete();
-    }
-  }
+  @visibleForTesting
+  static Future<T> ripeLimitedForTest<T>(Future<T> Function() task) =>
+      _ripeGate.run(task);
 
   /// Runs [tasks] with at most [limit] in flight; results keep the order.
+  /// A task that throws gives null for that entry (unknown), not a failed
+  /// batch.
   @visibleForTesting
-  static Future<List<T>> limited<T>(List<Future<T> Function()> tasks,
-      {int limit = ripeConcurrency}) async {
-    final results = List<T?>.filled(tasks.length, null);
-    var next = 0;
-    Future<void> worker() async {
-      while (next < tasks.length) {
-        final i = next++;
-        results[i] = await tasks[i]();
-      }
-    }
-
-    await Future.wait([for (var i = 0; i < limit; i++) worker()]);
-    return results.cast<T>();
+  static Future<List<T?>> limited<T>(List<Future<T> Function()> tasks,
+      {int limit = ripeConcurrency}) {
+    final gate = _Gate(limit);
+    return Future.wait([
+      for (final task in tasks)
+        gate.run<T?>(() async {
+          try {
+            return await task();
+          } catch (_) {
+            return null;
+          }
+        }),
+    ]);
   }
 
   static Future<void> _enrichHost(HostInfo info) async {
@@ -1245,7 +1235,7 @@ class SovereigntyService {
   }
 
   static Future<Map<String, dynamic>?> _getJson(String url) =>
-      _ripeLimited(() => _fetchJson(url));
+      _ripeGate.run(() => _fetchJson(url));
 
   static Future<Map<String, dynamic>?> _fetchJson(String url) async {
     final client = HttpClient()..connectionTimeout = _timeout;
@@ -1325,14 +1315,21 @@ class SovereigntyService {
   };
 
   /// Registrable domain: the public suffix (from [_publicSuffixes], else the
-  /// last label) plus one label. `foo.github.io` stays `foo.github.io`.
+  /// generic `{co,com,org,net,gov,ac,edu}.<ccTLD>` pattern, else the last
+  /// label) plus one label. `foo.github.io` stays `foo.github.io`; an IP
+  /// address is returned unchanged; the result is lowercase.
   static String registrableDomain(String host) {
-    final parts = host.toLowerCase().split('.');
-    if (parts.length <= 2) {
-      return host;
-    }
+    final h = host.toLowerCase();
+    if (h.contains(':') || RegExp(r'^\d+(\.\d+){3}$').hasMatch(h)) return h;
+    final parts = h.split('.');
+    if (parts.length <= 2) return h;
     final twoLabel = parts.sublist(parts.length - 2).join('.');
-    final take = _publicSuffixes.contains(twoLabel) ? 3 : 2;
+    const genericSld = {'co', 'com', 'org', 'net', 'gov', 'ac', 'edu'};
+    final take = _publicSuffixes.contains(twoLabel) ||
+            (genericSld.contains(parts[parts.length - 2]) &&
+                parts.last.length == 2)
+        ? 3
+        : 2;
     return parts.sublist(parts.length - take).join('.');
   }
 
@@ -1472,5 +1469,28 @@ class SovereigntyService {
     final tag = utf8.decode(rdata.sublist(2, tagEnd), allowMalformed: true);
     final value = utf8.decode(rdata.sublist(tagEnd), allowMalformed: true);
     return '$tag $value';
+  }
+}
+
+/// At most [limit] tasks run at once; the rest wait their turn.
+class _Gate {
+  final int limit;
+  int _running = 0;
+  final List<Completer<void>> _waiting = [];
+  _Gate(this.limit);
+
+  Future<T> run<T>(Future<T> Function() task) async {
+    while (_running >= limit) {
+      final c = Completer<void>();
+      _waiting.add(c);
+      await c.future;
+    }
+    _running++;
+    try {
+      return await task();
+    } finally {
+      _running--;
+      if (_waiting.isNotEmpty) _waiting.removeAt(0).complete();
+    }
   }
 }

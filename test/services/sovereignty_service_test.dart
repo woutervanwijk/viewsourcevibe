@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/detection/catalog.dart';
 import '../detection_helpers.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
-import 'package:view_source_vibe/services/metadata_parser.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
 
@@ -649,10 +648,10 @@ void main() {
   });
 
   test('TYPO3 detection', () async {
-    final byGenerator = await extractMetadataInIsolate(
+    final byGenerator = await extractMetadataWithDetections(
         '<html><head><meta name="generator" content="TYPO3 CMS"></head></html>',
         'https://example.nl/');
-    final byPath = await extractMetadataInIsolate(
+    final byPath = await extractMetadataWithDetections(
         '<html><head><link href="/typo3temp/assets/x.css" rel="stylesheet"></head></html>',
         'https://example.nl/');
     expect(techOf(byGenerator)['CMS'], 'TYPO3');
@@ -810,6 +809,48 @@ void main() {
             'security': {'Strict-Transport-Security': null}
           }).status,
           CheckStatus.fail);
+    });
+  });
+
+  group('Task 9 fix 1', () {
+    test('registrableDomain generic ccTLD rule, IPs and case (I3)', () {
+      String r(String h) => SovereigntyService.registrableDomain(h);
+      expect(r('x.foo.com.mx'), 'foo.com.mx');
+      expect(r('a.b.com.pl'), 'b.com.pl');
+      expect(r('shop.co.at'), 'shop.co.at');
+      expect(r('1.2.3.4'), '1.2.3.4');
+      expect(r('2001:db8::1'), '2001:db8::1');
+      expect(r('Foo.Example.COM'), 'example.com');
+    });
+
+    test('the production limiter is the tested one: ripeConcurrency <= 6', () {
+      expect(SovereigntyService.ripeConcurrency, lessThanOrEqualTo(6));
+    });
+
+    test('a throwing task is unknown for that host, not a failed batch',
+        () async {
+      final out = await SovereigntyService.limited<int?>([
+        () async => 1,
+        () async => throw StateError('boom'),
+        () async => 3,
+      ], limit: 2);
+      expect(out, [1, null, 3]);
+    });
+
+    test('RIPEstat gate runs at most 6 requests at once', () async {
+      var running = 0, peak = 0;
+      final tasks = [
+        for (var i = 0; i < 20; i++)
+          () => SovereigntyService.ripeLimitedForTest(() async {
+                running++;
+                if (running > peak) peak = running;
+                await Future<void>.delayed(const Duration(milliseconds: 5));
+                running--;
+                return i;
+              })
+      ];
+      await Future.wait(tasks.map((f) => f()));
+      expect(peak, lessThanOrEqualTo(6));
     });
   });
 
