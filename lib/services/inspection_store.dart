@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/inspection/browser_snapshot.dart';
@@ -28,6 +30,7 @@ class InspectionStore extends ChangeNotifier {
       server: const Pending(),
       browser: const Pending(),
       file: const Unavailable(UnavailableReason.notApplicable, 'not a file'),
+      // primaryDocumentPreference is deliberately not carried over: begin* resets it.
     ));
     return gen;
   }
@@ -40,6 +43,7 @@ class InspectionStore extends ChangeNotifier {
       server: const Unavailable(UnavailableReason.notApplicable, 'local file'),
       browser: const Unavailable(UnavailableReason.notApplicable, 'local file'),
       file: Present(f, source: DataSource.file),
+      robots: const Unavailable(UnavailableReason.notApplicable, 'local file'),
     ));
     return gen;
   }
@@ -49,17 +53,19 @@ class InspectionStore extends ChangeNotifier {
 
   void applyServer(int gen, Observed<ServerSnapshot> result) {
     if (!_accepts(gen)) return;
+    // A Present server is only replaced by a fresher Present.
+    if (_current.server is Present<ServerSnapshot> &&
+        result is! Present<ServerSnapshot>) {
+      return;
+    }
     _set(_current.copyWith(server: result));
   }
 
-  /// Robots live inside the server snapshot; ignored when there is none.
+  /// Robots are kept separately from the server result, so their arrival
+  /// order relative to the main fetch does not matter.
   void applyRobots(int gen, Observed<RobotsInfo> robots) {
     if (!_accepts(gen)) return;
-    final s = _current.server;
-    if (s is! Present<ServerSnapshot>) return;
-    _set(_current.copyWith(
-        server: Present(s.value.withRobots(robots),
-            source: s.source, provenance: s.provenance)));
+    _set(_current.copyWith(robots: robots));
   }
 
   /// A browser payload. A later payload for the same generation is merged:
@@ -68,6 +74,8 @@ class InspectionStore extends ChangeNotifier {
   void applyBrowser(int gen, BrowserSnapshot snap) {
     if (!_accepts(gen)) return;
     final old = _current.browser;
+    // Nothing Present to accept over an existing Present result: no change.
+    if (old is Present<BrowserSnapshot> && !_hasPresentSection(snap)) return;
     final merged =
         old is Present<BrowserSnapshot> ? _merge(old.value, snap) : snap;
     _set(_current.copyWith(
@@ -88,6 +96,15 @@ class InspectionStore extends ChangeNotifier {
   }
 }
 
+bool _hasPresentSection(BrowserSnapshot b) =>
+    b.contentType is Present ||
+    b.renderedDom is Present ||
+    b.resources is Present ||
+    b.cookies is Present ||
+    b.storage is Present ||
+    b.navigation is Present ||
+    b.snapshotTimeMs is Present;
+
 Observed<T> _fresher<T>(Observed<T> old, Observed<T> fresh) =>
     fresh is Present<T> || old is! Present<T> ? fresh : old;
 
@@ -100,7 +117,6 @@ BrowserSnapshot _merge(BrowserSnapshot old, BrowserSnapshot n) {
   } else {
     resources = _fresher(o, f);
   }
-  final resPresent = resources is Present<List<ResourceEntry>>;
   return BrowserSnapshot(
     url: n.url,
     platform: n.platform,
@@ -111,12 +127,8 @@ BrowserSnapshot _merge(BrowserSnapshot old, BrowserSnapshot n) {
     storage: _fresher(old.storage, n.storage),
     navigation: _fresher(old.navigation, n.navigation),
     snapshotTimeMs: _fresher(old.snapshotTimeMs, n.snapshotTimeMs),
-    resourcesTruncated: resPresent && n.resources is Present
-        ? n.resourcesTruncated
-        : old.resourcesTruncated,
-    resourcesDropped: resPresent && n.resources is Present
-        ? n.resourcesDropped
-        : old.resourcesDropped,
+    resourcesTruncated: old.resourcesTruncated || n.resourcesTruncated,
+    resourcesDropped: max(old.resourcesDropped, n.resourcesDropped),
     rawPayload: n.rawPayload ?? old.rawPayload,
   );
 }

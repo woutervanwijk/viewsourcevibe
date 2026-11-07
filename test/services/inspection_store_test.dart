@@ -46,7 +46,10 @@ ResourceEntry _res(String url, {int? transfer}) => ResourceEntry(
     );
 
 BrowserSnapshot _browser(String url,
-        {String? dom, List<ResourceEntry>? resources}) =>
+        {String? dom,
+        List<ResourceEntry>? resources,
+        bool truncated = false,
+        int dropped = 0}) =>
     BrowserSnapshot(
       url: Uri.parse(url),
       platform: BrowserPlatform.macos,
@@ -61,6 +64,8 @@ BrowserSnapshot _browser(String url,
       storage: const Unavailable(UnavailableReason.notExposedToPage),
       navigation: const Unavailable(UnavailableReason.notExposedToPage),
       snapshotTimeMs: const Present(10.0, source: DataSource.browser),
+      resourcesTruncated: truncated,
+      resourcesDropped: dropped,
     );
 
 FileSnapshot _file() => FileSnapshot(
@@ -219,16 +224,99 @@ void main() {
     expect(store.current.browser, isA<Failed<BrowserSnapshot>>());
   });
 
-  test('applyRobots attaches to server snapshot; ignored without server', () {
+  RobotsInfo robotsInfo() => const RobotsInfo(
+        robotsStatus: Present(200, source: DataSource.server),
+        robotsText: Present('User-agent: *', source: DataSource.server),
+        disallowCount: Present(0, source: DataSource.server),
+        allowCount: Present(0, source: DataSource.server),
+        sitemaps: Present(<String>[], source: DataSource.server),
+        sitemapStatus: Unavailable(UnavailableReason.notApplicable),
+      );
+
+  test('robots before server are kept, and survive the server arriving', () {
     final g = store.beginUrl(Uri.parse('https://a.test/'));
-    notifies = 0;
-    store.applyRobots(g, const Failed('x'));
-    expect(notifies, 0);
+    store.applyRobots(g, Present(robotsInfo(), source: DataSource.server));
+    expect(store.current.robots, isA<Present<RobotsInfo>>());
     store.applyServer(
         g, Present(_server('https://a.test/'), source: DataSource.server));
-    store.applyRobots(g, const Failed('no robots'));
-    final s = (store.current.server as Present<ServerSnapshot>).value;
-    expect(s.robots, isA<Failed<RobotsInfo>>());
+    expect(store.current.robots, isA<Present<RobotsInfo>>());
+  });
+
+  test('robots after server are kept; begin resets them', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    store.applyServer(
+        g, Present(_server('https://a.test/'), source: DataSource.server));
+    store.applyRobots(g, Present(robotsInfo(), source: DataSource.server));
+    expect(store.current.robots, isA<Present<RobotsInfo>>());
+    store.beginUrl(Uri.parse('https://b.test/'));
+    expect(store.current.robots, isA<Pending<RobotsInfo>>());
+  });
+
+  test('stale robots ignored', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    store.beginUrl(Uri.parse('https://b.test/'));
+    notifies = 0;
+    store.applyRobots(g, Present(robotsInfo(), source: DataSource.server));
+    expect(store.current.robots, isA<Pending<RobotsInfo>>());
+    expect(notifies, 0);
+  });
+
+  test('Failed/Unavailable server never replaces a Present server', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    store.applyServer(
+        g, Present(_server('https://a.test/'), source: DataSource.server));
+    notifies = 0;
+    store.applyServer(g, const Failed('late'));
+    store.applyServer(g, const Unavailable(UnavailableReason.blockedBySite));
+    expect(store.current.server, isA<Present<ServerSnapshot>>());
+    expect(notifies, 0);
+    store.applyServer(
+        g,
+        Present(_server('https://a.test/', body: 'new'),
+            source: DataSource.server));
+    expect(notifies, 1);
+  });
+
+  test('truncation flag is OR-ed, dropped count is the max', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    store.applyBrowser(
+        g,
+        _browser('https://a.test/',
+            dom: '<p/>',
+            resources: [_res('https://a.test/1.png')],
+            truncated: true,
+            dropped: 7));
+    store.applyBrowser(
+        g,
+        _browser('https://a.test/',
+            resources: [_res('https://a.test/2.png')], dropped: 3));
+    final b = (store.current.browser as Present<BrowserSnapshot>).value;
+    expect(b.resourcesTruncated, isTrue);
+    expect(b.resourcesDropped, 7);
+  });
+
+  test('all-unavailable browser payload over Present: no change, no notify',
+      () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    store.applyBrowser(g, _browser('https://a.test/', dom: '<p/>'));
+    final before = store.current;
+    notifies = 0;
+    store.applyBrowser(
+        g,
+        BrowserSnapshot.unavailable(Uri.parse('https://a.test/'),
+            BrowserPlatform.macos, UnavailableReason.notExposedToPage, 'x'));
+    expect(notifies, 0);
+    expect(identical(store.current, before), isTrue);
+  });
+
+  test('begin* resets primaryDocumentPreference', () {
+    store.beginUrl(Uri.parse('https://a.test/'));
+    store.setPrimaryDocument(DataSource.server);
+    store.beginUrl(Uri.parse('https://b.test/'));
+    expect(store.current.primaryDocumentPreference, isNull);
+    store.setPrimaryDocument(DataSource.file);
+    store.beginFile(_file());
+    expect(store.current.primaryDocumentPreference, isNull);
   });
 
   test('primaryDocument rule and preference', () {

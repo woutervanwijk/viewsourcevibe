@@ -25,13 +25,15 @@ class FileTarget extends InspectionTarget {
 /// Immutable state of the current inspection: three cores (server, browser,
 /// file) plus the generation of the navigation they belong to.
 ///
-/// Robots are not kept separately: they live in `ServerSnapshot.robots`.
+/// [robots] is kept per generation, independent of the server result's
+/// arrival order (robots.txt may return before the main fetch).
 class PageInspection {
   final int generation;
   final InspectionTarget target;
   final Observed<ServerSnapshot> server;
   final Observed<BrowserSnapshot> browser;
   final Observed<FileSnapshot> file;
+  final Observed<RobotsInfo> robots;
 
   /// The user's choice for the Source tab; null = default rule.
   final DataSource? primaryDocumentPreference;
@@ -42,6 +44,7 @@ class PageInspection {
     required this.server,
     required this.browser,
     required this.file,
+    this.robots = const Pending(),
     this.primaryDocumentPreference,
   });
 
@@ -54,12 +57,15 @@ class PageInspection {
             UnavailableReason.notApplicable, 'nothing loaded'),
         file = const Unavailable(
             UnavailableReason.notApplicable, 'nothing loaded'),
+        robots = const Unavailable(
+            UnavailableReason.notApplicable, 'nothing loaded'),
         primaryDocumentPreference = null;
 
   PageInspection copyWith({
     Observed<ServerSnapshot>? server,
     Observed<BrowserSnapshot>? browser,
     Observed<FileSnapshot>? file,
+    Observed<RobotsInfo>? robots,
     Object? primaryDocumentPreference = _keep,
   }) =>
       PageInspection(
@@ -68,6 +74,7 @@ class PageInspection {
         server: server ?? this.server,
         browser: browser ?? this.browser,
         file: file ?? this.file,
+        robots: robots ?? this.robots,
         primaryDocumentPreference: identical(primaryDocumentPreference, _keep)
             ? this.primaryDocumentPreference
             : primaryDocumentPreference as DataSource?,
