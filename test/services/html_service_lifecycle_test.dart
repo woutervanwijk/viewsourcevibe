@@ -9,7 +9,9 @@ import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/services/sovereignty_service.dart';
 import 'package:view_source_vibe/utils/text_decoding.dart';
 
 class FakeServerFetcher implements ServerFetcher {
@@ -123,8 +125,13 @@ void main() {
   late HtmlService service;
   late List<String> extractedHtml;
 
-  HtmlService make({bool browserFirst = true, Completer<void>? gate}) {
+  HtmlService make({
+    bool browserFirst = true,
+    Completer<void>? gate,
+    SovereigntyAnalyzer? sovereigntyAnalyzer,
+  }) {
     final s = HtmlService(
+      sovereigntyAnalyzer: sovereigntyAnalyzer,
       store: store,
       serverFetcher: fetcher,
       browserLoader: browser,
@@ -326,8 +333,134 @@ void main() {
       expect(fetcher.calls.length, 2);
       expect(store.current.generation, gen + 1);
       fetcher.pending[1].complete(okSnapshot('https://other.test/', 'o'));
-      expect((await probe)['statusCode'], 200);
+      await probe;
+      expect(service.probeResult!['statusCode'], 200);
       expect(service.probeResult!['url'], 'https://other.test/');
+    });
+  });
+
+  group('fix round 1', () {
+    test('I1/I2: a server file built for a superseded navigation is dropped',
+        () async {
+      service.dispose();
+      service = make(browserFirst: false);
+      final gate = Completer<void>();
+      service.debugAfterServerFileBuilt = () => gate.future;
+
+      final a = service.loadUrl('https://a.test/');
+      await pumpEventQueue();
+      fetcher.pending[0]
+          .complete(okSnapshot('https://a.test/', '<html>A</html>'));
+      await pumpEventQueue(); // A's file is built, waiting at the hook
+
+      final b = service.loadUrl('https://b.test/');
+      await pumpEventQueue();
+      gate.complete();
+      await a;
+
+      final target = store.current.target as UrlTarget;
+      expect(target.url, Uri.parse('https://b.test/'));
+      expect(store.current.server, isA<Pending<ServerSnapshot>>());
+      expect(service.currentFile?.content ?? '', isNot(contains('A')));
+      expect(service.lastPageWeight, isNull);
+      expect(fetcher.calls.length, 2);
+
+      fetcher.pending[1]
+          .complete(okSnapshot('https://b.test/', '<html>B</html>'));
+      await b;
+      expect(service.currentFile!.content, '<html>B</html>');
+      expect(service.lastPageWeight, {'transfer': 14, 'decoded': 14});
+    });
+
+    test('I4: a sovereignty report for a superseded navigation is dropped',
+        () async {
+      final gate = Completer<void>();
+      service.dispose();
+      service = make(sovereigntyAnalyzer: ({
+        required pageUrl,
+        required probeResult,
+        required resources,
+        metadata,
+        detections = const [],
+        html,
+        home = 'EU',
+      }) async {
+        await gate.future;
+        return const SovereigntyReport(
+            mainHost: 'a.test',
+            hosts: [],
+            cdn: null,
+            nameServers: [],
+            mailServers: [],
+            tlsIssuer: null,
+            tlsProvider: null,
+            checks: []);
+      });
+      await service.loadUrl('https://a.test/');
+      final analysis = service.analyzeSovereignty();
+      await pumpEventQueue();
+      await service.loadUrl('https://b.test/');
+      gate.complete();
+      await analysis;
+      expect(service.sovereigntyReport, isNull);
+    });
+
+    test('R20: a different path reported during Pending is a new navigation',
+        () async {
+      await service.loadUrl('https://a.test/');
+      unawaited(service.probeUrl('https://a.test/other'));
+      await pumpEventQueue();
+      expect(fetcher.calls, [
+        Uri.parse('https://a.test/'),
+        Uri.parse('https://a.test/other'),
+      ]);
+
+      fetcher.pending[0]
+          .complete(okSnapshot('https://a.test/', '<html>A</html>'));
+      await pumpEventQueue();
+      expect(service.serverSource, isNull);
+      expect(service.probeResult, isNull);
+
+      fetcher.pending[1]
+          .complete(okSnapshot('https://a.test/other', '<html>O</html>'));
+      await pumpEventQueue();
+      expect(service.serverSource, '<html>O</html>');
+    });
+
+    test('R20: http to https, www and trailing slash stay one navigation',
+        () async {
+      await service.loadUrl('http://a.test/page');
+      for (final u in [
+        'https://a.test/page',
+        'https://www.a.test/page/',
+        'http://a.test/page',
+      ]) {
+        unawaited(service.probeUrl(u));
+      }
+      await pumpEventQueue();
+      expect(fetcher.calls.length, 1);
+    });
+
+    test('R20: a non-http URL during Pending is not covered', () async {
+      await service.loadUrl('https://a.test/');
+      unawaited(service.probeUrl('https://other.test/'));
+      await pumpEventQueue();
+      expect(fetcher.calls.length, 2);
+    });
+
+    test('metadata of a changed generation with equal content is rerun',
+        () async {
+      final gate = Completer<void>();
+      service.dispose();
+      service = make(gate: gate);
+      final a = service.loadFile(localFile('a.html', '<html>A</html>'));
+      await Future.delayed(const Duration(milliseconds: 200));
+      store.clear(); // generation changes, the content does not
+      gate.complete();
+      await a;
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(extractedHtml.length, 2);
+      expect(service.pageMetadata, isNotNull);
     });
   });
 

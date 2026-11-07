@@ -35,7 +35,7 @@ Map<String, dynamic>? legacyProbeMap(PageInspection p,
 
   final map = <String, dynamic>{
     'statusCode': last.statusCode,
-    'reasonPhrase': last.reasonPhrase,
+    if (last.reasonPhrase.isNotEmpty) 'reasonPhrase': last.reasonPhrase,
     'headers': headers,
     'isRedirect': isRedirect,
     'url': s.requestedUrl.toString(),

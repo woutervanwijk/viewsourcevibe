@@ -121,6 +121,13 @@ void main() {
       expect((m['security'] as Map)['Content-Security-Policy'], isNull);
     });
 
+    test('an empty reason phrase is left out', () {
+      final m = legacyProbeMap(_inspection(
+          _p(_snapshot([_hop('http://a.test/', 200, reason: '')]))))!;
+      expect(m.containsKey('reasonPhrase'), isFalse);
+      expect(m['statusCode'], 200);
+    });
+
     test('a single hop is not a redirect and has no chain', () {
       final m = legacyProbeMap(_inspection(_p(_snapshot([
         _hop('http://a.test/', 200),

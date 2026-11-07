@@ -12,8 +12,8 @@ class AppStateService with ChangeNotifier {
   static const String _lastFileNameKey = 'last_file_name';
   static const String _lastFilePathKey = 'last_file_path';
   static const String _lastFileIsUrlKey = 'last_file_is_url';
-  static const String _isProbeVisibleKey = 'is_probe_visible';
-  static const String _probeResultKey = 'probe_result';
+  // Removed keys: the old probe result held cookie values. Deleted at startup.
+  static const List<String> _legacyKeys = ['is_probe_visible', 'probe_result'];
   static const String _pendingUrlKey = 'pending_url';
   static const String _inputTextKey = 'input_text';
 
@@ -23,6 +23,9 @@ class AppStateService with ChangeNotifier {
 
   static Future<AppStateService> create() async {
     final prefs = await SharedPreferences.getInstance();
+    for (final key in _legacyKeys) {
+      if (prefs.containsKey(key)) await prefs.remove(key);
+    }
     return AppStateService(prefs);
   }
 
@@ -32,8 +35,6 @@ class AppStateService with ChangeNotifier {
     double? scrollPosition,
     double? horizontalScrollPosition,
     String? contentType,
-    bool? isProbeVisible,
-    String? probeResultJson,
     String? pendingUrl,
     String? inputText,
   }) async {
@@ -66,14 +67,6 @@ class AppStateService with ChangeNotifier {
         await _prefs.setString(_lastContentTypeKey, contentType);
       }
 
-      if (isProbeVisible != null) {
-        await _prefs.setBool(_isProbeVisibleKey, isProbeVisible);
-      }
-
-      if (probeResultJson != null) {
-        await _prefs.setString(_probeResultKey, probeResultJson);
-      }
-
       if (pendingUrl != null) {
         await _prefs.setString(_pendingUrlKey, pendingUrl);
       } else {
@@ -99,8 +92,7 @@ class AppStateService with ChangeNotifier {
       // Check if we have any saved state - check several possible primary keys
       if (!_prefs.containsKey(_lastFilePathKey) &&
           !_prefs.containsKey(_lastFileKey) &&
-          !_prefs.containsKey(_lastUrlKey) &&
-          !_prefs.containsKey(_isProbeVisibleKey)) {
+          !_prefs.containsKey(_lastUrlKey)) {
         debugPrint('📂 No saved app state found');
         return null;
       }
@@ -127,15 +119,6 @@ class AppStateService with ChangeNotifier {
       // Load content type
       if (_prefs.containsKey(_lastContentTypeKey)) {
         state.contentType = _prefs.getString(_lastContentTypeKey);
-      }
-
-      // Load probe state
-      if (_prefs.containsKey(_isProbeVisibleKey)) {
-        state.isProbeVisible = _prefs.getBool(_isProbeVisibleKey);
-      }
-
-      if (_prefs.containsKey(_probeResultKey)) {
-        state.probeResultJson = _prefs.getString(_probeResultKey);
       }
 
       if (_prefs.containsKey(_pendingUrlKey)) {
@@ -165,8 +148,6 @@ class AppStateService with ChangeNotifier {
       await _prefs.remove(_lastFileNameKey);
       await _prefs.remove(_lastFilePathKey);
       await _prefs.remove(_lastFileIsUrlKey);
-      await _prefs.remove(_isProbeVisibleKey);
-      await _prefs.remove(_probeResultKey);
       await _prefs.remove(_pendingUrlKey);
       await _prefs.remove(_inputTextKey);
 
@@ -185,13 +166,11 @@ class AppState {
   double? scrollPosition;
   double? horizontalScrollPosition;
   String? contentType;
-  bool? isProbeVisible;
-  String? probeResultJson;
   String? pendingUrl;
   String? inputText;
 
   @override
   String toString() {
-    return 'AppState(filePath: $filePath, fileName: $fileName, isUrl: $isUrl, scrollPosition: $scrollPosition, horizontalScrollPosition: $horizontalScrollPosition, contentType: $contentType, isProbeVisible: $isProbeVisible, pendingUrl: $pendingUrl, inputText: $inputText)';
+    return 'AppState(filePath: $filePath, fileName: $fileName, isUrl: $isUrl, scrollPosition: $scrollPosition, horizontalScrollPosition: $horizontalScrollPosition, contentType: $contentType, pendingUrl: $pendingUrl, inputText: $inputText)';
   }
 }

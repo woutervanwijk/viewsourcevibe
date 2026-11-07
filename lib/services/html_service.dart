@@ -37,7 +37,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 typedef MetadataExtractor = Future<Map<String, dynamic>>
     Function(String html, String baseUrl, {Map<String, String>? headers});
 
+typedef SovereigntyAnalyzer = Future<SovereigntyReport> Function({
+  required String pageUrl,
+  required Map<String, dynamic>? probeResult,
+  required List<Map<String, dynamic>> resources,
+  Map<String, dynamic>? metadata,
+  List<Detection> detections,
+  String? html,
+  String home,
+});
+
 class HtmlService extends ChangeNotifier {
+  final SovereigntyAnalyzer _sovereigntyAnalyzer;
+
+  /// Test hook: awaited right after a server file was built.
+  @visibleForTesting
+  Future<void> Function()? debugAfterServerFileBuilt;
+
+  @visibleForTesting
+  Map<String, dynamic>? get lastPageWeight => _lastPageWeight;
+
   /// The central inspection data (server, browser and file cores).
   final InspectionStore store;
   final bool _ownsStore;
@@ -313,9 +332,10 @@ class HtmlService extends ChangeNotifier {
       return;
     }
     _isAnalyzingSovereignty = true;
+    final gen = store.current.generation;
     notifyListeners();
     try {
-      _sovereigntyReport = await SovereigntyService.analyze(
+      final report = await _sovereigntyAnalyzer(
         pageUrl: url,
         probeResult: _probeResult,
         resources: resourceTimelineData,
@@ -324,6 +344,9 @@ class HtmlService extends ChangeNotifier {
         html: _currentFile?.content,
         home: siteJurisdiction.jurisdiction,
       );
+      if (!_disposed && gen == store.current.generation) {
+        _sovereigntyReport = report;
+      }
     } catch (e) {
       debugPrint('Sovereignty analysis failed: $e');
     } finally {
@@ -646,7 +669,7 @@ class HtmlService extends ChangeNotifier {
   /// Main document size as reported by the browser for [url], or 0 if unknown.
   int _browserDocSizeFor(String url) {
     final probeUrl = _browserProbeResult?['url'] as String?;
-    if (probeUrl == null || !areUrlsEqual(probeUrl, url)) return 0;
+    if (probeUrl == null || !_sameUrlString(probeUrl, url)) return 0;
     return (_browserProbeResult?['pageWeight']?['mainDocumentDecoded']
                 as num? ??
             0)
@@ -703,7 +726,10 @@ class HtmlService extends ChangeNotifier {
     ServerFetcher? serverFetcher,
     BrowserLoader? browserLoader,
     MetadataExtractor? metadataExtractor,
-  })  : store = store ?? InspectionStore(),
+    SovereigntyAnalyzer? sovereigntyAnalyzer,
+  })  : _sovereigntyAnalyzer =
+            sovereigntyAnalyzer ?? SovereigntyService.analyze,
+        store = store ?? InspectionStore(),
         _ownsStore = store == null,
         _serverFetcher = serverFetcher ?? const IoServerFetcher(),
         _metadataExtractor = metadataExtractor ?? extractMetadataInIsolate {
@@ -869,7 +895,11 @@ class HtmlService extends ChangeNotifier {
         await _serverFetch;
         if (_disposed || gen != store.current.generation) return;
         _pendingUrl = null;
-        await loadFile(await _fileFromServer(uri, store.current.server));
+        final built = await _fileFromServer(uri, store.current.server);
+        // Navigation may have moved on while the file was being built.
+        if (_disposed || gen != store.current.generation) return;
+        _applyPageWeight(built.weight);
+        await loadFile(built.file);
       } catch (e) {
         if (gen == store.current.generation) _pendingUrl = null;
         rethrow;
@@ -919,6 +949,13 @@ class HtmlService extends ChangeNotifier {
     }
     if (_disposed) return;
     store.applyServer(gen, result);
+    // The browser reported a URL while we were waiting; now the chain is
+    // known. One that is not part of it is a navigation of its own.
+    final noted = _browserUrlDuringFetch;
+    if (noted != null && noted.$1 == gen && !_storeCovers(noted.$2)) {
+      _startInspection(noted.$2, adoptBody: false);
+      return;
+    }
     if (adoptBody) await _adoptServerBodyIfEmpty(gen);
   }
 
@@ -957,14 +994,17 @@ class HtmlService extends ChangeNotifier {
     if (current != null && (!current.isUrl || current.content.isNotEmpty)) {
       return;
     }
-    final file = await _fileFromServer(target.url, server);
+    final built = await _fileFromServer(target.url, server);
     if (_disposed ||
         gen != store.current.generation ||
         (_currentFile?.content.isNotEmpty ?? false)) {
       return;
     }
+    final file = built.file;
+    _applyPageWeight(built.weight);
     // A redirect changes the path: do not push the empty placeholder.
-    if (_currentFile != null && !areUrlsEqual(_currentFile!.path, file.path)) {
+    if (_currentFile != null &&
+        !_sameUrlString(_currentFile!.path, file.path)) {
       _currentFile = null;
     }
     await loadFile(file);
@@ -974,9 +1014,20 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
+  /// Without browser numbers, the document's own wire and decoded size.
+  void _applyPageWeight(Map<String, dynamic>? weight) {
+    if (weight != null && _browserProbeResult == null) _lastPageWeight = weight;
+  }
+
+  static bool _sameUrlString(String a, String b) {
+    final x = Uri.tryParse(a), y = Uri.tryParse(b);
+    return x != null && y != null ? sameUrl(x, y) : a == b;
+  }
+
   /// The server's answer as a file for the viewer: the body, or an error page
-  /// that says why there is none.
-  Future<HtmlFile> _fileFromServer(
+  /// that says why there is none. Pure: the caller applies [weight] after
+  /// checking the navigation is still current.
+  Future<({HtmlFile file, Map<String, dynamic>? weight})> _fileFromServer(
       Uri requested, Observed<ServerSnapshot> server) async {
     final snapshot = server is Present<ServerSnapshot> ? server.value : null;
     final body = snapshot?.body;
@@ -986,7 +1037,8 @@ class HtmlService extends ChangeNotifier {
         Present<ServerSnapshot>(value: final s) => _failureMessage(s),
         _ => 'no response from the server',
       };
-      return _urlErrorFile(requested.toString(), reason);
+      await debugAfterServerFileBuilt?.call();
+      return (file: _urlErrorFile(requested.toString(), reason), weight: null);
     }
 
     final last = snapshot.hops.last;
@@ -1014,22 +1066,21 @@ class HtmlService extends ChangeNotifier {
           : 'response_${last.statusCode}';
     }
 
-    // Without browser numbers, the wire and decoded size of the document.
-    if (_browserProbeResult == null) {
-      _lastPageWeight = {
+    await debugAfterServerFileBuilt?.call();
+    return (
+      file: HtmlFile(
+        name: filename,
+        path: finalUri.toString(),
+        content: content,
+        lastModified: DateTime.now(),
+        size: body.value.byteLength,
+        isUrl: true,
+        isError: last.statusCode >= 400,
+      ),
+      weight: <String, dynamic>{
         'transfer': body.value.transferLength,
         'decoded': body.value.byteLength,
-      };
-    }
-
-    return HtmlFile(
-      name: filename,
-      path: finalUri.toString(),
-      content: content,
-      lastModified: DateTime.now(),
-      size: body.value.byteLength,
-      isUrl: true,
-      isError: last.statusCode >= 400,
+      },
     );
   }
 
@@ -1076,20 +1127,51 @@ Technical details: $message''';
     );
   }
 
-  /// Whether the current inspection already covers [uri]: it is the requested
-  /// URL, a hop of the fetched chain, or the page arrived while the server
-  /// fetch is still running (a redirect target reported by the browser).
+  /// Whether the current inspection already covers [uri] (R20): the same
+  /// document as the requested URL, a hop of the fetched chain or its final
+  /// URL. Same document = http(s), same host ignoring a leading `www.` and
+  /// same path ignoring a trailing slash; the scheme may differ, so
+  /// http -> https and www redirects stay one navigation, also while the
+  /// fetch is still running. Any other URL is a new navigation.
   bool _storeCovers(Uri uri) {
     final current = store.current;
     final target = current.target;
     if (target is! UrlTarget) return false;
-    if (sameUrl(target.url, uri)) return true;
+    if (sameUrl(target.url, uri) || _sameDocument(target.url, uri)) return true;
     final server = current.server;
-    if (server is Pending<ServerSnapshot>) return true;
     if (server is Present<ServerSnapshot>) {
-      return server.value.hops.any((h) => sameUrl(h.url, uri));
+      final finalUrl = server.value.finalUrl;
+      return server.value.hops.any((h) => _sameDocument(h.url, uri)) ||
+          (finalUrl is Present<Uri> && _sameDocument(finalUrl.value, uri));
     }
     return false;
+  }
+
+  static bool _sameDocument(Uri a, Uri b) {
+    bool web(Uri u) => u.scheme == 'http' || u.scheme == 'https';
+    String host(Uri u) {
+      final h = u.host.toLowerCase();
+      return h.startsWith('www.') ? h.substring(4) : h;
+    }
+
+    String path(Uri u) => u.path.length > 1 && u.path.endsWith('/')
+        ? u.path.substring(0, u.path.length - 1)
+        : (u.path.isEmpty ? '/' : u.path);
+    return web(a) &&
+        web(b) &&
+        host(a) == host(b) &&
+        path(a) == path(b) &&
+        a.query == b.query;
+  }
+
+  /// The last URL the browser reported while the fetch of this navigation
+  /// was running; checked again when the chain is known.
+  (int, Uri)? _browserUrlDuringFetch;
+
+  void _noteBrowserUrl(Uri uri) {
+    if (store.current.server is Pending<ServerSnapshot>) {
+      _browserUrlDuringFetch = (store.current.generation, uri);
+    }
   }
 
   /// Strict URL identity for data decisions: scheme, host, port, path
@@ -1917,7 +1999,8 @@ Technical details: $message''';
 
     // Save current file to navigation stack if we are not going back
     // AND if we are actually navigating to a NEW file (url/path check)
-    if (_currentFile != null && !areUrlsEqual(_currentFile!.path, file.path)) {
+    if (_currentFile != null &&
+        !_sameUrlString(_currentFile!.path, file.path)) {
       _pushToNavigationStack();
     }
 
@@ -1926,7 +2009,7 @@ Technical details: $message''';
     // Only clear everything if it's NOT a partial update AND it's a different URL
     // This prevents "flipping" and flickering when the same page updates or finishes sync
     bool isSameUrl =
-        _currentFile != null && areUrlsEqual(_currentFile!.path, file.path);
+        _currentFile != null && _sameUrlString(_currentFile!.path, file.path);
 
     if (!isPartial && !isSameUrl) {
       await clearFile(clearProbe: clearProbe, newUrl: file.path);
@@ -2084,7 +2167,11 @@ Technical details: $message''';
   void _syncStoreWithFile(HtmlFile file, FileSnapshot? snapshot) {
     if (file.isUrl) {
       final uri = Uri.tryParse(file.path);
-      if (uri == null || _storeCovers(uri)) return;
+      if (uri == null) return;
+      if (_storeCovers(uri)) {
+        _noteBrowserUrl(uri);
+        return;
+      }
       final gen = store.beginUrl(uri);
       const no = Unavailable<Never>(
           UnavailableReason.notApplicable, 'no server fetch for this document');
@@ -2362,21 +2449,22 @@ Technical details: $message''';
   /// legacy probe map ({} while unknown). A page the current navigation
   /// already covers (same URL, a hop of its chain, or a fetch still running)
   /// is not fetched again.
-  Future<Map<String, dynamic>> probeUrl(
+  Future<void> probeUrl(
     String url, {
     bool forceReload = false,
   }) async {
     var target = url.trim();
-    if (target.startsWith('about:')) return {};
+    if (target.startsWith('about:')) return;
     if (!target.contains('://')) target = 'https://$target';
     final uri = Uri.tryParse(target);
-    if (uri == null || !uri.hasAuthority || uri.host.isEmpty) return {};
+    if (uri == null || !uri.hasAuthority || uri.host.isEmpty) return;
 
     if (forceReload || !_storeCovers(uri)) {
       _startInspection(uri, adoptBody: false);
+    } else {
+      _noteBrowserUrl(uri);
     }
     await _serverFetch;
-    return _probeResult ?? {};
   }
 
   /// Get the language name from a MIME type
@@ -3182,7 +3270,9 @@ Technical details: $message''';
         }
         if (_disposed) return;
         if (gen != store.current.generation || _currentFile?.content != html) {
-          continue; // stale: dropped; a queued request reruns below
+          // Stale: dropped. Rerun on what is current now.
+          _metadataRerunQueued = _currentFile != null;
+          continue;
         }
 
         _pageMetadata = metadata;
