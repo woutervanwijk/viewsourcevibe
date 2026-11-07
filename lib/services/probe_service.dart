@@ -36,20 +36,75 @@ class ProbeService {
     };
 
     final Map<String, String> parsed = {};
-    final parts = x509.split(RegExp(r'[/,]\s*'));
-    for (var part in parts) {
-      if (part.contains('=')) {
-        final kv = part.split('=');
-        if (kv.length >= 2) {
-          final key = kv[0].trim().toUpperCase();
-          final value = kv.sublist(1).join('=').trim();
-          if (key.isNotEmpty && value.isNotEmpty) {
-            parsed[labels[key] ?? key] = value;
-          }
-        }
+    for (final part in _splitDistinguishedName(x509)) {
+      final eq = part.indexOf('=');
+      if (eq <= 0) continue;
+      final key = part.substring(0, eq).trim().toUpperCase();
+      final value = _unquoteDnValue(part.substring(eq + 1).trim());
+      if (key.isNotEmpty && value.isNotEmpty) {
+        parsed[labels[key] ?? key] = value;
       }
     }
     return parsed;
+  }
+
+  /// Splits a distinguished name into `KEY=value` parts. Two forms occur:
+  /// the OpenSSL one-line form dart:io uses (`/C=US/O=Example, Inc./CN=x`:
+  /// '/' separates, commas are plain characters) and RFC 4514
+  /// (`CN=x,O=Example\, Inc.`: ',' or ';' separates; `\,` and quoted values
+  /// keep the separator).
+  static List<String> _splitDistinguishedName(String dn) {
+    final s = dn.trim();
+    if (s.startsWith('/')) {
+      // A '/' only starts a new part when a `KEY=` follows.
+      return s
+          .split(RegExp(r'/(?=[A-Za-z][A-Za-z0-9-]*=|\d+(?:\.\d+)+=)'))
+          .where((p) => p.isNotEmpty)
+          .toList();
+    }
+    final parts = <String>[];
+    final cur = StringBuffer();
+    var quoted = false;
+    for (var i = 0; i < s.length; i++) {
+      final c = s[i];
+      if (c == r'\' && i + 1 < s.length) {
+        cur
+          ..write(c)
+          ..write(s[++i]);
+      } else if (c == '"') {
+        quoted = !quoted;
+        cur.write(c);
+      } else if ((c == ',' || c == ';') && !quoted) {
+        parts.add(cur.toString());
+        cur.clear();
+      } else {
+        cur.write(c);
+      }
+    }
+    if (cur.isNotEmpty) parts.add(cur.toString());
+    return parts;
+  }
+
+  /// Removes surrounding quotes and resolves `\,` and `\2C` style escapes.
+  static String _unquoteDnValue(String v) {
+    if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+      v = v.substring(1, v.length - 1);
+    }
+    final out = StringBuffer();
+    for (var i = 0; i < v.length; i++) {
+      if (v[i] == r'\' && i + 1 < v.length) {
+        final hex = i + 2 < v.length ? v.substring(i + 1, i + 3) : '';
+        if (RegExp(r'^[0-9a-fA-F]{2}$').hasMatch(hex)) {
+          out.writeCharCode(int.parse(hex, radix: 16));
+          i += 2;
+        } else {
+          out.write(v[++i]);
+        }
+      } else {
+        out.write(v[i]);
+      }
+    }
+    return out.toString();
   }
 
   static String convertToPem(List<int> der) {

@@ -596,7 +596,8 @@ class SovereigntyService {
     ]);
     final securityTxt = mainHost.isEmpty
         ? null
-        : await _exists('https://$mainHost/.well-known/security.txt');
+        : classifySecurityTxt(
+            await _statusOf('https://$mainHost/.well-known/security.txt'));
 
     final issuer =
         (probeResult?['certificate']?['issuerParsed'] as Map?)?['Organization']
@@ -621,7 +622,7 @@ class SovereigntyService {
         home: home,
       ),
       ..._residencyChecks(analyzed, cdn, home),
-      ..._securityChecks(
+      ...securityChecks(
         txt: lookups[2],
         dmarc: lookups[3],
         caa: lookups[4],
@@ -1002,7 +1003,8 @@ class SovereigntyService {
     );
   }
 
-  static List<SovereigntyCheck> _securityChecks({
+  @visibleForTesting
+  static List<SovereigntyCheck> securityChecks({
     required List<String>? txt,
     required List<String>? dmarc,
     required List<String>? caa,
@@ -1022,7 +1024,7 @@ class SovereigntyService {
           p,
           title,
           CheckStatus.unknown,
-          'DNS lookup failed',
+          'DNS lookup failed or the resolver could not answer (unknown)',
           weight: weight,
         );
       }
@@ -1045,14 +1047,16 @@ class SovereigntyService {
       SovereigntyCheck(
         p,
         'HSTS enabled',
-        probeResult == null
+        probeResult == null || probeResult['security'] is! Map
             ? CheckStatus.unknown
             : hsts != null
                 ? CheckStatus.pass
                 : CheckStatus.fail,
-        hsts != null
-            ? 'Strict-Transport-Security: $hsts'
-            : 'No Strict-Transport-Security header',
+        probeResult == null || probeResult['security'] is! Map
+            ? 'No server response to read the headers from'
+            : hsts != null
+                ? 'Strict-Transport-Security: $hsts'
+                : 'No Strict-Transport-Security header',
       ),
       dnsCheck(
         'CAA (allowed certificate authorities)',
@@ -1161,19 +1165,64 @@ class SovereigntyService {
     ];
   }
 
-  /// True if [url] answers 200 (HEAD), null when unreachable.
-  static Future<bool?> _exists(String url) async {
+  /// security.txt: 200 = published, 404 = not published, any other status
+  /// (403, 429, 5xx) or no answer = unknown.
+  static bool? classifySecurityTxt(int? status) => switch (status) {
+        200 => true,
+        404 => false,
+        _ => null,
+      };
+
+  /// The HTTP status of a GET (HEAD is often refused), null when unreachable.
+  static Future<int?> _statusOf(String url) async {
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
-      final req = await client.headUrl(Uri.parse(url)).timeout(_timeout);
+      final req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
       final res = await req.close().timeout(_timeout);
       await res.drain<void>();
-      return res.statusCode == 200;
+      return res.statusCode;
     } catch (_) {
       return null;
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// RIPEstat is rate limited: at most this many requests in flight.
+  static const ripeConcurrency = 6;
+  static int _ripeInFlight = 0;
+  static final List<Completer<void>> _ripeWaiting = [];
+
+  static Future<T> _ripeLimited<T>(Future<T> Function() task) async {
+    while (_ripeInFlight >= ripeConcurrency) {
+      final c = Completer<void>();
+      _ripeWaiting.add(c);
+      await c.future;
+    }
+    _ripeInFlight++;
+    try {
+      return await task();
+    } finally {
+      _ripeInFlight--;
+      if (_ripeWaiting.isNotEmpty) _ripeWaiting.removeAt(0).complete();
+    }
+  }
+
+  /// Runs [tasks] with at most [limit] in flight; results keep the order.
+  @visibleForTesting
+  static Future<List<T>> limited<T>(List<Future<T> Function()> tasks,
+      {int limit = ripeConcurrency}) async {
+    final results = List<T?>.filled(tasks.length, null);
+    var next = 0;
+    Future<void> worker() async {
+      while (next < tasks.length) {
+        final i = next++;
+        results[i] = await tasks[i]();
+      }
+    }
+
+    await Future.wait([for (var i = 0; i < limit; i++) worker()]);
+    return results.cast<T>();
   }
 
   static Future<void> _enrichHost(HostInfo info) async {
@@ -1195,7 +1244,10 @@ class SovereigntyService {
     info.provider = matchProvider([info.host, info.asnHolder]);
   }
 
-  static Future<Map<String, dynamic>?> _getJson(String url) async {
+  static Future<Map<String, dynamic>?> _getJson(String url) =>
+      _ripeLimited(() => _fetchJson(url));
+
+  static Future<Map<String, dynamic>?> _fetchJson(String url) async {
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
       final req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
@@ -1257,16 +1309,30 @@ class SovereigntyService {
     return country;
   }
 
-  /// Naive registrable domain: last two labels, three for common
-  /// second-level suffixes (co.uk, com.au, ...).
+  /// Multi-label public suffixes that are common enough to matter here. This
+  /// is a PSL-lite, NOT the full Public Suffix List: an unlisted suffix is
+  /// treated as a single label (so `x.example.co.id` gives `co.id`).
+  static const _publicSuffixes = {
+    'co.uk', 'ac.uk', 'gov.uk', 'org.uk',
+    'com.au', 'net.au', 'org.au',
+    'co.nz',
+    'co.jp', 'ne.jp', 'or.jp',
+    'com.br', 'com.cn', 'com.tr', 'co.za',
+    // Hosting platforms where every customer gets a subdomain.
+    'github.io', 'gitlab.io', 'netlify.app', 'vercel.app', 'pages.dev',
+    'herokuapp.com', 'azurewebsites.net', 'cloudfront.net', 'blogspot.com',
+    'appspot.com', 'web.app', 'firebaseapp.com',
+  };
+
+  /// Registrable domain: the public suffix (from [_publicSuffixes], else the
+  /// last label) plus one label. `foo.github.io` stays `foo.github.io`.
   static String registrableDomain(String host) {
-    final parts = host.split('.');
-    if (parts.length <= 2) return host;
-    const sld = {'co', 'com', 'org', 'net', 'gov', 'ac'};
-    final take =
-        (sld.contains(parts[parts.length - 2]) && parts.last.length == 2)
-            ? 3
-            : 2;
+    final parts = host.toLowerCase().split('.');
+    if (parts.length <= 2) {
+      return host;
+    }
+    final twoLabel = parts.sublist(parts.length - 2).join('.');
+    final take = _publicSuffixes.contains(twoLabel) ? 3 : 2;
     return parts.sublist(parts.length - take).join('.');
   }
 
@@ -1294,7 +1360,9 @@ class SovereigntyService {
         final bytes = await res
             .fold<BytesBuilder>(BytesBuilder(), (b, c) => b..add(c))
             .timeout(_timeout);
-        return parseDnsRecords(bytes.takeBytes(), type);
+        final records = classifyDnsResponse(bytes.takeBytes(), type);
+        if (records == null) continue; // SERVFAIL/REFUSED: try the next one
+        return records;
       } catch (e) {
         debugPrint('DNS query via $resolver failed for $domain: $e');
       } finally {
@@ -1302,6 +1370,22 @@ class SovereigntyService {
       }
     }
     return null;
+  }
+
+  /// The RCODE of a DNS response (0 NOERROR, 2 SERVFAIL, 3 NXDOMAIN,
+  /// 5 REFUSED); null for a message too short to have one.
+  @visibleForTesting
+  static int? dnsRcode(Uint8List d) => d.length < 4 ? null : d[3] & 0x0F;
+
+  /// Records of [type] in a response, with the RCODE taken into account:
+  /// NOERROR and NXDOMAIN are real answers (possibly empty = "no record");
+  /// SERVFAIL, REFUSED and anything else mean the resolver could not tell,
+  /// so null (unknown), never an empty list.
+  @visibleForTesting
+  static List<String>? classifyDnsResponse(Uint8List d, int type) {
+    final rcode = dnsRcode(d);
+    if (rcode != 0 && rcode != 3) return null;
+    return parseDnsRecords(d, type);
   }
 
   @visibleForTesting
