@@ -112,7 +112,25 @@ class InspectionExportService {
     addJson('analysis/page-weight.json',
         browserProbe?['pageWeight'] ?? metadata?['pageWeight'] ?? {});
 
+    // The raw collector payload of the last sync, so real-device fixtures can
+    // be recorded later. It holds the page's storage values and cookie string.
+    final browserPayload = htmlService.browserDebugPayload;
+    if (browserPayload != null) {
+      addString('debug/browser-payload.json', _payloadJson(browserPayload));
+    }
+
     return ZipEncoder().encode(archive);
+  }
+
+  /// The payload as pretty JSON; a payload that is not JSON is wrapped, so the
+  /// file is always valid JSON and nothing is lost.
+  static String _payloadJson(String raw) {
+    const encoder = JsonEncoder.withIndent('  ');
+    try {
+      return encoder.convert(jsonDecode(raw));
+    } catch (_) {
+      return encoder.convert({'unparsablePayload': raw});
+    }
   }
 
   static String buildPackageFilename(HtmlFile file) {
@@ -425,8 +443,8 @@ class InspectionExportService {
         item['name']?.toString() ?? item['url']?.toString() ?? '',
         _numberLabel(item['start'] ?? item['startTime'], suffix: ' ms'),
         _numberLabel(item['duration'], suffix: ' ms'),
-        item['transfer']?.toString() ?? '0',
-        item['decoded']?.toString() ?? '0',
+        item['transfer']?.toString() ?? 'unknown',
+        item['decoded']?.toString() ?? 'unknown',
       ];
     }).toList();
   }
@@ -535,7 +553,9 @@ class InspectionExportService {
     final decoded = pageWeight['totalDecoded'] ?? pageWeight['decoded'];
     final transfer = pageWeight['totalTransfer'] ?? pageWeight['transfer'];
     if (decoded == null && transfer == null) return 'N/A';
-    return 'transfer ${transfer ?? 0} bytes, decoded ${decoded ?? 0} bytes';
+    final partial = pageWeight['isPartial'] == true ? ' (partial)' : '';
+    return 'transfer ${transfer == null ? 'unknown' : '$transfer bytes'}, '
+        'decoded ${decoded == null ? 'unknown' : '$decoded bytes'}$partial';
   }
 
   static Map<String, dynamic> _mapFrom(Object? value) {
