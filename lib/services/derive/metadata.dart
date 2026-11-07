@@ -61,9 +61,16 @@ Iterable<String> _linkStrings(Map<String, dynamic> m) sync* {
     'rssLinks',
     'icons',
     'resourceHints',
-    'pageConfig',
   ]) {
     yield* strings(m[k]);
+  }
+  // pageConfig also holds viewport / theme-color / msapplication-* values,
+  // which are not links.
+  final config = m['pageConfig'];
+  if (config is Map) {
+    for (final k in const ['canonical', 'manifest', 'opensearch']) {
+      yield* strings(config[k]);
+    }
   }
   final media = m['media'];
   if (media is Map) {

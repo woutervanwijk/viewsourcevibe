@@ -71,4 +71,16 @@ void main() {
     expect(primaryDocumentInput(serverOnly)!.source, DataSource.server);
     expect(primaryDocumentInput(inspection()), isNull);
   });
+
+  test('viewport / theme-color / msapplication are not links (I1)', () async {
+    final m = await deriveMetadata(
+        '<html><head><meta name="viewport" content="width=device-width, initial-scale=1">'
+            '<meta name="theme-color" content="#fff">'
+            '<meta name="msapplication-TileColor" content="#da532c">'
+            '<link rel="manifest" href="site.webmanifest"></head></html>',
+        '',
+        DataSource.file,
+        extractor: _inline);
+    expect(m.unresolvedLinks.map((l) => l.url), ['site.webmanifest']);
+  });
 }

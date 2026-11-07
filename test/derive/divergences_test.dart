@@ -38,12 +38,20 @@ void main() {
     expect(host.map((x) => x.kind), [DivergenceKind.finalUrl]);
   });
 
-  test('scheme/www/trailing slash/fragment alone are not divergences', () {
+  test('scheme/trailing slash/fragment alone are not divergences', () {
     expect(
         deriveDivergences(inspection(
             server: serverSnap(url: 'http://a.test/page/'),
             browser: browserSnap(url: 'https://a.test/page#x'))),
         isEmpty);
+  });
+
+  test('www <-> non-www is a low-severity redirect-host divergence', () {
+    final d = deriveDivergences(inspection(
+        server: serverSnap(url: 'https://a.test/page'),
+        browser: browserSnap(url: 'https://www.a.test/page')));
+    expect(d.single.kind, DivergenceKind.redirectHost);
+    expect(d.single.lowSeverity, isTrue);
   });
 
   test('non-html server content-type while the DOM is html: note', () {
