@@ -28,6 +28,10 @@ import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
+import 'package:view_source_vibe/services/derive/detections.dart';
+import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/metadata.dart';
+import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
 import 'package:view_source_vibe/services/legacy_probe_adapter.dart';
@@ -321,28 +325,31 @@ class HtmlService extends ChangeNotifier {
   }
 
   List<Detection>? _detections;
-  Object? _detectionsKey;
+  PageInspection? _detectionsFor;
 
-  /// Every service, tracker and technology on the page: the source scan from
-  /// the metadata isolate plus the browser's requests and cookies.
+  /// Every service, tracker and technology on the page, derived from the
+  /// store's snapshots (server headers and source, browser DOM, requests and
+  /// cookies); each evidence item says which core it came from.
   List<Detection> get detections {
-    final cookies = _probeResult?['analyzedCookies'] as List?;
-    final key = (
-      identityHashCode(_pageMetadata),
-      identityHashCode(resourceTimelineData),
-      resourceTimelineData.length,
-      identityHashCode(cookies),
-      cookies?.length,
-    );
-    if (_detections != null && key == _detectionsKey) return _detections!;
-    _detectionsKey = key;
-    return _detections = detect(
-      pageUrl: _currentFile?.path ?? '',
-      html: _currentFile?.content ?? '',
-      source: Detection.listFrom(_pageMetadata?['detections']),
-      requests: collectResourceUrls(_pageMetadata, resourceTimelineData),
-      cookies: (cookies ?? const []).whereType<Map>(),
-    );
+    final current = store.current;
+    if (_detections == null || !identical(current, _detectionsFor)) {
+      _detectionsFor = current;
+      _detections = deriveDetections(current);
+    }
+    return _detections!;
+  }
+
+  List<Divergence>? _divergences;
+  PageInspection? _divergencesFor;
+
+  /// Where the app's own request and the browser disagree (UI: Task 10).
+  List<Divergence> get divergences {
+    final current = store.current;
+    if (_divergences == null || !identical(current, _divergencesFor)) {
+      _divergencesFor = current;
+      _divergences = deriveDivergences(current);
+    }
+    return _divergences!;
   }
 
   bool get isProbing => store.current.server is Pending<ServerSnapshot>;
@@ -360,7 +367,14 @@ class HtmlService extends ChangeNotifier {
   /// else the default from settings.
   SiteJurisdiction get siteJurisdiction {
     final manual = _appSettings?.siteJurisdiction(sovereigntyDomain);
-    if (manual != null) return (jurisdiction: manual, source: 'Set manually');
+    if (manual != null) {
+      return (
+        jurisdiction: manual,
+        source: 'Set manually',
+        derived: false,
+        warning: null
+      );
+    }
     final detected = detectSiteJurisdiction(
       host: _sovereigntyHost,
       certificateSubject:
@@ -372,6 +386,8 @@ class HtmlService extends ChangeNotifier {
           jurisdiction:
               _appSettings?.homeJurisdiction ?? defaultHomeJurisdiction(),
           source: 'Not detected; default from Settings',
+          derived: true,
+          warning: null,
         );
   }
 
@@ -1978,51 +1994,6 @@ Technical details: $message''';
     return false;
   }
 
-  /// Query params that don't change the resource content (cache-busters).
-  static const _cacheBusterParams = {
-    'v',
-    'ver',
-    'version',
-    't',
-    'ts',
-    'timestamp',
-    'hash',
-    '_',
-    'cache',
-    'cachebuster',
-    'cb',
-    'nocache',
-    'rev',
-    'revision',
-  };
-
-  /// Query string with cache-busting params removed, sorted for comparison.
-  static String _queryWithoutCacheBusters(Uri uri) {
-    final params = Map<String, String>.from(uri.queryParameters);
-    params.removeWhere(
-        (key, _) => _cacheBusterParams.contains(key.toLowerCase()));
-    final keys = params.keys.toList()..sort();
-    return keys.map((k) => '$k=${params[k]}').join('&');
-  }
-
-  /// True when [url1] and [url2] point to the same resource: same host and
-  /// path, and query params equal after dropping cache-busters. CDN
-  /// versioning (`?v=1` vs `?v=2`) still matches, but content-changing params
-  /// such as image resize options (`?width=112` vs `?width=264` or none)
-  /// never do.
-  static bool sameResourceModuloCacheBusters(String url1, String url2) {
-    if (url1 == url2) return true;
-    try {
-      final uri1 = Uri.parse(url1);
-      final uri2 = Uri.parse(url2);
-      if (uri1.host.toLowerCase() != uri2.host.toLowerCase()) return false;
-      if (uri1.path != uri2.path) return false;
-      return _queryWithoutCacheBusters(uri1) == _queryWithoutCacheBusters(uri2);
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// Helper to check if two URLs are effectively the same
   /// ignoring trailing slashes, fragments, and minor scheme differences
   bool areUrlsEqual(String url1, String url2) {
@@ -3339,6 +3310,13 @@ Technical details: $message''';
     notifyListeners();
   }
 
+  /// The document metadata runs on: the store's primary document (rendered
+  /// DOM, else server body, else file), else the viewer's current file.
+  PageDocumentInput _metadataInput(HtmlFile file) =>
+      primaryDocumentInput(store.current) ??
+      PageDocumentInput(file.content, file.isUrl ? file.path : '',
+          file.isUrl ? DataSource.server : DataSource.file);
+
   /// Extract metadata from the current file content.
   ///
   /// Only one extraction runs at a time; a request that arrives meanwhile is
@@ -3358,21 +3336,26 @@ Technical details: $message''';
         final file = _currentFile;
         if (file == null) break;
         final gen = store.current.generation;
-        final html = file.content;
-        final baseUrl = file.isUrl ? file.path : '';
+        final input = _metadataInput(file);
+        final html = input.text;
+        final baseUrl = input.baseUrl;
         final headers = _probeResult?['headers'] as Map<String, String>?;
 
         Map<String, dynamic>? metadata;
         try {
-          metadata = Map<String, dynamic>.from(
-              await _metadataExtractor(html, baseUrl, headers: headers));
+          metadata = (await deriveMetadata(html, baseUrl, input.source,
+                  headers: headers, extractor: _metadataExtractor))
+              .data;
         } catch (e, stack) {
           debugPrint('Error extracting metadata in isolate: $e\n$stack');
         }
         if (_disposed) return;
-        if (gen != store.current.generation || _currentFile?.content != html) {
+        final now = _currentFile;
+        if (gen != store.current.generation ||
+            now == null ||
+            _metadataInput(now).text != html) {
           // Stale: dropped. Rerun on what is current now.
-          _metadataRerunQueued = _currentFile != null;
+          _metadataRerunQueued = now != null;
           continue;
         }
 
@@ -3469,7 +3452,7 @@ Technical details: $message''';
       // does NOT match "vendor-chunk.js"
       try {
         final srcFileName = Uri.parse(src).path.split('/').last;
-        final srcQuery = _queryWithoutCacheBusters(Uri.parse(src));
+        final srcQuery = queryWithoutCacheBusters(Uri.parse(src));
         if (srcFileName.length > 4) {
           match = timeline.firstWhere((r) {
             final rName = r['name'].toString();
@@ -3477,7 +3460,7 @@ Technical details: $message''';
               return false;
             }
             try {
-              return _queryWithoutCacheBusters(Uri.parse(rName)) == srcQuery;
+              return queryWithoutCacheBusters(Uri.parse(rName)) == srcQuery;
             } catch (_) {
               return false;
             }

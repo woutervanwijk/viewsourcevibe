@@ -13,6 +13,12 @@ Future<Map<String, dynamic>> extractMetadataInIsolate(
       {'html': html, 'baseUrl': baseUrl, 'headers': headers});
 }
 
+/// The same extraction without the isolate (tests, small inputs).
+Map<String, dynamic> extractMetadataSync(String html, String baseUrl,
+        {Map<String, String>? headers}) =>
+    _extractMetadataInternal(
+        {'html': html, 'baseUrl': baseUrl, 'headers': headers});
+
 Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
   final html = args['html'] as String;
   final baseUrl = args['baseUrl'] as String;
@@ -53,11 +59,17 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
       debugPrint(
           'MetadataParser: XML parsing failed, falling back to HTML: $e');
       final doc = html_parser.parse(html);
-      _extractFromHtml(doc, metadata, baseUrl);
+      _extractFromHtml(doc, metadata, _effectiveBase(doc, baseUrl));
     }
   } else {
     final doc = html_parser.parse(html);
-    _extractFromHtml(doc, metadata, baseUrl);
+    _extractFromHtml(doc, metadata, _effectiveBase(doc, baseUrl));
+  }
+
+  // <link rel=canonical> (resolved against the effective base).
+  final canonical = metadata['pageConfig']['canonical'];
+  if (canonical is String && canonical.isNotEmpty) {
+    metadata['canonical'] = canonical;
   }
 
   // Refine Image/Favicon from OG/Meta
@@ -90,6 +102,25 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
   }
 
   return metadata;
+}
+
+/// The base URL links resolve against: `<base href>` (resolved against the
+/// document URL when relative) or the document URL. An empty result means
+/// there is nothing to resolve against (a local file): relative links then
+/// stay as written.
+String _effectiveBase(dom.Document doc, String baseUrl) {
+  final href = doc.querySelector('base[href]')?.attributes['href']?.trim();
+  if (href == null || href.isEmpty) return baseUrl;
+  try {
+    final uri = Uri.parse(href);
+    if (uri.hasScheme) {
+      return uri.scheme == 'http' || uri.scheme == 'https' ? href : baseUrl;
+    }
+    if (baseUrl.isEmpty) return baseUrl;
+    return Uri.parse(baseUrl).resolveUri(uri).toString();
+  } catch (_) {
+    return baseUrl;
+  }
 }
 
 void _extractFromHtml(

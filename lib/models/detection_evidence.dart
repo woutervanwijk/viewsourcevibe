@@ -1,3 +1,5 @@
+import 'inspection/observed.dart';
+
 /// Where a detected tracker/service/technology was found.
 enum EvidenceKind {
   html,
@@ -21,7 +23,15 @@ class DetectionEvidence {
   /// 1-based line in the page source.
   final int? line;
 
-  const DetectionEvidence(this.kind, this.title, {this.detail, this.line});
+  /// Which core produced this evidence (server response, browser DOM or
+  /// requests, local file); null for evidence not yet attributed.
+  final DataSource? source;
+
+  const DetectionEvidence(this.kind, this.title,
+      {this.detail, this.line, this.source});
+
+  DetectionEvidence withSource(DataSource s) =>
+      DetectionEvidence(kind, title, detail: detail, line: line, source: s);
 
   /// Evidence for a match at [index] in [html]: line number plus the
   /// enclosing tag (or a window around the match inside long scripts).
@@ -51,6 +61,7 @@ class DetectionEvidence {
         'title': title,
         if (detail != null) 'detail': detail,
         if (line != null) 'line': line,
+        if (source != null) 'source': source!.name,
       };
 
   static DetectionEvidence? fromMap(dynamic raw) {
@@ -59,7 +70,11 @@ class DetectionEvidence {
         EvidenceKind.values.where((k) => k.name == raw['kind']).firstOrNull;
     if (kind == null) return null;
     return DetectionEvidence(kind, raw['title']?.toString() ?? '',
-        detail: raw['detail']?.toString(), line: raw['line'] as int?);
+        detail: raw['detail']?.toString(),
+        line: raw['line'] as int?,
+        source: DataSource.values
+            .where((s) => s.name == raw['source'])
+            .firstOrNull);
   }
 
   /// Description of an analyzed cookie (as stored in `analyzedCookies`).
@@ -82,6 +97,11 @@ class DetectionEvidence {
     ];
     final description = parts.join(' · ');
     return DetectionEvidence(EvidenceKind.cookie, 'Cookie $name',
-        detail: description[0].toUpperCase() + description.substring(1));
+        detail: description[0].toUpperCase() + description.substring(1),
+        source: source.isEmpty
+            ? null
+            : source.contains('Server')
+                ? DataSource.server
+                : DataSource.browser);
   }
 }
