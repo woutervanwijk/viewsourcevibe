@@ -99,7 +99,8 @@ String _normalizeUrl(String url) {
       : noFragment;
 }
 
-String _reasonWord(Observed<int> o) => switch (o) {
+/// Short reason why a size is not known ("blocked by the platform", ...).
+String sizeReasonWord(Observed<int> o) => switch (o) {
       Unavailable<int>(reason: final r, detail: final d) => switch (r) {
           // "cross-origin" only when the collector said so.
           UnavailableReason.blockedByPlatform ||
@@ -160,7 +161,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
             final int? size = isImage ? tx : (dec ?? tx);
             String? note;
             if (size == null) {
-              note = _reasonWord(r.transfer);
+              note = sizeReasonWord(r.transfer);
               reasons.add(note);
             }
             final row = PageSizeRow(

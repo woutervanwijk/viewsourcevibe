@@ -1,99 +1,105 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/probe_general.dart'
+    show RedirectStep;
+import 'package:view_source_vibe/services/derive/request_timeline.dart';
 import 'package:view_source_vibe/services/html_service.dart';
-import 'package:view_source_vibe/services/probe_service.dart';
-import 'package:view_source_vibe/utils/format_utils.dart';
 
 class RequestTimelineView extends StatelessWidget {
   const RequestTimelineView({super.key});
 
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
+
   @override
   Widget build(BuildContext context) {
-    return Consumer<HtmlService>(
-      builder: (context, htmlService, child) {
-        final resources = htmlService.resourceTimelineData;
-        final probe = htmlService.probeResult ?? const <String, dynamic>{};
-        final browserProbe =
-            htmlService.browserProbeResult ?? const <String, dynamic>{};
-        final pageWeight =
-            browserProbe['pageWeight'] as Map<String, dynamic>? ??
-                const <String, dynamic>{};
-        final redirectChain = _redirectChainFrom(probe);
+    builds++;
+    final state = context
+        .select<HtmlService, Observed<TimelineModel>>((s) => s.timelineView);
+    switch (state) {
+      case Pending<TimelineModel>():
+        return const Center(child: CircularProgressIndicator());
+      case Failed<TimelineModel>(:final error):
+        return _message('Error: $error', error: true);
+      case Unavailable<TimelineModel>(:final detail, :final reason):
+        return _message(
+            detail.isEmpty ? unavailableMessage(reason, detail) : detail);
+      case Present<TimelineModel>(value: final model):
+        return _buildModel(context, model);
+    }
+  }
 
-        if (resources.isEmpty &&
-            redirectChain.isEmpty &&
-            (htmlService.isLoading ||
-                htmlService.isWebViewLoading ||
-                htmlService.isExtractingMetadata)) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (resources.isEmpty && redirectChain.isEmpty && probe.isEmpty) {
-          return const Center(
-            child: Text(
-              'Load a URL to view the request timeline.',
-              style: TextStyle(color: Colors.grey),
-            ),
-          );
-        }
-
-        final sortedResources = [...resources]..sort((a, b) {
-            final startCompare = _startTime(a).compareTo(_startTime(b));
-            if (startCompare != 0) return startCompare;
-            return _duration(b).compareTo(_duration(a));
-          });
-        final timelineEnd = sortedResources.fold<double>(
-          0,
-          (max, resource) {
-            final end = _startTime(resource) + _duration(resource);
-            return end > max ? end : max;
-          },
-        );
-
-        return Scrollbar(
-          child: ListView(
-            primary: true,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
-            children: [
-              _buildOverviewCard(context, probe, pageWeight, resources.length),
-              if (redirectChain.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                _buildRedirectChainCard(context, redirectChain),
-              ],
-              const SizedBox(height: 16),
-              Text(
-                'Resource Timeline',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              if (sortedResources.isEmpty)
-                _buildEmptyResourcesCard(context)
-              else ...[
-                _buildTimelineMap(context, sortedResources, timelineEnd),
-                const SizedBox(height: 16),
-                _buildWaterfallDetail(context, sortedResources, timelineEnd),
-              ],
-            ],
-          ),
-        );
-      },
+  Widget _message(String text, {bool error = false}) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: SelectableText(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: error ? Colors.red : Colors.grey),
+        ),
+      ),
     );
   }
 
-  Widget _buildOverviewCard(
-    BuildContext context,
-    Map<String, dynamic> probe,
-    Map<String, dynamic> pageWeight,
-    int resourceCount,
-  ) {
-    final url = probe['finalUrl']?.toString() ?? probe['url']?.toString();
-    final statusCode = probe['statusCode'];
-    final transfer = (pageWeight['totalTransfer'] as num? ?? 0).toInt();
-    final decoded = (pageWeight['totalDecoded'] as num? ?? 0).toInt();
+  Widget _buildModel(BuildContext context, TimelineModel m) {
+    final rows = m.rows;
+    return Scrollbar(
+      child: ListView(
+        primary: true,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
+        children: [
+          _buildOverviewCard(context, m),
+          if (m.redirects.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildRedirectChainCard(context, m.redirects),
+          ],
+          const SizedBox(height: 16),
+          Text(
+            'Resource Timeline',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          switch (rows) {
+            Present<List<TimelineRow>>(value: final list) when list.isEmpty =>
+              _buildNoteCard(
+                  context, 'The browser reported no requests for this page.'),
+            Present<List<TimelineRow>>(value: final list) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (m.note != null) ...[
+                    _buildNoteCard(context, m.note!, warn: true),
+                    const SizedBox(height: 12),
+                  ],
+                  if (list.any((r) => r.hasBar)) ...[
+                    _buildTimelineMap(context,
+                        list.where((r) => r.hasBar).toList(), m.timelineEnd),
+                    const SizedBox(height: 16),
+                  ],
+                  _buildWaterfallDetail(context, list, m.timelineEnd),
+                ],
+              ),
+            Pending<List<TimelineRow>>() => _buildNoteCard(
+                context, 'Waiting for the browser to report its requests…',
+                busy: true),
+            Failed<List<TimelineRow>>(:final error) => _buildNoteCard(
+                context, 'The requests could not be read: $error',
+                error: true),
+            Unavailable<List<TimelineRow>>(:final reason, :final detail) =>
+              _buildNoteCard(context,
+                  'No request timing: ${unavailableMessage(reason, detail)}'),
+          },
+        ],
+      ),
+    );
+  }
 
+  Widget _buildOverviewCard(BuildContext context, TimelineModel m) {
     return Card(
       elevation: 0,
       color: Theme.of(context)
@@ -116,10 +122,10 @@ class RequestTimelineView extends StatelessWidget {
                   .titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
-            if (url != null) ...[
+            if (m.url != null) ...[
               const SizedBox(height: 8),
               SelectableText(
-                url,
+                m.url!,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
                   fontSize: 12,
@@ -131,27 +137,13 @@ class RequestTimelineView extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                _buildMetricChip(context, Icons.http, m.appStatus),
                 _buildMetricChip(
-                  context,
-                  Icons.http,
-                  statusCode == null ? 'Status N/A' : 'HTTP $statusCode',
-                ),
+                    context, Icons.account_tree_outlined, m.resourcesLabel),
                 _buildMetricChip(
-                  context,
-                  Icons.account_tree_outlined,
-                  '$resourceCount resources',
-                ),
-                _buildMetricChip(
-                  context,
-                  Icons.download_outlined,
-                  transfer > 0 ? FormatUtils.formatBytes(transfer) : 'Size N/A',
-                ),
-                if (decoded > 0 && decoded != transfer)
-                  _buildMetricChip(
-                    context,
-                    Icons.data_object,
-                    '${FormatUtils.formatBytes(decoded)} decoded',
-                  ),
+                    context, Icons.download_outlined, m.transferLabel),
+                if (m.decodedLabel != null)
+                  _buildMetricChip(context, Icons.data_object, m.decodedLabel!),
               ],
             ),
           ],
@@ -162,7 +154,7 @@ class RequestTimelineView extends StatelessWidget {
 
   Widget _buildRedirectChainCard(
     BuildContext context,
-    List<Map<String, dynamic>> redirects,
+    List<RedirectStep> redirects,
   ) {
     return Card(
       elevation: 0,
@@ -193,10 +185,6 @@ class RequestTimelineView extends StatelessWidget {
             ...redirects.asMap().entries.map((entry) {
               final index = entry.key + 1;
               final redirect = entry.value;
-              final status = redirect['statusCode']?.toString() ?? '3xx';
-              final reason = redirect['reasonPhrase']?.toString();
-              final from = redirect['from']?.toString() ?? '';
-              final to = redirect['to']?.toString() ?? '';
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Row(
@@ -220,7 +208,7 @@ class RequestTimelineView extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            reason == null ? status : '$status $reason',
+                            redirect.statusText,
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
@@ -228,7 +216,7 @@ class RequestTimelineView extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           SelectableText(
-                            from,
+                            redirect.from,
                             style: const TextStyle(fontSize: 11),
                           ),
                           const SizedBox(height: 2),
@@ -238,7 +226,7 @@ class RequestTimelineView extends StatelessWidget {
                               const SizedBox(width: 4),
                               Expanded(
                                 child: SelectableText(
-                                  to,
+                                  redirect.to ?? 'no Location header',
                                   style: TextStyle(
                                     color:
                                         Theme.of(context).colorScheme.primary,
@@ -263,7 +251,7 @@ class RequestTimelineView extends StatelessWidget {
 
   Widget _buildTimelineMap(
     BuildContext context,
-    List<Map<String, dynamic>> resources,
+    List<TimelineRow> resources,
     double timelineEnd,
   ) {
     final entries = _buildTimelineEntries(resources, timelineEnd);
@@ -329,7 +317,7 @@ class RequestTimelineView extends StatelessWidget {
 
   Widget _buildWaterfallDetail(
     BuildContext context,
-    List<Map<String, dynamic>> resources,
+    List<TimelineRow> resources,
     double timelineEnd,
   ) {
     final maxEnd = timelineEnd <= 0 ? 1.0 : timelineEnd;
@@ -353,15 +341,14 @@ class RequestTimelineView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ...resources.take(60).map((resource) {
-              final name = resource['name']?.toString() ?? '';
-              final type = _resourceType(name);
+              final type = resource.type;
               final color = _typeColor(type);
-              final start = _startTime(resource);
-              final duration = _duration(resource);
-              final left = (start / maxEnd).clamp(0.0, 1.0);
-              final width = (duration / maxEnd).clamp(0.01, 1.0 - left);
-              final transfer = (resource['transfer'] as num? ?? 0).toInt();
-              final decoded = (resource['decoded'] as num? ?? 0).toInt();
+              final start = resource.start;
+              final duration = resource.duration;
+              final hasBar = resource.hasBar;
+              final left = hasBar ? (start! / maxEnd).clamp(0.0, 1.0) : 0.0;
+              final width =
+                  hasBar ? (duration! / maxEnd).clamp(0.01, 1.0 - left) : 0.0;
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -374,7 +361,7 @@ class RequestTimelineView extends StatelessWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            _shortResourceName(name),
+                            resource.shortName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -384,44 +371,46 @@ class RequestTimelineView extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          '${_formatMs(start)} / ${_formatMs(duration)}',
-                          style: const TextStyle(fontSize: 10),
+                        Flexible(
+                          child: Text(
+                            resource.timingLabel,
+                            textAlign: TextAlign.end,
+                            style: const TextStyle(fontSize: 10),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 5),
-                    LayoutBuilder(builder: (context, constraints) {
-                      return Stack(
-                        children: [
-                          Container(
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                          Positioned(
-                            left: constraints.maxWidth * left,
-                            width: (constraints.maxWidth * width)
-                                .clamp(2.0, constraints.maxWidth),
-                            child: Container(
+                    if (hasBar) ...[
+                      const SizedBox(height: 5),
+                      LayoutBuilder(builder: (context, constraints) {
+                        return Stack(
+                          children: [
+                            Container(
                               height: 8,
                               decoration: BoxDecoration(
-                                color: color,
+                                color: color.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(999),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    }),
+                            Positioned(
+                              left: constraints.maxWidth * left,
+                              width: (constraints.maxWidth * width)
+                                  .clamp(2.0, constraints.maxWidth),
+                              child: Container(
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+                    ],
                     const SizedBox(height: 3),
                     Text(
-                      FormatUtils.formatBytesWithTransfer({
-                        'decoded': decoded,
-                        'transfer': transfer,
-                      }),
+                      resource.sizeLabel,
                       style: TextStyle(
                         color: Theme.of(context)
                             .colorScheme
@@ -434,6 +423,14 @@ class RequestTimelineView extends StatelessWidget {
                 ),
               );
             }),
+            if (resources.length > 60)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${resources.length - 60} more not shown',
+                  style: const TextStyle(color: Colors.grey, fontSize: 11),
+                ),
+              ),
           ],
         ),
       ),
@@ -505,7 +502,7 @@ class RequestTimelineView extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            '${_formatMs(entry.start)} start  |  ${_formatMs(entry.duration)}  |  ${entry.sizeLabel}',
+            '${formatMs(entry.start)} start  |  ${formatMs(entry.duration)}  |  ${entry.sizeLabel}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -522,7 +519,7 @@ class RequestTimelineView extends StatelessWidget {
   }
 
   List<_TimelineEntry> _buildTimelineEntries(
-    List<Map<String, dynamic>> resources,
+    List<TimelineRow> resources,
     double timelineEnd,
   ) {
     const top = 34.0;
@@ -531,55 +528,21 @@ class RequestTimelineView extends StatelessWidget {
     var previousY = top - 54;
 
     return resources.map((resource) {
-      final name = resource['name']?.toString() ?? '';
-      final transfer = (resource['transfer'] as num? ?? 0).toInt();
-      final decoded = (resource['decoded'] as num? ?? 0).toInt();
-      final start = _startTime(resource);
-      final duration = _duration(resource);
-      final type = _resourceType(name);
+      final start = resource.start!;
       final rawY = timelineEnd <= 0 ? top : top + (start / timelineEnd) * span;
       final y = rawY < previousY + 54 ? previousY + 54 : rawY;
       previousY = y;
 
       return _TimelineEntry(
-        name: name,
-        shortName: _shortResourceName(name),
-        type: type,
+        name: resource.url,
+        shortName: resource.shortName,
+        type: resource.type,
         start: start,
-        duration: duration,
+        duration: resource.duration!,
         y: y.clamp(top, bottom),
-        sizeLabel: FormatUtils.formatBytesWithTransfer({
-          'decoded': decoded,
-          'transfer': transfer,
-        }),
+        sizeLabel: resource.sizeLabel,
       );
     }).toList();
-  }
-
-  String _shortResourceName(String name) {
-    final uri = Uri.tryParse(name);
-    final path = uri?.path ?? name;
-    final parts = path.split('/').where((part) => part.isNotEmpty).toList();
-    if (parts.isEmpty) return uri?.host ?? name;
-    return parts.last.length > 48
-        ? '${parts.last.substring(0, 45)}...'
-        : parts.last;
-  }
-
-  double _startTime(Map<String, dynamic> resource) {
-    return (resource['startTime'] as num? ?? 0).toDouble();
-  }
-
-  double _duration(Map<String, dynamic> resource) {
-    final duration = (resource['duration'] as num? ?? 0).toDouble();
-    return duration < 0 ? 0 : duration;
-  }
-
-  String _formatMs(double value) {
-    if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(2)}s';
-    }
-    return '${value.round()}ms';
   }
 
   Widget _buildMetricChip(
@@ -607,74 +570,42 @@ class RequestTimelineView extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyResourcesCard(BuildContext context) {
+  Widget _buildNoteCard(BuildContext context, String text,
+      {bool warn = false, bool error = false, bool busy = false}) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        side: BorderSide(
+            color: warn
+                ? Colors.orange.withValues(alpha: 0.4)
+                : Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text(
-          'No browser resource timing entries yet. Open the Browser tab or reload the page to collect them.',
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            if (busy) ...[
+              const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(text,
+                  style: TextStyle(
+                      color: error
+                          ? Colors.red
+                          : warn
+                              ? Colors.orange
+                              : null,
+                      fontSize: 13)),
+            ),
+          ],
         ),
       ),
     );
-  }
-
-  List<Map<String, dynamic>> _redirectChainFrom(Map<String, dynamic> probe) {
-    final raw = probe['redirectChain'];
-    if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-
-    final redirectLocation = probe['redirectLocation']?.toString();
-    if (redirectLocation == null || redirectLocation.isEmpty) return [];
-
-    return [
-      {
-        'from': probe['url'],
-        'to': redirectLocation,
-        'statusCode': probe['statusCode'],
-        'reasonPhrase': probe['reasonPhrase'],
-      }
-    ];
-  }
-
-  String _resourceType(String name) {
-    final byExtension = ProbeService.resourceTypeFromExtension(name);
-    if (byExtension != null) return byExtension;
-
-    final lower = name.toLowerCase();
-    if (lower.endsWith('.js') || lower.contains('.js?')) return 'script';
-    if (lower.endsWith('.css') || lower.contains('.css?')) return 'style';
-    if (lower.contains('/font') ||
-        lower.endsWith('.woff') ||
-        lower.endsWith('.woff2') ||
-        lower.endsWith('.ttf')) {
-      return 'font';
-    }
-    if (lower.endsWith('.png') ||
-        lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.gif') ||
-        lower.endsWith('.svg') ||
-        lower.endsWith('.webp') ||
-        lower.endsWith('.avif') ||
-        lower.contains('/image')) {
-      return 'image';
-    }
-    if (lower.contains('/api/') ||
-        lower.contains('graphql') ||
-        lower.contains('xhr')) {
-      return 'fetch';
-    }
-    if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'document';
-    return 'other';
   }
 
   IconData _typeIcon(String type) {

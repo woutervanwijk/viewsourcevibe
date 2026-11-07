@@ -34,6 +34,7 @@ import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
+import 'package:view_source_vibe/services/derive/request_timeline.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart';
 import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
@@ -752,6 +753,20 @@ class HtmlService extends ChangeNotifier {
       _cookiesView = deriveCookiesView(current);
     }
     return _cookiesView!;
+  }
+
+  Observed<TimelineModel>? _timelineModel;
+  PageInspection? _timelineModelFor;
+
+  /// The Request Timeline tab: the browser's requests (timing and size may
+  /// be unknown per row), totals and the redirect chain of the server.
+  Observed<TimelineModel> get timelineView {
+    final current = store.current;
+    if (_timelineModel == null || !identical(current, _timelineModelFor)) {
+      _timelineModelFor = current;
+      _timelineModel = deriveTimeline(current);
+    }
+    return _timelineModel!;
   }
 
   Observed<PageSizeModel>? _pageSize;

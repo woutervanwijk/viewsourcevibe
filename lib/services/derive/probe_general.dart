@@ -142,6 +142,23 @@ class RedirectStep {
   const RedirectStep(this.statusText, this.from, this.to);
 }
 
+/// Every 3xx answer in [hops]: where it came from and where it pointed.
+List<RedirectStep> redirectStepsOf(List<HopLine> hops) => [
+      for (var i = 0; i < hops.length; i++)
+        if (hops[i].status >= 300 && hops[i].status < 400)
+          RedirectStep(
+            hops[i].text,
+            hops[i].url.toString(),
+            i + 1 < hops.length ? hops[i + 1].url.toString() : hops[i].location,
+          ),
+    ];
+
+/// The hops of a server snapshot as lines.
+List<HopLine> hopLinesOf(ServerSnapshot s) => [
+      for (final h in s.hops)
+        HopLine(h.url, h.statusCode, h.reasonPhrase, h.header('location')),
+    ];
+
 /// The status card: what the app's own request got (not the browser's).
 class ServerStatus {
   final List<HopLine> hops;
@@ -360,10 +377,7 @@ Observed<ServerStatus> _status(PageInspection p) {
   if (s.hops.isEmpty) {
     return const Failed('The server did not answer.');
   }
-  final hops = [
-    for (final h in s.hops)
-      HopLine(h.url, h.statusCode, h.reasonPhrase, h.header('location')),
-  ];
+  final hops = hopLinesOf(s);
   final last = s.hops.last;
   final lastIsRedirect = last.statusCode >= 300 && last.statusCode < 400;
   final body = s.body;
@@ -382,15 +396,7 @@ Observed<ServerStatus> _status(PageInspection p) {
     contentLength = unknownText(body);
     bodyLabel = unknownText(body);
   }
-  final redirects = [
-    for (var i = 0; i < hops.length; i++)
-      if (hops[i].status >= 300 && hops[i].status < 400)
-        RedirectStep(
-          hops[i].text,
-          hops[i].url.toString(),
-          i + 1 < hops.length ? hops[i + 1].url.toString() : hops[i].location,
-        ),
-  ];
+  final redirects = redirectStepsOf(hops);
   return Present(
       ServerStatus(
         hops: hops,
