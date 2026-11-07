@@ -11,6 +11,13 @@ import 'package:view_source_vibe/services/rss_template_service.dart';
 import 'dart:io';
 import 'dart:collection';
 
+/// Whether a Content-Type names an RSS or Atom feed.
+bool isFeedContentType(String? contentType) {
+  final t = (contentType ?? '').toLowerCase();
+  return t.contains('application/rss+xml') ||
+      t.contains('application/atom+xml');
+}
+
 class BrowserView extends StatefulWidget {
   final HtmlFile? file;
   final Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers;
@@ -119,19 +126,12 @@ class _BrowserViewState extends State<BrowserView> {
     var isRssOrXml = await RssTemplateService.isRssFeed(
         widget.file?.name ?? '', widget.file?.content ?? '');
 
-    // Robust check: if content inspection failed, check headers from probe
-    if (!isRssOrXml && widget.file?.probeResult != null) {
-      final headers = widget.file!.probeResult!['headers'];
-      if (headers is Map) {
-        final contentType =
-            headers['content-type']?.toString().toLowerCase() ?? '';
-        if (contentType.contains('application/rss+xml') ||
-            contentType.contains('application/atom+xml')) {
-          debugPrint(
-              'BrowserView: Detected RSS/Atom via Content-Type header: $contentType');
-          isRssOrXml = true;
-        }
-      }
+    // Robust check: if content inspection failed, use the server's
+    // Content-Type from the store.
+    if (!isRssOrXml && isFeedContentType(htmlService.serverContentType)) {
+      debugPrint(
+          'BrowserView: Detected RSS/Atom via Content-Type header: ${htmlService.serverContentType}');
+      isRssOrXml = true;
     }
 
     if (isRssOrXml && (widget.file?.content.isNotEmpty ?? false)) {
