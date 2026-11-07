@@ -35,8 +35,8 @@ void main() {
       // Verify that metadata extraction was triggered (isExtractingMetadata should be false after completion)
       expect(htmlService.isExtractingMetadata, isFalse);
 
-      // Verify that probe result is available (even if empty)
-      expect(htmlService.probeResult, isNotNull);
+      // No server fetch happened for this page: no probe result, no placeholder.
+      expect(htmlService.probeResult, isNull);
     });
 
     test('loadFile of a local file updates metadata but has no probe result',
@@ -55,7 +55,7 @@ void main() {
       // A local file never contacted a server: no probe result, no placeholder.
       expect(htmlService.probeResult, isNull);
       expect(htmlService.pageMetadata, isNotNull);
-    }, skip: 'B3: nep-probe, gerepareerd in Taak 7');
+    });
 
     test('local HTML files should expose browser view', () async {
       final testFile = HtmlFile(

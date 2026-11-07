@@ -5,13 +5,10 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
-import 'package:view_source_vibe/utils/cookie_utils.dart';
 import 'package:view_source_vibe/utils/font_url.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
@@ -22,14 +19,42 @@ import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
-import 'package:view_source_vibe/services/certificate_security_service.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart'
     hide X509Certificate;
 import 'package:xml/xml.dart' as xml;
+import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
+import 'package:view_source_vibe/services/collectors/browser_loader.dart';
+import 'package:view_source_vibe/services/collectors/file_loader.dart';
+import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
+import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/services/legacy_probe_adapter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Extracts page metadata from source (isolate in production, a fake in tests).
+typedef MetadataExtractor = Future<Map<String, dynamic>>
+    Function(String html, String baseUrl, {Map<String, String>? headers});
+
 class HtmlService extends ChangeNotifier {
-  static const int _maxUrlResponseBytes = 10 * 1024 * 1024;
+  /// The central inspection data (server, browser and file cores).
+  final InspectionStore store;
+  final bool _ownsStore;
+  final ServerFetcher _serverFetcher;
+  late final BrowserLoader _browserLoader;
+  final MetadataExtractor _metadataExtractor;
+  bool _disposed = false;
+
+  /// The server fetch of the current navigation (null when none runs).
+  Future<void>? _serverFetch;
+
+  // Cached legacy probe map, rebuilt when the store or browser cookies change.
+  Map<String, dynamic>? _probeCache;
+  PageInspection? _probeCacheFor;
+  String? _probeCacheCookies;
+
+  bool _metadataRerunQueued = false;
 
   HtmlFile? _currentFile;
   int? _requestedTabIndex;
@@ -60,16 +85,11 @@ class HtmlService extends ChangeNotifier {
   final List<HtmlFile> _navigationStack = [];
   bool _isNavigatingBack = false;
 
-  // Probe state
-  Map<String, dynamic>? _probeResult;
-  bool _isProbing = false;
+  // Probe state: the server side lives in [store]; these are browser-derived.
   SovereigntyReport? _sovereigntyReport;
   bool _isAnalyzingSovereignty = false;
-  String? _probeError;
-  String? _currentlyProbingUrl;
   Map<String, dynamic>?
       _browserProbeResult; // Store separate browser probe data
-  String? _lastServerSource;
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
@@ -195,10 +215,35 @@ class HtmlService extends ChangeNotifier {
   GlobalKey? get codeEditorKey => _codeEditorKey;
 
   // Expose probe state
+  /// Legacy view of the server data: null until the server answered, and for
+  /// local files or failed fetches. Never a placeholder.
   Map<String, dynamic>? get probeResult => _probeResult;
+  Map<String, dynamic>? get _probeResult {
+    final current = store.current;
+    if (!identical(current, _probeCacheFor) ||
+        _lastBrowserCookies != _probeCacheCookies) {
+      _probeCache =
+          legacyProbeMap(current, browserCookies: _lastBrowserCookies);
+      _probeCacheFor = current;
+      _probeCacheCookies = _lastBrowserCookies;
+    }
+    return _probeCache;
+  }
+
   Map<String, dynamic>? get browserProbeResult =>
       _browserProbeResult; // Expose browser probe result
-  String? get serverSource => _lastServerSource;
+
+  /// The HTML exactly as the server sent it; null while unknown.
+  String? get serverSource {
+    final server = store.current.server;
+    if (server is! Present<ServerSnapshot>) return null;
+    final body = server.value.body;
+    if (body is! Present<ServerBody> || body.value.decoded.isBinary) {
+      return null;
+    }
+    return body.value.decoded.text;
+  }
+
   List<Map<String, dynamic>> get resourceTimelineData =>
       List.unmodifiable(_resourcePerformanceData ?? const []);
 
@@ -227,7 +272,7 @@ class HtmlService extends ChangeNotifier {
     );
   }
 
-  bool get isProbing => _isProbing;
+  bool get isProbing => store.current.server is Pending<ServerSnapshot>;
   SovereigntyReport? get sovereigntyReport => _sovereigntyReport;
   bool get isAnalyzingSovereignty => _isAnalyzingSovereignty;
 
@@ -288,7 +333,11 @@ class HtmlService extends ChangeNotifier {
   }
 
   bool get canGoBack => _navigationStack.isNotEmpty;
-  String? get probeError => _probeError;
+  String? get probeError {
+    final server = store.current.server;
+    return server is Failed<ServerSnapshot> ? server.error : null;
+  }
+
   bool get isLoading => _isLoading;
   bool get isExtractingMetadata => _isExtractingMetadata;
   String? get pendingUrl => _pendingUrl;
@@ -587,13 +636,9 @@ class HtmlService extends ChangeNotifier {
         triggerBrowserReload();
       }
 
-      // If switching to Source tab in Browser-First mode, load the source if missing
-      if (index == sourceTabIndex &&
-          _useBrowserByDefault &&
-          (_currentFile?.content.isEmpty ?? true) &&
-          (_currentFile?.isUrl ?? false)) {
-        debugPrint('Lazy loading source for: ${_currentFile!.path}');
-        _loadSourceOnly(_currentFile!.path);
+      // Source tab without content yet: the server body may have arrived.
+      if (index == sourceTabIndex) {
+        _adoptServerBodyIfEmpty(store.current.generation).ignore();
       }
     }
   }
@@ -606,34 +651,6 @@ class HtmlService extends ChangeNotifier {
                 as num? ??
             0)
         .toInt();
-  }
-
-  /// Lazy load source code without resetting the whole flow
-  Future<void> _loadSourceOnly(String url) async {
-    if (_isLoading) return;
-
-    _isLoading = true;
-    // Also set webViewLoading to false since we're loading source
-    _isWebViewLoading = false;
-    notifyListeners();
-
-    try {
-      final file = await _loadFromUrlInternal(url);
-
-      // Only update if we are still on the same URL
-      if (_currentFile?.path == url) {
-        final browserSize = _browserDocSizeFor(url);
-        await loadFile(
-            browserSize > 0 ? file.copyWith(size: browserSize) : file);
-      }
-    } catch (e) {
-      debugPrint('Error lazy loading source: $e');
-      _probeError = e.toString();
-    } finally {
-      _isLoading = false;
-      _isWebViewLoading = false;
-      notifyListeners();
-    }
   }
 
   /// Trigger a browser reload if the URL has changed and the browser tab is visible
@@ -681,25 +698,45 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
-  HtmlService() {
+  HtmlService({
+    InspectionStore? store,
+    ServerFetcher? serverFetcher,
+    BrowserLoader? browserLoader,
+    MetadataExtractor? metadataExtractor,
+  })  : store = store ?? InspectionStore(),
+        _ownsStore = store == null,
+        _serverFetcher = serverFetcher ?? const IoServerFetcher(),
+        _metadataExtractor = metadataExtractor ?? extractMetadataInIsolate {
+    _browserLoader = browserLoader ?? _ControllerBrowserLoader(this);
+    this.store.addListener(notifyListeners);
     _codeEditorKey = GlobalKey();
     _currentInputText = '';
   }
 
-  /// Reset all loading and result state before a new URL load
-  void _resetLoadState({String? newUrl, bool notify = true}) {
-    _probeResult = null;
+  /// Forget everything measured by the browser for the previous page.
+  void _clearBrowserDerivedData() {
     _browserProbeResult = null;
-    _lastServerSource = null;
-    _probeError = null;
-    _pageMetadata = null;
     _lastPageWeight = null;
     _resourcePerformanceData = null;
     _sovereigntyReport = null;
-    _webViewLoadingProgress = 0.0;
-    _isProbing = false;
-    _currentlyProbingUrl = null;
     _lastBrowserCookies = '';
+  }
+
+  @visibleForTesting
+  void seedBrowserDataForTest() {
+    _browserProbeResult = {'url': 'seed'};
+    _lastPageWeight = {'transfer': 1, 'decoded': 2};
+    _resourcePerformanceData = [
+      {'name': 'https://seed.test/a.js'}
+    ];
+    _lastBrowserCookies = 'seed=1';
+  }
+
+  /// Reset all loading and result state before a new URL load
+  void _resetLoadState({String? newUrl, bool notify = true}) {
+    _clearBrowserDerivedData();
+    _pageMetadata = null;
+    _webViewLoadingProgress = 0.0;
     _beautifiedCache.clear();
     _isBeautifyEnabled = false;
 
@@ -782,17 +819,16 @@ class HtmlService extends ChangeNotifier {
     //   activeWebViewController!.loadRequest(Uri.parse('about:blank')).ignore();
     // }
 
-    // 4. Trigger background probe ALWAYS
-    probeUrl(url, forceReload: forceReload).ignore();
+    // 4. One generation and one server fetch (document + robots.txt) for this
+    // navigation, in both modes. Results of an older navigation are dropped.
+    final uri = Uri.parse(url);
+    final bool shouldUseBrowserLogic = forceWebView || _useBrowserByDefault;
+    final gen = _startInspection(uri, adoptBody: shouldUseBrowserLogic);
 
     // 5. Primary Load Path branching
-    // Browser-First Mode: If enabled, force WebView (Browser) loading logic
-    bool shouldUseBrowserLogic = forceWebView || _useBrowserByDefault;
-
     if (shouldUseBrowserLogic) {
-      // Browser-First Flow:
-      // - Browser loads immediately
-      // - Source tab is DELAYED (stays null/loading)
+      // Browser-First Flow: the browser loads immediately; the server body
+      // fills the tabs until the rendered DOM replaces it.
       _webViewLoadingUrl = url;
       _isWebViewLoading = true;
 
@@ -805,8 +841,6 @@ class HtmlService extends ChangeNotifier {
       }
 
       // Add to history immediately for Browser-First Flow
-      // This ensures history is updated even when HTML isn't fetched yet
-      // We use a temporary HtmlFile to check if it should be added
       final tempFile = HtmlFile(
         name: url,
         path: url,
@@ -820,52 +854,253 @@ class HtmlService extends ChangeNotifier {
         _urlHistoryService?.addUrl(url);
         _historyPendingUrl = url;
 
-        // Create a placeholder HtmlFile for the current URL in Browser-First Flow
-        // This ensures _currentFile is set even when HTML isn't fetched yet
+        // Placeholder so _currentFile is set before the HTML arrives.
         _currentFile = tempFile;
       }
 
       notifyListeners();
 
-      // Actually trigger the load in the browser
-      if (activeWebViewController != null && !skipWebViewLoad) {
-        activeWebViewController!.loadUrl(
-          urlRequest: URLRequest(url: WebUri(url)),
-        );
-      }
-
-      // We don't fetch HTML here in Browser-First mode.
-      // However, we MUST fetch the HTML for tabs (Metadata, Services, etc.) to work
-      // even if the user stays on the Source tab. We'll fetch it in the background.
-      // This ensures all tabs can populate their data.
-      _loadSourceOnly(url).catchError((e) {
-        debugPrint('Error loading source in background: $e');
-        _isWebViewLoading = false;
-        _isLoading = false;
-        notifyListeners();
-      });
+      if (!skipWebViewLoad) _browserLoader.loadUrl(uri);
     } else {
-      // Source-First Flow:
-      // - HTML is fetched immediately
-      // - Browser tab stays at about:blank (DELAYED)
-
-      // Notify we started loading
+      // Source-First Flow: wait for the server body; the browser stays idle
+      // until the Browser tab opens.
       notifyListeners();
-
       try {
-        final file = await _loadFromUrlInternal(url);
+        await _serverFetch;
+        if (_disposed || gen != store.current.generation) return;
         _pendingUrl = null;
-        await loadFile(file);
+        await loadFile(await _fileFromServer(uri, store.current.server));
       } catch (e) {
-        _pendingUrl = null;
-        _isLoading = false;
-        notifyListeners();
+        if (gen == store.current.generation) _pendingUrl = null;
         rethrow;
       } finally {
-        _isLoading = false;
-        notifyListeners();
+        if (!_disposed && gen == store.current.generation) {
+          _isLoading = false;
+          notifyListeners();
+        }
       }
     }
+  }
+
+  /// Starts a new inspection generation for [uri] and fetches its server side
+  /// in the background. With [adoptBody] the body becomes the current file
+  /// when none has content yet (browser-first).
+  int _startInspection(Uri uri, {required bool adoptBody}) {
+    final gen = store.beginUrl(uri);
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
+      const na = Unavailable<Never>(
+          UnavailableReason.notApplicable, 'no server fetch for this scheme');
+      store.applyServer(gen, na);
+      store.applyRobots(gen, na);
+      _serverFetch = null;
+    } else {
+      _serverFetch = _fetchServer(uri, gen, adoptBody: adoptBody);
+    }
+    return gen;
+  }
+
+  Future<void> _fetchServer(Uri uri, int gen, {required bool adoptBody}) async {
+    final origin = Uri(
+        scheme: uri.scheme,
+        host: uri.host,
+        port: uri.hasPort ? uri.port : null);
+    _fetchRobots(origin, gen).ignore();
+
+    Observed<ServerSnapshot> result;
+    try {
+      final snapshot =
+          await _serverFetcher.fetch(uri, userAgent: kServerUserAgent);
+      // Nothing answered: that is a failure, not a snapshot without data.
+      result = snapshot.hops.isEmpty
+          ? Failed(_failureMessage(snapshot))
+          : Present(snapshot, source: DataSource.server);
+    } catch (e) {
+      result = Failed('error: $e');
+    }
+    if (_disposed) return;
+    store.applyServer(gen, result);
+    if (adoptBody) await _adoptServerBodyIfEmpty(gen);
+  }
+
+  Future<void> _fetchRobots(Uri origin, int gen) async {
+    Observed<RobotsInfo> result;
+    try {
+      result = Present(
+          await _serverFetcher.fetchRobots(origin, userAgent: kServerUserAgent),
+          source: DataSource.server);
+    } catch (e) {
+      result = Failed('error: $e');
+    }
+    if (_disposed) return;
+    store.applyRobots(gen, result);
+  }
+
+  static String _failureMessage(ServerSnapshot s) {
+    String? of<T>(Observed<T> o) => switch (o) {
+          Failed<T>(error: final e) => e,
+          Unavailable<T>(reason: final r, detail: final d) =>
+            unavailableMessage(r, d),
+          _ => null,
+        };
+    return of(s.finalUrl) ?? of(s.body) ?? 'no response from the server';
+  }
+
+  /// Browser-first: the server body fills the tabs while the browser DOM is
+  /// still missing. The DOM (syncWebViewState) replaces it later.
+  Future<void> _adoptServerBodyIfEmpty(int gen) async {
+    if (_disposed || gen != store.current.generation) return;
+    final target = store.current.target;
+    final server = store.current.server;
+    if (target is! UrlTarget || server is! Present<ServerSnapshot>) return;
+    if (server.value.body is! Present<ServerBody>) return;
+    final current = _currentFile;
+    if (current != null && (!current.isUrl || current.content.isNotEmpty)) {
+      return;
+    }
+    final file = await _fileFromServer(target.url, server);
+    if (_disposed ||
+        gen != store.current.generation ||
+        (_currentFile?.content.isNotEmpty ?? false)) {
+      return;
+    }
+    // A redirect changes the path: do not push the empty placeholder.
+    if (_currentFile != null && !areUrlsEqual(_currentFile!.path, file.path)) {
+      _currentFile = null;
+    }
+    await loadFile(file);
+    if (gen == store.current.generation) {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// The server's answer as a file for the viewer: the body, or an error page
+  /// that says why there is none.
+  Future<HtmlFile> _fileFromServer(
+      Uri requested, Observed<ServerSnapshot> server) async {
+    final snapshot = server is Present<ServerSnapshot> ? server.value : null;
+    final body = snapshot?.body;
+    if (snapshot == null || body is! Present<ServerBody>) {
+      final reason = switch (server) {
+        Failed<ServerSnapshot>(error: final e) => e,
+        Present<ServerSnapshot>(value: final s) => _failureMessage(s),
+        _ => 'no response from the server',
+      };
+      return _urlErrorFile(requested.toString(), reason);
+    }
+
+    final last = snapshot.hops.last;
+    final finalUrl = snapshot.finalUrl;
+    final finalUri = finalUrl is Present<Uri> ? finalUrl.value : requested;
+    final content = body.value.decoded.isBinary ? '' : body.value.decoded.text;
+    final contentType = last.header('content-type');
+
+    String filename;
+    if (last.statusCode == 200) {
+      final pathFilename =
+          finalUri.pathSegments.isNotEmpty ? finalUri.pathSegments.last : '';
+      filename = pathFilename.isNotEmpty &&
+              pathFilename.contains('.') &&
+              !pathFilename.startsWith('_') &&
+              pathFilename != 'index' &&
+              pathFilename != 'home'
+          ? pathFilename
+          : generateDescriptiveFilename(finalUri, content);
+      filename = await detectFileTypeAndGenerateFilename(filename, content,
+          contentType: contentType);
+    } else {
+      filename = finalUri.pathSegments.isNotEmpty
+          ? finalUri.pathSegments.last
+          : 'response_${last.statusCode}';
+    }
+
+    // Without browser numbers, the wire and decoded size of the document.
+    if (_browserProbeResult == null) {
+      _lastPageWeight = {
+        'transfer': body.value.transferLength,
+        'decoded': body.value.byteLength,
+      };
+    }
+
+    return HtmlFile(
+      name: filename,
+      path: finalUri.toString(),
+      content: content,
+      lastModified: DateTime.now(),
+      size: body.value.byteLength,
+      isUrl: true,
+      isError: last.statusCode >= 400,
+    );
+  }
+
+  HtmlFile _urlErrorFile(String url, String message) {
+    final errorContent = '''Web URL Could Not Be Loaded
+
+Error: $message
+
+URL: $url
+
+This web URL could not be loaded. Possible reasons:
+
+🌐 Network Issues
+- Check your internet connection
+- Try again later if the website is temporarily unavailable
+
+🔒 Website Restrictions
+- Some websites block automated requests
+- Try opening the URL in your browser first
+
+📱 URL Format Problems
+- Make sure the URL is complete and valid
+- Include "https://" at the beginning
+
+🔄 Redirect Issues
+- The URL might redirect to an unavailable location
+- Try the original URL directly
+
+If this problem persists, you can:
+1. Open the URL in your browser
+2. View the page source there
+3. Copy and paste the HTML content here manually
+
+Technical details: $message''';
+
+    return HtmlFile(
+      name: url,
+      path: url,
+      content: errorContent,
+      lastModified: DateTime.now(),
+      size: errorContent.length,
+      isUrl: true,
+      isError: true,
+    );
+  }
+
+  /// Whether the current inspection already covers [uri]: it is the requested
+  /// URL, a hop of the fetched chain, or the page arrived while the server
+  /// fetch is still running (a redirect target reported by the browser).
+  bool _storeCovers(Uri uri) {
+    final current = store.current;
+    final target = current.target;
+    if (target is! UrlTarget) return false;
+    if (sameUrl(target.url, uri)) return true;
+    final server = current.server;
+    if (server is Pending<ServerSnapshot>) return true;
+    if (server is Present<ServerSnapshot>) {
+      return server.value.hops.any((h) => sameUrl(h.url, uri));
+    }
+    return false;
+  }
+
+  /// Strict URL identity for data decisions: scheme, host, port, path
+  /// (empty equals '/') and query; the fragment is ignored.
+  static bool sameUrl(Uri a, Uri b) {
+    String path(Uri u) => u.path.isEmpty ? '/' : u.path;
+    return a.scheme.toLowerCase() == b.scheme.toLowerCase() &&
+        a.host.toLowerCase() == b.host.toLowerCase() &&
+        a.port == b.port &&
+        path(a) == path(b) &&
+        a.query == b.query;
   }
 
   Future<void> reloadCurrentFile() async {
@@ -877,16 +1112,10 @@ class HtmlService extends ChangeNotifier {
       // Local file reload
       if (_currentFile!.path.isNotEmpty) {
         try {
-          final file = File(_currentFile!.path);
-          if (await file.exists()) {
-            final content = await file.readAsString();
-            final newFile = _currentFile!.copyWith(
-              content: content,
-              lastModified: await file.lastModified(),
-              size: await file.length(),
-            );
-            await loadFile(newFile, clearProbe: true);
-          }
+          final snapshot = await FileLoader.fromPath(_currentFile!.path,
+              origin: FileOrigin.restore, enforceSandbox: false);
+          await loadFile(snapshot.toHtmlFile(),
+              clearProbe: true, snapshot: snapshot);
         } catch (e) {
           debugPrint('Error reloading local file: $e');
         }
@@ -916,8 +1145,17 @@ class HtmlService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Async work (loads, extraction) may finish after dispose; ignore it.
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
+    store.removeListener(notifyListeners);
+    if (_ownsStore) store.dispose();
     _autoSaveTimer?.cancel();
     _disposalTimer?.cancel();
     // Final immediate disposal
@@ -1077,19 +1315,6 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
-  /// Restore probe state
-  void restoreProbeState(bool? isVisible, String? resultJson) {
-    if (isVisible != null) {}
-    if (resultJson != null && resultJson.isNotEmpty) {
-      try {
-        _probeResult = jsonDecode(resultJson);
-      } catch (e) {
-        debugPrint('❌ Error restoring probe result: $e');
-      }
-    }
-    notifyListeners();
-  }
-
   Future<void> saveCurrentState(AppStateService appStateService) async {
     try {
       await appStateService.saveAppState(
@@ -1097,9 +1322,6 @@ class HtmlService extends ChangeNotifier {
         scrollPosition: getCurrentScrollPosition(),
         horizontalScrollPosition: getCurrentHorizontalScrollPosition(),
         contentType: selectedContentType,
-        isProbeVisible:
-            _probeResult != null, // Assuming probe is visible if result exists
-        probeResultJson: _probeResult != null ? jsonEncode(_probeResult) : null,
         pendingUrl: _pendingUrl,
         inputText: _currentInputText,
       );
@@ -1207,102 +1429,6 @@ class HtmlService extends ChangeNotifier {
     // If it's a domain-like name without extension, return it as is
     // detectFileTypeAndGenerateFilename will handle adding extensions if needed
     return baseFilename;
-  }
-
-  /// Get the final URL after following all redirects manually
-  /// This ensures we get the actual redirected URL, not the original
-  Future<String> _getFinalUrlAfterRedirects(
-    Uri uri,
-    http.Client client,
-    Map<String, String> headers, {
-    Uri? originalUri,
-    int redirectDepth = 0,
-    List<Map<String, dynamic>>? redirectChain,
-  }) async {
-    HttpClient? hClient;
-    try {
-      // Prevent infinite redirect loops
-      if (redirectDepth > 5) {
-        debugPrint('Too many redirects (>5), falling back to original URL');
-        return originalUri?.toString() ?? uri.toString();
-      }
-
-      // Use HttpClient to manually handle redirects and capture certificate
-      hClient = HttpClient();
-      hClient.badCertificateCallback =
-          CertificateSecurityService.defaultBadCertificateCallback;
-      final hRequest = await CertificateSecurityService.withCertificatePrompt(
-        uri.host,
-        () => hClient!.openUrl('GET', uri),
-      );
-      hRequest.followRedirects = false;
-
-      // Add headers to the request
-      headers.forEach((key, value) {
-        hRequest.headers.set(key, value);
-      });
-
-      final hResponse = await hRequest.close().timeout(
-            const Duration(seconds: 30),
-          );
-
-      // Capture certificate info if available
-      if (hResponse.certificate != null) {
-        // We can use this to store the cert, but for now it's in probeResult
-      }
-
-      // Check if this is a redirect response
-      if (hResponse.statusCode >= 300 &&
-          hResponse.statusCode < 400 &&
-          hResponse.headers.value('location') != null) {
-        final locationHeader = hResponse.headers.value('location')!;
-        // Handle relative redirects by resolving against the original URI
-        final redirectUri = uri.resolve(locationHeader);
-        redirectChain?.add({
-          'from': uri.toString(),
-          'to': redirectUri.toString(),
-          'statusCode': hResponse.statusCode,
-          'reasonPhrase': hResponse.reasonPhrase,
-        });
-
-        // Recursively follow the redirect to get the final URL
-        // Security: Ensure we don't get redirected to non-http/https schemes (like file://)
-        if (redirectUri.scheme == 'http' || redirectUri.scheme == 'https') {
-          return await _getFinalUrlAfterRedirects(
-            redirectUri,
-            client,
-            headers,
-            originalUri: originalUri ?? uri, // Preserve the original URI
-            redirectDepth: redirectDepth + 1,
-            redirectChain: redirectChain,
-          );
-        } else {
-          debugPrint(
-            'Blocked redirect to unsafe scheme: ${redirectUri.scheme}',
-          );
-          return originalUri?.toString() ?? uri.toString();
-        }
-      }
-
-      // If not a redirect, return the current URL
-      return uri.toString();
-    } catch (e) {
-      // If redirect handling fails, fall back to the original URL if available
-      debugPrint('Error handling redirects: $e');
-
-      // If this is a DNS lookup failure or connection error, fall back to original URL
-      if (e is SocketException || e.toString().contains('Failed host lookup')) {
-        debugPrint(
-          'DNS/Connection error detected, falling back to original URL',
-        );
-        return originalUri?.toString() ?? uri.toString();
-      }
-
-      // For other errors, return the original URL if available, otherwise current URI
-      return originalUri?.toString() ?? uri.toString();
-    } finally {
-      hClient?.close(force: true);
-    }
   }
 
   /// Detect file type and generate appropriate filename using robust detection
@@ -1782,7 +1908,9 @@ class HtmlService extends ChangeNotifier {
     bool clearProbe = true,
     bool isPartial = false,
     int? switchToTab,
+    FileSnapshot? snapshot,
   }) async {
+    _syncStoreWithFile(file, snapshot);
     if (!isPartial) {
       _isBeautifyEnabled = false; // Reset beautify mode on new file
     }
@@ -1815,12 +1943,6 @@ class HtmlService extends ChangeNotifier {
     _currentFile = file;
     _lastCurrentFileUpdate = DateTime.now();
     _originalFile = file; // Store original file for "Automatic" option
-
-    // Restore probe result if available
-    if (file.probeResult != null) {
-      _probeResult = Map<String, dynamic>.from(file.probeResult!);
-      _updateAnalyzedCookies();
-    }
 
     // Try to determine content type from probe result
     if (_probeResult != null && _probeResult!['headers'] is Map) {
@@ -1956,6 +2078,30 @@ class HtmlService extends ChangeNotifier {
     // We don't save state here to avoid excessive writes during normal usage
   }
 
+  /// Keeps the store in line with the file being shown: a local file puts it
+  /// in file mode (no server, no browser); a URL page the store knows nothing
+  /// about gets a generation without a server fetch.
+  void _syncStoreWithFile(HtmlFile file, FileSnapshot? snapshot) {
+    if (file.isUrl) {
+      final uri = Uri.tryParse(file.path);
+      if (uri == null || _storeCovers(uri)) return;
+      final gen = store.beginUrl(uri);
+      const no = Unavailable<Never>(
+          UnavailableReason.notApplicable, 'no server fetch for this document');
+      store.applyServer(gen, no);
+      store.applyRobots(gen, no);
+      _serverFetch = null;
+      return;
+    }
+    store.beginFile(snapshot ??
+        FileLoader.fromText(file.content,
+            origin: file.isShared ? FileOrigin.share : FileOrigin.picker,
+            name: file.name,
+            path: file.path,
+            isError: file.isError));
+    _clearBrowserDerivedData();
+  }
+
   /// Map detected file type to appropriate content type for syntax highlighting
   String _mapDetectedTypeToContentType(String detectedType) {
     // Map detected types to content types that work with re_highlight
@@ -2058,17 +2204,16 @@ class HtmlService extends ChangeNotifier {
     if (!isUrlNavigation) {
       _webViewLoadingUrl = null;
       _isWebViewLoading = false;
+      _clearBrowserDerivedData();
     } else {
       // Keep the browser tab anchored to the new URL during transition.
       _webViewLoadingUrl = newUrl;
     }
     _originalFile = null; // Also clear the original file
     selectedContentType = null; // Reset content type selection
-    if (clearProbe) {
-      _probeResult = null; // Clear probe results
-      _probeError = null; // Clear probe errors
-      _lastServerSource = null;
-    }
+    // The user cleared the page: nothing is inspected any more. (A new
+    // navigation has already started its own generation.)
+    if (clearProbe && newUrl == null) store.clear();
     // Always clear page metadata when loading a new file, even if preserving probe
     // This ensures metadata tabs are cleaned when navigating back
     _pageMetadata = null;
@@ -2194,319 +2339,6 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
-  Future<HtmlFile> _loadFromUrlInternal(String url) async {
-    Map<String, dynamic>? currentProbeResult;
-    http.Client? client;
-    HttpClient? hClient;
-
-    try {
-      // Validate and sanitize URL
-      // Auto-prepend https if no scheme is provided, excluding special schemes like about:
-      if (!url.contains('://') &&
-          !url.startsWith('about:') &&
-          !url.startsWith('data:')) {
-        url = 'https://$url';
-      }
-
-      // Parse and validate the URL
-      final uri = Uri.tryParse(url);
-      if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
-        throw Exception('Invalid URL format');
-      }
-
-      // Security: Only allow http and https schemes
-      if (uri.scheme != 'http' && uri.scheme != 'https') {
-        throw Exception('Only http and https URLs are supported');
-      }
-
-      // Use the http package with timeout and security settings
-      final httpClient = _createClient();
-      client = httpClient;
-      final stopwatch = Stopwatch()..start();
-      String? ipAddress;
-
-      // Resolve IP (part of probing)
-      try {
-        final addresses = await InternetAddress.lookup(
-          uri.host,
-        ).timeout(const Duration(seconds: 2));
-        if (addresses.isNotEmpty) {
-          ipAddress = addresses.first.address;
-        }
-      } catch (e) {
-        debugPrint('DNS Lookup failed: $e');
-      }
-
-      // Set proper headers
-      final headers = {
-        'User-Agent': 'curl/7.88.1',
-        'Accept':
-            'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      };
-
-      // Manual redirect handling
-      final redirectChain = <Map<String, dynamic>>[];
-      final finalUrl = await CertificateSecurityService.withCertificatePrompt(
-        uri.host,
-        () => _getFinalUrlAfterRedirects(
-          uri,
-          httpClient,
-          headers,
-          originalUri: uri,
-          redirectChain: redirectChain,
-        ),
-      );
-
-      // Update the input text immediately
-      if (finalUrl != url) {
-        debugPrint('update text html $finalUrl');
-        _currentInputText = finalUrl;
-        notifyListeners();
-      }
-
-      // Use HttpClient for the final request
-      var acceptedInvalidCertificate = false;
-      hClient = HttpClient();
-      hClient.badCertificateCallback =
-          (X509Certificate cert, String host, int port) {
-        final trusted =
-            CertificateSecurityService.defaultBadCertificateCallback(
-                cert, host, port);
-        if (trusted) acceptedInvalidCertificate = true;
-        return trusted;
-      };
-      final hRequest = await CertificateSecurityService.withCertificatePrompt(
-        Uri.parse(finalUrl).host,
-        () => hClient!.openUrl('GET', Uri.parse(finalUrl)),
-      );
-
-      headers.forEach((key, value) {
-        hRequest.headers.set(key, value);
-      });
-
-      final hResponse = await hRequest.close().timeout(
-            const Duration(seconds: 30),
-          );
-
-      // Capture certificate info — must be read before body drain destroys the socket
-      Map<String, dynamic>? certInfo;
-      try {
-        if (hResponse.certificate != null) {
-          certInfo =
-              ProbeService.extractCertificateInfo(hResponse.certificate!);
-        }
-      } catch (e) {
-        debugPrint(
-          'Could not read SSL certificate (socket already closed): $e',
-        );
-      }
-
-      // Read body
-      final bytes = await _readResponseBytesWithLimit(hResponse);
-      final content = utf8.decode(bytes, allowMalformed: true);
-      _lastServerSource = content;
-
-      stopwatch.stop();
-
-      // Convert HttpClient headers
-      final respHeaders = <String, String>{};
-      final List<String> extractedCookies = [];
-      hResponse.headers.forEach((name, values) {
-        final lowerName = name.toLowerCase();
-        if (lowerName == 'set-cookie') {
-          extractedCookies.addAll(values);
-        } else {
-          respHeaders[lowerName] = values.join(', ');
-        }
-      });
-
-      // Construct Probe Result
-      final List<String> cookies = extractedCookies;
-
-      final securityHeaders = {
-        'Strict-Transport-Security': respHeaders['strict-transport-security'],
-        'Content-Security-Policy': respHeaders['content-security-policy'],
-        'X-Frame-Options': respHeaders['x-frame-options'],
-        'X-Content-Type-Options': respHeaders['x-content-type-options'],
-        'Referrer-Policy': respHeaders['referrer-policy'],
-        'Permissions-Policy': respHeaders['permissions-policy'],
-      };
-
-      int? contentLength = hResponse.contentLength;
-      if (contentLength <= 0 && respHeaders.containsKey('content-length')) {
-        contentLength = int.tryParse(respHeaders['content-length']!);
-      }
-
-      currentProbeResult = {
-        'statusCode': hResponse.statusCode,
-        'reasonPhrase': hResponse.reasonPhrase,
-        'headers': respHeaders,
-        'isRedirect': finalUrl != url,
-        'contentLength': contentLength,
-        'url': url,
-        'finalUrl': finalUrl,
-        'timing': {
-          'total': stopwatch.elapsedMilliseconds,
-        },
-        'responseTime': stopwatch.elapsedMilliseconds,
-        'ip': ipAddress,
-        'ipAddress': ipAddress,
-        'security': securityHeaders,
-        'cookies': cookies,
-        'certificate': certInfo,
-        'tlsInvalidCertificate': acceptedInvalidCertificate,
-        'tlsWarning': acceptedInvalidCertificate
-            ? 'TLS certificate validation failed. Content was loaded anyway for inspection.'
-            : null,
-        'analyzedCookies': <Map<String, dynamic>>[],
-      };
-
-      if (finalUrl != url) {
-        currentProbeResult['redirectLocation'] = finalUrl;
-        currentProbeResult['redirectChain'] = redirectChain;
-      }
-
-      // Note: _probeResult is NOT updated here anymore.
-      // It will be updated by loadFile(file) using the results in HtmlFile.
-      _isProbing = false;
-
-      if (hResponse.statusCode == 200) {
-        final finalUri = Uri.parse(finalUrl);
-        final pathFilename =
-            finalUri.pathSegments.isNotEmpty ? finalUri.pathSegments.last : '';
-
-        final filename = pathFilename.isNotEmpty &&
-                pathFilename.contains('.') &&
-                !pathFilename.startsWith('_') &&
-                pathFilename != 'index' &&
-                pathFilename != 'home'
-            ? pathFilename
-            : generateDescriptiveFilename(finalUri, content);
-
-        final contentType = respHeaders['content-type'];
-        final processedFilename = await detectFileTypeAndGenerateFilename(
-          filename,
-          content,
-          contentType: contentType,
-        );
-
-        // Probe-based weight is only a fallback when the browser reported nothing.
-        if (_browserProbeResult == null) {
-          _lastPageWeight = {
-            'transfer': contentLength ?? content.length,
-            'decoded': content.length,
-          };
-        }
-
-        return HtmlFile(
-          name: processedFilename,
-          path: finalUrl,
-          content: content,
-          lastModified: DateTime.now(),
-          size: content.length, // Initial probe size
-          isUrl: true,
-          probeResult: currentProbeResult,
-        );
-      } else {
-        // For non-200 responses, we still return the content
-        final finalUri = Uri.parse(finalUrl);
-        final filename = finalUri.pathSegments.isNotEmpty
-            ? finalUri.pathSegments.last
-            : 'response_${hResponse.statusCode}';
-
-        return HtmlFile(
-          name: filename,
-          path: finalUrl,
-          content: content,
-          lastModified: DateTime.now(),
-          size: content.length,
-          isUrl: true,
-          probeResult: currentProbeResult,
-          isError: hResponse.statusCode >= 400,
-        );
-      }
-    } catch (e) {
-      String errorMessage;
-      if (e is TimeoutException) {
-        errorMessage = 'Request timed out';
-      } else if (e is FormatException) {
-        errorMessage = 'Invalid URL format';
-      } else if (e is SocketException) {
-        errorMessage = 'Network error: ${e.message}';
-      } else {
-        errorMessage = e.toString();
-      }
-
-      final errorContent = '''Web URL Could Not Be Loaded
-
-Error: $errorMessage
-
-URL: $url
-
-This web URL could not be loaded. Possible reasons:
-
-🌐 Network Issues
-- Check your internet connection
-- Try again later if the website is temporarily unavailable
-
-🔒 Website Restrictions
-- Some websites block automated requests
-- Try opening the URL in your browser first
-
-📱 URL Format Problems
-- Make sure the URL is complete and valid
-- Include "https://" at the beginning
-
-🔄 Redirect Issues
-- The URL might redirect to an unavailable location
-- Try the original URL directly
-
-If this problem persists, you can:
-1. Open the URL in your browser
-2. View the page source there
-3. Copy and paste the HTML content here manually
-
-Technical details: $e''';
-
-      return HtmlFile(
-        name: url,
-        path: url,
-        content: errorContent,
-        lastModified: DateTime.now(),
-        size: errorContent.length,
-        isUrl: true,
-        isError: true,
-        probeResult: currentProbeResult,
-      );
-    } finally {
-      client?.close();
-      hClient?.close(force: true);
-    }
-  }
-
-  Future<List<int>> _readResponseBytesWithLimit(
-    HttpClientResponse response,
-  ) async {
-    final declaredLength = response.contentLength;
-    if (declaredLength > _maxUrlResponseBytes) {
-      throw Exception('Response size exceeds maximum limit (10MB)');
-    }
-
-    final builder = BytesBuilder(copy: false);
-    var total = 0;
-
-    await for (final chunk in response) {
-      total += chunk.length;
-      if (total > _maxUrlResponseBytes) {
-        throw Exception('Response size exceeds maximum limit (10MB)');
-      }
-      builder.add(chunk);
-    }
-
-    return builder.takeBytes();
-  }
-
   Future<void> loadFromUrl(
     String url, {
     int? switchToTab,
@@ -2522,430 +2354,29 @@ Technical details: $e''';
     );
   }
 
-  Future<void> loadServerSourceForDiff() async {
-    final url = _currentFile?.isUrl == true
-        ? _currentFile!.path
-        : (_currentInputText?.startsWith('http') == true
-            ? _currentInputText
-            : null);
-    if (url == null || url.isEmpty) return;
+  /// The server source is always fetched with the page, so there is nothing
+  /// to load: this returns what the store has (null while unknown).
+  Future<String?> loadServerSourceForDiff() async => serverSource;
 
-    _isLoading = true;
-    notifyListeners();
-    try {
-      await _loadFromUrlInternal(url);
-    } catch (e) {
-      debugPrint('Error loading server source for diff: $e');
-      _probeError = e.toString();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // Map<String, dynamic> getHighlightTheme() => githubTheme;
-
-  /// Probe a URL to get status code and headers without downloading the full content
+  /// Makes sure the server side of [url] is being inspected and returns the
+  /// legacy probe map ({} while unknown). A page the current navigation
+  /// already covers (same URL, a hop of its chain, or a fetch still running)
+  /// is not fetched again.
   Future<Map<String, dynamic>> probeUrl(
     String url, {
     bool forceReload = false,
   }) async {
-    if (!forceReload && _currentlyProbingUrl == url && _isProbing) {
-      return _probeResult ?? {};
+    var target = url.trim();
+    if (target.startsWith('about:')) return {};
+    if (!target.contains('://')) target = 'https://$target';
+    final uri = Uri.tryParse(target);
+    if (uri == null || !uri.hasAuthority || uri.host.isEmpty) return {};
+
+    if (forceReload || !_storeCovers(uri)) {
+      _startInspection(uri, adoptBody: false);
     }
-
-    // Skip probing for local/pseudo schemes like about:blank
-    if (url.startsWith('about:')) {
-      return {};
-    }
-
-    final String? existingFinalUrl = _probeResult?['finalUrl'];
-    final bool isEquivalent =
-        existingFinalUrl != null && areUrlsEqual(existingFinalUrl, url);
-
-    _isProbing = true;
-    _currentlyProbingUrl = url;
-
-    // Phase 2: Preserve previous results if the URL is equivalent
-    // This prevents UI flickering (N/A) during re-probes of the same site
-    // HOWEVER, if forceReload is true, we always clear it to handle it as a "new url"
-    if (!isEquivalent || forceReload) {
-      _probeResult = null;
-      _lastBrowserCookies = ''; // Reset browser cookies on new probe
-    }
-
-    _probeError = null;
-    debugPrint('probe url $url');
-    notifyListeners();
-    _autoSave();
-
-    HttpClient? client;
-    try {
-      // Validate and sanitize URL
-      String targetUrl = url.trim();
-      // Auto-prepend https if no scheme is provided, excluding special schemes like about:
-      if (!targetUrl.contains('://') &&
-          !targetUrl.startsWith('about:') &&
-          !targetUrl.startsWith('data:')) {
-        targetUrl = 'https://$targetUrl';
-      }
-
-      final uri = Uri.parse(targetUrl);
-
-      // Use HttpClient directly to get certificate info
-      var acceptedInvalidCertificate = false;
-      final httpClient = HttpClient();
-      client = httpClient;
-      client.badCertificateCallback =
-          (X509Certificate cert, String host, int port) {
-        final trusted =
-            CertificateSecurityService.defaultBadCertificateCallback(
-                cert, host, port);
-        if (trusted) acceptedInvalidCertificate = true;
-        return trusted;
-      };
-      client.connectionTimeout = const Duration(seconds: 10);
-
-      final stopwatch = Stopwatch()..start();
-      String? ipAddress;
-
-      // Resolve IP
-      if (uri.host.isNotEmpty) {
-        try {
-          final addresses = await InternetAddress.lookup(
-            uri.host,
-          ).timeout(const Duration(seconds: 2));
-          if (addresses.isNotEmpty) {
-            ipAddress = addresses.first.address;
-          }
-        } catch (e) {
-          debugPrint('DNS Lookup failed for ${uri.host}: $e');
-        }
-      }
-
-      // Headers to mimic a browser/curl
-      const userAgent = 'curl/7.88.1';
-
-      HttpClientRequest request;
-      HttpClientResponse response;
-
-      Future<HttpClientResponse> openRequest() async {
-        try {
-          // Try HEAD request first (most efficient)
-          request = await httpClient.openUrl('HEAD', uri);
-          request.headers.set('User-Agent', userAgent);
-          request.headers.set('Accept', '*/*');
-          request.followRedirects = false;
-          return await request.close().timeout(const Duration(seconds: 15));
-        } catch (e) {
-          debugPrint('HEAD request failed, trying GET: $e');
-          // Fallback to GET with range
-          request = await httpClient.openUrl('GET', uri);
-          request.headers.set('User-Agent', userAgent);
-          request.headers.set('Accept', '*/*');
-          request.headers.set('Range', 'bytes=0-0');
-          request.followRedirects = false;
-          return await request.close().timeout(const Duration(seconds: 15));
-        }
-      }
-
-      response = await CertificateSecurityService.withCertificatePrompt(
-        uri.host,
-        openRequest,
-      );
-
-      // Capture certificate info — must be read before response is fully drained/closed
-      Map<String, dynamic>? certInfo;
-      try {
-        if (response.certificate != null) {
-          certInfo = ProbeService.extractCertificateInfo(response.certificate!);
-        }
-      } catch (e) {
-        debugPrint('Could not read SSL certificate: $e');
-      }
-
-      stopwatch.stop();
-
-      // Drain response to ensure socket is closed properly, but we don't need body.
-      // We add a timeout here because if the server ignores the Range header
-      // and starts sending a massive file, drain() could hang.
-      try {
-        await response.drain().timeout(const Duration(seconds: 2));
-      } catch (e) {
-        debugPrint('Response drain timed out or failed: $e');
-        // We continue anyway since we have the headers we need
-      }
-
-      int? contentLength = response.contentLength;
-
-      // Check Content-Length header fallback
-      if (contentLength <= 0) {
-        final lengthHeader = response.headers.value('content-length');
-        if (lengthHeader != null) {
-          contentLength = int.tryParse(lengthHeader) ?? 0;
-        } else {
-          contentLength = 0;
-        }
-      }
-
-      // Standardize on lowercase keys for consistent lookup
-      final normalizedHeaders = <String, String>{};
-      final List<String> serverCookies = [];
-      response.headers.forEach((key, values) {
-        final lowerKey = key.toLowerCase();
-        if (lowerKey == 'set-cookie') {
-          serverCookies.addAll(values);
-        } else {
-          normalizedHeaders[lowerKey] = values.join(', ');
-        }
-      });
-
-      // Security Headers Check
-      final securityHeaders = {
-        'Strict-Transport-Security':
-            normalizedHeaders['strict-transport-security'],
-        'Content-Security-Policy': normalizedHeaders['content-security-policy'],
-        'X-Frame-Options': normalizedHeaders['x-frame-options'],
-        'X-Content-Type-Options': normalizedHeaders['x-content-type-options'],
-        'Referrer-Policy': normalizedHeaders['referrer-policy'],
-        'Permissions-Policy': normalizedHeaders['permissions-policy'],
-      };
-
-      // Cookies - use headers directly to avoid strict parsing errors in dart:io
-      final List<String> cookies = serverCookies;
-
-      // Only update state if this probe is still relevant
-      if (_currentlyProbingUrl == url) {
-        // Construct the result, ONLY from the probe
-        _probeResult = {
-          'statusCode': response.statusCode,
-          'reasonPhrase': response.reasonPhrase,
-          'headers': normalizedHeaders,
-          'isRedirect': response.isRedirect,
-          'contentLength': contentLength,
-          'url': url,
-          'finalUrl': url,
-          'ip': ipAddress,
-          'ipAddress': ipAddress,
-          'timing': {
-            'total': stopwatch.elapsedMilliseconds,
-          },
-          'responseTime': stopwatch.elapsedMilliseconds,
-          'security': securityHeaders,
-          'cookies': cookies,
-          'certificate': certInfo,
-          'tlsInvalidCertificate': acceptedInvalidCertificate,
-          'tlsWarning': acceptedInvalidCertificate
-              ? 'TLS certificate validation failed. Content was loaded anyway for inspection.'
-              : null,
-          'analyzedCookies': <Map<String, dynamic>>[],
-        };
-
-        // Update _currentFile with the probe results immediately
-        // This ensures UI components like BrowserView can see headers/content-type
-        // even before the next sync or full load.
-        if (_currentFile != null && areUrlsEqual(_currentFile!.path, url)) {
-          _currentFile = _currentFile!.copyWith(probeResult: _probeResult);
-        }
-
-        // Update cookies with any browser cookies we might already have
-        _updateAnalyzedCookies();
-        _discoverRobotsAndSitemap(uri, url).ignore();
-
-        // Extract redirect location if present
-        if (response.isRedirect) {
-          final location = normalizedHeaders['location'];
-          if (location != null && location.isNotEmpty) {
-            // Resolve relative URLs
-            final redirectUri = uri.resolve(location);
-            _probeResult!['redirectLocation'] = redirectUri.toString();
-            _probeResult!['redirectChain'] = [
-              {
-                'from': targetUrl,
-                'to': redirectUri.toString(),
-                'statusCode': response.statusCode,
-                'reasonPhrase': response.reasonPhrase,
-              }
-            ];
-          }
-        }
-
-        // AUTO-DETECT RSS/ATOM AND FETCH SOURCE
-        final contentType =
-            normalizedHeaders['content-type']?.toLowerCase() ?? '';
-        final isFeed = contentType.contains('application/rss+xml') ||
-            contentType.contains('application/atom+xml') ||
-            (contentType.contains('xml') &&
-                (targetUrl.endsWith('.rss') ||
-                    targetUrl.endsWith('.atom') ||
-                    targetUrl.endsWith('.xml')));
-
-        if (isFeed && _useBrowserByDefault) {
-          debugPrint(
-            'RSS/Atom detected in probe ($contentType), forcing source load.',
-          );
-          _loadFromUrlInternal(targetUrl).then((file) {
-            if (_currentlyProbingUrl == targetUrl ||
-                _currentFile?.path == targetUrl) {
-              loadFile(file);
-            }
-          }).catchError((e) {
-            debugPrint('Error forcing RSS source load: $e');
-          });
-        }
-
-        debugPrint('Probe successful for $url');
-
-        // Update all tab data when probe completes
-        if (_currentFile != null && areUrlsEqual(_currentFile!.path, url)) {
-          _updateAllTabData().ignore();
-        }
-
-        return _probeResult!;
-      } else {
-        debugPrint(
-          'Discarding stale probe result for $url (current active probe/sync: $_currentlyProbingUrl)',
-        );
-        return {};
-      }
-    } catch (e) {
-      debugPrint('Error probing URL $url: $e');
-      if (_currentlyProbingUrl == url) {
-        _probeError = e.toString();
-      }
-      return {}; // Return empty instead of rethrowing to avoid unhandled async exceptions
-    } finally {
-      // Ensure client is closed to free up resources
-      try {
-        client?.close(force: true);
-      } catch (e) {
-        debugPrint('Error closing HttpClient: $e');
-      }
-
-      // Only reset flags if we are still the active probe
-      if (_currentlyProbingUrl == url) {
-        _isProbing = false;
-        _currentlyProbingUrl = null;
-        _autoSave();
-      }
-    }
-  }
-
-  Future<void> _discoverRobotsAndSitemap(
-      Uri pageUri, String originalUrl) async {
-    if (pageUri.scheme != 'http' && pageUri.scheme != 'https') return;
-    if (pageUri.host.isEmpty) return;
-
-    final base = pageUri.replace(path: '/', query: '', fragment: '');
-    final robotsUri = base.resolve('/robots.txt');
-    final sitemapUri = base.resolve('/sitemap.xml');
-
-    final robots = await _fetchSmallProbeText(robotsUri);
-    final sitemaps = <String>{};
-    final disallowRules = <String>[];
-    final allowRules = <String>[];
-    final userAgents = <String>{};
-
-    if (robots.body != null) {
-      final lines = const LineSplitter().convert(robots.body!);
-      for (final line in lines) {
-        final trimmed = line.split('#').first.trim();
-        if (trimmed.isEmpty || !trimmed.contains(':')) continue;
-        final index = trimmed.indexOf(':');
-        final key = trimmed.substring(0, index).trim().toLowerCase();
-        final value = trimmed.substring(index + 1).trim();
-        if (value.isEmpty) continue;
-
-        switch (key) {
-          case 'sitemap':
-            sitemaps.add(pageUri.resolve(value).toString());
-            break;
-          case 'disallow':
-            disallowRules.add(value);
-            break;
-          case 'allow':
-            allowRules.add(value);
-            break;
-          case 'user-agent':
-            userAgents.add(value);
-            break;
-        }
-      }
-    }
-
-    final sitemap = await _fetchSmallProbeText(sitemapUri, headOnly: true);
-    if ((sitemap.statusCode ?? 0) >= 200 && (sitemap.statusCode ?? 0) < 400) {
-      sitemaps.add(sitemapUri.toString());
-    }
-
-    if (_probeResult == null) return;
-    final resultUrl = _probeResult!['url']?.toString();
-    final resultFinalUrl = _probeResult!['finalUrl']?.toString();
-    final isStillCurrent = (_currentlyProbingUrl != null &&
-            _currentlyProbingUrl == originalUrl) ||
-        (resultUrl != null && areUrlsEqual(resultUrl, originalUrl)) ||
-        (resultFinalUrl != null && areUrlsEqual(resultFinalUrl, originalUrl));
-    if (!isStillCurrent) return;
-
-    _probeResult!['robotsSitemap'] = {
-      'robotsUrl': robotsUri.toString(),
-      'robotsStatus': robots.statusCode,
-      'robotsPresent': robots.statusCode != null &&
-          robots.statusCode! >= 200 &&
-          robots.statusCode! < 400,
-      'sitemapUrl': sitemapUri.toString(),
-      'sitemapStatus': sitemap.statusCode,
-      'sitemaps': sitemaps.toList()..sort(),
-      'disallowCount': disallowRules.length,
-      'allowCount': allowRules.length,
-      'userAgents': userAgents.toList()..sort(),
-      'sampleDisallow': disallowRules.take(8).toList(),
-      'sampleAllow': allowRules.take(8).toList(),
-      'robotsBytes': robots.body?.length ?? 0,
-    };
-
-    if (_currentFile != null && areUrlsEqual(_currentFile!.path, originalUrl)) {
-      _currentFile = _currentFile!.copyWith(probeResult: _probeResult);
-    }
-    notifyListeners();
-  }
-
-  Future<_SmallProbeResponse> _fetchSmallProbeText(Uri uri,
-      {bool headOnly = false}) async {
-    final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 6);
-    client.badCertificateCallback =
-        CertificateSecurityService.defaultBadCertificateCallback;
-    try {
-      final request = await CertificateSecurityService.withCertificatePrompt(
-        uri.host,
-        () => client.openUrl(headOnly ? 'HEAD' : 'GET', uri),
-      );
-      request.headers.set('User-Agent', 'ViewSourceVibe/1.0');
-      request.followRedirects = true;
-      final response =
-          await request.close().timeout(const Duration(seconds: 8));
-      if (headOnly) {
-        await response.drain().timeout(const Duration(seconds: 2));
-        return _SmallProbeResponse(statusCode: response.statusCode);
-      }
-
-      final bytes = <int>[];
-      await for (final chunk in response.timeout(const Duration(seconds: 8))) {
-        final remaining = 256 * 1024 - bytes.length;
-        if (remaining <= 0) break;
-        bytes.addAll(chunk.length > remaining ? chunk.take(remaining) : chunk);
-      }
-      return _SmallProbeResponse(
-        statusCode: response.statusCode,
-        body: utf8.decode(bytes, allowMalformed: true),
-      );
-    } catch (e) {
-      debugPrint('Robots/sitemap discovery failed for $uri: $e');
-      return const _SmallProbeResponse();
-    } finally {
-      client.close(force: true);
-    }
+    await _serverFetch;
+    return _probeResult ?? {};
   }
 
   /// Get the language name from a MIME type
@@ -3700,9 +3131,6 @@ Technical details: $e''';
   Future<void> _updateAllTabData({bool isPartial = false}) async {
     if (_currentFile == null) return;
 
-    // Update analyzed cookies first (depends on probeResult)
-    _updateAnalyzedCookies();
-
     // Extract metadata if needed
     if ((_currentFile!.content.isNotEmpty &&
             (selectedContentType == 'html' ||
@@ -3722,84 +3150,54 @@ Technical details: $e''';
     notifyListeners();
   }
 
-  /// Extract metadata from the current file content
+  /// Extract metadata from the current file content.
+  ///
+  /// Only one extraction runs at a time; a request that arrives meanwhile is
+  /// queued and runs afterwards on the latest content. A result for a
+  /// navigation or content that has since changed is dropped.
   Future<void> _extractMetadata({bool isPartial = false}) async {
-    if (_currentFile == null || _isExtractingMetadata) return;
+    if (_currentFile == null) return;
+    if (_isExtractingMetadata) {
+      _metadataRerunQueued = true;
+      return;
+    }
 
     _isExtractingMetadata = true;
-    final html = _currentFile!.content;
-    final baseUrl = _currentFile!.isUrl ? _currentFile!.path : '';
-    final headers = _probeResult?['headers'] as Map<String, dynamic>?;
-
     try {
-      final rawMetadata = await extractMetadataInIsolate(
-        html,
-        baseUrl,
-        headers: headers?.cast<String, String>(),
-      );
-      _pageMetadata = Map<String, dynamic>.from(rawMetadata);
-      debugPrint(
-        'Metadata: Extraction complete. Found title: ${_pageMetadata?['title']}, links: ${_pageMetadata?['cssLinks']?.length} CSS, ${_pageMetadata?['jsLinks']?.length} JS, ${_pageMetadata?['media']?['images']?.length} Images',
-      );
+      do {
+        _metadataRerunQueued = false;
+        final file = _currentFile;
+        if (file == null) break;
+        final gen = store.current.generation;
+        final html = file.content;
+        final baseUrl = file.isUrl ? file.path : '';
+        final headers = _probeResult?['headers'] as Map<String, String>?;
 
-      if (_lastPageWeight != null) {
-        _pageMetadata!['pageWeight'] = _lastPageWeight;
-      }
+        Map<String, dynamic>? metadata;
+        try {
+          metadata = Map<String, dynamic>.from(
+              await _metadataExtractor(html, baseUrl, headers: headers));
+        } catch (e, stack) {
+          debugPrint('Error extracting metadata in isolate: $e\n$stack');
+        }
+        if (_disposed) return;
+        if (gen != store.current.generation || _currentFile?.content != html) {
+          continue; // stale: dropped; a queued request reruns below
+        }
 
-      // Correlate resource sizes with metadata
-      if (_pageMetadata != null) {
-        _enrichMetadataWithSizes(baseUrl);
-        _fetchMissingMetadataSizesAsync().ignore();
-      }
-    } catch (e, stack) {
-      debugPrint('Error extracting metadata in isolate: $e\n$stack');
-      _pageMetadata = null;
+        _pageMetadata = metadata;
+        if (metadata != null) {
+          if (_lastPageWeight != null) metadata['pageWeight'] = _lastPageWeight;
+          // Correlate resource sizes with metadata
+          _enrichMetadataWithSizes(baseUrl);
+          _fetchMissingMetadataSizesAsync().ignore();
+        }
+        notifyListeners();
+      } while (_metadataRerunQueued);
     } finally {
       _isExtractingMetadata = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
-  }
-
-  /// Helper to update analyzed cookies by merging server (probe) and browser (webview) cookies
-  void _updateAnalyzedCookies() {
-    // We need at least one source of cookies to proceed, but we might have empty cookies from both
-    // if so, we still want to show an empty list properly if we have a probe result.
-
-    // If we haven't probed yet, we can't really "merge" into the probe result
-    // But we might want to show browser cookies anyway?
-    // We create a minimal placeholder ONLY if we don't have one, ensuring it doesn't look like an error
-    _probeResult ??= {
-      'finalUrl': _currentFile?.path ?? _currentInputText ?? 'unknown',
-      'analyzedCookies': <Map<String, dynamic>>[],
-      'cookies': <String>[],
-    };
-
-    final List<String> serverCookies =
-        (_probeResult!['cookies'] as List?)?.cast<String>() ?? [];
-
-    final analyzed = CookieUtils.mergeCookies(
-      serverCookies,
-      _lastBrowserCookies,
-    );
-
-    _probeResult!['analyzedCookies'] = analyzed
-        .map(
-          (c) => {
-            'name': c.name,
-            'value': c.value,
-            'domain': c.domain,
-            'expires': c.expires,
-            'sameSite': c.sameSite,
-            'secure': c.secure,
-            'httpOnly': c.httpOnly,
-            'category': c.category.toString().split('.').last,
-            'provider': c.provider,
-            'source': c.source,
-          },
-        )
-        .toList();
-
-    // Don't notify here - caller will notify
   }
 
   /// Matches extracted metadata links with performance resource data to find sizes
@@ -4205,27 +3603,9 @@ Technical details: $e''';
       // which is handled by onPageStarted/onUrlChange in BrowserView
     }
 
-    // Trigger probe for the new URL if not already probing it or if it's different from the result
-    // Independent Probe: This ensures we have server-side data for Probe/Security tabs
-    // In our new architecture, loadFromUrl already triggered the probe.
-    // However, if the user navigated INSIDE the WebView (clicked a link), we need to trigger it here.
-    final String? existingFinalUrl = _probeResult?['finalUrl'];
-    final bool alreadyProbed =
-        existingFinalUrl != null && areUrlsEqual(existingFinalUrl, url);
-
-    if (_currentlyProbingUrl != url && !alreadyProbed) {
-      // Synchronize _currentlyProbingUrl even if we don't start a new probe
-      // This ensures background probes for PREVIOUS pages are correctly identified as stale
-      _currentlyProbingUrl = url;
-
-      probeUrl(url).catchError((e) {
-        debugPrint('Error probing synced URL: $e');
-        return <String, dynamic>{};
-      });
-    } else {
-      // Ensure stale background probes are discarded by updating the active target
-      _currentlyProbingUrl = url;
-    }
+    // Server side of the page the browser is on (headers, redirects, robots).
+    // A page the current navigation covers is not fetched again.
+    probeUrl(url).ignore();
 
     try {
       // 1. Critical: Get Content (HTML or Raw)
@@ -4436,7 +3816,7 @@ Technical details: $e''';
               debugPrint('Error getting native cookies: $e');
               _lastBrowserCookies = weightMap['cookies']?.toString() ?? '';
             }
-            _updateAnalyzedCookies();
+            // analyzedCookies is derived from _lastBrowserCookies on read.
 
             // Parse detailed resource data
             if (weightMap['list'] != null && weightMap['list'] is List) {
@@ -4999,25 +4379,24 @@ Technical details: $e''';
     // Clear cookies using the static/singleton CookieManager
     await CookieManager.instance().deleteAllCookies();
 
-    // Reset probe results as they might contain now-invalid cookie data
-    _probeResult = null;
+    // Browser cookies are gone; the server's own data stays valid.
+    _lastBrowserCookies = '';
     _pageMetadata = null;
 
     debugPrint('Browser storage (cache, local storage, cookies) cleared');
     notifyListeners();
   }
-
-  http.Client _createClient() {
-    final ioc = HttpClient();
-    ioc.badCertificateCallback =
-        CertificateSecurityService.defaultBadCertificateCallback;
-    return IOClient(ioc);
-  }
 }
 
-class _SmallProbeResponse {
-  final int? statusCode;
-  final String? body;
+/// Production [BrowserLoader]: navigates the active WebView, if there is one.
+class _ControllerBrowserLoader implements BrowserLoader {
+  final HtmlService _service;
+  _ControllerBrowserLoader(this._service);
 
-  const _SmallProbeResponse({this.statusCode, this.body});
+  @override
+  void loadUrl(Uri url) {
+    _service.activeWebViewController
+        ?.loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())))
+        .ignore();
+  }
 }

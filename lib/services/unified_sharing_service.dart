@@ -487,7 +487,7 @@ class UnifiedSharingService {
         path: 'shared://file',
       );
 
-      await htmlService.loadFile(snapshot.toHtmlFile());
+      await htmlService.loadFile(snapshot.toHtmlFile(), snapshot: snapshot);
     } catch (e) {
       debugPrint('UnifiedSharingService: Error handling file bytes: $e');
       if (context.mounted) {
@@ -773,7 +773,7 @@ If you're the app developer, please update the native iOS Share Extension code.'
           origin: FileOrigin.share);
       final htmlFile = snapshot.toHtmlFile();
 
-      await htmlService.loadFile(htmlFile);
+      await htmlService.loadFile(htmlFile, snapshot: snapshot);
     } catch (e) {
       debugPrint('UnifiedSharingService: Error handling file path: $e');
       if (context.mounted) {

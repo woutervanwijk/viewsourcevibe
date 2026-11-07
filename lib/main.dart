@@ -5,6 +5,7 @@ import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/file_system_service.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
@@ -105,7 +106,7 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
         // Refusals/missing files come back as a visible error file.
         final snapshot = await FileLoader.fromDeepLinkPath(filePath);
         await htmlService.loadFile(snapshot.toHtmlFile(),
-            switchToTab: HtmlService.viewerTab);
+            switchToTab: HtmlService.viewerTab, snapshot: snapshot);
       } catch (e) {
         debugPrint('Error loading file from deep link: $e');
       }
@@ -215,8 +216,6 @@ Try these solutions:
   else if (uri.scheme == 'http' || uri.scheme == 'https') {
     debugPrint('Opening web URL: ${uri.toString()}');
     try {
-      // Trigger probe in parallel
-      htmlService.probeUrl(uri.toString()).ignore();
       await htmlService.loadFromUrl(uri.toString());
     } catch (e) {
       debugPrint('Error loading web URL: $e');
@@ -238,7 +237,8 @@ void main() async {
     PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
   }
 
-  final htmlService = HtmlService();
+  final inspectionStore = InspectionStore();
+  final htmlService = HtmlService(store: inspectionStore);
   final appSettings = AppSettings();
   final fileSystemService = FileSystemService();
   final appStateService = await AppStateService.create();
@@ -294,10 +294,11 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => htmlService),
-        ChangeNotifierProvider(create: (_) => appSettings),
-        ChangeNotifierProvider(create: (_) => appStateService),
-        ChangeNotifierProvider(create: (_) => urlHistoryService),
+        ChangeNotifierProvider.value(value: inspectionStore),
+        ChangeNotifierProvider.value(value: htmlService),
+        ChangeNotifierProvider.value(value: appSettings),
+        ChangeNotifierProvider.value(value: appStateService),
+        ChangeNotifierProvider.value(value: urlHistoryService),
         Provider<FileSystemService>(create: (_) => fileSystemService),
       ],
       child: const MyApp(),
@@ -416,7 +417,7 @@ Future<void> _performDelayedInitialization(
                       .toHtmlFile()
                       .copyWith(name: savedState.fileName ?? snapshot.name);
                   await htmlService.loadFile(htmlFile,
-                      switchToTab: HtmlService.viewerTab);
+                      switchToTab: HtmlService.viewerTab, snapshot: snapshot);
                 } else {
                   debugPrint(
                       '❌ Restored file no longer exists: ${savedState.filePath}');
@@ -438,14 +439,6 @@ Future<void> _performDelayedInitialization(
               savedState.contentType!.isNotEmpty) {
             htmlService.selectedContentType = savedState.contentType;
             debugPrint('🎨 Restored content type: ${savedState.contentType}');
-          }
-
-          // Restore probe state
-          if (savedState.isProbeVisible != null ||
-              savedState.probeResultJson != null) {
-            htmlService.restoreProbeState(
-                savedState.isProbeVisible, savedState.probeResultJson);
-            debugPrint('🔍 Restored probe state');
           }
 
           // Restore scroll positions

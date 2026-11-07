@@ -1055,9 +1055,6 @@ class ProbeGeneralView extends ProbeViewBase {
                           final redirectUrl = result['redirectLocation'];
                           Provider.of<HtmlService>(context, listen: false)
                               .loadFromUrl(redirectUrl);
-                          Provider.of<HtmlService>(context, listen: false)
-                              .probeUrl(redirectUrl)
-                              .ignore();
                         },
                         child: Text(
                           result['redirectLocation'],

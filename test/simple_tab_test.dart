@@ -73,6 +73,6 @@ void main() {
       await htmlService.loadFile(testFile);
 
       expect(htmlService.probeResult, isNull);
-    }, skip: 'B3: nep-probe, gerepareerd in Taak 7');
+    });
   });
 }
