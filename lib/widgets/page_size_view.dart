@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/utils/format_utils.dart';
 import 'package:view_source_vibe/utils/page_weight.dart';
+import 'package:view_source_vibe/widgets/safe_network_svg.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 
 /// File-type filter tabs: resource type (null = all) and label, matching
@@ -427,10 +427,14 @@ class _PageSizeViewState extends State<PageSizeView>
         color: scheme.surfaceContainerHighest,
         alignment: Alignment.center,
         child: path.endsWith('.svg')
-            ? SvgPicture.network(url,
+            ? SafeNetworkSvg(
+                url: url,
                 width: size,
                 height: size,
-                errorBuilder: (_, __, ___) => fallback)
+                fit: BoxFit.cover,
+                placeholderBuilder: (_) => fallback,
+                errorWidget: fallback,
+              )
             : Image.network(url,
                 width: size,
                 height: size,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/widgets/safe_network_svg.dart';
 
 // Conditional import for web-specific features
 import 'package:view_source_vibe/widgets/media_browser_platform_proxy.dart'
@@ -61,11 +61,12 @@ class _MediaBrowserState extends State<MediaBrowser> {
             maxScale: 5.0,
             child: Center(
               child: extension == 'svg'
-                  ? SvgPicture.network(
-                      widget.file.path,
+                  ? SafeNetworkSvg(
+                      url: widget.file.path,
                       fit: BoxFit.contain,
                       placeholderBuilder: (context) =>
                           const Center(child: CircularProgressIndicator()),
+                      errorWidget: _buildErrorView(),
                     )
                   : Image.network(
                       widget.file.path,

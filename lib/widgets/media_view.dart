@@ -5,62 +5,9 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
+import 'package:view_source_vibe/widgets/safe_network_svg.dart';
 import '../utils/format_utils.dart';
 import '../utils/font_url.dart';
-
-/// Sanitizes SVG data by converting percentage coordinates to absolute values
-/// based on the viewBox. This fixes 'Invalid double: 50%' errors.
-Uint8List _sanitizeSvgData(Uint8List bytes) {
-  try {
-    String content = utf8.decode(bytes, allowMalformed: true).trim();
-    if (content.isEmpty) return bytes;
-
-    // Check if dimensions are present
-    final hasDim = content.contains(
-        RegExp('\\b(width|height|viewBox)\\s*=', caseSensitive: false));
-
-    if (!hasDim) {
-      // Add a fallback viewBox if missing to prevent 'Bad state' error
-      content = content.replaceFirst(
-          RegExp('<svg\\b', caseSensitive: false), '<svg viewBox="0 0 24 24"');
-    }
-
-    // Find viewBox="x y w h" - allow commas as well as spaces
-    final vbRegex = RegExp(
-        'viewBox\\s*=\\s*["\']\\s*(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)\\s*["\']',
-        caseSensitive: false);
-    final viewBoxMatch = vbRegex.firstMatch(content);
-
-    if (viewBoxMatch != null) {
-      final double vbWidth = double.tryParse(viewBoxMatch.group(3)!) ?? 100.0;
-      final double vbHeight = double.tryParse(viewBoxMatch.group(4)!) ?? 100.0;
-
-      // Replace 50% / 100% in cx, cy, x, y, width, height, r, rx, ry
-      final attrRegex = RegExp(
-          '\\b(cx|cy|x|y|width|height|r|rx|ry)\\s*=\\s*["\']\\s*(\\d+\\.?\\d*)\\s*%\\s*["\']',
-          caseSensitive: false);
-      content = content.replaceAllMapped(attrRegex, (match) {
-        final attr = match.group(1);
-        final percentString = match.group(2);
-        final percent = double.tryParse(percentString!) ?? 0.0;
-        final base = (attr == 'cx' ||
-                attr == 'x' ||
-                attr == 'width' ||
-                attr == 'r' ||
-                attr == 'rx')
-            ? vbWidth
-            : vbHeight;
-        final absolute = (percent / 100.0) * base;
-        return '$attr="$absolute"';
-      });
-    }
-
-    return utf8.encode(content);
-  } catch (e) {
-    debugPrint('Error sanitizing SVG: $e');
-    return bytes;
-  }
-}
 
 class MediaView extends StatelessWidget {
   const MediaView({super.key});
@@ -512,7 +459,7 @@ class MediaView extends StatelessWidget {
           header.toLowerCase().contains('<svg');
 
       if (isSvg) {
-        final sanitizedData = _sanitizeSvgData(dataBytes);
+        final sanitizedData = sanitizeSvgData(dataBytes);
         if (sanitizedData.isEmpty) {
           return const Center(
               child: Icon(Icons.broken_image, color: Colors.grey));
@@ -673,112 +620,6 @@ class _FontItemState extends State<_FontItem> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class SafeNetworkSvg extends StatefulWidget {
-  final String url;
-  final BoxFit fit;
-  final WidgetBuilder placeholderBuilder;
-
-  const SafeNetworkSvg({
-    super.key,
-    required this.url,
-    this.fit = BoxFit.contain,
-    required this.placeholderBuilder,
-  });
-
-  @override
-  State<SafeNetworkSvg> createState() => _SafeNetworkSvgState();
-}
-
-class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
-  Future<Uint8List?>? _loadingFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadingFuture = _loadSvg();
-  }
-
-  Future<Uint8List?> _loadSvg() async {
-    try {
-      // Use HtmlService's platform-agnostic HTTP client if possible, but for simple
-      // check we can stick to basic logic or use the existing HtmlService from context if I could access it.
-      // But creating a new Client is safer for isolation.
-      // Note: We need to import http package
-      // Since I cannot easily add imports in this tool call without replacing the top,
-      // I will assume I can add the import in a separate call or use a workaround.
-      // Actually, I should add the import first.
-
-      // Since I can't add import here, I will depend on HtmlService helper?
-      // No, HtmlService doesn't expose a simple "getBytes" for arbitrary URL easily without side effects.
-
-      // I'll assume standard http GET for now and fix imports in next step.
-      // Or I can use NetworkAssetBundle which is available in Flutter.
-
-      final bundle = NetworkAssetBundle(Uri.parse(widget.url));
-      final data = await bundle.load("");
-      final bytes = data.buffer.asUint8List();
-
-      // Simple validation to prevent HTML parsing
-      // Check first 1KB for <html or <!DOCTYPE htmlTags
-      final head = String.fromCharCodes(
-        bytes.sublist(0, bytes.length < 1024 ? bytes.length : 1024),
-      ).toLowerCase();
-
-      if (head.contains('<html') || head.contains('<!doctype html')) {
-        debugPrint(
-            'SVG Validation Failed: Content looks like HTML for ${widget.url}');
-        return null; // Invalid SVG
-      }
-
-      return _sanitizeSvgData(bytes);
-    } catch (e) {
-      debugPrint('Error loading SVG: $e');
-      return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _loadingFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return widget.placeholderBuilder(context);
-        }
-
-        if (snapshot.hasError || snapshot.data == null) {
-          return const Center(
-              child: Icon(Icons.broken_image, color: Colors.grey));
-        }
-
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            double w =
-                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            double h =
-                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
-            if (w.isNaN || w.isInfinite) w = 100.0;
-            if (h.isNaN || h.isInfinite) h = 100.0;
-            return Center(
-              child: SvgPicture.memory(
-                snapshot.data!,
-                width: w,
-                height: h,
-                fit: widget.fit,
-                placeholderBuilder: widget.placeholderBuilder,
-                errorBuilder: (context, error, stackTrace) {
-                  debugPrint('SVG Render Error (network): $error');
-                  return const Icon(Icons.broken_image, color: Colors.grey);
-                },
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
