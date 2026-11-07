@@ -33,6 +33,7 @@ import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
+import 'package:view_source_vibe/services/derive/security_audit.dart';
 import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
@@ -722,6 +723,20 @@ class HtmlService extends ChangeNotifier {
       _headers = deriveHeaders(current);
     }
     return _headers!;
+  }
+
+  Observed<SecurityModel>? _security;
+  PageInspection? _securityFor;
+
+  /// The Security tab: header audit, CSP and certificate of the final
+  /// response; no score while the response is unknown.
+  Observed<SecurityModel> get securityView {
+    final current = store.current;
+    if (_security == null || !identical(current, _securityFor)) {
+      _securityFor = current;
+      _security = deriveSecurity(current);
+    }
+    return _security!;
   }
 
   Observed<PageSizeModel>? _pageSize;

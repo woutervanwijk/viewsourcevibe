@@ -10,6 +10,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
+import 'package:view_source_vibe/services/derive/security_audit.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/utils/format_utils.dart';
 
@@ -1052,22 +1053,42 @@ class ProbeHeadersView extends StatelessWidget {
   }
 }
 
-class ProbeSecurityView extends ProbeViewBase {
+// ---------------------------------------------------------------------------
+// Security
+// ---------------------------------------------------------------------------
+
+Color _certColor(CertTone tone) => switch (tone) {
+      CertTone.good => Colors.green,
+      CertTone.warn => Colors.orange,
+      CertTone.bad => Colors.red,
+      CertTone.neutral => Colors.grey,
+    };
+
+class ProbeSecurityView extends StatelessWidget {
   const ProbeSecurityView({super.key});
 
-  @override
-  Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    final Map<String, dynamic> security = result['security'] ?? {};
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    final state = context
+        .select<HtmlService, Observed<SecurityModel>>((s) => s.securityView);
+    return _tabBody(state, (m) => _content(context, m));
+  }
+
+  Widget _content(BuildContext context, SecurityModel m) {
+    final audit = m.audit;
     return Scrollbar(
         child: ListView(
       primary: true,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
-        _buildSecurityScorecard(context, result, security),
+        _buildSecurityScorecard(context, audit),
         const SizedBox(height: 16),
-        _buildCspSimulator(context, security),
+        _buildCspSimulator(context, m.csp),
         const SizedBox(height: 16),
         Text(
           'Security Header Audit',
@@ -1077,16 +1098,13 @@ class ProbeSecurityView extends ProbeViewBase {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        if (result['tlsInvalidCertificate'] == true) ...[
-          _buildTlsWarningCard(context, result),
+        if (m.tlsWarning != null) ...[
+          _buildTlsWarningCard(context, m.tlsWarning!),
           const SizedBox(height: 12),
         ],
-        ...(() {
-          final sortedSecurity = security.entries.toList()
-            ..sort(
-                (a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
-          return sortedSecurity.map((e) {
-            final isPresent = e.value != null;
+        if (audit is Present<SecurityAudit>)
+          ...audit.value.rows.map((row) {
+            final isPresent = row.value != null;
             return Card(
               elevation: 0,
               margin: const EdgeInsets.only(bottom: 8),
@@ -1105,12 +1123,12 @@ class ProbeSecurityView extends ProbeViewBase {
                       : Icons.warning_amber_rounded,
                   color: isPresent ? Colors.green : Colors.orange,
                 ),
-                title: Text(e.key,
+                title: Text(row.name,
                     style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.bold)),
                 subtitle: Text(
                   isPresent
-                      ? FormatUtils.formatHumanData(e.value!)
+                      ? FormatUtils.formatHumanData(row.value!)
                       : 'Missing Header',
                   style: TextStyle(
                     fontSize: 12,
@@ -1121,8 +1139,9 @@ class ProbeSecurityView extends ProbeViewBase {
                 dense: true,
               ),
             );
-          }).toList();
-        }()),
+          })
+        else
+          _notThere(audit, 'Fetching the response headers…'),
         const SizedBox(height: 24),
         Text(
           'SSL Certificate',
@@ -1132,21 +1151,26 @@ class ProbeSecurityView extends ProbeViewBase {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        _buildCertificateCard(context, result),
+        _buildCertificateCard(context, m.certificate),
       ],
     ));
   }
 
-  Widget _buildSecurityScorecard(BuildContext context,
-      Map<String, dynamic> result, Map<String, dynamic> security) {
-    final checks = _buildSecurityHeaderChecks(result, security);
-    final applicableChecks =
-        checks.where((check) => check.isApplicable).toList();
-    final passed = applicableChecks.where((check) => check.isPassing).length;
-    final total = applicableChecks.length;
-    final score = total == 0 ? 0.0 : passed / total;
-    final percentage = (score * 100).round();
-
+  Widget _buildSecurityScorecard(
+      BuildContext context, Observed<SecurityAudit> state) {
+    if (state is! Present<SecurityAudit> || state.value.percentage == null) {
+      return _card(
+          context,
+          [
+            _cardTitle(context, Icons.security, 'Security Headers Score'),
+            const SizedBox(height: 12),
+            _notThere(state, 'Fetching the response headers…'),
+          ],
+          filled: true);
+    }
+    final audit = state.value;
+    final percentage = audit.percentage!;
+    final score = percentage / 100;
     final Color scoreColor;
     if (percentage >= 80) {
       scoreColor = Colors.green;
@@ -1156,387 +1180,212 @@ class ProbeSecurityView extends ProbeViewBase {
       scoreColor = Colors.red;
     }
 
-    return Card(
-      elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.32),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: scoreColor.withValues(alpha: 0.45)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return _card(
+      context,
+      [
+        Row(
           children: [
-            Row(
-              children: [
-                SizedBox(
-                  width: 54,
-                  height: 54,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CircularProgressIndicator(
-                        value: score,
-                        strokeWidth: 6,
-                        color: scoreColor,
-                        backgroundColor: scoreColor.withValues(alpha: 0.14),
-                      ),
-                      Center(
-                        child: Text(
-                          '$percentage',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: scoreColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                      ),
-                    ],
+            SizedBox(
+              width: 54,
+              height: 54,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: score,
+                    strokeWidth: 6,
+                    color: scoreColor,
+                    backgroundColor: scoreColor.withValues(alpha: 0.14),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Security Headers Score',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '$passed of $total controls present',
-                        style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.72),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: checks.map((check) {
-                final color = !check.isApplicable
-                    ? Colors.grey
-                    : check.isPassing
-                        ? Colors.green
-                        : Colors.orange;
-                return Tooltip(
-                  message: check.detail,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: color.withValues(alpha: 0.35)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          !check.isApplicable
-                              ? Icons.remove_circle_outline
-                              : check.isPassing
-                                  ? Icons.check_circle_outline
-                                  : Icons.warning_amber_rounded,
-                          color: color,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          check.label,
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                  Center(
+                    child: Text(
+                      '$percentage',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: scoreColor,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ),
-                      ],
                     ),
                   ),
-                );
-              }).toList(),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<_SecurityHeaderCheck> _buildSecurityHeaderChecks(
-      Map<String, dynamic> result, Map<String, dynamic> security) {
-    final csp = _headerValue(security, 'Content-Security-Policy');
-    final frameOptions = _headerValue(security, 'X-Frame-Options');
-    final contentTypeOptions = _headerValue(security, 'X-Content-Type-Options');
-    final hsts = _headerValue(security, 'Strict-Transport-Security');
-    final referrerPolicy = _headerValue(security, 'Referrer-Policy');
-    final permissionsPolicy = _headerValue(security, 'Permissions-Policy');
-    final finalUrl =
-        result['finalUrl']?.toString() ?? result['url']?.toString();
-    final isHttps = finalUrl?.startsWith('https://') ?? false;
-
-    final hasFrameProtection =
-        _isPresent(frameOptions) || (csp?.contains('frame-ancestors') ?? false);
-    final hasNoSniff =
-        contentTypeOptions?.toLowerCase().contains('nosniff') ?? false;
-
-    return [
-      _SecurityHeaderCheck(
-        label: 'HSTS',
-        isApplicable: isHttps,
-        isPassing: _isPresent(hsts),
-        detail: isHttps
-            ? (_isPresent(hsts)
-                ? 'Strict-Transport-Security is present.'
-                : 'Missing Strict-Transport-Security on HTTPS.')
-            : 'HSTS is only meaningful on HTTPS responses.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'CSP',
-        isPassing: _isPresent(csp),
-        detail: _isPresent(csp)
-            ? 'Content-Security-Policy is present.'
-            : 'Missing Content-Security-Policy.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'Frames',
-        isPassing: hasFrameProtection,
-        detail: hasFrameProtection
-            ? 'Frame protection is present.'
-            : 'Missing X-Frame-Options or CSP frame-ancestors.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'No Sniff',
-        isPassing: hasNoSniff,
-        detail: hasNoSniff
-            ? 'X-Content-Type-Options includes nosniff.'
-            : 'Missing X-Content-Type-Options: nosniff.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'Referrer',
-        isPassing: _isPresent(referrerPolicy),
-        detail: _isPresent(referrerPolicy)
-            ? 'Referrer-Policy is present.'
-            : 'Missing Referrer-Policy.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'Permissions',
-        isPassing: _isPresent(permissionsPolicy),
-        detail: _isPresent(permissionsPolicy)
-            ? 'Permissions-Policy is present.'
-            : 'Missing Permissions-Policy.',
-      ),
-    ];
-  }
-
-  String? _headerValue(Map<String, dynamic> security, String key) {
-    final value = security[key];
-    if (value == null) return null;
-    final text = value.toString().trim();
-    return text.isEmpty ? null : text.toLowerCase();
-  }
-
-  bool _isPresent(String? value) => value != null && value.isNotEmpty;
-
-  Widget _buildCspSimulator(
-      BuildContext context, Map<String, dynamic> security) {
-    final csp = security['Content-Security-Policy']?.toString() ?? '';
-    final directives = _parseCsp(csp);
-    final findings = _cspFindings(directives);
-    final score = directives.isEmpty
-        ? 0
-        : (100 -
-                findings.where((f) => f.severity == _CspSeverity.high).length *
-                    22 -
-                findings
-                        .where((f) => f.severity == _CspSeverity.medium)
-                        .length *
-                    12)
-            .clamp(0, 100);
-    final color = score >= 80
-        ? Colors.green
-        : score >= 50
-            ? Colors.orange
-            : Colors.red;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: color.withValues(alpha: 0.34)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.policy_outlined, color: color, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'CSP Simulator',
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Security Headers Score',
                     style: Theme.of(context)
                         .textTheme
                         .titleSmall
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
-                ),
-                Text('$score',
+                  const SizedBox(height: 3),
+                  Text(
+                    '${audit.passed} of ${audit.total} controls present',
                     style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (directives.isEmpty)
-              const Text(
-                'No Content-Security-Policy header found.',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              )
-            else ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: directives.entries.map((entry) {
-                  return _buildCspChip(
-                    Icons.rule,
-                    '${entry.key} ${entry.value.length}',
-                    Colors.blue,
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-              ...findings.map((finding) {
-                final findingColor = finding.severity.color;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 7),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(finding.severity.icon,
-                          color: findingColor, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          finding.text,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ],
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.72),
+                      fontSize: 12,
+                    ),
                   ),
-                );
-              }),
-            ],
+                ],
+              ),
+            ),
           ],
         ),
-      ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: audit.checks.map((check) {
+            final color = !check.applicable
+                ? Colors.grey
+                : check.passing
+                    ? Colors.green
+                    : Colors.orange;
+            return Tooltip(
+              message: check.detail,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: color.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      !check.applicable
+                          ? Icons.remove_circle_outline
+                          : check.passing
+                              ? Icons.check_circle_outline
+                              : Icons.warning_amber_rounded,
+                      color: color,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      check.label,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+      filled: true,
+      border: scoreColor.withValues(alpha: 0.45),
     );
   }
 
-  Map<String, List<String>> _parseCsp(String csp) {
-    final result = <String, List<String>>{};
-    for (final part in csp.split(';')) {
-      final tokens = part.trim().split(RegExp(r'\s+'));
-      if (tokens.isEmpty || tokens.first.isEmpty) continue;
-      result[tokens.first.toLowerCase()] = tokens.skip(1).toList();
+  Widget _buildCspSimulator(BuildContext context, Observed<CspModel> state) {
+    if (state is! Present<CspModel>) {
+      return _card(context, [
+        _cardTitle(context, Icons.policy_outlined, 'CSP Simulator'),
+        const SizedBox(height: 12),
+        _notThere(state, 'Fetching the response headers…'),
+      ]);
     }
-    return result;
-  }
+    final csp = state.value;
+    final score = csp.score;
+    final color = score == null
+        ? Colors.grey
+        : score >= 80
+            ? Colors.green
+            : score >= 50
+                ? Colors.orange
+                : Colors.red;
 
-  Widget _buildCspChip(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 14),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+    return _card(
+      context,
+      [
+        Row(
+          children: [
+            Icon(Icons.policy_outlined, color: color, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'CSP Simulator',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
-        ],
-      ),
+            if (score != null)
+              Text('$score',
+                  style: TextStyle(
+                      color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (csp.policies.isEmpty)
+          const Text(
+            'No Content-Security-Policy header found.',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          )
+        else
+          for (final (i, policy) in csp.policies.indexed) ...[
+            if (csp.policies.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6, top: 4),
+                child: Text('Policy ${i + 1} (score ${policy.score})',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: policy.directives
+                  .map((d) => _chip(Icons.rule, '${d.$1} ${d.$2}', Colors.blue))
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
+            ...policy.findings.map((finding) {
+              final findingColor = switch (finding.severity) {
+                CspSeverity.low => Colors.green,
+                CspSeverity.medium => Colors.orange,
+                CspSeverity.high => Colors.red,
+              };
+              final icon = switch (finding.severity) {
+                CspSeverity.low => Icons.check_circle_outline,
+                CspSeverity.medium => Icons.warning_amber_rounded,
+                CspSeverity.high => Icons.dangerous_outlined,
+              };
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(icon, color: findingColor, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(finding.text,
+                          style: const TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+      ],
+      border: color.withValues(alpha: 0.34),
     );
   }
 
-  List<_CspFinding> _cspFindings(Map<String, List<String>> directives) {
-    if (directives.isEmpty) {
-      return const [
-        _CspFinding(_CspSeverity.high,
-            'Missing CSP allows any source by browser default.'),
-      ];
-    }
-    final findings = <_CspFinding>[];
-    final defaultSrc = directives['default-src'] ?? const [];
-    final scriptSrc = directives['script-src'] ?? defaultSrc;
-    final objectSrc = directives['object-src'];
-    final baseUri = directives['base-uri'];
-    final frameAncestors = directives['frame-ancestors'];
-
-    if (scriptSrc.contains("'unsafe-inline'")) {
-      findings.add(const _CspFinding(
-          _CspSeverity.high, "script-src allows 'unsafe-inline'."));
-    }
-    if (scriptSrc.contains("'unsafe-eval'")) {
-      findings.add(const _CspFinding(
-          _CspSeverity.high, "script-src allows 'unsafe-eval'."));
-    }
-    if (defaultSrc.contains('*') || scriptSrc.contains('*')) {
-      findings.add(const _CspFinding(
-          _CspSeverity.medium, 'Wildcard source allows broad loading.'));
-    }
-    if (objectSrc == null || !objectSrc.contains("'none'")) {
-      findings.add(const _CspFinding(
-          _CspSeverity.medium, "object-src should usually be 'none'."));
-    }
-    if (baseUri == null) {
-      findings.add(const _CspFinding(
-          _CspSeverity.medium, 'Missing base-uri protection.'));
-    }
-    if (frameAncestors == null) {
-      findings.add(const _CspFinding(_CspSeverity.medium,
-          'Missing frame-ancestors clickjacking control.'));
-    }
-    if (findings.isEmpty) {
-      findings.add(const _CspFinding(
-          _CspSeverity.low, 'Policy looks reasonably constrained.'));
-    }
-    return findings;
-  }
-
-  Widget _buildTlsWarningCard(
-      BuildContext context, Map<String, dynamic> result) {
-    final warning = result['tlsWarning']?.toString() ??
-        'TLS certificate validation failed. Content was loaded anyway for inspection.';
+  Widget _buildTlsWarningCard(BuildContext context, String warning) {
     return Card(
       elevation: 0,
       color: Colors.orange.withValues(alpha: 0.1),
@@ -1557,142 +1406,99 @@ class ProbeSecurityView extends ProbeViewBase {
   }
 
   Widget _buildCertificateCard(
-      BuildContext context, Map<String, dynamic> result) {
-    final cert = result['certificate'] as Map<String, dynamic>?;
-    if (cert == null) {
-      return Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              Icon(Icons.no_encryption_gmailerrorred, color: Colors.orange),
-              SizedBox(width: 12),
-              Expanded(child: Text('No certificate information available')),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final Map<String, dynamic>? subjectParsed = cert['subjectParsed'];
-    final Map<String, dynamic>? issuerParsed = cert['issuerParsed'];
-    final String start = cert['startValidity'] ?? '';
-    final String end = cert['endValidity'] ?? '';
-    final finalUrl =
-        result['finalUrl']?.toString() ?? result['url']?.toString();
-    final host = Uri.tryParse(finalUrl ?? '')?.host ?? '';
-    final commonName = subjectParsed?['Common Name']?.toString() ?? '';
-    final validity = _certificateValidity(end);
-    final hostMatch = _certificateHostMatches(host, commonName);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      BuildContext context, Observed<CertificateModel> state) {
+    if (state is! Present<CertificateModel>) {
+      return _card(context, [
+        Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildCertSignal(
-                    context,
-                    validity.$2,
-                    validity.$1,
-                    validity.$3,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildCertSignal(
-                    context,
-                    hostMatch ? Colors.green : Colors.orange,
-                    hostMatch
-                        ? Icons.verified_user_outlined
-                        : Icons.help_outline,
-                    host.isEmpty
-                        ? 'Host unknown'
-                        : hostMatch
-                            ? 'CN matches host'
-                            : 'CN differs from host',
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            Text(
-              'Subject (Owner)',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildParsedInfo(context, subjectParsed, cert['subject']),
-            const Divider(height: 24),
-            Text(
-              'Issuer',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildParsedInfo(context, issuerParsed, cert['issuer']),
-            const Divider(height: 24),
-            Row(
-              children: [
-                Expanded(
-                    child: _buildCertDetail(
-                        context, 'Valid From', _formatDate(start))),
-                Expanded(
-                    child: _buildCertDetail(
-                        context, 'Valid Until', _formatDate(end))),
-              ],
-            ),
-            if (cert['der'] != null) ...[
-              const Divider(height: 24),
-              _buildCertDetail(
-                context,
-                'DER Fingerprint Hint',
-                cert['der'].toString().substring(
-                      0,
-                      cert['der'].toString().length.clamp(0, 32),
-                    ),
-              ),
-            ],
-            if (cert['pem'] != null) ...[
-              const Divider(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.copy, size: 16),
-                  label: const Text('Copy PEM Certificate'),
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: cert['pem']));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Certificate copied')),
-                    );
-                  },
-                ),
-              ),
-            ],
+            const Icon(Icons.no_encryption_gmailerrorred, color: Colors.orange),
+            const SizedBox(width: 12),
+            Expanded(child: _notThere(state, 'Fetching the certificate…')),
           ],
         ),
+      ]);
+    }
+    final cert = state.value;
+    final validityColor = _certColor(cert.validityTone);
+    final hostColor = cert.hostMatches ? Colors.green : Colors.orange;
+
+    return _card(context, [
+      Row(
+        children: [
+          Expanded(
+            child: _buildCertSignal(
+                context,
+                validityColor,
+                cert.validityExpired
+                    ? Icons.dangerous_outlined
+                    : cert.validityTone == CertTone.neutral
+                        ? Icons.help_outline
+                        : cert.validityTone == CertTone.good
+                            ? Icons.check_circle_outline
+                            : Icons.warning_amber_rounded,
+                cert.validityLabel),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildCertSignal(
+              context,
+              hostColor,
+              cert.hostMatches
+                  ? Icons.verified_user_outlined
+                  : Icons.help_outline,
+              cert.hostLabel,
+            ),
+          ),
+        ],
       ),
-    );
+      const Divider(height: 24),
+      _certSectionTitle(context, 'Subject (Owner)'),
+      const SizedBox(height: 8),
+      _buildParsedInfo(context, cert.subject, cert.subjectRaw),
+      const Divider(height: 24),
+      _certSectionTitle(context, 'Issuer'),
+      const SizedBox(height: 8),
+      _buildParsedInfo(context, cert.issuer, cert.issuerRaw),
+      const Divider(height: 24),
+      Row(
+        children: [
+          Expanded(
+              child: _buildCertDetail(context, 'Valid From', cert.validFrom)),
+          Expanded(
+              child: _buildCertDetail(context, 'Valid Until', cert.validUntil)),
+        ],
+      ),
+      if (cert.derHint != null) ...[
+        const Divider(height: 24),
+        _buildCertDetail(context, 'DER Fingerprint Hint', cert.derHint!),
+      ],
+      if (cert.pem != null) ...[
+        const Divider(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Copy PEM Certificate'),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: cert.pem!));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Certificate copied')),
+              );
+            },
+          ),
+        ),
+      ],
+    ]);
   }
+
+  Widget _certSectionTitle(BuildContext context, String text) => Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      );
 
   Widget _buildCertSignal(
       BuildContext context, Color color, IconData icon, String label) {
@@ -1724,51 +1530,11 @@ class ProbeSecurityView extends ProbeViewBase {
     );
   }
 
-  (IconData, Color, String) _certificateValidity(String end) {
-    try {
-      final endDate = DateTime.parse(end);
-      final days = endDate.difference(DateTime.now()).inDays;
-      if (days < 0) {
-        return (
-          Icons.dangerous_outlined,
-          Colors.red,
-          'Expired ${days.abs()}d ago'
-        );
-      }
-      if (days < 14) {
-        return (Icons.warning_amber_rounded, Colors.red, 'Expires in ${days}d');
-      }
-      if (days < 45) {
-        return (
-          Icons.warning_amber_rounded,
-          Colors.orange,
-          'Expires in ${days}d'
-        );
-      }
-      return (Icons.check_circle_outline, Colors.green, 'Valid for ${days}d');
-    } catch (_) {
-      return (Icons.help_outline, Colors.grey, 'Validity unknown');
-    }
-  }
-
-  bool _certificateHostMatches(String host, String commonName) {
-    if (host.isEmpty || commonName.isEmpty) return false;
-    final normalizedHost = host.toLowerCase();
-    final normalizedCn = commonName.toLowerCase();
-    if (normalizedCn == normalizedHost) return true;
-    if (normalizedCn.startsWith('*.')) {
-      final suffix = normalizedCn.substring(1);
-      return normalizedHost.endsWith(suffix) &&
-          normalizedHost.split('.').length == normalizedCn.split('.').length;
-    }
-    return false;
-  }
-
   Widget _buildParsedInfo(
-      BuildContext context, Map<String, dynamic>? parsed, String? raw) {
-    if (parsed == null || parsed.isEmpty) {
+      BuildContext context, Map<String, String> parsed, String raw) {
+    if (parsed.isEmpty) {
       return SelectableText(
-        raw ?? 'Unknown',
+        raw,
         style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
       );
     }
@@ -1790,7 +1556,7 @@ class ProbeSecurityView extends ProbeViewBase {
               ),
               Expanded(
                 child: SelectableText(
-                  e.value.toString(),
+                  e.value,
                   style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w500),
                 ),
@@ -1806,14 +1572,7 @@ class ProbeSecurityView extends ProbeViewBase {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
+        _certSectionTitle(context, label),
         const SizedBox(height: 4),
         SelectableText(
           value,
@@ -1821,17 +1580,6 @@ class ProbeSecurityView extends ProbeViewBase {
         ),
       ],
     );
-  }
-
-  String _formatDate(String isoString) {
-    try {
-      if (isoString.isEmpty) return 'Unknown';
-      final date = DateTime.parse(isoString);
-      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
-          '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return isoString;
-    }
   }
 }
 
@@ -2368,53 +2116,4 @@ class _CookiePrivacyNote {
   final String text;
 
   const _CookiePrivacyNote(this.icon, this.color, this.text);
-}
-
-enum _CspSeverity {
-  low,
-  medium,
-  high;
-
-  Color get color {
-    switch (this) {
-      case _CspSeverity.low:
-        return Colors.green;
-      case _CspSeverity.medium:
-        return Colors.orange;
-      case _CspSeverity.high:
-        return Colors.red;
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case _CspSeverity.low:
-        return Icons.check_circle_outline;
-      case _CspSeverity.medium:
-        return Icons.warning_amber_rounded;
-      case _CspSeverity.high:
-        return Icons.dangerous_outlined;
-    }
-  }
-}
-
-class _CspFinding {
-  final _CspSeverity severity;
-  final String text;
-
-  const _CspFinding(this.severity, this.text);
-}
-
-class _SecurityHeaderCheck {
-  final String label;
-  final bool isApplicable;
-  final bool isPassing;
-  final String detail;
-
-  const _SecurityHeaderCheck({
-    required this.label,
-    this.isApplicable = true,
-    required this.isPassing,
-    required this.detail,
-  });
 }
