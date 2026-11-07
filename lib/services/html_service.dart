@@ -45,7 +45,6 @@ import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
-import 'package:view_source_vibe/services/legacy_probe_adapter.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_payload.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -116,7 +115,6 @@ class HtmlService extends ChangeNotifier {
   Observed<BrowserSnapshot>? _derivedBrowser;
   Observed<ServerSnapshot>? _derivedServer;
   List<Map<String, dynamic>> _timeline = const [];
-  Map<String, dynamic>? _browserProbe;
   Map<String, dynamic>? _browserWeight;
 
   void _deriveBrowserData() {
@@ -128,7 +126,6 @@ class HtmlService extends ChangeNotifier {
     _derivedBrowser = current.browser;
     _derivedServer = current.server;
     _timeline = legacyResourceTimeline(current);
-    _browserProbe = legacyBrowserProbeMap(current);
     _browserWeight = legacyPageWeight(current);
   }
 
@@ -141,9 +138,6 @@ class HtmlService extends ChangeNotifier {
   /// The server fetch of the current navigation (null when none runs).
   Future<void>? _serverFetch;
 
-  // Cached legacy probe map, rebuilt when the store or browser cookies change.
-  Map<String, dynamic>? _probeCache;
-  PageInspection? _probeCacheFor;
 
   bool _metadataRerunQueued = false;
 
@@ -416,22 +410,16 @@ class HtmlService extends ChangeNotifier {
   GlobalKey? get codeEditorKey => _codeEditorKey;
 
   // Expose probe state
-  /// Legacy view of the server data: null until the server answered, and for
-  /// local files or failed fetches. Never a placeholder.
-  Map<String, dynamic>? get probeResult => _probeResult;
-  Map<String, dynamic>? get _probeResult {
-    final current = store.current;
-    if (!identical(current, _probeCacheFor)) {
-      _probeCache = legacyProbeMap(current);
-      _probeCacheFor = current;
-    }
-    return _probeCache;
-  }
-
-  /// What the browser reported about the page; null until it did.
-  Map<String, dynamic>? get browserProbeResult {
-    _deriveBrowserData();
-    return _browserProbe;
+  /// The app's own server answer, final hop: headers without Set-Cookie
+  /// (values joined by ", "). Null until the server answered, and for local
+  /// files or failed fetches. Never a placeholder.
+  Map<String, String>? get _responseHeaders {
+    final server = SovereigntyService.serverOf(store.current);
+    if (server == null) return null;
+    return {
+      for (final e in server.hops.last.headers.entries)
+        if (e.key != 'set-cookie') e.key: e.value.join(', '),
+    };
   }
 
   /// The HTML exactly as the server sent it; null while unknown.
@@ -1027,8 +1015,7 @@ class HtmlService extends ChangeNotifier {
 
   bool get isHtml {
     final contentType =
-        _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-            '';
+        _responseHeaders?['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('text/html') ||
         contentType.contains('application/xhtml+xml')) {
       return true;
@@ -1156,8 +1143,7 @@ class HtmlService extends ChangeNotifier {
 
   bool get isSvg {
     final contentType =
-        _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-            '';
+        _responseHeaders?['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('image/svg+xml')) return true;
 
     return selectedContentType == 'svg' ||
@@ -1166,8 +1152,7 @@ class HtmlService extends ChangeNotifier {
 
   bool get isXml {
     final contentType =
-        _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-            '';
+        _responseHeaders?['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('application/xml') ||
         contentType.contains('text/xml')) {
       return true;
@@ -1267,8 +1252,7 @@ class HtmlService extends ChangeNotifier {
 
   bool get isMedia {
     final contentType =
-        _probeResult?['headers']?['content-type']?.toString().toLowerCase() ??
-            '';
+        _responseHeaders?['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('image/') ||
         contentType.contains('video/') ||
         contentType.contains('audio/')) {
@@ -1719,7 +1703,7 @@ class HtmlService extends ChangeNotifier {
 
   /// Without browser numbers, the document's own wire and decoded size.
   void _applyPageWeight(Map<String, dynamic>? weight) {
-    if (weight != null && browserProbeResult == null) _lastPageWeight = weight;
+    if (weight != null && _browserWeight == null) _lastPageWeight = weight;
   }
 
   static bool _sameUrlString(String a, String b) {
@@ -2685,7 +2669,6 @@ Technical details: $message''';
           lastModified: _currentFile!.lastModified,
           size: _currentFile!.size,
           isUrl: _currentFile!.isUrl,
-          probeResult: _probeResult ?? _currentFile!.probeResult,
         );
 
         // Prevent duplicates in back stack (don't push if same as top)
@@ -2740,19 +2723,11 @@ Technical details: $message''';
     _lastCurrentFileUpdate = DateTime.now();
     _originalFile = file; // Store original file for "Automatic" option
 
-    // Try to determine content type from probe result
-    if (_probeResult != null && _probeResult!['headers'] is Map) {
-      final headers = _probeResult!['headers'] as Map;
-      // Headers keys are often lowercase, but let's check carefully
-      // The headers from http.Response are usually case-insensitive, but when serialized to Map they might not be
-      final contentType = headers['content-type'] ?? headers['Content-Type'];
-
-      if (contentType != null && contentType is String) {
-        final detectedLanguage = getLanguageForMimeType(contentType);
-        if (detectedLanguage != null) {
-          selectedContentType = detectedLanguage;
-        }
-      }
+    // Try to determine content type from the server's answer
+    final contentType = _responseHeaders?['content-type'];
+    if (contentType != null) {
+      final detectedLanguage = getLanguageForMimeType(contentType);
+      if (detectedLanguage != null) selectedContentType = detectedLanguage;
     }
 
     // Record in history if it has a path/URL
@@ -2797,8 +2772,7 @@ Technical details: $message''';
     // Automatically detect content type for syntax highlighting
     // This ensures HTML content gets proper syntax highlighting even when loaded from URLs
     try {
-      final headers = _probeResult?['headers'] as Map<String, String>?;
-      final contentType = headers?['content-type'];
+      final contentType = _responseHeaders?['content-type'];
 
       final detectedType = await fileTypeDetector.detectFileType(
         filename: file.name,
@@ -3944,11 +3918,6 @@ Technical details: $message''';
       await _extractMetadata(isPartial: isPartial);
     }
 
-    // Ensure probe result is properly set in current file
-    if (_probeResult != null && _currentFile != null) {
-      _currentFile = _currentFile!.copyWith(probeResult: _probeResult);
-    }
-
     notifyListeners();
   }
 
@@ -3981,7 +3950,7 @@ Technical details: $message''';
         final input = _metadataInput(file);
         final html = input.text;
         final baseUrl = input.baseUrl;
-        final headers = _probeResult?['headers'] as Map<String, String>?;
+        final headers = _responseHeaders;
 
         Map<String, dynamic>? metadata;
         DerivedMetadata? derived;
@@ -4575,8 +4544,7 @@ Technical details: $message''';
           filename = generateDescriptiveFilename(
               uri, dom is Present<RenderedDom> ? dom.value.text : '');
         } catch (_) {}
-        final file = legacyDomFile(browser.value,
-            name: filename, probeResult: _probeResult);
+        final file = legacyDomFile(browser.value, name: filename);
         if (file != null) {
           await loadFile(file, clearProbe: false, isPartial: isPartial);
           if (stale()) return;

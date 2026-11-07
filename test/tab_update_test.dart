@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
@@ -36,7 +38,7 @@ void main() {
       expect(htmlService.isExtractingMetadata, isFalse);
 
       // No server fetch happened for this page: no probe result, no placeholder.
-      expect(htmlService.probeResult, isNull);
+      expect(htmlService.store.current.server, isNot(isA<Present<ServerSnapshot>>()));
     });
 
     test('loadFile of a local file updates metadata but has no probe result',
@@ -53,7 +55,7 @@ void main() {
       await htmlService.loadFile(testFile);
 
       // A local file never contacted a server: no probe result, no placeholder.
-      expect(htmlService.probeResult, isNull);
+      expect(htmlService.store.current.server, isNot(isA<Present<ServerSnapshot>>()));
       expect(htmlService.pageMetadata, isNotNull);
     });
 

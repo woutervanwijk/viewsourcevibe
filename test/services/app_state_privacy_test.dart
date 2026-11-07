@@ -22,15 +22,6 @@ void main() {
       lastModified: DateTime(2024),
       size: 24,
       isUrl: true,
-      probeResult: {
-        'cookies': [
-          {'name': 'sid', 'value': 'COOKIE-SECRET'}
-        ],
-        'analyzedCookies': [
-          {'name': 'sid', 'value': 'COOKIE-SECRET'}
-        ],
-        'headers': {'set-cookie': 'sid=COOKIE-SECRET'},
-      },
     );
     await service.loadFile(file);
 

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
@@ -72,7 +74,7 @@ void main() {
 
       await htmlService.loadFile(testFile);
 
-      expect(htmlService.probeResult, isNull);
+      expect(htmlService.store.current.server, isNot(isA<Present<ServerSnapshot>>()));
     });
   });
 }

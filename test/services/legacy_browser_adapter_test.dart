@@ -4,7 +4,6 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
-import 'package:view_source_vibe/services/legacy_probe_adapter.dart';
 import 'package:view_source_vibe/utils/text_decoding.dart';
 
 Present<T> _b<T>(T v) => Present(v, source: DataSource.browser);
@@ -249,55 +248,6 @@ void main() {
     });
   });
 
-  group('legacyBrowserProbeMap', () {
-    test('has url, platform, resourceCount, pageWeight and storage', () {
-      final storage = BrowserStorage(
-        local: _b(StorageArea(
-            count: 2, bytes: _b(30), topItems: const [StorageItem('k', 20)])),
-        session: const Unavailable(UnavailableReason.blockedBySite, 'denied'),
-      );
-      final m = legacyBrowserProbeMap(inspection(
-          snap(storage: _b(storage), platform: BrowserPlatform.ios, resources: [
-        res('https://a.test/a.js', tx: _b(10), dec: _b(20)),
-        res('https://c.test/b.js'),
-      ])))!;
-      expect(m['url'], 'https://a.test/page');
-      expect(m['platform'], 'ios');
-      expect(m['os'], 'ios');
-      expect(m['resourceCount'], 2);
-      expect(m['pageWeight']['totalTransfer'], 10);
-      expect(m['pageWeight']['totalDecoded'], 20);
-      expect(m['pageWeight']['isPartial'], isTrue);
-      final local = m['storage']['localStorage'] as Map;
-      expect(local['count'], 2);
-      expect(local['bytes'], 30);
-      expect(local['items'], [
-        {'k': 'k', 's': 20}
-      ]);
-      // A session area that could not be read is absent, not {count: 0}.
-      expect((m['storage'] as Map).containsKey('sessionStorage'), isFalse);
-    });
-
-    test('does not copy the server status or the title (B19)', () {
-      final m =
-          legacyBrowserProbeMap(inspection(snap(), server: serverSnap()))!;
-      expect(m.containsKey('serverStatusCode'), isFalse);
-      expect(m.containsKey('title'), isFalse);
-    });
-
-    test('null unless the browser is Present', () {
-      expect(legacyBrowserProbeMap(inspection(null)), isNull);
-    });
-
-    test('resourceCount is absent when resources are unavailable', () {
-      final m = legacyBrowserProbeMap(inspection(snap(
-          resourcesObserved:
-              const Unavailable(UnavailableReason.unsupportedPlatform))))!;
-      expect(m.containsKey('resourceCount'), isFalse);
-      expect(m.containsKey('pageWeight'), isFalse);
-    });
-  });
-
   group('legacyDomFile', () {
     test('size is the UTF-8 byte length of the serialized DOM (B9)', () {
       final b = snap();
@@ -312,76 +262,6 @@ void main() {
       final b = BrowserSnapshot.unavailable(Uri.parse('https://a.test/'),
           BrowserPlatform.windows, UnavailableReason.unsupportedPlatform, 'x');
       expect(legacyDomFile(b, name: 'p.html'), isNull);
-    });
-  });
-
-  group('analyzed cookies carry the real flags (B20)', () {
-    test('browser flags are kept, Unavailable stays unknown (absent)', () {
-      final m = legacyProbeMap(
-        inspection(
-            snap(
-                cookies: _b([
-              cookie('known',
-                  secure: _b(true), httpOnly: _b(false), domain: _b('a.test')),
-              cookie('flagless'),
-            ])),
-            server: serverSnap()),
-      )!;
-      final list = (m['analyzedCookies'] as List).cast<Map>();
-      final known = list.firstWhere((c) => c['name'] == 'known');
-      expect(known['secure'], true);
-      expect(known['httpOnly'], false);
-      expect(known['domain'], 'a.test');
-      final flagless = list.firstWhere((c) => c['name'] == 'flagless');
-      expect(flagless.containsKey('secure'), isFalse);
-      expect(flagless.containsKey('httpOnly'), isFalse);
-    });
-
-    test('a server cookie keeps its Set-Cookie flags', () {
-      final m = legacyProbeMap(inspection(snap(), server: serverSnap()))!;
-      final sid = (m['analyzedCookies'] as List)
-          .cast<Map>()
-          .firstWhere((c) => c['name'] == 'sid');
-      expect(sid['secure'], true);
-      expect(sid['source'], 'Server');
-    });
-
-    test(
-        'same name seen by server and browser merges, flags unknown stay '
-        'unknown', () {
-      final m = legacyProbeMap(inspection(snap(cookies: _b([cookie('sid')])),
-          server: serverSnap()))!;
-      final list = (m['analyzedCookies'] as List).cast<Map>();
-      final sid = list.where((c) => c['name'] == 'sid').toList();
-      expect(sid, hasLength(1));
-      expect(sid.single['source'], 'Server + Browser');
-      expect(sid.single['secure'], true); // from the server header
-      expect(sid.single.containsKey('httpOnly'), isTrue); // server: no attr
-      expect(sid.single['httpOnly'], false);
-    });
-
-    test('browser-only cookie with unknown HttpOnly is not marked false', () {
-      final m = legacyProbeMap(inspection(snap(cookies: _b([cookie('jsonly')])),
-          server: serverSnap()))!;
-      final c = (m['analyzedCookies'] as List)
-          .cast<Map>()
-          .firstWhere((c) => c['name'] == 'jsonly');
-      expect(c['httpOnly'], isNot(false));
-      expect(c.containsKey('httpOnly'), isFalse);
-    });
-
-    test('cookies of different domains are not merged by name alone', () {
-      final m = legacyProbeMap(inspection(
-          snap(
-              cookies: _b([
-            cookie('id', domain: _b('a.test')),
-            cookie('id', domain: _b('tracker.test')),
-          ])),
-          server: serverSnap()))!;
-      final ids = (m['analyzedCookies'] as List)
-          .cast<Map>()
-          .where((c) => c['name'] == 'id');
-      expect(ids, hasLength(2));
     });
   });
 }

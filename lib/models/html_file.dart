@@ -6,7 +6,6 @@ class HtmlFile {
   final int size;
   final bool isUrl;
   final bool isError;
-  final Map<String, dynamic>? probeResult;
   final bool isShared;
 
   HtmlFile({
@@ -16,7 +15,6 @@ class HtmlFile {
     required this.lastModified,
     required this.size,
     this.isUrl = false,
-    this.probeResult,
     this.isError = false,
     this.isShared = false,
   });
@@ -125,7 +123,6 @@ class HtmlFile {
     DateTime? lastModified,
     int? size,
     bool? isUrl,
-    Map<String, dynamic>? probeResult,
     bool? isError,
     bool? isShared,
   }) {
@@ -136,7 +133,6 @@ class HtmlFile {
       lastModified: lastModified ?? this.lastModified,
       size: size ?? this.size,
       isUrl: isUrl ?? this.isUrl,
-      probeResult: probeResult ?? this.probeResult,
       isError: isError ?? this.isError,
       isShared: isShared ?? this.isShared,
     );

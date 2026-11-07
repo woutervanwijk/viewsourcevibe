@@ -24,13 +24,6 @@ void main() {
           lastModified: DateTime.utc(2026, 4, 29),
           size: 82,
           isUrl: true,
-          probeResult: {
-            'url': 'https://example.com',
-            'statusCode': 200,
-            'headers': {'content-type': 'text/html'},
-            'security': {'X-Content-Type-Options': 'nosniff'},
-            'analyzedCookies': [],
-          },
         ),
       );
 

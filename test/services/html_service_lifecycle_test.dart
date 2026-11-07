@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -109,6 +110,12 @@ ServerSnapshot failedSnapshot(String url, String message) => ServerSnapshot(
       certificate: const Unavailable(UnavailableReason.notApplicable),
     );
 
+/// The app's own server answer in the store; null unless it is Present.
+ServerSnapshot? presentServer(HtmlService s) {
+  final v = s.store.current.server;
+  return v is Present<ServerSnapshot> ? v.value : null;
+}
+
 HtmlFile localFile(String name, String content, {String? path}) => HtmlFile(
     name: name,
     path: path ?? '/tmp/$name',
@@ -171,7 +178,7 @@ void main() {
       await pumpEventQueue();
 
       expect(service.serverSource, '<html>S</html>');
-      expect(service.probeResult!['statusCode'], 200);
+      expect(presentServer(service)!.hops.last.statusCode, 200);
     });
 
     test('server body fills an empty currentFile until the DOM replaces it',
@@ -196,22 +203,21 @@ void main() {
           .complete(failedSnapshot('https://a.test/', 'network error: down'));
       await pumpEventQueue();
 
-      expect(service.probeResult, isNull);
+      expect(presentServer(service), isNull);
       expect(service.probeError, 'network error: down');
       expect(service.serverSource, isNull);
       expect(service.isProbing, isFalse);
     });
 
-    test('redirect chain from the server shows up in probeResult', () async {
+    test('redirect chain from the server is in the store', () async {
       await service.loadUrl('http://a.test/');
       fetcher.pending.single.complete(
           okSnapshot('http://a.test/', 'x', finalUrl: 'https://a.test/'));
       await pumpEventQueue();
 
-      final p = service.probeResult!;
-      expect(p['isRedirect'], isTrue);
-      expect((p['redirectChain'] as List).length, 1);
-      expect(p['finalUrl'], 'https://a.test/');
+      final p = presentServer(service)!;
+      expect(p.hops.length, 2);
+      expect((p.finalUrl as Present<Uri>).value.toString(), 'https://a.test/');
     });
   });
 
@@ -247,7 +253,7 @@ void main() {
 
       expect(service.currentFile!.isError, isTrue);
       expect(service.currentFile!.content, contains('timeout: slow'));
-      expect(service.probeResult, isNull);
+      expect(presentServer(service), isNull);
       expect(service.probeError, 'timeout: slow');
     });
   });
@@ -264,14 +270,15 @@ void main() {
       await pumpEventQueue();
 
       expect(service.serverSource, isNull);
-      expect(service.probeResult, isNull);
+      expect(presentServer(service), isNull);
       expect(service.currentFile?.content ?? '', isNot(contains('A')));
 
       fetcher.pending[1]
           .complete(okSnapshot('https://b.test/', '<html>B</html>'));
       await pumpEventQueue();
       expect(service.serverSource, '<html>B</html>');
-      expect(service.probeResult!['url'], 'https://b.test/');
+      expect(
+          presentServer(service)!.requestedUrl.toString(), 'https://b.test/');
     });
 
     test('source-first: a late result for A never touches currentFile',
@@ -334,8 +341,9 @@ void main() {
       expect(store.current.generation, gen + 1);
       fetcher.pending[1].complete(okSnapshot('https://other.test/', 'o'));
       await probe;
-      expect(service.probeResult!['statusCode'], 200);
-      expect(service.probeResult!['url'], 'https://other.test/');
+      expect(presentServer(service)!.hops.last.statusCode, 200);
+      expect(presentServer(service)!.requestedUrl.toString(),
+          'https://other.test/');
     });
   });
 
@@ -418,7 +426,7 @@ void main() {
           .complete(okSnapshot('https://a.test/', '<html>A</html>'));
       await pumpEventQueue();
       expect(service.serverSource, isNull);
-      expect(service.probeResult, isNull);
+      expect(presentServer(service), isNull);
 
       fetcher.pending[1]
           .complete(okSnapshot('https://a.test/other', '<html>O</html>'));
@@ -479,7 +487,7 @@ void main() {
   group('local files', () {
     test('have no probe result and no probe error (B3)', () async {
       await service.loadFile(localFile('t.html', '<p>x</p>'));
-      expect(service.probeResult, isNull);
+      expect(presentServer(service), isNull);
       expect(service.probeError, isNull);
       expect(service.isProbing, isFalse);
       expect(service.serverSource, isNull);
@@ -489,20 +497,21 @@ void main() {
       await service.loadUrl('https://a.test/');
       service.seedBrowserDataForTest();
       expect(service.resourceTimelineData, isNotEmpty);
-      expect(service.browserProbeResult, isNotNull);
+      expect(service.store.current.browser, isA<Present<BrowserSnapshot>>());
 
       await service.loadFile(localFile('t.html', '<p>x</p>'));
 
       expect(service.resourceTimelineData, isEmpty);
-      expect(service.browserProbeResult, isNull);
+      expect(service.store.current.browser,
+          isNot(isA<Present<BrowserSnapshot>>()));
       expect(service.sovereigntyReport, isNull);
-      expect(service.probeResult, isNull);
+      expect(presentServer(service), isNull);
     });
 
     test('a URL page loaded without a fetch has no probe result (B3)',
         () async {
       await service.loadFile(localFileUrl('https://a.test/', '<p>x</p>'));
-      expect(service.probeResult, isNull);
+      expect(presentServer(service), isNull);
     });
 
     test('reloadCurrentFile re-reads through FileLoader (non-UTF-8 ok)',
@@ -532,8 +541,7 @@ void main() {
     });
     tearDown(() => dir.delete(recursive: true));
 
-    test('refresh() re-reads the file and never goes to the network',
-        () async {
+    test('refresh() re-reads the file and never goes to the network', () async {
       f.writeAsStringSync('<p>new</p>');
       await service.refresh();
 

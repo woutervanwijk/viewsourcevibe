@@ -77,60 +77,12 @@ Map<String, dynamic>? legacyPageWeight(PageInspection p) {
   };
 }
 
-Map<String, dynamic>? _storageArea(Observed<StorageArea> o) {
-  final a = _value(o);
-  if (a == null) return null;
-  final bytes = _value(a.bytes);
-  return {
-    'count': a.count,
-    if (bytes != null) 'bytes': bytes,
-    'items': [
-      for (final i in a.topItems) {'k': i.key, 's': i.bytes},
-    ],
-  };
-}
-
-/// `browserProbeResult`: what the browser reported about the page. The
-/// server's status code and the page title are not copied (B19).
-Map<String, dynamic>? legacyBrowserProbeMap(PageInspection p) {
-  final b = _browser(p);
-  if (b == null) return null;
-  final resources = _resources(b);
-  final weight = legacyPageWeight(p);
-  final storage = _value(b.storage);
-  final local = storage == null ? null : _storageArea(storage.local);
-  final session = storage == null ? null : _storageArea(storage.session);
-  return {
-    'browser': 'InAppWebView',
-    'os': b.platform.name,
-    'platform': b.platform.name,
-    'url': b.url.toString(),
-    if (resources != null) 'resourceCount': resources.length,
-    if (weight != null)
-      'pageWeight': {
-        if (weight.containsKey('transfer')) 'totalTransfer': weight['transfer'],
-        if (weight.containsKey('decoded')) 'totalDecoded': weight['decoded'],
-        'isPartial': weight['isPartial'],
-        if (weight.containsKey('documentSource'))
-          'documentSource': weight['documentSource'],
-        if (weight.containsKey('snapshotTimeMs'))
-          'snapshotTimeMs': weight['snapshotTimeMs'],
-        'breakdown': weight['breakdown'],
-      },
-    if (local != null || session != null)
-      'storage': {
-        if (local != null) 'localStorage': local,
-        if (session != null) 'sessionStorage': session,
-      },
-  };
-}
-
 /// The rendered DOM as a file for the viewer. Its `size` is the UTF-8 byte
 /// length of the serialized DOM text: it is not the size of the network
 /// response (that is the server body's or a resource entry's). Null unless
 /// the DOM is Present.
 HtmlFile? legacyDomFile(BrowserSnapshot b,
-    {required String name, Map<String, dynamic>? probeResult}) {
+    {required String name}) {
   final dom = _value(b.renderedDom);
   if (dom == null) return null;
   return HtmlFile(
@@ -140,6 +92,5 @@ HtmlFile? legacyDomFile(BrowserSnapshot b,
     lastModified: DateTime.now(),
     size: utf8.encode(dom.text).length,
     isUrl: true,
-    probeResult: probeResult,
   );
 }

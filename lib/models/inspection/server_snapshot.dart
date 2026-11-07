@@ -103,9 +103,6 @@ class ServerSnapshot {
   /// Certificate of the final hop.
   final Observed<Map<String, dynamic>> certificate;
 
-  /// Pending until `fetchRobots` has run; use [withRobots].
-  final Observed<RobotsInfo> robots;
-
   /// True when the user accepted an untrusted TLS certificate for this fetch
   /// (the content was loaded anyway, for inspection).
   final bool acceptedInvalidCertificate;
@@ -118,19 +115,6 @@ class ServerSnapshot {
     required this.body,
     required this.timingMs,
     required this.certificate,
-    this.robots = const Pending(),
     this.acceptedInvalidCertificate = false,
   });
-
-  ServerSnapshot withRobots(Observed<RobotsInfo> robots) => ServerSnapshot(
-        requestedUrl: requestedUrl,
-        userAgent: userAgent,
-        hops: hops,
-        finalUrl: finalUrl,
-        body: body,
-        timingMs: timingMs,
-        certificate: certificate,
-        robots: robots,
-        acceptedInvalidCertificate: acceptedInvalidCertificate,
-      );
 }

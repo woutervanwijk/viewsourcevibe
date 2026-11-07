@@ -8,11 +8,17 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
+import 'package:view_source_vibe/services/derive/cookies.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 
 import 'html_service_lifecycle_test.dart'
-    show FakeServerFetcher, FakeBrowserLoader, okSnapshot, localFile;
+    show
+        FakeServerFetcher,
+        FakeBrowserLoader,
+        okSnapshot,
+        localFile,
+        presentServer;
 
 /// A collector payload in the schema of `__vsv_collect()`.
 String payload({
@@ -147,7 +153,11 @@ void main() {
       final t = service.resourceTimelineData;
       expect(t.single['name'], 'https://a.test/a.js');
       expect(t.single['transfer'], 100);
-      expect(service.browserProbeResult!['resourceCount'], 1);
+      expect(
+          ((store.current.browser as Present<BrowserSnapshot>).value.resources
+                  as Present<List<ResourceEntry>>)
+              .value,
+          hasLength(1));
     });
 
     test('a failed storage section does not drop the rest (B22)', () async {
@@ -191,11 +201,11 @@ void main() {
       final browserState = store.current.browser;
       expect(browserState, isA<Failed<BrowserSnapshot>>());
       expect((browserState as Failed).error, contains('webview gone'));
-      expect(service.probeResult!['statusCode'], 200);
+      expect(presentServer(service)!.hops.last.statusCode, 200);
       expect(service.serverSource, '<html>S</html>');
       expect(service.currentFile!.content, '<html>S</html>');
       expect(service.resourceTimelineData, isEmpty);
-      expect(service.browserProbeResult, isNull);
+      expect(store.current.browser, isNot(isA<Present<BrowserSnapshot>>()));
     });
 
     test('a non-String result is Unavailable and does not blank the page',
@@ -237,11 +247,10 @@ void main() {
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
 
-      final cookies =
-          (service.probeResult!['analyzedCookies'] as List).cast<Map>();
-      final sid = cookies.firstWhere((c) => c['name'] == 'sid');
-      expect(sid['httpOnly'], true);
-      expect(sid['secure'], true);
+      final sid =
+          deriveCookies(store.current).firstWhere((c) => c.name == 'sid');
+      expect(sid.httpOnly, true);
+      expect(sid.secure, true);
     });
 
     test('without native cookies the JS cookies are used, flags unknown',
@@ -250,10 +259,8 @@ void main() {
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
 
-      final cookies =
-          (service.probeResult!['analyzedCookies'] as List).cast<Map>();
-      final c = cookies.firstWhere((c) => c['name'] == 'jsc');
-      expect(c.containsKey('httpOnly'), isFalse);
+      final c = deriveCookies(store.current).firstWhere((c) => c.name == 'jsc');
+      expect(c.httpOnly, isNull); // unknown, not false
     });
 
     test('the raw payload of the last sync is kept per generation', () async {
@@ -507,11 +514,11 @@ void main() {
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
       expect(service.resourceTimelineData, isNotEmpty);
-      expect(service.browserProbeResult, isNotNull);
+      expect(store.current.browser, isA<Present<BrowserSnapshot>>());
 
       await service.loadUrl('https://b.test/');
       expect(service.resourceTimelineData, isEmpty);
-      expect(service.browserProbeResult, isNull);
+      expect(store.current.browser, isNot(isA<Present<BrowserSnapshot>>()));
     });
 
     test('metadata sizes tolerate unknown (null) resource sizes', () async {
