@@ -4,8 +4,7 @@ import '../models/html_file.dart';
 import '../models/inspection/browser_snapshot.dart';
 import '../models/inspection/observed.dart';
 import '../models/inspection/page_inspection.dart';
-import '../models/inspection/server_snapshot.dart';
-import 'probe_service.dart';
+import 'derive/page_weight.dart';
 
 /// Old-style maps for the widgets that still read them, built from the
 /// store's browser snapshot. Pure functions: a value that is not Present is
@@ -55,99 +54,26 @@ List<Map<String, dynamic>> legacyResourceTimeline(PageInspection p) {
   ]);
 }
 
-class _Bucket {
-  int count = 0;
-  int transfer = 0, decoded = 0;
-  bool hasTransfer = false, hasDecoded = false;
-
-  Map<String, dynamic> toMap() => {
-        'count': count,
-        if (hasTransfer) 'transfer': transfer,
-        if (hasDecoded) 'decoded': decoded,
-      };
-}
-
-/// The page weight: totals over the values that are Present, a breakdown per
-/// type, and `isPartial` when something is missing from the totals (a
-/// resource without a transfer size, a non-image without a decoded size,
-/// truncated resources). Images are judged by their transfer size: WebKit
-/// reports the decoded pixel buffer for them, so their decoded size is never
-/// added there and its absence is not a gap.
-///
-/// The browser does not report the main document's own size; when the
-/// server's body is Present its sizes are added (`documentSource: 'server'`).
-/// Null unless the browser's resources are Present.
+/// The page weight as the old map: totals over the values that are Present,
+/// a breakdown per type, `isPartial` when something is missing. See
+/// [derivePageWeight]. Null unless the browser's resources are Present.
 Map<String, dynamic>? legacyPageWeight(PageInspection p) {
-  final b = _browser(p);
-  final resources = b == null ? null : _resources(b);
-  if (b == null || resources == null) return null;
-
-  final pageUrl = b.url.toString();
-  final buckets = {
-    'scripts': _Bucket(),
-    'css': _Bucket(),
-    'images': _Bucket(),
-    'html': _Bucket(),
-    'other': _Bucket(),
-  };
-  var partial = b.resourcesTruncated;
-
-  for (final r in resources) {
-    final category = ProbeService.categorizeResource(r.url, pageUrl);
-    final isImage = category == 'image' || r.type == 'img' || r.type == 'image';
-    final bucket = buckets[switch (category) {
-      'script' => 'scripts',
-      'style' => 'css',
-      'image' => 'images',
-      'document' => 'html',
-      _ => 'other',
-    }]!;
-    bucket.count++;
-
-    final tx = _value(r.transfer);
-    if (tx == null) {
-      partial = true;
-    } else {
-      bucket.transfer += tx;
-      bucket.hasTransfer = true;
-    }
-
-    final dec = _value(r.decoded);
-    if (dec == null) {
-      if (!isImage) partial = true;
-    } else if (!(isImage && b.platform.isWebKit)) {
-      bucket.decoded += dec;
-      bucket.hasDecoded = true;
-    }
-  }
-
-  var documentFromServer = false;
-  final server = p.server;
-  if (server is Present<ServerSnapshot>) {
-    final body = server.value.body;
-    if (body is Present<ServerBody>) {
-      final html = buckets['html']!;
-      html.count++;
-      html.transfer += body.value.transferLength;
-      html.hasTransfer = true;
-      html.decoded += body.value.byteLength;
-      html.hasDecoded = true;
-      if (body.value.truncated) partial = true;
-      documentFromServer = true;
-    }
-  }
-
-  final all = buckets.values;
-  final hasTransfer = all.any((x) => x.hasTransfer);
-  final hasDecoded = all.any((x) => x.hasDecoded);
-  final snapshotTime = _value(b.snapshotTimeMs);
+  final w = derivePageWeight(p);
+  if (w == null) return null;
   return {
-    if (hasTransfer) 'transfer': all.fold<int>(0, (s, x) => s + x.transfer),
-    if (hasDecoded) 'decoded': all.fold<int>(0, (s, x) => s + x.decoded),
-    'isPartial': partial,
-    if (documentFromServer) 'documentSource': 'server',
-    if (snapshotTime != null) 'snapshotTimeMs': snapshotTime,
-    'breakdown': {for (final e in buckets.entries) e.key: e.value.toMap()},
+    if (w.transfer != null) 'transfer': w.transfer,
+    if (w.decoded != null) 'decoded': w.decoded,
+    'isPartial': w.isPartial,
+    if (w.documentSource != null) 'documentSource': w.documentSource!.name,
+    if (w.snapshotTimeMs != null) 'snapshotTimeMs': w.snapshotTimeMs,
+    'breakdown': {
+      for (final e in w.breakdown.entries)
+        e.key: {
+          'count': e.value.count,
+          if (e.value.transfer != null) 'transfer': e.value.transfer,
+          if (e.value.decoded != null) 'decoded': e.value.decoded,
+        },
+    },
   };
 }
 

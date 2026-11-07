@@ -22,6 +22,13 @@ class CookieInfo {
   final String? expires;
   final String? sameSite;
 
+  /// The Path attribute / the browser's cookie path; null = unknown.
+  final String? path;
+
+  /// For a server cookie: the host the Set-Cookie came from, used to match a
+  /// host-only cookie (no Domain attribute) with the browser's copy.
+  final String? requestHost;
+
   /// null = unknown (the browser did not expose the flag); never assumed false.
   final bool? secure;
   final bool? httpOnly;
@@ -37,6 +44,8 @@ class CookieInfo {
     this.sameSite,
     this.secure,
     this.httpOnly,
+    this.path,
+    this.requestHost,
   });
 }
 
@@ -4316,7 +4325,8 @@ class CookieUtils {
         _ => CookieCategory.functional,
       };
 
-  static CookieInfo analyze(String rawCookie, String source) {
+  static CookieInfo analyze(String rawCookie, String source,
+      {DateTime? now, String? requestHost}) {
     // Parse name and value, and handle attributes
     final parts = rawCookie.split(';');
     final pair = parts[0].split('=');
@@ -4325,6 +4335,8 @@ class CookieUtils {
 
     String? domain;
     String? expires;
+    String? path;
+    int? maxAge;
     String? sameSite;
     bool secure = false;
     bool httpOnly = false;
@@ -4339,6 +4351,15 @@ class CookieUtils {
         if (eqIndex != -1) domain = attr.substring(eqIndex + 1).trim();
       } else if (lowerAttr.startsWith('expires=')) {
         if (eqIndex != -1) expires = attr.substring(eqIndex + 1).trim();
+      } else if (lowerAttr.startsWith('max-age=')) {
+        if (eqIndex != -1) {
+          maxAge = int.tryParse(attr.substring(eqIndex + 1).trim());
+        }
+      } else if (lowerAttr.startsWith('path=')) {
+        if (eqIndex != -1) {
+          final v = attr.substring(eqIndex + 1).trim();
+          if (v.isNotEmpty) path = v;
+        }
       } else if (lowerAttr.startsWith('samesite=')) {
         if (eqIndex != -1) sameSite = attr.substring(eqIndex + 1).trim();
       } else if (lowerAttr == 'secure') {
@@ -4386,10 +4407,20 @@ class CookieUtils {
 
     final known = knownData ?? {};
 
+    // Max-Age wins over Expires (RFC 6265 5.3): expires = now + Max-Age.
+    if (maxAge != null) {
+      expires = (now ?? DateTime.now())
+          .toUtc()
+          .add(Duration(seconds: maxAge))
+          .toIso8601String();
+    }
+
     return CookieInfo(
       name: name,
       value: value,
       domain: domain,
+      path: path,
+      requestHost: requestHost,
       expires: expires,
       sameSite: sameSite,
       secure: secure,
@@ -4411,6 +4442,7 @@ class CookieUtils {
       name: c.name,
       value: c.value,
       domain: text<String>(c.domain, (v) => v),
+      path: text<String>(c.path, (v) => v),
       expires: text<DateTime>(c.expires, (v) => v.toUtc().toIso8601String()),
       sameSite: text<String>(c.sameSite, (v) => v),
       secure: flag(c.isSecure),
@@ -4419,68 +4451,5 @@ class CookieUtils {
       provider: base.provider,
       source: 'Browser',
     );
-  }
-
-  static String? _bareDomain(String? d) {
-    if (d == null || d.isEmpty) return null;
-    final lower = d.toLowerCase();
-    return lower.startsWith('.') ? lower.substring(1) : lower;
-  }
-
-  /// True when two cookies with the same name can be the same cookie: a
-  /// domain that is unknown on either side does not tell them apart.
-  static bool _sameCookie(CookieInfo a, CookieInfo b) {
-    if (a.name != b.name) return false;
-    final x = _bareDomain(a.domain), y = _bareDomain(b.domain);
-    return x == null || y == null || x == y;
-  }
-
-  static bool? _anyTrue(bool? a, bool? b) =>
-      a == true || b == true ? true : a ?? b;
-
-  /// Set-Cookie headers of the server plus the cookies the browser holds.
-  /// The same cookie seen by both is merged; cookies of the same name on
-  /// different domains stay separate.
-  static List<CookieInfo> mergeCookies(
-      List<String> serverCookies, List<BrowserCookie> browserCookies) {
-    final merged = <CookieInfo>[];
-
-    for (final sc in serverCookies) {
-      final name = sc.split(';')[0].split('=')[0].trim();
-      if (name.isEmpty) continue;
-      final info = analyze(sc, 'Server');
-      final i = merged.indexWhere((m) => _sameCookie(m, info));
-      if (i >= 0) {
-        merged[i] = info; // a later Set-Cookie for the same cookie wins
-      } else {
-        merged.add(info);
-      }
-    }
-
-    for (final b in browserCookies) {
-      if (b.name.isEmpty) continue;
-      final bc = fromBrowser(b);
-      final i = merged.indexWhere((m) => _sameCookie(m, bc));
-      if (i < 0) {
-        merged.add(bc);
-        continue;
-      }
-      final existing = merged[i];
-      merged[i] = CookieInfo(
-        name: bc.name,
-        value: bc.value,
-        domain: existing.domain ?? bc.domain,
-        expires: existing.expires ?? bc.expires,
-        sameSite: existing.sameSite ?? bc.sameSite,
-        secure: _anyTrue(existing.secure, bc.secure),
-        httpOnly: _anyTrue(existing.httpOnly, bc.httpOnly),
-        category: existing.category == CookieCategory.unknown
-            ? bc.category
-            : existing.category,
-        provider: existing.provider ?? bc.provider,
-        source: 'Server + Browser',
-      );
-    }
-    return merged;
   }
 }

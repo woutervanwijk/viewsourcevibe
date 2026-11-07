@@ -1,8 +1,7 @@
-import '../models/inspection/browser_snapshot.dart';
 import '../models/inspection/observed.dart';
 import '../models/inspection/page_inspection.dart';
 import '../models/inspection/server_snapshot.dart';
-import '../utils/cookie_utils.dart';
+import 'derive/cookies.dart';
 
 /// The old `probeResult` map, built from the store's server data (and
 /// robots), so widgets that still read the map keep working. The analyzed
@@ -86,26 +85,8 @@ Map<String, dynamic>? legacyProbeMap(PageInspection p) {
     map['robotsSitemap'] = _robotsMap(s.requestedUrl, robots.value);
   }
 
-  final browser = p.browser;
-  final browserCookies = browser is Present<BrowserSnapshot> &&
-          browser.value.cookies is Present<List<BrowserCookie>>
-      ? (browser.value.cookies as Present<List<BrowserCookie>>).value
-      : const <BrowserCookie>[];
   map['analyzedCookies'] = [
-    for (final c in CookieUtils.mergeCookies(cookies, browserCookies))
-      {
-        'name': c.name,
-        'value': c.value,
-        if (c.domain != null) 'domain': c.domain,
-        if (c.expires != null) 'expires': c.expires,
-        if (c.sameSite != null) 'sameSite': c.sameSite,
-        // Unknown flags are left out, never reported as false.
-        if (c.secure != null) 'secure': c.secure,
-        if (c.httpOnly != null) 'httpOnly': c.httpOnly,
-        'category': c.category.toString().split('.').last,
-        'provider': c.provider,
-        'source': c.source,
-      },
+    for (final c in deriveCookies(p)) cookieInfoToMap(c),
   ];
   return map;
 }

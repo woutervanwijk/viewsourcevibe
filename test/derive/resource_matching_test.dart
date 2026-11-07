@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/derive/resource_matching.dart';
 
 void main() {
-  group('HtmlService.sameResourceModuloCacheBusters', () {
+  group('sameResourceModuloCacheBusters', () {
     test('matches identical URLs', () {
       expect(
-        HtmlService.sameResourceModuloCacheBusters(
+        sameResourceModuloCacheBusters(
           'https://i.regiogroei.cloud/a.jpg?width=112&height=64',
           'https://i.regiogroei.cloud/a.jpg?width=112&height=64',
         ),
@@ -15,14 +15,14 @@ void main() {
 
     test('ignores cache-buster params like v and cb', () {
       expect(
-        HtmlService.sameResourceModuloCacheBusters(
+        sameResourceModuloCacheBusters(
           'https://cdn.example.com/app.js?v=1',
           'https://cdn.example.com/app.js?v=2',
         ),
         isTrue,
       );
       expect(
-        HtmlService.sameResourceModuloCacheBusters(
+        sameResourceModuloCacheBusters(
           'https://i.regiogroei.cloud/a.jpg?width=112&cb=aaa',
           'https://i.regiogroei.cloud/a.jpg?cb=bbb&width=112',
         ),
@@ -32,7 +32,7 @@ void main() {
 
     test('does not match different resize params on the same path', () {
       expect(
-        HtmlService.sameResourceModuloCacheBusters(
+        sameResourceModuloCacheBusters(
           'https://i.regiogroei.cloud/a.jpg?width=112&height=64',
           'https://i.regiogroei.cloud/a.jpg?width=264&height=148',
         ),
@@ -42,7 +42,7 @@ void main() {
 
     test('does not match a resized variant against the unresized original', () {
       expect(
-        HtmlService.sameResourceModuloCacheBusters(
+        sameResourceModuloCacheBusters(
           'https://i.regiogroei.cloud/a.jpg?width=112&height=64',
           'https://i.regiogroei.cloud/a.jpg',
         ),
@@ -52,19 +52,24 @@ void main() {
 
     test('does not match different paths or hosts', () {
       expect(
-        HtmlService.sameResourceModuloCacheBusters(
+        sameResourceModuloCacheBusters(
           'https://cdn.example.com/a/app.js',
           'https://cdn.example.com/b/app.js',
         ),
         isFalse,
       );
       expect(
-        HtmlService.sameResourceModuloCacheBusters(
+        sameResourceModuloCacheBusters(
           'https://i.regiogroei.cloud/a.jpg',
           'https://s.regiogroei.cloud/a.jpg',
         ),
         isFalse,
       );
     });
+  });
+
+  test('queryWithoutCacheBusters is sorted and drops busters', () {
+    expect(queryWithoutCacheBusters(Uri.parse('https://a/x?b=2&v=9&a=1')),
+        'a=1&b=2');
   });
 }
