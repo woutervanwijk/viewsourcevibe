@@ -31,7 +31,9 @@ import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
+import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
+import 'package:view_source_vibe/services/derive/source_view.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
 import 'package:view_source_vibe/services/legacy_probe_adapter.dart';
@@ -370,8 +372,8 @@ class HtmlService extends ChangeNotifier {
 
   void _startDetectionScan(DetectionTexts texts) {
     _scanPending = true;
-    final scan = _detectionScanner ??
-        (DetectionTexts t) => compute(scanTextsToMaps, t);
+    final scan =
+        _detectionScanner ?? (DetectionTexts t) => compute(scanTextsToMaps, t);
     void done(List<Map<String, dynamic>>? maps) {
       if (_disposed || !identical(_scanTexts, texts)) return;
       _scanPending = false;
@@ -384,6 +386,76 @@ class HtmlService extends ChangeNotifier {
       debugPrint('Detection scan failed: $e');
       done(null);
     });
+  }
+
+  SourceView? _sourceView;
+  PageInspection? _sourceViewFor;
+  String? _sourceViewFallback;
+
+  /// The document the Source tab and DOM tree show (from the store; the
+  /// legacy current file only fills in when the store holds no document).
+  SourceView get sourceView {
+    final current = store.current;
+    final fallback = _currentFile?.content;
+    if (_sourceView == null ||
+        !identical(current, _sourceViewFor) ||
+        !identical(fallback, _sourceViewFallback)) {
+      _sourceViewFor = current;
+      _sourceViewFallback = fallback;
+      _sourceView = deriveSourceView(current, fallbackText: fallback);
+    }
+    return _sourceView!;
+  }
+
+  /// The user picked a document in the Source tab's switch.
+  void selectSourceDocument(DataSource source) =>
+      store.setPrimaryDocument(source);
+
+  /// Set when the content was loaded although its TLS certificate is invalid.
+  String? get tlsWarning {
+    final server = store.current.server;
+    if (server is! Present<ServerSnapshot> ||
+        !server.value.acceptedInvalidCertificate ||
+        server.value.hops.isEmpty ||
+        server.value.hops.last.url.scheme != 'https') {
+      return null;
+    }
+    return 'TLS certificate validation failed. Content was loaded anyway for inspection.';
+  }
+
+  /// Content-Type of the server's final response; null when unknown.
+  String? get serverContentType {
+    final server = store.current.server;
+    if (server is! Present<ServerSnapshot> || server.value.hops.isEmpty) {
+      return null;
+    }
+    return server.value.hops.last.header('content-type');
+  }
+
+  DomTree? _domTree;
+  String? _domTreeText;
+  DomTreeKind? _domTreeKind;
+
+  /// How many times a tree was built (tests: once per document).
+  @visibleForTesting
+  int domTreeBuilds = 0;
+
+  /// The DOM tree of the Source tab's document; null while it has no text.
+  /// Built once per document (the text's identity) and kind.
+  DomTree? get domTree {
+    final text = sourceView.textOrNull;
+    if (text == null) return null;
+    final kind =
+        isSvg ? DomTreeKind.svg : (isXml ? DomTreeKind.xml : DomTreeKind.html);
+    if (_domTree == null ||
+        !identical(text, _domTreeText) ||
+        kind != _domTreeKind) {
+      domTreeBuilds++;
+      _domTree = deriveDomTree(text, kind);
+      _domTreeText = text;
+      _domTreeKind = kind;
+    }
+    return _domTree;
   }
 
   List<Divergence>? _divergences;
