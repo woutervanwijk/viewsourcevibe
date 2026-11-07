@@ -14,7 +14,9 @@ const String vsvResourceBootstrapJs = r'''
   window.__vsv_obs = {};
   window.__vsv_obsCount = 0;
   window.__vsv_obsDropped = 0;
+  window.__vsv_obsOk = false;
   window.__vsv_patch = [];
+  window.__vsv_patchDropped = 0;
   try {
     if (performance.setResourceTimingBufferSize) {
       performance.setResourceTimingBufferSize(10000);
@@ -23,20 +25,23 @@ const String vsvResourceBootstrapJs = r'''
   function skip(name) {
     return !name || name.indexOf('data:') === 0 || name.indexOf('blob:') === 0;
   }
+  // A field the browser does not report stays null (never 0).
+  function num(v) { return typeof v === 'number' ? v : null; }
+  function sum(o) { return (o.tx || 0) + (o.enc || 0) + (o.dec || 0); }
   function record(e) {
     if (skip(e.name)) return;
     var cur = {
       it: e.initiatorType || '',
-      st: e.startTime || 0,
-      du: e.duration || 0,
-      tx: e.transferSize || 0,
-      enc: e.encodedBodySize || 0,
-      dec: e.decodedBodySize || 0
+      st: num(e.startTime),
+      du: num(e.duration),
+      tx: num(e.transferSize),
+      enc: num(e.encodedBodySize),
+      dec: num(e.decodedBodySize)
     };
     var prev = window.__vsv_obs[e.name];
     if (prev) {
       // Keep the first start/duration; take the sizes when they are larger.
-      if (cur.tx + cur.enc + cur.dec > prev.tx + prev.enc + prev.dec) {
+      if (sum(cur) > sum(prev)) {
         prev.tx = cur.tx; prev.enc = cur.enc; prev.dec = cur.dec;
       }
       return;
@@ -51,10 +56,15 @@ const String vsvResourceBootstrapJs = r'''
       for (var i = 0; i < es.length; i++) record(es[i]);
     });
     obs.observe({type: 'resource', buffered: true});
+    // Only set when observe() did not throw; otherwise the collector falls
+    // back to performance.getEntriesByType.
+    window.__vsv_obsOk = true;
   } catch (e) {}
-  function patchRecord(url, cl, kind) {
-    if (skip(url) || !(cl > 0) || window.__vsv_patch.length >= MAX) return;
-    window.__vsv_patch.push({n: url, it: kind, cl: cl, st: performance.now()});
+  // st is performance.now() taken when the request started, not at response.
+  function patchRecord(url, cl, kind, st) {
+    if (skip(url) || !(cl > 0)) return;
+    if (window.__vsv_patch.length >= MAX) { window.__vsv_patchDropped++; return; }
+    window.__vsv_patch.push({n: url, it: kind, cl: cl, st: st});
   }
   try {
     var origFetch = window.fetch;
@@ -62,10 +72,11 @@ const String vsvResourceBootstrapJs = r'''
       window.fetch = function(input, init) {
         var url = typeof input === 'string' ? input :
             (input && input.url) ? input.url : String(input);
+        var t0 = performance.now();
         return origFetch.apply(this, arguments).then(function(resp) {
           try {
             var cl = resp.headers.get('content-length');
-            if (cl) patchRecord(url, parseInt(cl, 10), 'fetch');
+            if (cl) patchRecord(url, parseInt(cl, 10), 'fetch', t0);
           } catch (e) {}
           return resp;
         });
@@ -81,10 +92,11 @@ const String vsvResourceBootstrapJs = r'''
     var xhrSend = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send = function() {
       var xhr = this;
+      var t0 = performance.now();
       xhr.addEventListener('load', function() {
         try {
           var cl = xhr.getResponseHeader('content-length');
-          if (cl && xhr.__vsvUrl) patchRecord(String(xhr.__vsvUrl), parseInt(cl, 10), 'xhr');
+          if (cl && xhr.__vsvUrl) patchRecord(String(xhr.__vsvUrl), parseInt(cl, 10), 'xhr', t0);
         } catch (e) {}
       });
       return xhrSend.apply(this, arguments);
@@ -159,9 +171,12 @@ window.__vsv_collect = function() {
     return res;
   });
 
+  function num(v) { return typeof v === 'number' ? v : null; }
+
   out.resources = section(function() {
     var observer = [];
-    var bootstrap = typeof window.__vsv_obs === 'object' && window.__vsv_obs !== null;
+    var bootstrap = window.__vsv_obsOk === true &&
+        typeof window.__vsv_obs === 'object' && window.__vsv_obs !== null;
     if (bootstrap) {
       for (var name in window.__vsv_obs) {
         if (!Object.prototype.hasOwnProperty.call(window.__vsv_obs, name)) continue;
@@ -173,15 +188,16 @@ window.__vsv_collect = function() {
       for (var i = 0; i < es.length; i++) {
         var e = es[i];
         if (!e.name || e.name.indexOf('data:') === 0 || e.name.indexOf('blob:') === 0) continue;
-        observer.push({n: e.name, it: e.initiatorType || '', st: e.startTime || 0, du: e.duration || 0,
-          tx: e.transferSize || 0, enc: e.encodedBodySize || 0, dec: e.decodedBodySize || 0});
+        observer.push({n: e.name, it: e.initiatorType || '', st: num(e.startTime), du: num(e.duration),
+          tx: num(e.transferSize), enc: num(e.encodedBodySize), dec: num(e.decodedBodySize)});
       }
     }
     return {
       bootstrap: bootstrap,
       observer: observer,
       patch: (window.__vsv_patch || []).slice(0),
-      dropped: window.__vsv_obsDropped || 0
+      dropped: window.__vsv_obsDropped || 0,
+      patchDropped: window.__vsv_patchDropped || 0
     };
   });
 

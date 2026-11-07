@@ -4,6 +4,9 @@ import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';
 
 const _crossOriginZero = 'cross-origin resource without Timing-Allow-Origin';
+const _localPage = 'resource sizes not measurable for local pages';
+const _sameOriginZero =
+    'reported 0 bytes; may be unmeasured (service worker / redirect)';
 
 Present<T> _measured<T>(T v) => Present<T>(v, source: DataSource.browser);
 
@@ -48,13 +51,30 @@ BrowserSnapshot parseBrowserPayload(Object? raw, BrowserPlatform platform,
           'document.contentType empty');
   final ctString = ct is String ? ct : '';
 
+  // The payload url is where the page ended up (redirects, pushState); the
+  // caller's pageUrl may be stale. Sizes are judged against the payload url.
+  final pu = p['url'];
+  final effectiveUrl =
+      (pu is String && pu.isNotEmpty ? Uri.tryParse(pu) : null) ?? pageUrl;
+
+  var dropped = 0;
+  final rs = p['resources'];
+  if (rs is Map && rs['ok'] == true) {
+    for (final k in const ['dropped', 'patchDropped']) {
+      final d = rs[k];
+      if (d is num && d > 0) dropped += d.toInt();
+    }
+  }
+
   return BrowserSnapshot(
     url: pageUrl,
     platform: platform,
     contentType: contentType,
     renderedDom: _section(p['dom'], (m) => _parseDom(m, ctString)),
-    resources:
-        _section(p['resources'], (m) => _parseResources(m, platform, pageUrl)),
+    resources: _section(
+        p['resources'], (m) => _parseResources(m, platform, effectiveUrl)),
+    resourcesTruncated: dropped > 0,
+    resourcesDropped: dropped,
     cookies: _section(p['cookies'], _parseJsCookies),
     storage: _parseStorage(p['storage']),
     navigation: _section(p['navigation'], (m) => _parseNavigation(m)),
@@ -77,6 +97,9 @@ Observed<T> _section<T>(Object? sec, T Function(Map<String, dynamic>) parse) {
   if (m['ok'] != true) return Failed<T>('${m['error'] ?? 'unknown error'}');
   try {
     return _measured<T>(parse(m));
+  } on _Unmeasured {
+    return Unavailable<T>(UnavailableReason.notReportedByPlatform,
+        'no resource observer and an empty performance buffer; nothing measured');
   } catch (e) {
     return Failed<T>('$e');
   }
@@ -96,10 +119,13 @@ bool _isRawTextDocument(String contentType) {
 
 RenderedDom _parseDom(Map<String, dynamic> m, String contentType) {
   final value = m['value'];
+  if (value is! String) {
+    throw FormatException('dom.value is ${value.runtimeType}, not a String');
+  }
   final rawText = m['raw'];
   final unwrap = _isRawTextDocument(contentType) && rawText is String;
   return RenderedDom(
-    text: unwrap ? rawText : (value is String ? value : ''),
+    text: unwrap ? rawText : value,
     unwrappedRawDocument: unwrap,
     iframeCount: (m['iframes'] as num?)?.toInt() ?? 0,
     shadowRootCount: (m['shadowRoots'] as num?)?.toInt() ?? 0,
@@ -132,10 +158,20 @@ Observed<double> _time(Object? v) => v is num
     ? _measured(v.toDouble())
     : const Unavailable<double>(UnavailableReason.notReportedByPlatform);
 
+const _noOwnSizes =
+    Unavailable<int>(UnavailableReason.notReportedByPlatform, _localPage);
+
+bool _isWebPage(Uri u) => u.scheme == 'http' || u.scheme == 'https';
+
 List<ResourceEntry> _parseResources(
     Map<String, dynamic> m, BrowserPlatform platform, Uri pageUrl) {
+  final observed = m['observer'] as List? ?? const [];
+  if (m['bootstrap'] != true && observed.isEmpty) {
+    // No observer and an empty buffer: we never measured anything.
+    throw const _Unmeasured();
+  }
   final byUrl = <String, ResourceEntry>{};
-  for (final e in (m['observer'] as List? ?? const [])) {
+  for (final e in observed) {
     if (e is! Map) continue;
     final url = _absoluteUrl(e['n'], pageUrl);
     if (url == null) continue;
@@ -153,6 +189,7 @@ List<ResourceEntry> _parseResources(
       continue;
     }
     final cl = e['cl'];
+    final local = !_isWebPage(pageUrl);
     final entry = ResourceEntry(
       url: url,
       type: '${e['it'] ?? 'fetch'}',
@@ -160,12 +197,16 @@ List<ResourceEntry> _parseResources(
       startTime: _time(e['st']),
       duration: const Unavailable(UnavailableReason.notReportedByPlatform,
           'fetch/XHR patch does not measure duration'),
-      transfer: cl is num && cl > 0
-          ? _measured(cl.toInt())
-          : const Unavailable(
-              UnavailableReason.notExposedToPage, 'no content-length header'),
-      decoded: const Unavailable(UnavailableReason.notReportedByPlatform,
-          'content-length is the compressed size'),
+      transfer: local
+          ? _noOwnSizes
+          : cl is num && cl > 0
+              ? _measured(cl.toInt())
+              : const Unavailable(UnavailableReason.notExposedToPage,
+                  'no content-length header'),
+      decoded: local
+          ? _noOwnSizes
+          : const Unavailable(UnavailableReason.notReportedByPlatform,
+              'content-length is the compressed size'),
     );
     byUrl[url] =
         existing == null ? entry : mergeResources([existing], [entry]).single;
@@ -175,26 +216,41 @@ List<ResourceEntry> _parseResources(
 
 ResourceEntry _observerEntry(
     Map e, String url, BrowserPlatform platform, Uri pageUrl) {
-  int n(Object? v) => v is num ? v.toInt() : 0;
+  // null = the browser did not report the field (never coerced to 0).
+  int? n(Object? v) => v is num ? v.toInt() : null;
   final tx = n(e['tx']), enc = n(e['enc']), dec = n(e['dec']);
   final type = '${e['it'] ?? ''}';
-  final cross = !_sameOrigin(Uri.parse(url), pageUrl);
+  const missing = Unavailable<int>(UnavailableReason.notReportedByPlatform,
+      'field not reported by this browser');
 
   Observed<int> transfer;
   Observed<int> decoded;
-  if (tx == 0 && enc == 0 && dec == 0 && cross) {
+  final allZero = tx == 0 && enc == 0 && dec == 0;
+  if (!_isWebPage(pageUrl)) {
+    transfer = _noOwnSizes;
+    decoded = _noOwnSizes;
+  } else if (allZero && !_sameOrigin(Uri.parse(url), pageUrl)) {
     transfer = const Unavailable(
         UnavailableReason.blockedByPlatform, _crossOriginZero);
     decoded = const Unavailable(
         UnavailableReason.blockedByPlatform, _crossOriginZero);
+  } else if (allZero) {
+    transfer = const Unavailable(
+        UnavailableReason.notReportedByPlatform, _sameOriginZero);
+    decoded = const Unavailable(
+        UnavailableReason.notReportedByPlatform, _sameOriginZero);
   } else {
-    if (tx == 0 && (dec > 0 || enc > 0)) {
+    if (tx == null) {
+      transfer = missing;
+    } else if (tx == 0 && ((dec ?? 0) > 0 || (enc ?? 0) > 0)) {
       transfer = const Unavailable(UnavailableReason.servedFromCache,
           'transferSize is 0 for a cached response');
     } else {
       transfer = _measured(tx);
     }
-    if (platform.isWebKit && _isImage(type, url)) {
+    if (dec == null) {
+      decoded = missing;
+    } else if (platform.isWebKit && _isImage(type, url)) {
       decoded = const Unavailable(UnavailableReason.notReportedByPlatform,
           'WebKit reports decoded image pixel buffer');
     } else {
@@ -312,6 +368,11 @@ Observed<StorageArea> _parseArea(Object? a) {
 
 // ---- Cookies -------------------------------------------------------------
 
+/// Thrown inside the resources section when nothing was ever measured.
+class _Unmeasured implements Exception {
+  const _Unmeasured();
+}
+
 /// Cookies from `document.cookie`: name=value only.
 List<BrowserCookie> _parseJsCookies(Map<String, dynamic> m) {
   const detail = 'document.cookie exposes name=value only';
@@ -366,8 +427,12 @@ List<BrowserCookie> parseNativeCookies(
         expires: !c.containsKey('expiresDate')
             ? Unavailable<DateTime>(UnavailableReason.notExposedToPage, missing)
             : c['expiresDate'] == null
-                ? const Unavailable<DateTime>(
-                    UnavailableReason.notApplicable, 'session cookie')
+                ? !platform.isWebKit
+                    // Android etc. always include the key, null = unknown.
+                    ? Unavailable<DateTime>(
+                        UnavailableReason.notExposedToPage, missing)
+                    : const Unavailable<DateTime>(
+                        UnavailableReason.notApplicable, 'session cookie')
                 : c['expiresDate'] is num
                     ? _measured(DateTime.fromMillisecondsSinceEpoch(
                         (c['expiresDate'] as num).toInt(),

@@ -144,6 +144,11 @@ class BrowserSnapshot {
   /// to this time.
   final Observed<double> snapshotTimeMs;
 
+  /// True when the collector hit its buffer cap and dropped resource entries:
+  /// [resources] is then incomplete. [resourcesDropped] is how many.
+  final bool resourcesTruncated;
+  final int resourcesDropped;
+
   /// The raw collector payload (debug export / fixture recording).
   final String? rawPayload;
 
@@ -157,6 +162,8 @@ class BrowserSnapshot {
     required this.storage,
     required this.navigation,
     required this.snapshotTimeMs,
+    this.resourcesTruncated = false,
+    this.resourcesDropped = 0,
     this.rawPayload,
   });
 

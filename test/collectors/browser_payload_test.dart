@@ -314,8 +314,14 @@ void main() {
 
     test('Android without flags is Unavailable, never false', () {
       final c = parseNativeCookies([
-        {'name': 'sid', 'value': 'x'},
-        {'name': 'n', 'value': 'v', 'isSecure': null, 'isHttpOnly': null},
+        {'name': 'sid', 'value': 'x', 'expiresDate': null},
+        {
+          'name': 'n',
+          'value': 'v',
+          'expiresDate': null,
+          'isSecure': null,
+          'isHttpOnly': null
+        },
       ], BrowserPlatform.android);
       for (final x in c) {
         expect(unavailable(x.isSecure), UnavailableReason.notExposedToPage);
@@ -325,6 +331,191 @@ void main() {
         expect(unavailable(x.sameSite), UnavailableReason.notExposedToPage);
       }
       expect(c.first.value, 'x');
+    });
+  });
+
+  group('fix round 1', () {
+    BrowserSnapshot build(
+      List<Map<String, dynamic>> observer, {
+      String payloadUrl = 'https://example.com/',
+      String pageUrl = 'https://example.com/',
+      BrowserPlatform platform = BrowserPlatform.ios,
+      Map<String, dynamic> resources = const {},
+      List<Map<String, dynamic>> patch = const [],
+      Object? domValue = '<html></html>',
+    }) {
+      final j = {
+        'v': 1,
+        'url': payloadUrl,
+        'contentType': 'text/html',
+        'timing': {'ok': true, 'now': 1000.0},
+        'dom': {'ok': true, 'value': domValue, 'iframes': 0, 'shadowRoots': 0},
+        'resources': {
+          'ok': true,
+          'bootstrap': true,
+          'dropped': 0,
+          'observer': observer,
+          'patch': patch,
+          ...resources,
+        },
+        'navigation': {'ok': false, 'error': 'x'},
+        'storage': {
+          'local': {'ok': false, 'error': 'x'},
+          'session': {'ok': false, 'error': 'x'},
+        },
+        'cookies': {'ok': true, 'raw': ''},
+      };
+      return parseBrowserPayload(jsonEncode(j), platform,
+          pageUrl: Uri.parse(pageUrl));
+    }
+
+    Map<String, dynamic> res(String n,
+            {Object? tx = 0, Object? enc = 0, Object? dec = 0}) =>
+        {
+          'n': n,
+          'it': 'script',
+          'st': 1.0,
+          'du': 2.0,
+          'tx': tx,
+          'enc': enc,
+          'dec': dec
+        };
+
+    test('1: origin comes from the payload url, not the caller pageUrl', () {
+      final s = build(
+        [res('https://a.com/y.js'), res('https://b.com/x.js')],
+        payloadUrl: 'https://b.com/landing',
+        pageUrl: 'https://a.com/',
+      );
+      final cross = byUrl(s, 'https://a.com/y.js');
+      expect(unavailable(cross.transfer), UnavailableReason.blockedByPlatform);
+      expect(unavailable(cross.decoded), UnavailableReason.blockedByPlatform);
+    });
+
+    test('1: missing payload url falls back to pageUrl', () {
+      final j = jsonDecode(fixture('ios_cross_origin_rtvutrecht.json'))
+          as Map<String, dynamic>;
+      j.remove('url');
+      final s = parseBrowserPayload(jsonEncode(j), BrowserPlatform.ios,
+          pageUrl: Uri.parse('https://www.rtvutrecht.nl/'));
+      expect(unavailable(byUrl(s, 'https://cdn.example.net/lib.js').transfer),
+          UnavailableReason.blockedByPlatform);
+    });
+
+    for (final local in [
+      'file:///tmp/a.html',
+      'about:blank',
+      'data:text/html,x'
+    ]) {
+      test('1: local page $local has no measurable resource sizes', () {
+        final s = build(
+          [res('https://cdn.example.net/a.js', tx: 10, enc: 9, dec: 30)],
+          payloadUrl: local,
+          pageUrl: local,
+          patch: [
+            {
+              'n': 'https://cdn.example.net/api',
+              'it': 'fetch',
+              'cl': 5,
+              'st': 1.0
+            }
+          ],
+        );
+        for (final e in present(s.resources)) {
+          expect(
+              unavailable(e.transfer), UnavailableReason.notReportedByPlatform);
+          expect(
+              unavailable(e.decoded), UnavailableReason.notReportedByPlatform);
+          expect((e.transfer as Unavailable).detail,
+              'resource sizes not measurable for local pages');
+        }
+      });
+    }
+
+    test('2: undefined size fields are Unavailable, never 0', () {
+      final s = build([
+        res('https://example.com/a.js', tx: null, enc: null, dec: null),
+        res('https://example.com/b.js', tx: null, enc: 10, dec: 20),
+      ]);
+      final a = byUrl(s, 'https://example.com/a.js');
+      expect(unavailable(a.transfer), UnavailableReason.notReportedByPlatform);
+      expect(unavailable(a.decoded), UnavailableReason.notReportedByPlatform);
+      final b = byUrl(s, 'https://example.com/b.js');
+      expect(unavailable(b.transfer), UnavailableReason.notReportedByPlatform);
+      expect(present(b.decoded), 20);
+    });
+
+    test('2: null fields do not trigger the cross-origin rule', () {
+      final s = build([
+        res('https://cdn.example.net/a.js', tx: null, enc: null, dec: null)
+      ]);
+      final a = byUrl(s, 'https://cdn.example.net/a.js');
+      expect(unavailable(a.transfer), UnavailableReason.notReportedByPlatform);
+    });
+
+    test('2: JS sends null, not 0, for unsupported fields', () {
+      expect(vsvResourceBootstrapJs, isNot(contains('transferSize || 0')));
+      expect(vsvResourceBootstrapJs, isNot(contains('encodedBodySize || 0')));
+      expect(vsvResourceBootstrapJs, isNot(contains('decodedBodySize || 0')));
+      expect(vsvCollectJs, isNot(contains('transferSize || 0')));
+      expect(vsvCollectJs, isNot(contains('decodedBodySize || 0')));
+    });
+
+    test('3: Android cookie with null expiresDate is not a session cookie', () {
+      final c = parseNativeCookies([
+        {'name': 'a', 'value': 'b', 'expiresDate': null}
+      ], BrowserPlatform.android);
+      expect(unavailable(c.single.expires), UnavailableReason.notExposedToPage);
+    });
+
+    test('3: macOS null expiresDate is still a session cookie', () {
+      final c = parseNativeCookies([
+        {'name': 'a', 'value': 'b', 'expiresDate': null}
+      ], BrowserPlatform.macos);
+      expect(unavailable(c.single.expires), UnavailableReason.notApplicable);
+    });
+
+    test('4: observer that failed to install falls back in JS', () {
+      expect(vsvResourceBootstrapJs, contains('__vsv_obsOk'));
+      expect(vsvCollectJs, contains('__vsv_obsOk'));
+    });
+
+    test('4: no observer and nothing measured is Unavailable, not empty', () {
+      final s = build([], resources: {'bootstrap': false});
+      expect(unavailable(s.resources), UnavailableReason.notReportedByPlatform);
+    });
+
+    test('4: dropped entries surface as truncation', () {
+      final s = build([res('https://example.com/a.js', tx: 1, enc: 1, dec: 1)],
+          resources: {'dropped': 7, 'patchDropped': 3});
+      expect(s.resourcesTruncated, true);
+      expect(s.resourcesDropped, 10);
+      final ok =
+          build([res('https://example.com/a.js', tx: 1, enc: 1, dec: 1)]);
+      expect(ok.resourcesTruncated, false);
+      expect(ok.resourcesDropped, 0);
+    });
+
+    test('5: patch startTime is captured at call time', () {
+      expect(vsvResourceBootstrapJs, isNot(contains('st: performance.now()')));
+      expect(vsvResourceBootstrapJs,
+          contains('function patchRecord(url, cl, kind, st)'));
+    });
+
+    test('6: non-String DOM value is Failed, not an empty DOM', () {
+      final s = build([], domValue: 42);
+      expect(s.renderedDom, isA<Failed<RenderedDom>>());
+      final n = build([], domValue: null);
+      expect(n.renderedDom, isA<Failed<RenderedDom>>());
+    });
+
+    test('7: same-origin 0/0/0 is Unavailable, not a measured 0', () {
+      final s = build([res('https://example.com/sw.js')]);
+      final e = byUrl(s, 'https://example.com/sw.js');
+      expect(unavailable(e.transfer), UnavailableReason.notReportedByPlatform);
+      expect(unavailable(e.decoded), UnavailableReason.notReportedByPlatform);
+      expect((e.transfer as Unavailable).detail,
+          'reported 0 bytes; may be unmeasured (service worker / redirect)');
     });
   });
 
