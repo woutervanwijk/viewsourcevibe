@@ -56,8 +56,7 @@ typedef MetadataExtractor = Future<Map<String, dynamic>>
 
 typedef SovereigntyAnalyzer = Future<SovereigntyReport> Function({
   required String pageUrl,
-  required Map<String, dynamic>? probeResult,
-  required List<Map<String, dynamic>> resources,
+  required PageInspection inspection,
   Map<String, dynamic>? metadata,
   List<Detection> detections,
   String? html,
@@ -190,6 +189,9 @@ class HtmlService extends ChangeNotifier {
   String? _sovereigntyError;
   int _sovereigntyWatchers = 0;
   bool _sovereigntyScheduled = false;
+  String? _sovereigntyInputKey;
+  Timer? _sovereigntyTimer;
+  final Duration _sovereigntyDebounce;
   Observed<SovereigntyReport>? _sovereigntyPresent;
 
   // Metadata state
@@ -878,23 +880,53 @@ class HtmlService extends ChangeNotifier {
       return;
     }
     final gen = store.current.generation;
+    var inputsChanged = false;
     if (_sovereigntyGen == gen) {
       if (_sovereigntyError != null) return; // shown; "Re-run" tries again
       if (_sovereigntyReport != null &&
           _sovereigntyHome == siteJurisdiction.jurisdiction) {
-        return;
+        if (_sovereigntyInputKey == _currentSovereigntyInputKey) return;
+        // The browser's data arrived (or grew) after the analysis started.
+        inputsChanged = true;
       }
     }
     _sovereigntyScheduled = true;
-    scheduleMicrotask(() {
+    void run() {
       _sovereigntyScheduled = false;
       analyzeSovereignty().ignore();
-    });
+    }
+
+    if (inputsChanged) {
+      // Resources keep arriving while a page loads: wait until they settle.
+      _sovereigntyTimer?.cancel();
+      _sovereigntyTimer = Timer(_sovereigntyDebounce, run);
+    } else {
+      scheduleMicrotask(run);
+    }
+  }
+
+  /// What the analysis reads from the browser: whether it is Present, the
+  /// URL it is on and how many resources it reported. A change after the
+  /// analysis started makes the report stale.
+  String get _currentSovereigntyInputKey {
+    final browser = store.current.browser;
+    final count = SovereigntyService.browserResources(store.current).length;
+    return '${browser is Present<BrowserSnapshot>}|$_sovereigntyUri|$count';
   }
 
   /// Registrable domain the per-site jurisdiction choice is stored under.
   String get sovereigntyDomain =>
       SovereigntyService.registrableDomain(_sovereigntyHost);
+
+  /// Subject of the final hop's certificate, from the store; null unless Present.
+  Map? get _finalHopCertificateSubject {
+    final server = SovereigntyService.serverOf(store.current);
+    return switch (server?.certificate) {
+      Present<Map<String, dynamic>>(:final value) =>
+        value['subjectParsed'] as Map?,
+      _ => null,
+    };
+  }
 
   /// Legal home of the current site: chosen manually, else detected,
   /// else the default from settings.
@@ -910,8 +942,7 @@ class HtmlService extends ChangeNotifier {
     }
     final detected = detectSiteJurisdiction(
       host: _sovereigntyHost,
-      certificateSubject:
-          _probeResult?['certificate']?['subjectParsed'] as Map?,
+      certificateSubject: _finalHopCertificateSubject,
       structuredData: _pageMetadata?['structuredData'] as List?,
     );
     return detected ??
@@ -940,12 +971,12 @@ class HtmlService extends ChangeNotifier {
     _sovereigntyError = null;
     final gen = store.current.generation;
     final home = siteJurisdiction.jurisdiction;
+    final inputKey = _currentSovereigntyInputKey;
     notifyListeners();
     try {
       final report = await _sovereigntyAnalyzer(
         pageUrl: uri.toString(),
-        probeResult: _probeResult,
-        resources: resourceTimelineData,
+        inspection: store.current,
         metadata: _pageMetadata,
         detections: detections,
         html: sourceView.textOrNull,
@@ -954,6 +985,7 @@ class HtmlService extends ChangeNotifier {
       if (!_disposed && gen == store.current.generation) {
         _sovereigntyReport = report;
         _sovereigntyHome = home;
+        _sovereigntyInputKey = inputKey;
         _sovereigntyGen = gen;
       }
     } catch (e) {
@@ -1339,6 +1371,7 @@ class HtmlService extends ChangeNotifier {
     DomTreeBuilder? domTreeBuilder,
     int domTreeIsolateThreshold = 256 * 1024,
     SovereigntyAnalyzer? sovereigntyAnalyzer,
+    Duration sovereigntyDebounce = const Duration(milliseconds: 500),
     BrowserCollect? browserCollect,
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
@@ -1348,7 +1381,8 @@ class HtmlService extends ChangeNotifier {
       Duration(seconds: 14),
     ],
     Duration spaSettleDelay = const Duration(milliseconds: 400),
-  })  : _sovereigntyAnalyzer =
+  })  : _sovereigntyDebounce = sovereigntyDebounce,
+        _sovereigntyAnalyzer =
             sovereigntyAnalyzer ?? SovereigntyService.analyze,
         _detectionScanner = detectionScanner,
         _detectionIsolateThreshold = detectionIsolateThreshold,
@@ -1959,6 +1993,7 @@ Technical details: $message''';
   void dispose() {
     _disposed = true;
     _cancelBrowserRefreshes();
+    _sovereigntyTimer?.cancel();
     store.removeListener(notifyListeners);
     if (_ownsStore) store.dispose();
     _autoSaveTimer?.cancel();

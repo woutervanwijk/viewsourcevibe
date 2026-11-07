@@ -378,8 +378,7 @@ void main() {
       service.dispose();
       service = make(sovereigntyAnalyzer: ({
         required pageUrl,
-        required probeResult,
-        required resources,
+        required inspection,
         metadata,
         detections = const [],
         html,

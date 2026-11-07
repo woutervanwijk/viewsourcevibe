@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
@@ -25,23 +27,25 @@ void main() {
   late InspectionStore store;
   late HtmlService service;
   late List<String> calls; // page URLs the analyzer was asked about
+  late List<PageInspection> inspections; // what it was given
   late Future<SovereigntyReport> Function(String home) behaviour;
 
   HtmlService make() => HtmlService(
         store: store,
+        sovereigntyDebounce: Duration.zero,
         serverFetcher: SilentServerFetcher(),
         browserLoader: SilentBrowserLoader(),
         metadataExtractor: (html, baseUrl, {headers}) async => {},
         sovereigntyAnalyzer: ({
           required pageUrl,
-          required probeResult,
-          required resources,
+          required inspection,
           metadata,
           detections = const [],
           html,
           home = 'EU',
         }) {
           calls.add(pageUrl);
+          inspections.add(inspection);
           return behaviour(home);
         },
       );
@@ -49,6 +53,7 @@ void main() {
   setUp(() {
     store = InspectionStore();
     calls = [];
+    inspections = [];
     behaviour = (home) async => reportFor(home);
     service = make();
   });
@@ -136,6 +141,53 @@ void main() {
       expect(calls, ['https://example.com/', 'https://other.test/']);
     });
 
+    test('the analysis gets the store inspection, not legacy maps', () async {
+      seedStore(store, fullPage());
+      service.watchSovereignty(true);
+      await pumpEventQueue();
+      expect(inspections.single.generation, store.current.generation);
+      expect(inspections.single.server, isA<Present<ServerSnapshot>>());
+    });
+
+    test('browser resources arriving after the start re-run the same page',
+        () async {
+      final p = fullPage();
+      seedStore(store, p.copyWith(browser: const Pending()));
+      service.watchSovereignty(true);
+      await pumpEventQueue();
+      expect(calls, hasLength(1)); // hosts from metadata only
+      final gen = store.current.generation;
+
+      store.applyBrowser(
+          gen,
+          browserSnapshot(
+              url: 'https://example.com/',
+              dom: '<html></html>',
+              resources: [resource('https://cdn.test/a.js', 'script')]));
+      await pumpEventQueue();
+      expect(calls, hasLength(2), reason: 'browser went Pending -> Present');
+      expect(store.current.generation, gen);
+
+      store.applyBrowser(
+          gen,
+          browserSnapshot(
+              url: 'https://example.com/',
+              dom: '<html></html>',
+              resources: [resource('https://img.test/b.png', 'img')]));
+      await pumpEventQueue();
+      expect(calls, hasLength(3), reason: 'the resource set grew');
+
+      // Nothing new in the same set: no run.
+      store.applyBrowser(
+          gen,
+          browserSnapshot(
+              url: 'https://example.com/',
+              dom: '<html></html>',
+              resources: [resource('https://img.test/b.png', 'img')]));
+      await pumpEventQueue();
+      expect(calls, hasLength(3));
+    });
+
     test('a changed legal home re-runs the analysis', () async {
       final settings = AppSettings();
       service.setAppSettings(settings);
@@ -165,6 +217,26 @@ void main() {
       seedStore(store, fullPage());
       expect(service.sovereigntyDomain, 'example.com');
       expect(Uri.parse('https://example.com/').host, 'example.com');
+    });
+    test('the certificate comes from the final hop in the store', () {
+      final p = fullPage();
+      final s = (p.server as Present<ServerSnapshot>).value;
+      final withCert = ServerSnapshot(
+        requestedUrl: s.requestedUrl,
+        userAgent: s.userAgent,
+        hops: s.hops,
+        finalUrl: s.finalUrl,
+        body: s.body,
+        timingMs: s.timingMs,
+        certificate: server({
+          'subjectParsed': {'Country': 'US', 'Organization': 'Example Inc'},
+        }),
+      );
+      seedStore(store, p.copyWith(server: server(withCert)));
+      final j = service.siteJurisdiction;
+      expect(j.jurisdiction, 'US');
+      expect(j.source, contains('TLS certificate'));
+      expect(j.derived, isTrue);
     });
   });
 }

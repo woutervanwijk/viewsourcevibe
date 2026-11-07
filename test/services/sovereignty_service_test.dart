@@ -1,7 +1,10 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/detection/catalog.dart';
 import '../detection_helpers.dart';
+import '../fixtures/inspection/builders.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
@@ -735,7 +738,7 @@ void main() {
           caa: null,
           ds: null,
           securityTxt: null,
-          probeResult: null);
+          server: null);
       expect(checks.where((c) => c.title.contains('SPF')).single.status,
           CheckStatus.unknown);
       expect(checks.where((c) => c.title.contains('DMARC')).single.status,
@@ -788,27 +791,27 @@ void main() {
     });
 
     test('HSTS uses the real server headers; no server is unknown', () {
-      List<SovereigntyCheck> run(Map<String, dynamic>? probe) =>
+      ServerSnapshot snapshot(Map<String, List<String>> headers) =>
+          serverSnapshot(
+              url: 'https://a.test/',
+              hops: [hop('https://a.test/', 200, headers: headers)],
+              body: 'x');
+      SovereigntyCheck hsts(ServerSnapshot? server) =>
           SovereigntyService.securityChecks(
-              txt: const [],
-              dmarc: const [],
-              caa: const [],
-              ds: const [],
-              securityTxt: null,
-              probeResult: probe);
-      SovereigntyCheck hsts(Map<String, dynamic>? p) =>
-          run(p).firstWhere((c) => c.title.startsWith('HSTS'));
+                  txt: const [],
+                  dmarc: const [],
+                  caa: const [],
+                  ds: const [],
+                  securityTxt: null,
+                  server: server)
+              .firstWhere((c) => c.title.startsWith('HSTS'));
       expect(hsts(null).status, CheckStatus.unknown);
       expect(
-          hsts({
-            'security': {'Strict-Transport-Security': 'max-age=31536000'}
-          }).status,
+          hsts(snapshot({
+            'strict-transport-security': ['max-age=31536000']
+          })).status,
           CheckStatus.pass);
-      expect(
-          hsts({
-            'security': {'Strict-Transport-Security': null}
-          }).status,
-          CheckStatus.fail);
+      expect(hsts(snapshot({})).status, CheckStatus.fail);
     });
   });
 
@@ -962,13 +965,22 @@ void main() {
     test('host bytes: unknown stays null, known sums, mixed is partial', () {
       final hosts = SovereigntyService.collectHosts(
         pageUrl: 'https://a.test/',
-        resources: [
-          {'name': 'https://cdn.test/a.js', 'transfer': null},
-          {'name': 'https://cdn.test/b.js', 'transfer': 100},
-          {'name': 'https://img.test/c.png', 'transfer': null},
-          {'name': 'https://ok.test/d.css', 'transfer': 50},
-          {'name': 'https://ok.test/e.css', 'transfer': 25},
-        ],
+        inspection: urlInspection(
+          url: 'https://a.test/',
+          serverResult: const Pending(),
+          browserResult: browser(browserSnapshot(
+            url: 'https://a.test/',
+            dom: '',
+            resources: [
+              resource('https://cdn.test/a.js', 'script'),
+              resource('https://cdn.test/b.js', 'script',
+                  transfer: browser(100)),
+              resource('https://img.test/c.png', 'img'),
+              resource('https://ok.test/d.css', 'link', transfer: browser(50)),
+              resource('https://ok.test/e.css', 'link', transfer: browser(25)),
+            ],
+          )),
+        ),
         metadata: null,
       );
       HostInfo of(String h) => hosts.singleWhere((x) => x.host == h);

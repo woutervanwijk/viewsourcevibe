@@ -4,6 +4,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
@@ -537,9 +541,10 @@ class SovereigntyService {
   /// no bytes.
   static List<HostInfo> collectHosts({
     required String pageUrl,
-    required List<Map<String, dynamic>> resources,
+    required PageInspection inspection,
     Map<String, dynamic>? metadata,
   }) {
+    final resources = browserResources(inspection);
     final mainHost = Uri.tryParse(pageUrl)?.host ?? '';
     final hosts = <String, HostInfo>{};
     final withUnknownSize = <String>{};
@@ -561,12 +566,12 @@ class SovereigntyService {
 
     if (mainHost.isNotEmpty) add(pageUrl, null, 'document');
     for (final r in resources) {
-      final name = r['name']?.toString() ?? '';
-      if (!name.startsWith('http')) continue;
+      if (!r.url.startsWith('http')) continue;
+      final transfer = r.transfer;
       add(
-        name,
-        (r['transfer'] as num?)?.toInt(),
-        ProbeService.categorizeResource(name, pageUrl),
+        r.url,
+        transfer is Present<int> ? transfer.value : null,
+        ProbeService.categorizeResource(r.url, pageUrl),
       );
     }
     // Static links as fallback when no runtime resource data exists.
@@ -594,10 +599,25 @@ class SovereigntyService {
       });
   }
 
+  /// The resources the browser reported; empty unless they are Present.
+  static List<ResourceEntry> browserResources(PageInspection inspection) {
+    final b = inspection.browser;
+    if (b is! Present<BrowserSnapshot>) return const [];
+    final r = b.value.resources;
+    return r is Present<List<ResourceEntry>> ? r.value : const [];
+  }
+
+  /// The app's own server answer; null unless it is Present with a hop.
+  static ServerSnapshot? serverOf(PageInspection inspection) {
+    final s = inspection.server;
+    return s is Present<ServerSnapshot> && s.value.hops.isNotEmpty
+        ? s.value
+        : null;
+  }
+
   static Future<SovereigntyReport> analyze({
     required String pageUrl,
-    required Map<String, dynamic>? probeResult,
-    required List<Map<String, dynamic>> resources,
+    required PageInspection inspection,
     Map<String, dynamic>? metadata,
     List<Detection> detections = const [],
     String? html,
@@ -605,15 +625,17 @@ class SovereigntyService {
   }) async {
     final mainUri = Uri.tryParse(pageUrl);
     final mainHost = mainUri?.host ?? '';
+    final server = serverOf(inspection);
     final ordered = collectHosts(
-        pageUrl: pageUrl, resources: resources, metadata: metadata);
+        pageUrl: pageUrl, inspection: inspection, metadata: metadata);
     final analyzed = ordered.take(_maxHosts).toList();
 
     await Future.wait(analyzed.map(_enrichHost));
 
     final headers = <String, String>{
-      for (final e in (probeResult?['headers'] as Map? ?? const {}).entries)
-        e.key.toString(): e.value.toString(),
+      if (server != null)
+        for (final e in server.hops.last.headers.entries)
+          if (e.key != 'set-cookie') e.key: e.value.join(', '),
     };
     final mainProvider = analyzed.isEmpty ? null : analyzed.first.provider;
     final cdn = detectCdnFromHeaders(headers) ??
@@ -635,9 +657,11 @@ class SovereigntyService {
         : classifySecurityTxt(
             await _statusOf('https://$mainHost/.well-known/security.txt'));
 
-    final issuer =
-        (probeResult?['certificate']?['issuerParsed'] as Map?)?['Organization']
-            ?.toString();
+    final issuer = switch (server?.certificate) {
+      Present<Map<String, dynamic>>(:final value) =>
+        (value['issuerParsed'] as Map?)?['Organization']?.toString(),
+      _ => null,
+    };
     final tlsProvider = matchProvider([issuer]);
 
     final [nameServers, mailServers] = await Future.wait([
@@ -664,7 +688,7 @@ class SovereigntyService {
         caa: lookups[4],
         ds: lookups[5],
         securityTxt: securityTxt,
-        probeResult: probeResult,
+        server: server,
       ),
       ..._privacyChecks(analyzed, detections, html, home),
     ];
@@ -1046,7 +1070,7 @@ class SovereigntyService {
     required List<String>? caa,
     required List<String>? ds,
     required bool? securityTxt,
-    required Map<String, dynamic>? probeResult,
+    required ServerSnapshot? server,
   }) {
     const p = Pillar.security;
     SovereigntyCheck dnsCheck(
@@ -1068,8 +1092,8 @@ class SovereigntyService {
       return SovereigntyCheck(p, title, status, evidence, weight: weight);
     }
 
-    final hsts =
-        (probeResult?['security'] as Map?)?['Strict-Transport-Security'];
+    final hsts = server?.hops.last.headers['strict-transport-security']
+        ?.join(', ');
     return [
       dnsCheck('SPF (email sender policy)', txt, classifySpf),
       dnsCheck('DMARC (email authentication)', dmarc, classifyDmarc),
@@ -1083,12 +1107,12 @@ class SovereigntyService {
       SovereigntyCheck(
         p,
         'HSTS enabled',
-        probeResult == null || probeResult['security'] is! Map
+        server == null
             ? CheckStatus.unknown
             : hsts != null
                 ? CheckStatus.pass
                 : CheckStatus.fail,
-        probeResult == null || probeResult['security'] is! Map
+        server == null
             ? 'No server response to read the headers from'
             : hsts != null
                 ? 'Strict-Transport-Security: $hsts'

@@ -50,8 +50,7 @@ void main() {
       metadataExtractor: (html, baseUrl, {headers}) async => {},
       sovereigntyAnalyzer: ({
         required pageUrl,
-        required probeResult,
-        required resources,
+        required inspection,
         metadata,
         detections = const [],
         html,
