@@ -43,12 +43,35 @@ class EvidenceList extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.title,
-                          maxLines: compact ? 1 : null,
-                          overflow: compact ? TextOverflow.ellipsis : null,
-                          style: TextStyle(
-                              fontSize: compact ? 11 : 13,
-                              fontWeight: FontWeight.w600)),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(item.title,
+                                maxLines: compact ? 1 : null,
+                                overflow:
+                                    compact ? TextOverflow.ellipsis : null,
+                                style: TextStyle(
+                                    fontSize: compact ? 11 : 13,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          if (item.source != null) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .outlineVariant),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(item.source!.name,
+                                  style: TextStyle(fontSize: 9, color: muted)),
+                            ),
+                          ],
+                        ],
+                      ),
                       if (item.detail != null)
                         Text(item.detail!,
                             maxLines: compact ? 1 : 6,
