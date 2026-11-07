@@ -21,9 +21,15 @@ import 'package:view_source_vibe/widgets/sovereignty_view.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 import 'package:view_source_vibe/widgets/browser_view.dart';
+import 'package:view_source_vibe/widgets/divergence_banner.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  /// Times the tab structure was (re)built; tests check that a progress tick
+  /// does not rebuild the tab bodies.
+  @visibleForTesting
+  static int structureBuilds = 0;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -42,6 +48,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   /// Label of the tab the user is on. Tabs come and go while a page loads,
   /// so the selection follows the tab itself, not its index.
   String? _selectedTabLabel;
+
+  bool _tabRequestScheduled = false;
 
   @override
   void initState() {
@@ -408,6 +416,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         requestedTabIndex: service.requestedTabIndex,
       ),
       builder: (context, structure, child) {
+        HomeScreen.structureBuilds++;
         // Update TabController synchronously if content type changed
         // This MUST happen before building the TabBar to avoid length mismatch
         if (structure.isHtmlOrXml != _lastIsHtmlOrXml ||
@@ -419,18 +428,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _updateTabs(htmlService);
         }
 
-        // Handle requested tab switch
-        if (structure.requestedTabIndex != null) {
-          final targetIndex =
-              htmlService.resolveTabRequest(structure.requestedTabIndex!);
-          if (targetIndex < _tabController.length) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                _tabController.animateTo(targetIndex);
-              }
-            });
-          }
-          htmlService.consumeTabSwitchRequest();
+        // Handle requested tab switch (never mutate the service in build).
+        if (structure.requestedTabIndex != null && !_tabRequestScheduled) {
+          _tabRequestScheduled = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _tabRequestScheduled = false;
+            if (!mounted) return;
+            final requested = htmlService.requestedTabIndex;
+            if (requested == null) return;
+            final targetIndex = htmlService.resolveTabRequest(requested);
+            htmlService.consumeTabSwitchRequest();
+            if (targetIndex < _tabController.length) {
+              _tabController.animateTo(targetIndex);
+            }
+          });
         }
 
         return PopScope(
@@ -497,6 +508,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   const UrlInput(),
+                  const DivergenceBanner(),
                   // The Toolbar with Navigation Tabs
                   Container(
                     color: Theme.of(context).colorScheme.surface,

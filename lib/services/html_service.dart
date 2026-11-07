@@ -834,8 +834,12 @@ class HtmlService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The UI handled the tab request. Listeners are told (outside of build),
+  /// so a stale request does not linger in their selected state.
   void consumeTabSwitchRequest() {
+    if (_requestedTabIndex == null) return;
     _requestedTabIndex = null;
+    notifyListeners();
   }
 
   void setActiveTabIndex(int index) {
