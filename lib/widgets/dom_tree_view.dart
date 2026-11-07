@@ -63,6 +63,21 @@ class _DomTreeViewState extends State<DomTreeView> {
     final loading = context
         .select<HtmlService, bool>((s) => s.isLoading || s.isWebViewLoading);
 
+    final building = context.select<HtmlService, bool>((s) => s.domTreePending);
+    if (tree == null && building) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text('Building the tree…',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      );
+    }
     if (tree == null) {
       return _statusFor(context, view, loading);
     }

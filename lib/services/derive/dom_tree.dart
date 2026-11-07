@@ -169,3 +169,25 @@ List<DomTreeNode> _parseCorruptXml(String content) {
   }
   return [root];
 }
+
+/// Which parser family the displayed document needs: from its own content
+/// type (server header / browser document.contentType) or, for files, name.
+DomTreeKind domTreeKindFor({String? contentType, String? fileName}) {
+  final ct = (contentType ?? '').toLowerCase();
+  final name = (fileName ?? '').toLowerCase();
+  if (ct.contains('svg') || name.endsWith('.svg')) return DomTreeKind.svg;
+  final htmlLike = ct.contains('html');
+  if (!htmlLike &&
+      (ct.contains('xml') ||
+          ['.xml', '.rss', '.atom', '.opml'].any(name.endsWith))) {
+    return DomTreeKind.xml;
+  }
+  return DomTreeKind.html;
+}
+
+/// Builds a tree (isolate-friendly top-level entry for `compute`).
+DomTree buildDomTreeRecord((String, DomTreeKind) args) =>
+    deriveDomTree(args.$1, args.$2);
+
+typedef DomTreeBuilder = Future<DomTree> Function(
+    String text, DomTreeKind kind);

@@ -8,6 +8,8 @@ import '../../models/inspection/server_snapshot.dart';
 import '../../utils/text_decoding.dart';
 
 /// "12345" -> "12.345" (the Source header's number style).
+int _lines(String text) => '\n'.allMatches(text).length + 1;
+
 String formatThousands(int number) => number.toString().replaceAllMapped(
     RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
 
@@ -32,12 +34,25 @@ class SourceView {
   /// Charset of a server body / file; null for the rendered DOM.
   final String? charsetLabel;
 
+  /// Number of lines in [text]; null without text.
+  final int? lineCount;
+
+  /// Content type of the displayed document (server header / browser
+  /// document.contentType); null when unknown or for files.
+  final String? contentType;
+
+  /// File name when the document is a local file.
+  final String? fileName;
+
   const SourceView({
     required this.canSwitch,
     required this.requested,
     required this.text,
     this.sizeLabel,
     this.charsetLabel,
+    this.lineCount,
+    this.contentType,
+    this.fileName,
   });
 
   String? get textOrNull {
@@ -66,7 +81,9 @@ class SourceView {
       requested == other.requested &&
       _sameText(text, other.text) &&
       sizeLabel == other.sizeLabel &&
-      charsetLabel == other.charsetLabel;
+      charsetLabel == other.charsetLabel &&
+      contentType == other.contentType &&
+      fileName == other.fileName;
 
   @override
   int get hashCode => Object.hash(canSwitch, requested, text.runtimeType,
@@ -120,6 +137,11 @@ SourceView _forBrowser(Observed<BrowserSnapshot> b, bool canSwitch) {
         text: Present(dom.value.text, source: DataSource.browser),
         sizeLabel:
             '${formatThousands(dom.value.domCharCount)} characters (serialized DOM)',
+        lineCount: _lines(dom.value.text),
+        contentType: switch (b.value.contentType) {
+          Present<String>(:final value) => value,
+          _ => null,
+        },
       );
     }
     return SourceView(
@@ -150,6 +172,10 @@ SourceView _forServer(Observed<ServerSnapshot> s, bool canSwitch) {
         text: Present(b.decoded.text, source: DataSource.server),
         sizeLabel: '${formatThousands(b.byteLength)} bytes$transfer$cut',
         charsetLabel: _charsetLabel(b.decoded),
+        lineCount: _lines(b.decoded.text),
+        contentType: s.value.hops.isEmpty
+            ? null
+            : s.value.hops.last.header('content-type'),
       );
     }
     return SourceView(
@@ -174,11 +200,23 @@ SourceView _forFile(Observed<FileSnapshot> f) {
       text: Present(file.text.text, source: DataSource.file),
       sizeLabel: '${formatThousands(file.byteLength)} bytes',
       charsetLabel: _charsetLabel(file.text),
+      lineCount: _lines(file.text.text),
+      fileName: file.name,
     );
   }
   return SourceView(
       canSwitch: false, requested: DataSource.file, text: _asText(f));
 }
+
+/// Text the store does not hold (a generated error page, a URL file loaded
+/// without fetch). No switch: neither core is the source of this text.
+SourceView _fallback(String text) => SourceView(
+      canSwitch: false,
+      requested: null,
+      text: Present(text, source: DataSource.file),
+      sizeLabel: '${formatThousands(text.length)} characters (loaded document)',
+      lineCount: _lines(text),
+    );
 
 /// The document the Source tab and DOM tree show for [p].
 ///
@@ -189,7 +227,14 @@ SourceView _forFile(Observed<FileSnapshot> f) {
 /// (the app's legacy current file, e.g. a generated error page) is shown.
 SourceView deriveSourceView(PageInspection p, {String? fallbackText}) {
   final t = p.target;
-  if (t is FileTarget) return _forFile(p.file);
+  if (t is FileTarget) {
+    if (p.file is! Present<FileSnapshot> &&
+        fallbackText != null &&
+        fallbackText.isNotEmpty) {
+      return _fallback(fallbackText);
+    }
+    return _forFile(p.file);
+  }
   final canSwitch = t is UrlTarget;
   final requested = p.primaryDocumentPreference ?? p.primaryDocument;
   if (canSwitch && requested != null) {
@@ -200,12 +245,7 @@ SourceView deriveSourceView(PageInspection p, {String? fallbackText}) {
     };
   }
   if (fallbackText != null && fallbackText.isNotEmpty) {
-    return SourceView(
-      canSwitch: canSwitch,
-      requested: null,
-      text: Present(fallbackText, source: DataSource.file),
-      sizeLabel: '${formatThousands(fallbackText.length)} characters',
-    );
+    return _fallback(fallbackText);
   }
   if (!canSwitch) {
     return const SourceView(

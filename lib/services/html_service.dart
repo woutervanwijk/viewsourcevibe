@@ -59,6 +59,8 @@ class HtmlService extends ChangeNotifier {
   final SovereigntyAnalyzer _sovereigntyAnalyzer;
   final DetectionScanner? _detectionScanner;
   final int _detectionIsolateThreshold;
+  final DomTreeBuilder? _domTreeBuilder;
+  final int _domTreeIsolateThreshold;
 
   /// Test hook: awaited right after a server file was built.
   @visibleForTesting
@@ -432,30 +434,67 @@ class HtmlService extends ChangeNotifier {
     return server.value.hops.last.header('content-type');
   }
 
-  DomTree? _domTree;
-  String? _domTreeText;
-  DomTreeKind? _domTreeKind;
+  // Trees of the last few documents, by text identity and kind.
+  final List<({String text, DomTreeKind kind, DomTree tree})> _domTreeCache =
+      [];
+  ({String text, DomTreeKind kind})? _domTreeBuilding;
 
-  /// How many times a tree was built (tests: once per document).
+  /// How many trees were built (tests: once per document).
   @visibleForTesting
   int domTreeBuilds = 0;
 
-  /// The DOM tree of the Source tab's document; null while it has no text.
-  /// Built once per document (the text's identity) and kind.
+  /// True while the tree of the shown document is built off-thread.
+  bool get domTreePending {
+    domTree;
+    return _domTreeBuilding != null;
+  }
+
+  /// The DOM tree of the Source tab's document. Built once per document and
+  /// kind; big texts are parsed off the UI thread ([domTreePending] is true
+  /// and this is null until done; listeners are notified).
   DomTree? get domTree {
-    final text = sourceView.textOrNull;
+    final view = sourceView;
+    final text = view.textOrNull;
     if (text == null) return null;
-    final kind =
-        isSvg ? DomTreeKind.svg : (isXml ? DomTreeKind.xml : DomTreeKind.html);
-    if (_domTree == null ||
-        !identical(text, _domTreeText) ||
-        kind != _domTreeKind) {
-      domTreeBuilds++;
-      _domTree = deriveDomTree(text, kind);
-      _domTreeText = text;
-      _domTreeKind = kind;
+    final kind = domTreeKindFor(
+        contentType: view.contentType, fileName: view.fileName);
+    for (final e in _domTreeCache) {
+      if (identical(e.text, text) && e.kind == kind) return e.tree;
     }
-    return _domTree;
+    if (text.length <= _domTreeIsolateThreshold) {
+      domTreeBuilds++;
+      final tree = deriveDomTree(text, kind);
+      _rememberDomTree(text, kind, tree);
+      return tree;
+    }
+    final b = _domTreeBuilding;
+    if (b == null || !identical(b.text, text) || b.kind != kind) {
+      _startDomTreeBuild(text, kind);
+    }
+    return null;
+  }
+
+  void _rememberDomTree(String text, DomTreeKind kind, DomTree tree) {
+    _domTreeCache.insert(0, (text: text, kind: kind, tree: tree));
+    if (_domTreeCache.length > 3) _domTreeCache.removeLast();
+  }
+
+  void _startDomTreeBuild(String text, DomTreeKind kind) {
+    domTreeBuilds++;
+    final mine = _domTreeBuilding = (text: text, kind: kind);
+    final build = _domTreeBuilder ??
+        (String t, DomTreeKind k) => compute(buildDomTreeRecord, (t, k));
+    void finish(DomTree? tree) {
+      if (_disposed) return;
+      if (tree != null) _rememberDomTree(text, kind, tree);
+      if (identical(_domTreeBuilding, mine)) _domTreeBuilding = null;
+      notifyListeners();
+    }
+
+    build(text, kind).then(finish, onError: (Object e) {
+      debugPrint('DOM tree build failed: $e');
+      finish(null);
+    });
   }
 
   List<Divergence>? _divergences;
@@ -911,6 +950,8 @@ class HtmlService extends ChangeNotifier {
     MetadataExtractor? metadataExtractor,
     DetectionScanner? detectionScanner,
     int detectionIsolateThreshold = 256 * 1024,
+    DomTreeBuilder? domTreeBuilder,
+    int domTreeIsolateThreshold = 256 * 1024,
     SovereigntyAnalyzer? sovereigntyAnalyzer,
     BrowserCollect? browserCollect,
     NativeCookieReader? nativeCookies,
@@ -925,6 +966,8 @@ class HtmlService extends ChangeNotifier {
             sovereigntyAnalyzer ?? SovereigntyService.analyze,
         _detectionScanner = detectionScanner,
         _detectionIsolateThreshold = detectionIsolateThreshold,
+        _domTreeBuilder = domTreeBuilder,
+        _domTreeIsolateThreshold = domTreeIsolateThreshold,
         _browserCollectOverride = browserCollect,
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
         _sizeLookup = sizeLookup ?? _lookupResourceSize,

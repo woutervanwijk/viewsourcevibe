@@ -4,6 +4,7 @@ import 'package:re_editor/re_editor.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/services/derive/source_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/utils/text_decoding.dart';
@@ -253,5 +254,44 @@ void main() {
             file: p.file),
         loadLegacyFile: true);
     expect(editorText(tester), 'LEGACY-FILE-CONTENT');
+  });
+
+  testWidgets('fallback text: no switch, honest label', (tester) async {
+    final p = fullPage();
+    await show(
+        tester,
+        PageInspection(
+            generation: 1,
+            target: p.target,
+            server: const Unavailable(
+                UnavailableReason.notApplicable, 'not fetched'),
+            browser: const Pending(),
+            file: p.file),
+        loadLegacyFile: true);
+    expect(find.text('Rendered DOM'), findsNothing);
+    expect(find.text('Server HTML'), findsNothing);
+    expect(find.textContaining('loaded document'), findsOneWidget);
+  });
+
+  test('a file target without a file snapshot uses the legacy text', () {
+    final p = localFile();
+    final noSnapshot = PageInspection(
+        generation: 1,
+        target: p.target,
+        server: p.server,
+        browser: p.browser,
+        file: const Failed('could not read'));
+    final v = deriveSourceView(noSnapshot, fallbackText: 'LEGACY-FILE-CONTENT');
+    expect(v.textOrNull, 'LEGACY-FILE-CONTENT');
+    expect(v.canSwitch, isFalse);
+    expect(v.sizeLabel, contains('loaded document'));
+    // Without legacy text the failure is shown, not hidden.
+    expect(deriveSourceView(noSnapshot).text, isA<Failed<String>>());
+  });
+
+  test('line count is part of the derived view', () {
+    final v = deriveSourceView(localFile());
+    expect(v.lineCount, 1);
+    expect(deriveSourceView(fullPage()).lineCount, 1);
   });
 }

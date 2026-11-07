@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
@@ -6,6 +9,7 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 
+import '../fixtures/inspection/builders.dart';
 import '../fixtures/inspection/full_page.dart';
 import '../fixtures/inspection/local_file.dart';
 import '../fixtures/inspection/pump.dart';
@@ -119,6 +123,99 @@ void main() {
               primaryDocumentPreference: DataSource.server));
       expect(find.text('Fetching server HTML…'), findsOneWidget);
       expect(find.textContaining('id="app"'), findsNothing);
+    });
+  });
+
+  group('large documents and kind (fix round 1)', () {
+    Future<void> mount(WidgetTester tester, HtmlService service) =>
+        pumpWithProviders(tester, service: service, child: const DomTreeView());
+
+    testWidgets('a large document is built off-thread: Pending, then the tree',
+        (tester) async {
+      final store = seedStore(InspectionStore(), fullPage());
+      final builds = <Completer<DomTree>>[];
+      final service = makeService(store, (text, kind) {
+        final c = Completer<DomTree>();
+        builds.add(c);
+        return c.future;
+      }, 10);
+      addTearDown(service.dispose);
+      await mount(tester, service);
+      await tester.pump();
+      expect(service.domTreePending, isTrue);
+      expect(find.text('Building the tree…'), findsOneWidget);
+      expect(builds, hasLength(1));
+
+      builds.single.complete(deriveDomTree(fullPageDomHtml, DomTreeKind.html));
+      await tester.pump();
+      await tester.pump();
+      expect(service.domTreePending, isFalse);
+      expect(find.text('Source: rendered DOM'), findsOneWidget);
+
+      // Server doc: another build; then back to the DOM is synchronous.
+      service.selectSourceDocument(DataSource.server);
+      await tester.pump();
+      expect(builds, hasLength(2));
+      builds.last.complete(deriveDomTree(fullPageServerHtml, DomTreeKind.html));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Source: server HTML'), findsOneWidget);
+
+      service.selectSourceDocument(DataSource.browser);
+      await tester.pump();
+      expect(builds, hasLength(2));
+      expect(find.text('Source: rendered DOM'), findsOneWidget);
+    });
+
+    testWidgets('a result that arrives after dispose is ignored',
+        (tester) async {
+      final store = seedStore(InspectionStore(), fullPage());
+      final c = Completer<DomTree>();
+      final service = makeService(store, (t, k) => c.future, 10);
+      service.domTree; // starts the build
+      service.dispose();
+      c.complete(deriveDomTree('<html/>', DomTreeKind.html));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    test('kind follows the displayed document, not the legacy sniffing', () {
+      final h = hop('https://x.test/data', 200, headers: {
+        'content-type': ['application/xml']
+      });
+      const xml = '<root><item>a</item></root>';
+      final p = urlInspection(
+        url: 'https://x.test/data',
+        serverResult: server(
+            serverSnapshot(url: 'https://x.test/data', hops: [h], body: xml)),
+        browserResult:
+            browser(browserSnapshot(url: 'https://x.test/data', dom: xml)),
+      );
+      final store = seedStore(InspectionStore(), p);
+      final service = makeService(store);
+      addTearDown(service.dispose);
+
+      // Rendered DOM (browser content type text/html): HTML parser.
+      expect(service.domTree!.usedXmlParser, isFalse);
+      service.selectSourceDocument(DataSource.server);
+      expect(service.domTree!.usedXmlParser, isTrue);
+      expect(service.domTree!.roots.single.label, 'root');
+    });
+
+    test('file kind comes from the file name', () {
+      final svg = localFileSnapshot();
+      final f = FileSnapshot(
+          name: 'pic.svg',
+          path: '/tmp/pic.svg',
+          origin: FileOrigin.picker,
+          bytes: const [],
+          text: decoded('<svg><g/></svg>'),
+          lastModified: const Unavailable(UnavailableReason.notApplicable));
+      expect(svg.name, 'page.html');
+      final store = InspectionStore()..beginFile(f);
+      final service = makeService(store);
+      addTearDown(service.dispose);
+      expect(service.domTree!.usedXmlParser, isTrue);
     });
   });
 }

@@ -317,7 +317,7 @@ class _SourceViewerState extends State<SourceViewer> {
                                 ),
                                 if (text != null && view.sizeLabel != null)
                                   Text(
-                                    '${formatThousands('\n'.allMatches(text).length + 1)} lines • ${view.sizeLabel}',
+                                    '${formatThousands(view.lineCount ?? 1)} lines • ${view.sizeLabel}',
                                     style: _smallStyle(context),
                                   ),
                                 if (view.charsetLabel != null)

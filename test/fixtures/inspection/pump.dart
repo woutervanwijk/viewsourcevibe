@@ -11,6 +11,7 @@ import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
+import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 
@@ -58,7 +59,14 @@ InspectionStore seedStore(InspectionStore store, PageInspection p) {
 }
 
 /// An HtmlService on its own store that never touches the network.
-HtmlService makeService([InspectionStore? store]) => HtmlService(
+HtmlService makeService([
+  InspectionStore? store,
+  DomTreeBuilder? domTreeBuilder,
+  int? domTreeIsolateThreshold,
+]) =>
+    HtmlService(
+      domTreeBuilder: domTreeBuilder,
+      domTreeIsolateThreshold: domTreeIsolateThreshold ?? 256 * 1024,
       store: store ?? InspectionStore(),
       serverFetcher: SilentServerFetcher(),
       browserLoader: SilentBrowserLoader(),
