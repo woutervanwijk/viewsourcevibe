@@ -32,6 +32,7 @@ import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
+import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
@@ -177,6 +178,84 @@ class HtmlService extends ChangeNotifier {
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
+
+  // What the last extraction produced besides the map; reset with it.
+  DocumentChecks? _metadataChecks;
+  List<UnresolvedLink> _metadataUnresolved = const [];
+  DataSource? _metadataDocSource;
+  String? _metadataError;
+  int _metadataRevision = 0;
+
+  void _resetMetadata() {
+    _pageMetadata = null;
+    _metadataChecks = null;
+    _metadataUnresolved = const [];
+    _metadataDocSource = null;
+    _metadataError = null;
+    _metadataRevision++;
+  }
+
+  Observed<MetadataModel>? _metadataState;
+  int? _metadataStateRevision;
+  PageInspection? _metadataStateFor;
+  bool? _metadataStateExtracting;
+
+  /// Why a link has no size when the browser said nothing about it.
+  String _sizeUnknownReason() {
+    final b = store.current.browser;
+    return switch (b) {
+      Present<BrowserSnapshot>(value: final snap) => switch (snap.resources) {
+          Present() => 'not among the requests the browser reported',
+          Unavailable(reason: final r, detail: final d) =>
+            unavailableMessage(r, d),
+          Failed(error: final e) => 'browser requests failed: $e',
+          Pending() => 'browser requests still loading',
+        },
+      Pending<BrowserSnapshot>() => 'browser data still loading',
+      Failed<BrowserSnapshot>(error: final e) => 'browser data failed: $e',
+      Unavailable<BrowserSnapshot>(reason: final r, detail: final d) =>
+        store.current.target is FileTarget
+            ? 'browser data not available for local files'
+            : unavailableMessage(r, d),
+    };
+  }
+
+  /// The Metadata tab's data, or why there is none (reading, failed, nothing
+  /// loaded). Changes identity only when the extraction, its sizes or the
+  /// browser data change.
+  Observed<MetadataModel> get metadataState {
+    final current = store.current;
+    if (_metadataState == null ||
+        _metadataStateRevision != _metadataRevision ||
+        !identical(_metadataStateFor, current) ||
+        _metadataStateExtracting != _isExtractingMetadata) {
+      _metadataStateRevision = _metadataRevision;
+      _metadataStateFor = current;
+      _metadataStateExtracting = _isExtractingMetadata;
+      final data = _pageMetadata;
+      final checks = _metadataChecks;
+      _metadataState = _isExtractingMetadata
+          ? const Pending()
+          : data != null && checks != null
+              ? Present(
+                  MetadataModel(
+                    data: data,
+                    docSource: _metadataDocSource ?? DataSource.file,
+                    checks: checks,
+                    unresolved: _metadataUnresolved,
+                    sizeUnknownReason: _sizeUnknownReason(),
+                  ),
+                  source: _metadataDocSource ?? DataSource.file)
+              : _metadataError != null
+                  ? Failed(_metadataError!)
+                  : _currentFile == null && current.target is NoTarget
+                      ? const Unavailable(
+                          UnavailableReason.notApplicable, 'nothing loaded')
+                      : const Pending();
+    }
+    return _metadataState!;
+  }
+
   // The document's own wire/decoded size from the server body; used while
   // the browser has no numbers. Browser numbers come from the store.
   Map<String, dynamic>? _lastPageWeight;
@@ -455,8 +534,11 @@ class HtmlService extends ChangeNotifier {
   }
 
   /// The user picked a document in the Source tab's switch.
-  void selectSourceDocument(DataSource source) =>
-      store.setPrimaryDocument(source);
+  void selectSourceDocument(DataSource source) {
+    store.setPrimaryDocument(source);
+    // The metadata follows the chosen document.
+    if (_currentFile != null) _extractMetadata().ignore();
+  }
 
   /// Set when the content was loaded although its TLS certificate is invalid.
   String? get tlsWarning {
@@ -1124,7 +1206,7 @@ class HtmlService extends ChangeNotifier {
   /// Reset all loading and result state before a new URL load
   void _resetLoadState({String? newUrl, bool notify = true}) {
     _clearBrowserDerivedData();
-    _pageMetadata = null;
+    _resetMetadata();
     _webViewLoadingProgress = 0.0;
     _beautifiedCache.clear();
     _isBeautifyEnabled = false;
@@ -2640,7 +2722,7 @@ Technical details: $message''';
     if (clearProbe && newUrl == null) store.clear();
     // Always clear page metadata when loading a new file, even if preserving probe
     // This ensures metadata tabs are cleaned when navigating back
-    _pageMetadata = null;
+    _resetMetadata();
     // clearHighlightCache() is now called within _prepareForEditorReset()
     _beautifiedCache.clear(); // Clear beautify cache
     notifyListeners();
@@ -3607,12 +3689,20 @@ Technical details: $message''';
         final headers = _probeResult?['headers'] as Map<String, String>?;
 
         Map<String, dynamic>? metadata;
+        DerivedMetadata? derived;
+        DocumentChecks? checks;
+        String? error;
         try {
-          metadata = (await deriveMetadata(html, baseUrl, input.source,
-                  headers: headers, extractor: _metadataExtractor))
-              .data;
+          derived = await deriveMetadata(html, baseUrl, input.source,
+              headers: headers, extractor: _metadataExtractor);
+          metadata = derived.data;
+          checks = html.length > _detectionIsolateThreshold
+              ? await compute(deriveDocumentChecks, html)
+              : deriveDocumentChecks(html);
         } catch (e, stack) {
           debugPrint('Error extracting metadata in isolate: $e\n$stack');
+          error = '$e';
+          metadata = null;
         }
         if (_disposed) return;
         final now = _currentFile;
@@ -3625,6 +3715,11 @@ Technical details: $message''';
         }
 
         _pageMetadata = metadata;
+        _metadataError = error;
+        _metadataChecks = checks;
+        _metadataUnresolved = derived?.unresolvedLinks ?? const [];
+        _metadataDocSource = input.source;
+        _metadataRevision++;
         if (metadata != null) {
           final weight = _pageWeight;
           if (weight != null) metadata['pageWeight'] = weight;
@@ -3646,7 +3741,14 @@ Technical details: $message''';
   static Map<String, dynamic>? _sizeOf(Map match) {
     final tx = match['transfer'] as int?;
     final dec = match['decoded'] as int?;
-    if (tx == null && dec == null) return null;
+    if (tx == null && dec == null) {
+      final why = match['transferNote'] ?? match['decodedNote'];
+      return {
+        'transfer': null,
+        'decoded': null,
+        if (why != null) 'unknownReason': '$why',
+      };
+    }
     if (dec == null) {
       final isImage = match['initiatorType'] == 'img' ||
           match['initiatorType'] == 'image' ||
@@ -3878,6 +3980,7 @@ Technical details: $message''';
     }
 
     _sortMetadataLists();
+    _metadataRevision++;
   }
 
   void _sortMetadataLists() {
@@ -3999,6 +4102,7 @@ Technical details: $message''';
       }));
       if (changed && !stale()) {
         _sortMetadataLists();
+        _metadataRevision++;
         notifyListeners();
       }
     }
