@@ -2,9 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/html_file.dart';
-import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
-import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
@@ -13,8 +11,8 @@ import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
 import 'package:view_source_vibe/widgets/metadata_view.dart';
 
-import '../fixtures/inspection/builders.dart';
 import '../fixtures/inspection/full_page.dart';
+import '../fixtures/inspection/ios_partial.dart';
 import '../fixtures/inspection/local_file.dart';
 import '../fixtures/inspection/pump.dart';
 
@@ -29,37 +27,6 @@ HtmlService serviceFor(InspectionStore store, [MetadataExtractor? extractor]) =>
       browserLoader: SilentBrowserLoader(),
       metadataExtractor: extractor ?? _realExtractor,
     );
-
-/// iOS: a cross-origin script without sizes, an own script with only a
-/// transfer size, an image.
-PageInspection iosWithLinks() {
-  const url = 'https://example.org/';
-  const dom = '<html><head><title>IOS</title>'
-      '<script src="https://cdn.other.net/lib.js"></script>'
-      '<script src="https://example.org/own.js"></script></head>'
-      '<body><img src="https://example.org/pic.png"></body></html>';
-  const blocked = Unavailable<int>(UnavailableReason.blockedByPlatform,
-      'cross-origin without Timing-Allow-Origin');
-  return urlInspection(
-    url: url,
-    serverResult: Pending(),
-    browserResult: browser(browserSnapshot(
-      url: url,
-      dom: dom,
-      platform: BrowserPlatform.ios,
-      resources: [
-        resource('https://cdn.other.net/lib.js', 'script',
-            transfer: blocked, decoded: blocked),
-        resource('https://example.org/own.js', 'script',
-            transfer: browser(2048), decoded: blocked),
-        resource('https://example.org/pic.png', 'img',
-            transfer: browser(5000),
-            decoded: const Unavailable(
-                UnavailableReason.notReportedByPlatform, 'image decoded size')),
-      ],
-    )),
-  );
-}
 
 const relativeHtml = '<html><head><title>Local</title></head><body>'
     '<img src="img/a.png"><script src="app.js"></script></body></html>';
@@ -131,7 +98,7 @@ void main() {
     });
 
     testWidgets('(b) iOS: unknown sizes are said, not 0 KB', (tester) async {
-      await show(tester, iosWithLinks());
+      await show(tester, iosPartialWithLinks());
       expect(find.textContaining('size unknown (Not visible'), findsWidgets);
       expect(find.textContaining('↓ 2 KB'), findsOneWidget);
       expect(find.textContaining('0 KB'), findsNothing);

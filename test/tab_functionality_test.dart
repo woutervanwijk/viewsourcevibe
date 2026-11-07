@@ -8,6 +8,8 @@ import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/media_view.dart';
 import 'package:provider/provider.dart';
 
+import 'fixtures/inspection/builders.dart';
+
 void main() {
   // Initialize Flutter binding for tests
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -90,6 +92,14 @@ void main() {
       );
 
       await load(tester, testFile);
+      // The scan only says "none found" about sources it could read: give it
+      // the server response (loadFile alone leaves the store without one).
+      htmlService.store.applyServer(
+          htmlService.store.current.generation,
+          server(serverSnapshot(
+              url: 'https://example.com',
+              hops: [hop('https://example.com/', 200)],
+              body: testFile.content)));
 
       // Build the ServicesView widget
       await tester.pumpWidget(

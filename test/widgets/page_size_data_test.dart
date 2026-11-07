@@ -98,8 +98,8 @@ void main() {
 
     testWidgets('(c) local file: says it is not available', (tester) async {
       await show(tester, localFile());
-      expect(find.textContaining('not available for local files'),
-          findsOneWidget);
+      expect(
+          find.textContaining('not available for local files'), findsOneWidget);
       expect(find.text('Total Page Size'), findsNothing);
     });
 
@@ -115,12 +115,11 @@ void main() {
       store.beginFile((localFile().target as FileTarget).file);
       await tester.pump();
       expect(find.text('app.js'), findsNothing);
-      expect(find.textContaining('not available for local files'),
-          findsOneWidget);
+      expect(
+          find.textContaining('not available for local files'), findsOneWidget);
     });
 
-    testWidgets('(d) a loading-progress tick does not rebuild',
-        (tester) async {
+    testWidgets('(d) a loading-progress tick does not rebuild', (tester) async {
       await show(tester, fullPage());
       final before = PageSizeView.builds;
       service.updateWebViewLoadingProgress(0.4);
@@ -157,8 +156,8 @@ void main() {
                   storage: b.storage,
                   navigation: b.navigation,
                   snapshotTimeMs: b.snapshotTimeMs))));
-      expect(find.textContaining('Not reported by the platform'),
-          findsOneWidget);
+      expect(
+          find.textContaining('Not reported by the platform'), findsOneWidget);
       expect(find.text('Total Page Size'), findsNothing);
     });
   });

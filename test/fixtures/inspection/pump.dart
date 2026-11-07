@@ -14,6 +14,7 @@ import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/services/metadata_parser.dart';
 
 /// A fetcher that never answers: widget tests seed the store directly.
 class SilentServerFetcher implements ServerFetcher {
@@ -71,6 +72,15 @@ HtmlService makeService([
       serverFetcher: SilentServerFetcher(),
       browserLoader: SilentBrowserLoader(),
       metadataExtractor: (html, baseUrl, {headers}) async => {},
+    );
+
+/// Like [makeService], but with the real metadata parser (no isolate).
+HtmlService makeServiceWithMetadata(InspectionStore store) => HtmlService(
+      store: store,
+      serverFetcher: SilentServerFetcher(),
+      browserLoader: SilentBrowserLoader(),
+      metadataExtractor: (html, baseUrl, {headers}) async =>
+          extractMetadataSync(html, baseUrl, headers: headers),
     );
 
 HtmlFile htmlFileFor(PageInspection p, {String content = ''}) {

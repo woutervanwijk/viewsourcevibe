@@ -1,6 +1,7 @@
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 
 import 'builders.dart';
 
@@ -30,6 +31,40 @@ PageInspection iosPartial() {
             transfer: blocked, decoded: blocked),
         resource('https://example.org/own.js', 'script',
             transfer: browser(2048), decoded: blocked),
+        resource('https://example.org/pic.png', 'img',
+            transfer: browser(5000),
+            decoded: const Unavailable(
+                UnavailableReason.notReportedByPlatform, 'image decoded size')),
+      ],
+    )),
+  );
+}
+
+/// iOS: a cross-origin script without sizes, an own script with only a
+/// transfer size, an image.
+PageInspection iosPartialWithLinks() {
+  const url = 'https://example.org/';
+  const dom = '<html><head><title>IOS</title>'
+      '<script src="https://cdn.other.net/lib.js"></script>'
+      '<script src="https://example.org/own.js"></script>'
+      '<script src="https://www.google-analytics.com/analytics.js"></script></head>'
+      '<body><img src="https://example.org/pic.png"></body></html>';
+  const blocked = Unavailable<int>(UnavailableReason.blockedByPlatform,
+      'cross-origin without Timing-Allow-Origin');
+  return urlInspection(
+    url: url,
+    serverResult: const Pending<ServerSnapshot>(),
+    browserResult: browser(browserSnapshot(
+      url: url,
+      dom: dom,
+      platform: BrowserPlatform.ios,
+      resources: [
+        resource('https://cdn.other.net/lib.js', 'script',
+            transfer: blocked, decoded: blocked),
+        resource('https://example.org/own.js', 'script',
+            transfer: browser(2048), decoded: blocked),
+        resource('https://www.google-analytics.com/analytics.js', 'script',
+            transfer: blocked, decoded: blocked),
         resource('https://example.org/pic.png', 'img',
             transfer: browser(5000),
             decoded: const Unavailable(
