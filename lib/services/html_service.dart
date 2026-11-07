@@ -446,7 +446,38 @@ class HtmlService extends ChangeNotifier {
   /// True while the tree of the shown document is built off-thread.
   bool get domTreePending {
     domTree;
-    return _domTreeBuilding != null;
+    final key = _currentDomKey();
+    final b = _domTreeBuilding;
+    return key != null &&
+        b != null &&
+        identical(b.text, key.text) &&
+        b.kind == key.kind &&
+        _domTreeBuilding != null;
+  }
+
+  // Builds that failed, by text identity and kind: never retried.
+  final List<({String text, DomTreeKind kind, String error})> _domTreeFailures =
+      [];
+
+  /// Why the shown document's tree could not be built; null otherwise.
+  String? get domTreeError {
+    final key = _currentDomKey();
+    if (key == null) return null;
+    for (final f in _domTreeFailures) {
+      if (identical(f.text, key.text) && f.kind == key.kind) return f.error;
+    }
+    return null;
+  }
+
+  ({String text, DomTreeKind kind})? _currentDomKey() {
+    final view = sourceView;
+    final text = view.textOrNull;
+    if (text == null) return null;
+    return (
+      text: text,
+      kind:
+          domTreeKindFor(contentType: view.contentType, fileName: view.fileName)
+    );
   }
 
   /// The DOM tree of the Source tab's document. Built once per document and
@@ -456,11 +487,12 @@ class HtmlService extends ChangeNotifier {
     final view = sourceView;
     final text = view.textOrNull;
     if (text == null) return null;
-    final kind = domTreeKindFor(
-        contentType: view.contentType, fileName: view.fileName);
+    final kind =
+        domTreeKindFor(contentType: view.contentType, fileName: view.fileName);
     for (final e in _domTreeCache) {
       if (identical(e.text, text) && e.kind == kind) return e.tree;
     }
+    if (domTreeError != null) return null;
     if (text.length <= _domTreeIsolateThreshold) {
       domTreeBuilds++;
       final tree = deriveDomTree(text, kind);
@@ -484,16 +516,20 @@ class HtmlService extends ChangeNotifier {
     final mine = _domTreeBuilding = (text: text, kind: kind);
     final build = _domTreeBuilder ??
         (String t, DomTreeKind k) => compute(buildDomTreeRecord, (t, k));
-    void finish(DomTree? tree) {
+    void finish(DomTree? tree, [String? error]) {
       if (_disposed) return;
       if (tree != null) _rememberDomTree(text, kind, tree);
+      if (error != null) {
+        _domTreeFailures.insert(0, (text: text, kind: kind, error: error));
+        if (_domTreeFailures.length > 3) _domTreeFailures.removeLast();
+      }
       if (identical(_domTreeBuilding, mine)) _domTreeBuilding = null;
       notifyListeners();
     }
 
     build(text, kind).then(finish, onError: (Object e) {
       debugPrint('DOM tree build failed: $e');
-      finish(null);
+      finish(null, '$e');
     });
   }
 

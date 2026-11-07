@@ -64,6 +64,17 @@ class _DomTreeViewState extends State<DomTreeView> {
         .select<HtmlService, bool>((s) => s.isLoading || s.isWebViewLoading);
 
     final building = context.select<HtmlService, bool>((s) => s.domTreePending);
+    final error = context.select<HtmlService, String?>((s) => s.domTreeError);
+    if (tree == null && error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Could not build the tree: $error',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ),
+      );
+    }
     if (tree == null && building) {
       return Center(
         child: Column(

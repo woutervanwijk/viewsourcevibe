@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -216,6 +217,56 @@ void main() {
       final service = makeService(store);
       addTearDown(service.dispose);
       expect(service.domTree!.usedXmlParser, isTrue);
+    });
+  });
+
+  group('fix round 2', () {
+    testWidgets('a failing builder is called once and the error is shown',
+        (tester) async {
+      final store = seedStore(InspectionStore(), fullPage());
+      var calls = 0;
+      final service = makeService(store, (t, k) async {
+        calls++;
+        throw StateError('boom');
+      }, 10);
+      addTearDown(service.dispose);
+      await pumpWithProviders(tester,
+          service: service, child: const DomTreeView());
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+        service.updateWebViewLoadingProgress(0.1 * (i + 1));
+      }
+      await tester.pump();
+      expect(calls, 1);
+      expect(service.domTreePending, isFalse);
+      expect(find.textContaining('Could not build the tree'), findsOneWidget);
+      expect(find.textContaining('boom'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    testWidgets('pending only for the displayed document', (tester) async {
+      final p = fullPage();
+      final store = seedStore(
+          InspectionStore(),
+          PageInspection(
+              generation: 1,
+              target: p.target,
+              server: const Pending(),
+              browser: p.browser,
+              file: p.file));
+      final service =
+          makeService(store, (t, k) => Completer<DomTree>().future, 10);
+      addTearDown(service.dispose);
+      await pumpWithProviders(tester,
+          service: service, child: const DomTreeView());
+      await tester.pump();
+      expect(service.domTreePending, isTrue); // the DOM is building
+
+      service.selectSourceDocument(DataSource.server);
+      await tester.pump();
+      expect(service.domTreePending, isFalse);
+      expect(find.text('Fetching server HTML…'), findsOneWidget);
+      expect(find.text('Building the tree…'), findsNothing);
     });
   });
 }
