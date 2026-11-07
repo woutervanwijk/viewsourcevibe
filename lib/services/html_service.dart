@@ -29,6 +29,7 @@ import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
+import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
@@ -339,6 +340,7 @@ class HtmlService extends ChangeNotifier {
   DetectionTexts? _scanTexts;
   List<Map<String, dynamic>>? _scanned;
   bool _scanPending = false;
+  String? _scanError;
 
   /// True while the source scan runs off-thread (large documents): the
   /// source-based findings are then missing from [detections]; that is not
@@ -358,6 +360,7 @@ class HtmlService extends ChangeNotifier {
       _scanTexts = texts;
       _scanned = null;
       _scanPending = false;
+      _scanError = null;
       _detections = null;
       if (_detectionScanner == null &&
           texts.totalLength <= _detectionIsolateThreshold) {
@@ -371,6 +374,46 @@ class HtmlService extends ChangeNotifier {
       _detections = deriveDetections(current, scanned: _scanned ?? const []);
     }
     return _detections!;
+  }
+
+  /// Set when the source scan failed: the source-based findings are then
+  /// absent, which is not "none found".
+  String? get detectionsError {
+    detections;
+    return _scanError;
+  }
+
+  DetectionsView? _detectionsView;
+  List<Detection>? _detectionsViewList;
+  PageInspection? _detectionsViewFor;
+  bool? _detectionsViewScanning;
+  String? _detectionsViewError;
+
+  /// Findings plus whether they are complete (scanning, failed, which sources
+  /// were read). The Services, Privacy and Technology views read this.
+  DetectionsView get detectionsView {
+    final list = detections;
+    final current = store.current;
+    final sources =
+        describeCheckedSources(current, browserReachable: _browserReachable);
+    final scanning = _scanPending || sources.waiting;
+    if (_detectionsView == null ||
+        !identical(list, _detectionsViewList) ||
+        !identical(current, _detectionsViewFor) ||
+        scanning != _detectionsViewScanning ||
+        sources.line != _detectionsView!.sources.line ||
+        _scanError != _detectionsViewError) {
+      _detectionsViewList = list;
+      _detectionsViewFor = current;
+      _detectionsViewScanning = scanning;
+      _detectionsViewError = _scanError;
+      _detectionsView = DetectionsView(
+          detections: list,
+          scanning: scanning,
+          failure: _scanError,
+          sources: sources);
+    }
+    return _detectionsView!;
   }
 
   void _startDetectionScan(DetectionTexts texts) {
@@ -387,6 +430,7 @@ class HtmlService extends ChangeNotifier {
 
     scan(texts).then(done, onError: (Object e) {
       debugPrint('Detection scan failed: $e');
+      if (!_disposed && identical(_scanTexts, texts)) _scanError = '$e';
       done(null);
     });
   }
