@@ -5,7 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'dart:io';
-import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
+import 'package:view_source_vibe/services/collectors/file_loader.dart';
 
 class UrlInput extends StatefulWidget {
   const UrlInput({super.key});
@@ -133,15 +134,10 @@ class _UrlInputState extends State<UrlInput> {
           try {
             final file = File(fullPath);
             if (await file.exists()) {
-              final content = await file.readAsString();
-              final htmlFile = HtmlFile(
-                name: url,
-                path: fullPath,
-                content: content,
-                lastModified: await file.lastModified(),
-                size: await file.length(),
-                isUrl: false,
-              );
+              // Path comes from the app's own history: trusted.
+              final snapshot = await FileLoader.fromPath(fullPath,
+                  origin: FileOrigin.restore, enforceSandbox: false);
+              final htmlFile = snapshot.toHtmlFile().copyWith(name: url);
               await htmlService.loadFile(htmlFile, switchToTab: switchToTab);
               return;
             }

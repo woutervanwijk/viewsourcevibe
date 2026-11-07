@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
+import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -78,14 +79,9 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
     if (content != null && content.isNotEmpty) {
       debugPrint('Opening text content from deep link: $content');
       try {
-        final htmlFile = HtmlFile(
-          name: '',
-          path: 'shared://text',
-          content: content,
-          lastModified: DateTime.now(),
-          size: content.length,
-          isUrl: false,
-        );
+        final htmlFile =
+            FileLoader.fromText(content, origin: FileOrigin.deepLink, name: '')
+                .toHtmlFile();
         await htmlService.loadFile(htmlFile,
             switchToTab: HtmlService.viewerTab);
       } catch (e) {
@@ -114,25 +110,12 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
           return;
         }
 
-        // Read file from filesystem
-        final file = File(normalizedFilePath);
-        if (await file.exists()) {
-          final content = await file.readAsString();
-          final fileName = normalizedFilePath.split('/').last;
-
-          final htmlFile = HtmlFile(
-            name: fileName,
-            path: normalizedFilePath,
-            content: content,
-            lastModified: await file.lastModified(),
-            size: await file.length(),
-            isUrl: false,
-          );
-          await htmlService.loadFile(htmlFile,
-              switchToTab: HtmlService.viewerTab);
-        } else {
-          debugPrint('File does not exist: $normalizedFilePath');
-        }
+        // Already checked by _resolveAllowedDeepLinkFile; FileLoader checks
+        // the sandbox again.
+        final snapshot = await FileLoader.fromPath(normalizedFilePath,
+            origin: FileOrigin.deepLink);
+        await htmlService.loadFile(snapshot.toHtmlFile(),
+            switchToTab: HtmlService.viewerTab);
       } catch (e) {
         debugPrint('Error loading file from deep link: $e');
       }
@@ -227,14 +210,12 @@ Try these solutions:
 - Use a different app to share the file
 - Contact the app developer for support''';
 
-      final htmlFile = HtmlFile(
-        name: 'Content File Error',
-        path: uri.toString(),
-        content: errorContent,
-        lastModified: DateTime.now(),
-        size: errorContent.length,
-        isUrl: false,
-      );
+      final htmlFile = FileLoader.fromText(errorContent,
+              origin: FileOrigin.deepLink,
+              name: 'Content File Error',
+              path: uri.toString(),
+              isError: true)
+          .toHtmlFile();
       await htmlService.loadFile(htmlFile, switchToTab: HtmlService.viewerTab);
     } catch (e) {
       debugPrint('Error loading content URI: $e');
@@ -443,16 +424,14 @@ Future<void> _performDelayedInitialization(
                 final file = File(savedState.filePath!);
                 if (await file.exists()) {
                   debugPrint('📁 Restoring file: ${savedState.filePath}');
-                  final content = await file.readAsString();
-                  final htmlFile = HtmlFile(
-                    name: savedState.fileName ??
-                        savedState.filePath!.split('/').last,
-                    path: savedState.filePath!,
-                    content: content,
-                    lastModified: await file.lastModified(),
-                    size: await file.length(),
-                    isUrl: false,
-                  );
+                  // Own saved state: trusted, so no sandbox check.
+                  final snapshot = await FileLoader.fromPath(
+                      savedState.filePath!,
+                      origin: FileOrigin.restore,
+                      enforceSandbox: false);
+                  final htmlFile = snapshot
+                      .toHtmlFile()
+                      .copyWith(name: savedState.fileName ?? snapshot.name);
                   await htmlService.loadFile(htmlFile,
                       switchToTab: HtmlService.viewerTab);
                 } else {

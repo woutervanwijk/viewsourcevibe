@@ -48,7 +48,9 @@ class HtmlFile {
     }
   }
 
+  /// Lowercased text after the last dot; '' when the name has no dot.
   String get extension {
+    if (!name.contains('.')) return '';
     return name.split('.').last.toLowerCase();
   }
 
@@ -86,7 +88,9 @@ class HtmlFile {
       // Additional common text formats
       'log', 'env', 'gradle'
     };
-    return textExtensions.contains(extension);
+    // Extension-less names like Makefile/Dockerfile match by whole name.
+    final key = name.contains('.') ? extension : name.toLowerCase();
+    return textExtensions.contains(key);
   }
 
   bool get isMedia {

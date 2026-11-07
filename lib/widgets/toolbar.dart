@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -6,7 +5,8 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_export_service.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
+import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/screens/settings_screen.dart';
 import 'package:universal_io/io.dart';
 import 'package:flutter/services.dart';
@@ -49,26 +49,17 @@ class Toolbar extends StatelessWidget {
       );
 
       if (file != null && context.mounted) {
-        String content = '';
-        int fileSize = 0;
-        try {
-          final bytes = await file.readAsBytes();
-          content = utf8.decode(bytes, allowMalformed: true);
-          fileSize = bytes.length;
-        } catch (e) {
-          debugPrint('Error reading file: $e');
-        }
-
-        final htmlFile = HtmlFile(
+        // The picker delivers bytes the user chose, so no path read or
+        // sandbox check is needed.
+        final bytes = await file.readAsBytes();
+        final htmlFile = FileLoader.fromBytes(
+          bytes,
           name: file.name.isNotEmpty
               ? file.name.split('/').last.split('\\').last
               : '',
+          origin: FileOrigin.picker,
           path: file.path ?? '',
-          content: content,
-          lastModified: DateTime.now(),
-          size: fileSize,
-          isUrl: false,
-        );
+        ).toHtmlFile();
 
         if (context.mounted) {
           await Provider.of<HtmlService>(context, listen: false)

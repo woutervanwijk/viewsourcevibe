@@ -143,7 +143,7 @@ void main() {
         size: 7,
         isUrl: false,
       );
-      expect(noExtFile.extension, 'readme');
+      expect(noExtFile.extension, ''); // No dot -> empty extension (B37)
       expect(noExtFile.isHtml, false);
 
       // Test file with multiple dots
