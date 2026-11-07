@@ -28,6 +28,7 @@ import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
+import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
@@ -737,6 +738,20 @@ class HtmlService extends ChangeNotifier {
       _security = deriveSecurity(current);
     }
     return _security!;
+  }
+
+  Observed<CookiesModel>? _cookiesView;
+  PageInspection? _cookiesViewFor;
+
+  /// The Cookies tab: derived cookies with flags (unknown stays unknown)
+  /// and the privacy lens.
+  Observed<CookiesModel> get cookiesView {
+    final current = store.current;
+    if (_cookiesView == null || !identical(current, _cookiesViewFor)) {
+      _cookiesViewFor = current;
+      _cookiesView = deriveCookiesView(current);
+    }
+    return _cookiesView!;
   }
 
   Observed<PageSizeModel>? _pageSize;
