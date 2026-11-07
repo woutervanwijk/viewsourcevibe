@@ -106,6 +106,10 @@ class ServerSnapshot {
   /// Pending until `fetchRobots` has run; use [withRobots].
   final Observed<RobotsInfo> robots;
 
+  /// True when the user accepted an untrusted TLS certificate for this fetch
+  /// (the content was loaded anyway, for inspection).
+  final bool acceptedInvalidCertificate;
+
   const ServerSnapshot({
     required this.requestedUrl,
     required this.userAgent,
@@ -115,6 +119,7 @@ class ServerSnapshot {
     required this.timingMs,
     required this.certificate,
     this.robots = const Pending(),
+    this.acceptedInvalidCertificate = false,
   });
 
   ServerSnapshot withRobots(Observed<RobotsInfo> robots) => ServerSnapshot(
@@ -126,5 +131,6 @@ class ServerSnapshot {
         timingMs: timingMs,
         certificate: certificate,
         robots: robots,
+        acceptedInvalidCertificate: acceptedInvalidCertificate,
       );
 }

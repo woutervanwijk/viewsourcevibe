@@ -337,4 +337,18 @@ void main() {
     store.setPrimaryDocument(null);
     expect(notifies, 1);
   });
+
+  test('clear starts a new generation with nothing loaded', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    notifies = 0;
+    store.clear();
+    expect(store.current.generation, g + 1);
+    expect(store.current.target, isA<NoTarget>());
+    expect(store.current.server, isA<Unavailable<ServerSnapshot>>());
+    expect(notifies, 1);
+    // A late result of the cleared navigation is dropped.
+    store.applyServer(
+        g, Present(_server('https://a.test/'), source: DataSource.server));
+    expect(store.current.server, isA<Unavailable<ServerSnapshot>>());
+  });
 }

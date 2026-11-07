@@ -8,6 +8,10 @@ import '../../utils/text_decoding.dart';
 import '../certificate_security_service.dart';
 import '../probe_service.dart';
 
+/// The User-Agent of every direct fetch: honest about being this app.
+const kServerUserAgent =
+    'ViewSourceVibe/1.2 (+https://github.com/woutervanwijk/viewsourcevibe)';
+
 /// Curl-like direct fetch of a URL, independent of any WebView.
 abstract class ServerFetcher {
   /// Never throws for network problems: failures end up as [Failed] values in
@@ -32,12 +36,18 @@ class IoServerFetcher implements ServerFetcher {
     this.bodyTimeout = const Duration(seconds: 30),
   });
 
-  HttpClient _newClient(String userAgent) => HttpClient()
-    ..autoUncompress = false
-    ..connectionTimeout = connectTimeout
-    ..userAgent = userAgent
-    ..badCertificateCallback =
-        CertificateSecurityService.defaultBadCertificateCallback;
+  HttpClient _newClient(String userAgent, {void Function()? onInvalidCert}) =>
+      HttpClient()
+        ..autoUncompress = false
+        ..connectionTimeout = connectTimeout
+        ..userAgent = userAgent
+        ..badCertificateCallback = (cert, host, port) {
+          final trusted =
+              CertificateSecurityService.defaultBadCertificateCallback(
+                  cert, host, port);
+          if (trusted) onInvalidCert?.call();
+          return trusted;
+        };
 
   Future<HttpClientResponse> _send(
       HttpClient client, String method, Uri url, String userAgent,
@@ -97,6 +107,7 @@ class IoServerFetcher implements ServerFetcher {
       {required String userAgent, int maxBytes = 10 << 20}) async {
     final sw = Stopwatch()..start();
     final hops = <HttpHop>[];
+    var acceptedInvalidCert = false;
 
     ServerSnapshot done(Observed<Uri> finalUrl, Observed<ServerBody> body) =>
         ServerSnapshot(
@@ -105,6 +116,7 @@ class IoServerFetcher implements ServerFetcher {
           hops: List.unmodifiable(hops),
           finalUrl: finalUrl,
           body: body,
+          acceptedInvalidCertificate: acceptedInvalidCert,
           timingMs: Present(sw.elapsedMilliseconds, source: DataSource.server),
           // Only for a completed chain; per-hop certificates stay on the hops.
           certificate: hops.isEmpty || finalUrl is! Present<Uri>
@@ -118,7 +130,8 @@ class IoServerFetcher implements ServerFetcher {
       return done(f, Failed<ServerBody>(f.error));
     }
 
-    final client = _newClient(userAgent);
+    final client =
+        _newClient(userAgent, onInvalidCert: () => acceptedInvalidCert = true);
     try {
       var current = url;
       while (true) {

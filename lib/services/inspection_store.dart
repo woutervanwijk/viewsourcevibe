@@ -48,6 +48,23 @@ class InspectionStore extends ChangeNotifier {
     return gen;
   }
 
+  /// Nothing is being inspected any more (the user cleared the page). Still a
+  /// new generation, so results of the previous navigation are dropped.
+  void clear() {
+    _set(PageInspection(
+      generation: _current.generation + 1,
+      target: const NoTarget(),
+      server:
+          const Unavailable(UnavailableReason.notApplicable, 'nothing loaded'),
+      browser:
+          const Unavailable(UnavailableReason.notApplicable, 'nothing loaded'),
+      file:
+          const Unavailable(UnavailableReason.notApplicable, 'nothing loaded'),
+      robots:
+          const Unavailable(UnavailableReason.notApplicable, 'nothing loaded'),
+    ));
+  }
+
   bool _accepts(int gen) =>
       gen == _current.generation && _current.target is UrlTarget;
 
