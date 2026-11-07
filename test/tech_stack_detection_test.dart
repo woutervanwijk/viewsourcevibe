@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'detection_helpers.dart';
-import 'package:view_source_vibe/services/metadata_parser.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -12,8 +11,8 @@ void main() {
         'x-powered-by': 'PHP/8.1',
       };
 
-      final metadata =
-          await extractMetadataInIsolate('<html></html>', '', headers: headers);
+      final metadata = await extractMetadataWithDetections('<html></html>', '',
+          headers: headers);
       final tech = techOf(metadata);
 
       expect(tech['Web Server'], 'Nginx');
@@ -27,7 +26,7 @@ void main() {
       final html = '<html><body><div id="__NEXT_DATA__"></div></body></html>';
 
       final metadata =
-          await extractMetadataInIsolate(html, '', headers: headers);
+          await extractMetadataWithDetections(html, '', headers: headers);
       final tech = techOf(metadata);
 
       expect(tech['Framework'], 'Next.js');
@@ -36,7 +35,7 @@ void main() {
     test('Detects React', () async {
       final html = '<html><body><div data-reactroot=""></div></body></html>';
 
-      final metadata = await extractMetadataInIsolate(html, '');
+      final metadata = await extractMetadataWithDetections(html, '');
       final tech = techOf(metadata);
 
       expect(tech['Library'], 'React');
@@ -46,7 +45,7 @@ void main() {
       final html =
           '<html><head><link href="tailwind.min.css" rel="stylesheet"></head><body class="text-white bg-black p-4"></body></html>';
 
-      final metadata = await extractMetadataInIsolate(html, '');
+      final metadata = await extractMetadataWithDetections(html, '');
       final tech = techOf(metadata);
 
       expect(tech['CSS Framework'], 'Tailwind CSS');
@@ -56,7 +55,7 @@ void main() {
       final html =
           '<html><head><meta name="generator" content="WordPress 6.4.2"></head><body></body></html>';
 
-      final metadata = await extractMetadataInIsolate(html, '');
+      final metadata = await extractMetadataWithDetections(html, '');
       final tech = techOf(metadata);
 
       expect(tech['CMS'], 'WordPress');
@@ -68,8 +67,8 @@ void main() {
         'server': 'Vercel',
       };
 
-      final metadata =
-          await extractMetadataInIsolate('<html></html>', '', headers: headers);
+      final metadata = await extractMetadataWithDetections('<html></html>', '',
+          headers: headers);
       final tech = techOf(metadata);
 
       expect(tech['Platform'], 'Vercel');
@@ -84,7 +83,7 @@ void main() {
 </head><body></body></html>
 ''';
 
-      final metadata = await extractMetadataInIsolate(html, '');
+      final metadata = await extractMetadataWithDetections(html, '');
       final structuredData = metadata['structuredData'] as List;
 
       expect(structuredData, hasLength(1));
@@ -103,12 +102,15 @@ void main() {
 </head><body></body></html>
 ''';
 
-      final metadata =
-          await extractMetadataInIsolate(html, 'https://www.groningen.nl/');
+      final metadata = await extractMetadataWithDetections(
+          html, 'https://www.groningen.nl/');
       final structuredData = metadata['structuredData'] as List;
       final types = structuredData.map((n) => n['@type']).toList();
 
-      expect(types, containsAll(['WebSite', 'LocalBusiness', 'Organization', 'BreadcrumbList']));
+      expect(
+          types,
+          containsAll(
+              ['WebSite', 'LocalBusiness', 'Organization', 'BreadcrumbList']));
       expect(structuredData, hasLength(4));
       expect(structuredData.first['name'], 'Groningen.nl');
 

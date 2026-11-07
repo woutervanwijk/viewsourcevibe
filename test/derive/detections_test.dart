@@ -80,4 +80,21 @@ void main() {
     expect(fbp.evidence.firstWhere((e) => e.kind.name == 'cookie').source,
         DataSource.browser);
   });
+
+  test('split scan + cheap part equals the one-shot derive (I2)', () {
+    final p = inspection(
+        server: serverSnap(
+            setCookies: ['_ga=GA1.2.3'],
+            body:
+                '<html><script src="https://connect.facebook.net/en_US/fbevents.js"></script></html>'),
+        browser: browserSnap(resources: [
+          res('https://www.google-analytics.com/g/collect?v=2')
+        ]));
+    final texts = detectionTextsOf(p);
+    final scanned = scanTextsToMaps(texts);
+    List<Map<String, dynamic>> maps(List ds) => [for (final d in ds) d.toMap()];
+    expect(
+        maps(deriveDetections(p, scanned: scanned)), maps(deriveDetections(p)));
+    expect(sameDetectionTexts(texts, detectionTextsOf(p)), isTrue);
+  });
 }

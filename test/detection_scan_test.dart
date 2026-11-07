@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
-import 'package:view_source_vibe/services/metadata_parser.dart';
+import 'detection_helpers.dart';
 
 void main() {
   final sites = Platform.environment['SITES'];
@@ -35,7 +35,7 @@ void main() {
         }
       }
       final metadata =
-          await extractMetadataInIsolate(html, url, headers: headers);
+          await extractMetadataWithDetections(html, url, headers: headers);
       out.writeln('=== $name');
       for (final d in detect(
         pageUrl: url,

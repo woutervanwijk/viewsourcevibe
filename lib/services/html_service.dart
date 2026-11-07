@@ -55,6 +55,8 @@ typedef SovereigntyAnalyzer = Future<SovereigntyReport> Function({
 
 class HtmlService extends ChangeNotifier {
   final SovereigntyAnalyzer _sovereigntyAnalyzer;
+  final DetectionScanner? _detectionScanner;
+  final int _detectionIsolateThreshold;
 
   /// Test hook: awaited right after a server file was built.
   @visibleForTesting
@@ -327,16 +329,61 @@ class HtmlService extends ChangeNotifier {
   List<Detection>? _detections;
   PageInspection? _detectionsFor;
 
+  // The source scan is cached on the identity of the scanned texts, so
+  // resource/cookie updates only redo the cheap request/cookie part.
+  DetectionTexts? _scanTexts;
+  List<Map<String, dynamic>>? _scanned;
+  bool _scanPending = false;
+
+  /// True while the source scan runs off-thread (large documents): the
+  /// source-based findings are then missing from [detections]; that is not
+  /// "none found".
+  bool get detectionsPending {
+    detections;
+    return _scanPending;
+  }
+
   /// Every service, tracker and technology on the page, derived from the
   /// store's snapshots (server headers and source, browser DOM, requests and
   /// cookies); each evidence item says which core it came from.
   List<Detection> get detections {
     final current = store.current;
+    final texts = detectionTextsOf(current);
+    if (!sameDetectionTexts(texts, _scanTexts)) {
+      _scanTexts = texts;
+      _scanned = null;
+      _scanPending = false;
+      _detections = null;
+      if (_detectionScanner == null &&
+          texts.totalLength <= _detectionIsolateThreshold) {
+        _scanned = scanTextsToMaps(texts);
+      } else {
+        _startDetectionScan(texts);
+      }
+    }
     if (_detections == null || !identical(current, _detectionsFor)) {
       _detectionsFor = current;
-      _detections = deriveDetections(current);
+      _detections = deriveDetections(current, scanned: _scanned ?? const []);
     }
     return _detections!;
+  }
+
+  void _startDetectionScan(DetectionTexts texts) {
+    _scanPending = true;
+    final scan = _detectionScanner ??
+        (DetectionTexts t) => compute(scanTextsToMaps, t);
+    void done(List<Map<String, dynamic>>? maps) {
+      if (_disposed || !identical(_scanTexts, texts)) return;
+      _scanPending = false;
+      _scanned = maps;
+      _detections = null;
+      notifyListeners();
+    }
+
+    scan(texts).then(done, onError: (Object e) {
+      debugPrint('Detection scan failed: $e');
+      done(null);
+    });
   }
 
   List<Divergence>? _divergences;
@@ -786,6 +833,8 @@ class HtmlService extends ChangeNotifier {
     ServerFetcher? serverFetcher,
     BrowserLoader? browserLoader,
     MetadataExtractor? metadataExtractor,
+    DetectionScanner? detectionScanner,
+    int detectionIsolateThreshold = 256 * 1024,
     SovereigntyAnalyzer? sovereigntyAnalyzer,
     BrowserCollect? browserCollect,
     NativeCookieReader? nativeCookies,
@@ -798,6 +847,8 @@ class HtmlService extends ChangeNotifier {
     Duration spaSettleDelay = const Duration(milliseconds: 400),
   })  : _sovereigntyAnalyzer =
             sovereigntyAnalyzer ?? SovereigntyService.analyze,
+        _detectionScanner = detectionScanner,
+        _detectionIsolateThreshold = detectionIsolateThreshold,
         _browserCollectOverride = browserCollect,
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
         _sizeLookup = sizeLookup ?? _lookupResourceSize,

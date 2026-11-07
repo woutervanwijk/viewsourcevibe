@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
 import 'package:xml/xml.dart' as xml;
-import 'package:view_source_vibe/services/detection/engine.dart';
 
-/// Extract metadata from the file content
+/// Extract metadata from the file content. Service/tracker detection is not
+/// part of it (see derive/detections.dart); [headers] is kept for callers.
 Future<Map<String, dynamic>> extractMetadataInIsolate(
     String html, String baseUrl,
     {Map<String, String>? headers}) async {
@@ -22,7 +22,6 @@ Map<String, dynamic> extractMetadataSync(String html, String baseUrl,
 Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
   final html = args['html'] as String;
   final baseUrl = args['baseUrl'] as String;
-  final headers = args['headers'] as Map<String, String>?;
 
   final Map<String, dynamic> metadata = {
     'openGraph': <String, dynamic>{},
@@ -78,13 +77,6 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
   metadata['favicon'] = metadata['icons']['apple-touch-icon'] ??
       metadata['icons']['icon'] ??
       metadata['icons']['shortcut icon'];
-
-  // Services, trackers and technologies in the source and headers. The
-  // browser's requests and cookies are added later (HtmlService.detections).
-  metadata['detections'] = [
-    for (final d in scanSource(html: html, headers: headers, pageUrl: baseUrl))
-      d.toMap()
-  ];
 
   // Extract info from JSON-LD
   // We need a doc for this. If we used XML parser, we might not have a html.Document.
