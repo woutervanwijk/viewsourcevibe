@@ -40,7 +40,9 @@ void main() {
 
       expect(names, contains('manifest.json'));
       expect(names, contains('report.html'));
-      expect(names, contains('source/browser-dom.html'));
+      // No browser snapshot was taken: the DOM file is not written (it
+      // used to hold the loaded text under the DOM's name).
+      expect(names, isNot(contains('source/browser-dom.html')));
       expect(names, contains('network/headers.json'));
       expect(names, contains('analysis/security-scorecard.json'));
 
@@ -93,8 +95,10 @@ void main() {
       expect(payload['url'], 'https://example.com/');
 
       final timeline = jsonDecode(utf8.decode(
-          archive.findFile('network/timeline.json')!.readBytes()!)) as List;
-      expect(timeline.single['transfer'], isNull);
+          archive.findFile('network/timeline.json')!.readBytes()!)) as Map;
+      final row = (timeline['value'] as List).single as Map;
+      expect(row['transfer']['status'], 'unavailable');
+      expect(row['transfer'].containsKey('value'), isFalse);
       final report = utf8.decode(archive.findFile('report.html')!.readBytes()!);
       expect(report, contains('unknown'));
     });
