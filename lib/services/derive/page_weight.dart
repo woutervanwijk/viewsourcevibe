@@ -11,7 +11,23 @@ class WeightBucket {
   int? transfer;
   int? decoded;
 
+  /// Part of [transfer] that is the app's own estimate (null: none).
+  int? estimatedTransfer;
+
+  /// Prefix for the bucket's size: "≥ " when a resource has no size at all,
+  /// "≈ " when part of it is an estimate.
+  String get prefix =>
+      '${missingCount > 0 ? '≥ ' : ''}${estimatedTransfer != null ? '≈ ' : ''}';
+
+  /// Resources of this type that have no transfer size at all.
+  int missingCount = 0;
+
   void addTransfer(int v) => transfer = (transfer ?? 0) + v;
+  void addEstimate(int v) {
+    addTransfer(v);
+    estimatedTransfer = (estimatedTransfer ?? 0) + v;
+  }
+
   void addDecoded(int v) => decoded = (decoded ?? 0) + v;
 }
 
@@ -24,6 +40,13 @@ class PageWeight {
   /// Sum of the breakdown; null when nothing reported a size.
   final int? transfer;
   final int? decoded;
+
+  /// [transfer] split in what the browser measured and what the app's own
+  /// lookups estimated (both null when nothing contributed), and the number
+  /// of resources without any transfer size.
+  final int? measuredTransfer;
+  final int? estimatedTransfer;
+  final int missingCount;
 
   /// True when something is missing from the totals (a resource without a
   /// transfer size, a non-image without a decoded size, truncated resources):
@@ -39,17 +62,25 @@ class PageWeight {
     required this.breakdown,
     required this.transfer,
     required this.decoded,
+    this.measuredTransfer,
+    this.estimatedTransfer,
+    this.missingCount = 0,
     required this.isPartial,
     required this.documentSource,
     required this.snapshotTimeMs,
   });
 
-  /// `estimated` when the totals are a lower bound, else `measured`.
-  Provenance get provenance =>
-      isPartial ? Provenance.estimated : Provenance.measured;
+  /// `estimated` when the totals are a lower bound or include an estimate,
+  /// else `measured`.
+  Provenance get provenance => isPartial || estimatedTransfer != null
+      ? Provenance.estimated
+      : Provenance.measured;
 
-  /// Prefix for a displayed total: "≥ " when it is a lower bound.
-  String get totalPrefix => isPartial ? '≥ ' : '';
+  /// Prefix for a displayed total: "≥ " when it is a lower bound (something
+  /// is missing), then "≈ " when an own estimate is included; both give
+  /// "≥ ≈ " (at least roughly this much).
+  String get totalPrefix =>
+      '${isPartial ? '≥ ' : ''}${estimatedTransfer != null ? '≈ ' : ''}';
 }
 
 /// Page weight from [p]; null unless the browser's resources are Present.
@@ -73,6 +104,8 @@ PageWeight? derivePageWeight(PageInspection p) {
     'other': WeightBucket(),
   };
   var partial = b.resourcesTruncated;
+  int? measured;
+  var missing = 0;
 
   for (final r in res.value) {
     final category = ProbeService.categorizeResource(r.url, pageUrl);
@@ -87,16 +120,30 @@ PageWeight? derivePageWeight(PageInspection p) {
     bucket.count++;
 
     final tx = r.transfer;
+    var estimatedHere = false;
     if (tx is Present<int>) {
       bucket.addTransfer(tx.value);
+      measured = (measured ?? 0) + tx.value;
     } else {
-      partial = true;
+      final cached = tx is Unavailable<int> &&
+          tx.reason == UnavailableReason.servedFromCache;
+      final est = cached ? null : p.resourceEstimates[r.url];
+      if (est is Present<int>) {
+        bucket.addEstimate(est.value);
+        estimatedHere = true;
+      } else {
+        bucket.missingCount++;
+        missing++;
+        partial = true;
+      }
     }
 
     final dec = r.decoded;
     if (dec is Present<int>) {
       if (!(isImage && b.platform.isWebKit)) bucket.addDecoded(dec.value);
-    } else if (!isImage) {
+    } else if (!isImage && !estimatedHere) {
+      // An estimated resource has no decoded size either; the headline is
+      // the transfer total, so that gap does not add a "≥".
       partial = true;
     }
   }
@@ -109,6 +156,7 @@ PageWeight? derivePageWeight(PageInspection p) {
       final html = buckets['html']!;
       html.count++;
       html.addTransfer(body.value.transferLength);
+      measured = (measured ?? 0) + body.value.transferLength;
       html.addDecoded(body.value.byteLength);
       if (body.value.truncated) partial = true;
       documentSource = DataSource.server;
@@ -125,6 +173,9 @@ PageWeight? derivePageWeight(PageInspection p) {
     breakdown: buckets,
     transfer: sum((x) => x.transfer),
     decoded: sum((x) => x.decoded),
+    measuredTransfer: measured,
+    estimatedTransfer: sum((x) => x.estimatedTransfer),
+    missingCount: missing,
     isPartial: partial,
     documentSource: documentSource,
     snapshotTimeMs: snap is Present<double> ? snap.value : null,

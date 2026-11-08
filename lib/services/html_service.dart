@@ -39,6 +39,7 @@ import 'package:view_source_vibe/services/derive/security_audit.dart';
 import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
+import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
@@ -115,15 +116,18 @@ class HtmlService extends ChangeNotifier {
   // server result changes.
   Observed<BrowserSnapshot>? _derivedBrowser;
   Observed<ServerSnapshot>? _derivedServer;
+  Map<String, Observed<int>>? _derivedEstimates;
   List<Map<String, dynamic>> _timeline = const [];
   Map<String, dynamic>? _browserWeight;
 
   void _deriveBrowserData() {
     final current = store.current;
     if (identical(current.browser, _derivedBrowser) &&
-        identical(current.server, _derivedServer)) {
+        identical(current.server, _derivedServer) &&
+        identical(current.resourceEstimates, _derivedEstimates)) {
       return;
     }
+    _derivedEstimates = current.resourceEstimates;
     _derivedBrowser = current.browser;
     _derivedServer = current.server;
     _timeline = legacyResourceTimeline(current);
@@ -4448,6 +4452,69 @@ Technical details: $message''';
       return;
     }
     store.applyBrowser(gen, snapshot);
+    _fetchResourceEstimatesAsync().ignore();
+  }
+
+  static const int _maxEstimateLookups = 80;
+  static const int _estimateConcurrency = 5;
+  bool _estimating = false;
+  bool _estimateRerun = false;
+  int? _estimateGen;
+  int _estimateRequested = 0;
+
+  /// Own size lookups for the static resources the browser loaded but could
+  /// not size (see [estimateTargets]). Shares [_cachedSizeLookup] with the
+  /// metadata items, so a URL is requested once. At most
+  /// [_maxEstimateLookups] per page, [_estimateConcurrency] at a time; each
+  /// result goes to the store (which drops it when the navigation moved on).
+  /// A call while a run is active makes that run look again when it is done.
+  Future<void> _fetchResourceEstimatesAsync() async {
+    if (_estimating) {
+      _estimateRerun = true;
+      return;
+    }
+    _estimating = true;
+    try {
+      do {
+        _estimateRerun = false;
+        final gen = store.current.generation;
+        bool stale() => _disposed || gen != store.current.generation;
+        if (_estimateGen != gen) {
+          _estimateGen = gen;
+          _estimateRequested = 0;
+        }
+        final urls = estimateTargets(store.current,
+            limit: _maxEstimateLookups - _estimateRequested);
+        if (urls.isEmpty || stale()) continue;
+        _estimateRequested += urls.length;
+        var next = 0;
+        Future<void> worker() async {
+          while (next < urls.length && !stale()) {
+            final url = urls[next++];
+            Observed<int> result;
+            try {
+              final size = await _cachedSizeLookup(gen, url);
+              result = size == null
+                  ? const Unavailable(UnavailableReason.notReportedByServer,
+                      'the size lookup returned no size')
+                  : Present(size,
+                      source: DataSource.server,
+                      provenance: Provenance.estimated);
+            } catch (e) {
+              result = Failed('Size lookup failed: $e');
+            }
+            if (!stale()) store.applyEstimates(gen, {url: result});
+          }
+        }
+
+        await Future.wait([
+          for (var i = 0; i < _estimateConcurrency && i < urls.length; i++)
+            worker(),
+        ]);
+      } while (_estimateRerun && !_disposed);
+    } finally {
+      _estimating = false;
+    }
   }
 
   Future<Object?> _collectViaController(String url) {

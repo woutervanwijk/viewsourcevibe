@@ -64,6 +64,7 @@ Map<String, dynamic>? legacyPageWeight(PageInspection p) {
     if (w.transfer != null) 'transfer': w.transfer,
     if (w.decoded != null) 'decoded': w.decoded,
     'isPartial': w.isPartial,
+    if (w.estimatedTransfer != null) 'estimatedTransfer': w.estimatedTransfer,
     if (w.documentSource != null) 'documentSource': w.documentSource!.name,
     if (w.snapshotTimeMs != null) 'snapshotTimeMs': w.snapshotTimeMs,
     'breakdown': {

@@ -107,6 +107,23 @@ class InspectionStore extends ChangeNotifier {
     _set(_current.copyWith(browser: result));
   }
 
+  /// Own size lookups for resources the browser could not size, merged per
+  /// URL. A result that is not Present never replaces a Present estimate.
+  /// Nothing new = no change, no notify.
+  void applyEstimates(int gen, Map<String, Observed<int>> estimates) {
+    if (!_accepts(gen)) return;
+    final merged = {..._current.resourceEstimates};
+    var changed = false;
+    for (final e in estimates.entries) {
+      final old = merged[e.key];
+      if (old is Present<int> && e.value is! Present<int>) continue;
+      merged[e.key] = e.value;
+      changed = true;
+    }
+    if (!changed) return;
+    _set(_current.copyWith(resourceEstimates: merged));
+  }
+
   void setPrimaryDocument(DataSource? s) {
     if (_current.primaryDocumentPreference == s) return;
     _set(_current.copyWith(primaryDocumentPreference: s));

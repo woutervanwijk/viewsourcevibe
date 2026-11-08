@@ -246,6 +246,9 @@ class InspectionExportData {
             'duration': observedPlain(r.duration, source: DataSource.browser),
             'transfer': observedPlain(r.transfer, source: DataSource.browser),
             'decoded': observedPlain(r.decoded, source: DataSource.browser),
+            // The app's own size lookup, when the browser gave no transfer.
+            if (p.resourceEstimates[r.url] case final e?)
+              'estimatedTransfer': observedPlain(e, source: DataSource.server),
           },
       ],
       source: DataSource.browser,
@@ -275,6 +278,17 @@ class InspectionExportData {
       'provenance': w.provenance.name,
       'value': {
         'transfer': w.transfer,
+        // transfer = measured + estimated; estimated values come from the
+        // app's own size lookups (provenance: estimated).
+        'measuredTransfer': w.measuredTransfer,
+        'estimatedTransfer': w.estimatedTransfer == null
+            ? null
+            : observedPlain(
+                Present(w.estimatedTransfer!,
+                    source: DataSource.server,
+                    provenance: Provenance.estimated),
+                source: DataSource.server),
+        'missingCount': w.missingCount,
         'decoded': w.decoded,
         'isPartial': w.isPartial,
         if (w.documentSource != null) 'documentSource': w.documentSource!.name,
@@ -283,6 +297,8 @@ class InspectionExportData {
             e.key: {
               'count': e.value.count,
               'transfer': e.value.transfer,
+              'estimatedTransfer': e.value.estimatedTransfer,
+              'missingCount': e.value.missingCount,
               'decoded': e.value.decoded,
             },
         },

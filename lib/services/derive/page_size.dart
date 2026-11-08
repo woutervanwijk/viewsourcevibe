@@ -50,6 +50,9 @@ class PageSizeRow {
   /// Why the size is unknown (null when it is known).
   final String? sizeNote;
 
+  /// The transfer size is the app's own estimate, not the browser's.
+  final bool estimated;
+
   const PageSizeRow({
     required this.url,
     required this.type,
@@ -60,12 +63,20 @@ class PageSizeRow {
     required this.transfer,
     required this.shownDecoded,
     required this.sizeNote,
+    this.estimated = false,
   });
 
   /// "12 KB (↓ 4 KB)" or "size unknown (reason)".
-  String get sizeLabel =>
-      formatSizePair(decoded: shownDecoded, transfer: transfer) ??
-      'size unknown${sizeNote == null ? '' : ' ($sizeNote)'}';
+  String get sizeLabel {
+    if (estimated && transfer != null) {
+      // Our own request: only the transfer is estimated.
+      return shownDecoded == null || shownDecoded == transfer
+          ? '≈ ${_kb(transfer!)}'
+          : '${_kb(shownDecoded!)} (↓ ≈ ${_kb(transfer!)})';
+    }
+    return formatSizePair(decoded: shownDecoded, transfer: transfer) ??
+        'size unknown${sizeNote == null ? '' : ' ($sizeNote)'}';
+  }
 }
 
 class PageSizeModel {
@@ -78,11 +89,19 @@ class PageSizeModel {
   /// Explains what is missing from the totals; null when nothing is.
   final String? missingNote;
 
+  /// Resources whose size is the app's own estimate.
+  final int estimatedCount;
+
+  /// Says that and how many sizes are estimates; null when none.
+  final String? estimateNote;
+
   const PageSizeModel({
     required this.weight,
     required this.rows,
     required this.rowsWithoutSize,
     required this.missingNote,
+    this.estimatedCount = 0,
+    this.estimateNote,
   });
 
   /// Sum of the known row sizes (the share bars are relative to it).
@@ -150,9 +169,17 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
             final type = isPage
                 ? 'document'
                 : ProbeService.categorizeResource(url, pageUrl);
-            final tx = r.transfer is Present<int>
+            final measuredTx = r.transfer is Present<int>
                 ? (r.transfer as Present<int>).value
                 : null;
+            final cached = r.transfer is Unavailable<int> &&
+                (r.transfer as Unavailable<int>).reason ==
+                    UnavailableReason.servedFromCache;
+            final estimate =
+                measuredTx != null || cached ? null : p.resourceEstimates[url];
+            final estimatedTx =
+                estimate is Present<int> ? estimate.value : null;
+            final tx = measuredTx ?? estimatedTx;
             final dec = r.decoded is Present<int>
                 ? (r.decoded as Present<int>).value
                 : null;
@@ -161,7 +188,9 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
             final int? size = isImage ? tx : (dec ?? tx);
             String? note;
             if (size == null) {
-              note = sizeReasonWord(r.transfer);
+              note = estimate is Failed<int> || estimate is Unavailable<int>
+                  ? 'size lookup failed'
+                  : sizeReasonWord(r.transfer);
               reasons.add(note);
             }
             final row = PageSizeRow(
@@ -175,6 +204,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
               transfer: tx,
               shownDecoded: isImage ? tx : dec,
               sizeNote: note,
+              estimated: estimatedTx != null,
             );
             final old = byUrl[url];
             if (old == null || (row.size ?? -1) > (old.size ?? -1)) {
@@ -187,6 +217,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
               return bySize != 0 ? bySize : a.url.compareTo(b.url);
             });
           final without = rows.where((r) => r.size == null).length;
+          final estimatedCount = rows.where((r) => r.estimated).length;
           final parts = <String>[];
           if (without > 0) {
             final why = [
@@ -211,6 +242,13 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
               rows: rows,
               rowsWithoutSize: without,
               missingNote: parts.isEmpty ? null : parts.join('; '),
+              estimatedCount: estimatedCount,
+              estimateNote: estimatedCount == 0
+                  ? null
+                  : '$estimatedCount size${estimatedCount == 1 ? ' is an '
+                          'estimate' : 's are estimates'} from the app\'s own '
+                      'request (the browser did not report them; may differ '
+                      'from what the browser loaded)',
             ),
             source: DataSource.browser,
             provenance: weight.provenance,

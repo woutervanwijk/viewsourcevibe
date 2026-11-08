@@ -35,6 +35,11 @@ class PageInspection {
   final Observed<FileSnapshot> file;
   final Observed<RobotsInfo> robots;
 
+  /// The app's own size lookups for resources the browser could not size,
+  /// keyed by absolute URL. Present = an estimate (our request, may differ
+  /// from the browser's); Unavailable/Failed = the lookup gave no size.
+  final Map<String, Observed<int>> resourceEstimates;
+
   /// The user's choice for the Source tab; null = default rule.
   final DataSource? primaryDocumentPreference;
 
@@ -45,6 +50,7 @@ class PageInspection {
     required this.browser,
     required this.file,
     this.robots = const Pending(),
+    this.resourceEstimates = const {},
     this.primaryDocumentPreference,
   });
 
@@ -59,6 +65,7 @@ class PageInspection {
             UnavailableReason.notApplicable, 'nothing loaded'),
         robots = const Unavailable(
             UnavailableReason.notApplicable, 'nothing loaded'),
+        resourceEstimates = const {},
         primaryDocumentPreference = null;
 
   PageInspection copyWith({
@@ -66,6 +73,7 @@ class PageInspection {
     Observed<BrowserSnapshot>? browser,
     Observed<FileSnapshot>? file,
     Observed<RobotsInfo>? robots,
+    Map<String, Observed<int>>? resourceEstimates,
     Object? primaryDocumentPreference = _keep,
   }) =>
       PageInspection(
@@ -75,6 +83,7 @@ class PageInspection {
         browser: browser ?? this.browser,
         file: file ?? this.file,
         robots: robots ?? this.robots,
+        resourceEstimates: resourceEstimates ?? this.resourceEstimates,
         primaryDocumentPreference: identical(primaryDocumentPreference, _keep)
             ? this.primaryDocumentPreference
             : primaryDocumentPreference as DataSource?,

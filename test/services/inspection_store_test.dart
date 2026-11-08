@@ -351,4 +351,47 @@ void main() {
         g, Present(_server('https://a.test/'), source: DataSource.server));
     expect(store.current.server, isA<Unavailable<ServerSnapshot>>());
   });
+
+  group('applyEstimates', () {
+    Present<int> est(int v) =>
+        Present(v, source: DataSource.server, provenance: Provenance.estimated);
+
+    test('one apply = one notify; results are merged per URL', () {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      notifies = 0;
+      store.applyEstimates(g, {'https://a.test/a.js': est(10)});
+      expect(notifies, 1);
+      store.applyEstimates(g, {'https://a.test/b.js': est(20)});
+      expect(notifies, 2);
+      expect(store.current.resourceEstimates.keys,
+          ['https://a.test/a.js', 'https://a.test/b.js']);
+    });
+
+    test('a stale generation is dropped without a notify', () {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      store.beginUrl(Uri.parse('https://b.test/'));
+      notifies = 0;
+      store.applyEstimates(g, {'https://a.test/a.js': est(10)});
+      expect(notifies, 0);
+      expect(store.current.resourceEstimates, isEmpty);
+    });
+
+    test('a failure never replaces a Present estimate; empty is a no-op', () {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      store.applyEstimates(g, {'https://a.test/a.js': est(10)});
+      notifies = 0;
+      store.applyEstimates(g, {'https://a.test/a.js': const Failed('x')});
+      store.applyEstimates(g, {});
+      expect(notifies, 0);
+      expect(store.current.resourceEstimates['https://a.test/a.js'],
+          isA<Present<int>>());
+    });
+
+    test('a new navigation starts without estimates', () {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      store.applyEstimates(g, {'https://a.test/a.js': est(10)});
+      store.beginUrl(Uri.parse('https://b.test/'));
+      expect(store.current.resourceEstimates, isEmpty);
+    });
+  });
 }

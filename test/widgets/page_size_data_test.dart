@@ -127,7 +127,7 @@ void main() {
 
     testWidgets('(b) iOS: lower bound, explained, no 0 KB', (tester) async {
       await show(tester, iosPartial());
-      expect(find.textContaining('≥ '), findsOneWidget);
+      expect(find.textContaining('≥ '), findsWidgets);
       expect(find.textContaining('1 resource without size'), findsOneWidget);
       expect(find.textContaining('size unknown'), findsWidgets);
       expect(find.textContaining('0 KB'), findsNothing);

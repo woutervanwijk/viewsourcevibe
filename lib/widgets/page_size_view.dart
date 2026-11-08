@@ -255,6 +255,18 @@ class _PageSizeViewState extends State<PageSizeView>
                 ),
               ),
             ),
+          if (model.estimateNote != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Text(
+                '${model.estimateNote![0].toUpperCase()}${model.estimateNote!.substring(1)}.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
           if (weight.documentSource != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -287,9 +299,9 @@ class _PageSizeViewState extends State<PageSizeView>
     if (bucket == null || bucket.count == 0) {
       return const SizedBox.shrink();
     }
-    final text =
-        formatSizePair(decoded: bucket.decoded, transfer: bucket.transfer) ??
-            'size unknown';
+    final pair =
+        formatSizePair(decoded: bucket.decoded, transfer: bucket.transfer);
+    final text = pair == null ? 'size unknown' : '${bucket.prefix}$pair';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
