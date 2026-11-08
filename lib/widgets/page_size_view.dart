@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/widgets/safe_network_svg.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 
 /// File-type filter tabs: resource type (null = all) and label, matching
@@ -436,7 +436,9 @@ class _PageSizeViewState extends State<PageSizeView>
     final uri = Uri.tryParse(url);
     if (uri == null) return url;
     final segments = uri.pathSegments.where((s) => s.isNotEmpty);
-    if (segments.isNotEmpty) return Uri.decodeComponent(segments.last);
+    // pathSegments are already percent-decoded; decoding again throws on a
+    // stray '%' or non-ASCII (same fix as ResourceSize.fileName on main).
+    if (segments.isNotEmpty) return segments.last;
     return uri.host.isNotEmpty ? uri.host : url;
   }
 
@@ -461,10 +463,14 @@ class _PageSizeViewState extends State<PageSizeView>
         color: scheme.surfaceContainerHighest,
         alignment: Alignment.center,
         child: path.endsWith('.svg')
-            ? SvgPicture.network(url,
+            ? SafeNetworkSvg(
+                url: url,
                 width: size,
                 height: size,
-                errorBuilder: (_, __, ___) => fallback)
+                fit: BoxFit.cover,
+                placeholderBuilder: (_) => fallback,
+                errorWidget: fallback,
+              )
             : Image.network(url,
                 width: size,
                 height: size,

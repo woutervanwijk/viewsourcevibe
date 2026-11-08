@@ -120,5 +120,30 @@ void main() {
       expect(r('https://example.com/').fileName, 'example.com');
       expect(r('https://example.com/').host, 'example.com');
     });
+
+    test('fileName does not throw on non-ASCII or stray % in the path', () {
+      // pathSegments are already percent-decoded; decoding again throws
+      // "Illegal percent encoding in URI" (seen with edition.cnn.com assets).
+      ResourceSize r(String url) =>
+          ResourceSize(url: url, transfer: 0, decoded: 0, type: 'other');
+
+      expect(r('https://x.com/foto-é.jpg?w=100').fileName, 'foto-é.jpg');
+      expect(r('https://x.com/100%25off.txt').fileName, '100%off.txt');
+      expect(r('https://x.com/a%zz.js').fileName, 'a%zz.js');
+    });
+
+    test('resourcesBySize handles resource URLs with non-ASCII paths', () {
+      final result = resourcesBySize([
+        {
+          'name': 'https://media.example.com/foto-é.jpg?w=300&h=200',
+          'transfer': 1234,
+          'decoded': 999999,
+        },
+        {'name': 'https://example.com/app.js', 'transfer': 10, 'decoded': 20},
+      ], page);
+
+      expect(result.map((r) => r.fileName), ['foto-é.jpg', 'app.js']);
+      expect(result.first.type, 'image');
+    });
   });
 }

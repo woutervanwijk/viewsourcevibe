@@ -37,11 +37,14 @@ class ResourceSize {
       : (decoded > 0 ? decoded : transfer);
 
   /// Last path segment, or the host for root URLs.
+  ///
+  /// `pathSegments` are already percent-decoded; decoding again would throw
+  /// on non-ASCII or stray `%` in the decoded segment.
   String get fileName {
     final uri = Uri.tryParse(url);
     if (uri == null) return url;
     final segments = uri.pathSegments.where((s) => s.isNotEmpty);
-    if (segments.isNotEmpty) return Uri.decodeComponent(segments.last);
+    if (segments.isNotEmpty) return segments.last;
     return uri.host.isNotEmpty ? uri.host : url;
   }
 

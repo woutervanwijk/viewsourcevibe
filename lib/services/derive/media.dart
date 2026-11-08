@@ -5,21 +5,35 @@ import '../../models/inspection/observed.dart';
 import 'metadata_view.dart';
 import 'page_size.dart';
 
-/// Sanitizes SVG data by converting percentage coordinates to absolute values
-/// based on the viewBox. This fixes 'Invalid double: 50%' errors.
+/// Sanitizes SVG bytes so the vector graphics compiler always has a viewport.
+///
+/// The compiler throws 'Bad state: SVG did not specify dimensions' unless the
+/// root `<svg>` has a `viewBox` or both `width` and `height` attributes, so a
+/// fallback `viewBox` is injected when neither is present. Percentage
+/// coordinates are converted to absolute values based on the viewBox, which
+/// fixes 'Invalid double: 50%' errors.
 Uint8List sanitizeSvgData(Uint8List bytes) {
   try {
     String content = utf8.decode(bytes, allowMalformed: true).trim();
     if (content.isEmpty) return bytes;
 
-    // Check if dimensions are present
-    final hasDim = content.contains(
-        RegExp('\\b(width|height|viewBox)\\s*=', caseSensitive: false));
-
-    if (!hasDim) {
-      // Add a fallback viewBox if missing to prevent 'Bad state' error
-      content = content.replaceFirst(
-          RegExp('<svg\\b', caseSensitive: false), '<svg viewBox="0 0 24 24"');
+    // The compiler needs a viewBox or width+height on the root <svg> tag.
+    final svgTag = RegExp('<svg\\b[^>]*>', caseSensitive: false)
+        .firstMatch(content);
+    if (svgTag != null) {
+      final tag = svgTag.group(0)!;
+      final hasViewBox =
+          RegExp('\\bviewBox\\s*=', caseSensitive: false).hasMatch(tag);
+      final hasWidth =
+          RegExp('\\bwidth\\s*=', caseSensitive: false).hasMatch(tag);
+      final hasHeight =
+          RegExp('\\bheight\\s*=', caseSensitive: false).hasMatch(tag);
+      if (!hasViewBox && !(hasWidth && hasHeight)) {
+        // Add a fallback viewBox if missing to prevent 'Bad state' error
+        content = content.replaceFirstMapped(
+            RegExp('<svg\\b', caseSensitive: false),
+            (m) => '${m.group(0)} viewBox="0 0 24 24"');
+      }
     }
 
     // Find viewBox="x y w h" - allow commas as well as spaces
@@ -53,7 +67,7 @@ Uint8List sanitizeSvgData(Uint8List bytes) {
     }
 
     return utf8.encode(content);
-  } catch (e) {
+  } catch (_) {
     // Unparseable: render the bytes as they are.
     return bytes;
   }

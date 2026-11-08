@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:view_source_vibe/widgets/media_browser.dart';
+import 'package:view_source_vibe/widgets/safe_network_svg.dart';
 import '../utils/font_url.dart';
 
 class MediaView extends StatelessWidget {
@@ -509,98 +510,6 @@ class _FontItemState extends State<_FontItem> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class SafeNetworkSvg extends StatefulWidget {
-  final String url;
-  final BoxFit fit;
-  final WidgetBuilder placeholderBuilder;
-
-  const SafeNetworkSvg({
-    super.key,
-    required this.url,
-    this.fit = BoxFit.contain,
-    required this.placeholderBuilder,
-  });
-
-  @override
-  State<SafeNetworkSvg> createState() => _SafeNetworkSvgState();
-}
-
-class _SafeNetworkSvgState extends State<SafeNetworkSvg> {
-  Future<Uint8List?>? _loadingFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadingFuture = _loadSvg();
-  }
-
-  Future<Uint8List?> _loadSvg() async {
-    try {
-      final bundle = NetworkAssetBundle(Uri.parse(widget.url));
-      final data = await bundle.load("");
-      final bytes = data.buffer.asUint8List();
-
-      // Simple validation to prevent HTML parsing
-      // Check first 1KB for <html or <!DOCTYPE htmlTags
-      final head = String.fromCharCodes(
-        bytes.sublist(0, bytes.length < 1024 ? bytes.length : 1024),
-      ).toLowerCase();
-
-      if (head.contains('<html') || head.contains('<!doctype html')) {
-        debugPrint(
-            'SVG Validation Failed: Content looks like HTML for ${widget.url}');
-        return null; // Invalid SVG
-      }
-
-      return sanitizeSvgData(bytes);
-    } catch (e) {
-      debugPrint('Error loading SVG: $e');
-      return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: _loadingFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return widget.placeholderBuilder(context);
-        }
-
-        if (snapshot.hasError || snapshot.data == null) {
-          return const Center(
-              child: Icon(Icons.broken_image, color: Colors.grey));
-        }
-
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            double w =
-                constraints.hasBoundedWidth ? constraints.maxWidth : 100.0;
-            double h =
-                constraints.hasBoundedHeight ? constraints.maxHeight : 100.0;
-            if (w.isNaN || w.isInfinite) w = 100.0;
-            if (h.isNaN || h.isInfinite) h = 100.0;
-            return Center(
-              child: SvgPicture.memory(
-                snapshot.data!,
-                width: w,
-                height: h,
-                fit: widget.fit,
-                placeholderBuilder: widget.placeholderBuilder,
-                errorBuilder: (context, error, stackTrace) {
-                  debugPrint('SVG Render Error (network): $error');
-                  return const Icon(Icons.broken_image, color: Colors.grey);
-                },
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
