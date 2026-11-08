@@ -58,9 +58,16 @@ class AboutScreen extends StatelessWidget {
                       children: [
                         if (Platform.isIOS || Platform.isAndroid) ...[
                           ElevatedButton.icon(
-                            onPressed: () {
-                              UnifiedSharingService.shareText(
-                                  'Check out View Source Vibe! 🚀 An easy-to-use web page explorer. See the source, tech stack, trackers and hosting of any page.\n\nGet it here: https://github.com/woutervanwijk/viewsourcevibe');
+                            onPressed: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              try {
+                                await UnifiedSharingService.shareText(
+                                    'Check out View Source Vibe! 🚀 An easy-to-use web page explorer. See the source, tech stack, trackers and hosting of any page.\n\nGet it here: https://github.com/woutervanwijk/viewsourcevibe');
+                              } catch (e) {
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text('Error sharing: $e')),
+                                );
+                              }
                             },
                             icon: const Icon(Icons.share),
                             label: const Text('Share App'),

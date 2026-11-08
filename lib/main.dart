@@ -346,7 +346,8 @@ Future<void> _performDelayedInitialization(
     // Check for pending shared content (Android/iOS Share Sheet)
     bool hasSharedContent = false;
     try {
-      hasSharedContent = await UnifiedSharingService.hasPendingSharedContent();
+      hasSharedContent = await UnifiedSharingService.hasPendingSharedContent(
+          htmlService: htmlService);
       if (hasSharedContent) {
         debugPrint(
             '🚀 Pending shared content detected, handling directly from cold start');

@@ -95,6 +95,10 @@ class UnifiedSharingService {
           } catch (e) {
             debugPrint(
                 'UnifiedSharingService: Error processing real-time shared content: $e');
+            if (context.mounted) {
+              _notifyFailure(context.read<HtmlService>(),
+                  'Could not process the shared content: $e');
+            }
             return false;
           }
         }
@@ -104,6 +108,10 @@ class UnifiedSharingService {
       debugPrint('UnifiedSharingService: Method channel handlers set up');
     } catch (e) {
       debugPrint('UnifiedSharingService: Error setting up handlers: $e');
+      if (context.mounted) {
+        _notifyFailure(context.read<HtmlService>(),
+            'Sharing into the app is unavailable: $e');
+      }
     }
   }
 
@@ -120,6 +128,11 @@ class UnifiedSharingService {
     } catch (e) {
       debugPrint(
           'UnifiedSharingService: No initial shared content or error checking: $e');
+      if (context.mounted) {
+        _notifyFailure(context.read<HtmlService>(),
+            'Could not check for shared content: $e',
+            error: e);
+      }
     }
   }
 
@@ -127,13 +140,16 @@ class UnifiedSharingService {
   /// This is used during app startup to decide whether to skip session restoration.
   /// Uses 'hasSharedContent' (non-destructive peek) so the content is NOT consumed
   /// and is still available for actual handling by SharedContentWrapper.
-  static Future<bool> hasPendingSharedContent() async {
+  static Future<bool> hasPendingSharedContent(
+      {HtmlService? htmlService}) async {
     try {
       final result =
           await _sharedContentChannel.invokeMethod('hasSharedContent');
       return result == true;
     } catch (e) {
       debugPrint('UnifiedSharingService: Error checking pending content: $e');
+      _notifyFailure(htmlService, 'Could not check for shared content: $e',
+          error: e);
       return false;
     }
   }
@@ -185,6 +201,8 @@ class UnifiedSharingService {
     } catch (e) {
       debugPrint(
           'UnifiedSharingService: Error handling pending shared content: $e');
+      _notifyFailure(htmlService, 'Could not open the shared content: $e',
+          error: e);
       return false;
     }
   }
@@ -781,6 +799,14 @@ If you're the app developer, please update the native iOS Share Extension code.'
       }
       rethrow;
     }
+  }
+
+  /// A failed incoming share is shown under the URL bar, not only logged.
+  /// A platform without the sharing channel is not a failure.
+  static void _notifyFailure(HtmlService? service, String message,
+      {Object? error}) {
+    if (error is MissingPluginException) return;
+    service?.reportNotice(message);
   }
 
   /// Show snackbar message

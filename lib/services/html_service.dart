@@ -1889,6 +1889,10 @@ Technical details: $message''';
     notifyListeners();
   }
 
+  /// Shows a failure the user must see (for example a failed incoming
+  /// share) in the same place as file notices, under the URL bar.
+  void reportNotice(String message) => _setFileNotice(message);
+
   static String _errorText(Object e) =>
       (e is FileLoadException ? e.message : '$e')
           .replaceFirst('Exception: ', '');
