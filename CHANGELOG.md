@@ -2,6 +2,10 @@
 
 All notable, user-facing changes to View Source Vibe are documented here.
 
+## 1.2.1
+- Central data point
+- Small bugfixes
+
 ## 1.2.0
 
 ### New
