@@ -396,6 +396,39 @@ void main() {
       expect(collectCalls, ['https://a.test/other/route']);
     });
 
+    test(
+        'F1: a route change whose collect fails never shows the previous '
+        "route's text; the server body of the new route is adopted", () async {
+      collect = (url) async {
+        if (url.endsWith('/b')) throw Exception('boom');
+        return payload(url: url, dom: '<html>A-DOM</html>');
+      };
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(service.currentFile!.content, contains('A-DOM'));
+
+      await service.handleBrowserUrlChange('https://a.test/b');
+      await pumpEventQueue();
+
+      // Route B has neither DOM nor server body yet.
+      expect(service.currentFile?.content ?? '', isNot(contains('A-DOM')));
+
+      fetcher.pending.last
+          .complete(okSnapshot('https://a.test/b', '<html>B-BODY</html>'));
+      // Loading the file resets the editor (real short delays): wait for the
+      // service to announce the file instead of guessing a duration.
+      final shown = Completer<void>();
+      void onChange() {
+        if (service.currentFile != null && !shown.isCompleted) shown.complete();
+      }
+
+      service.addListener(onChange);
+      await shown.future.timeout(const Duration(seconds: 5));
+      service.removeListener(onChange);
+      expect(service.currentFile!.content, contains('B-BODY'));
+      expect(service.currentFile!.content, isNot(contains('A-DOM')));
+    });
+
     test('same document (scheme/www/trailing slash differ): nothing happens',
         () async {
       await loadAndAnswer('https://a.test/page');

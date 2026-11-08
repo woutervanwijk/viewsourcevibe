@@ -4526,7 +4526,18 @@ Technical details: $message''';
       return;
     }
     _clearBrowserDerivedData();
-    final gen = _startInspection(uri, adoptBody: false);
+    // The previous route's text must never stand under the new URL: drop it
+    // and show the loading state until the new route's DOM or server body
+    // arrives.
+    _resetMetadata();
+    _beautifiedCache.clear();
+    _isBeautifyEnabled = false;
+    _currentFile = null;
+    _originalFile = null;
+    _currentInputText = url;
+    _isLoading = true;
+    final gen = _startInspection(uri, adoptBody: true);
+    notifyListeners();
     // Let the SPA render the new route before its DOM is read.
     await Future<void>.delayed(_spaSettleDelay);
     if (_disposed || gen != store.current.generation) return;
