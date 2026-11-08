@@ -14,13 +14,21 @@ class WeightBucket {
   /// Part of [transfer] that is the app's own estimate (null: none).
   int? estimatedTransfer;
 
-  /// Prefix for the bucket's size: "≥ " when a resource has no size at all,
-  /// "≈ " when part of it is an estimate.
-  String get prefix =>
-      '${missingCount > 0 ? '≥ ' : ''}${estimatedTransfer != null ? '≈ ' : ''}';
-
   /// Resources of this type that have no transfer size at all.
   int missingCount = 0;
+
+  /// Non-image resources of this type without a decoded size (an image's
+  /// decoded size is never expected, see [derivePageWeight]).
+  int decodedMissingCount = 0;
+
+  /// Transfer prefix: "≥ " when a resource has no transfer size, then "≈ "
+  /// when part of it is the app's own estimate.
+  String get transferPrefix =>
+      '${missingCount > 0 ? '≥ ' : ''}${estimatedTransfer != null ? '≈ ' : ''}';
+
+  /// Decoded prefix: "≥ " when a resource lacks its decoded size. Decoded is
+  /// never estimated. (Truncation is a page-level fact, see [PageWeight].)
+  String get decodedPrefix => decodedMissingCount > 0 ? '≥ ' : '';
 
   void addTransfer(int v) => transfer = (transfer ?? 0) + v;
   void addEstimate(int v) {
@@ -48,10 +56,17 @@ class PageWeight {
   final int? estimatedTransfer;
   final int missingCount;
 
-  /// True when something is missing from the totals (a resource without a
-  /// transfer size, a non-image without a decoded size, truncated resources):
-  /// the totals are then a lower bound.
-  final bool isPartial;
+  /// The transfer total is a lower bound: a resource has no transfer size
+  /// (and no estimate), or the browser's resources / the server body were
+  /// truncated.
+  final bool transferLowerBound;
+
+  /// The transfer total includes the app's own estimates.
+  final bool transferEstimated;
+
+  /// The decoded total is a lower bound: a non-image resource has no decoded
+  /// size, or resources were truncated. Decoded is never estimated.
+  final bool decodedLowerBound;
 
   /// Set when the main document's sizes come from the server body (the
   /// browser does not report them).
@@ -65,22 +80,27 @@ class PageWeight {
     this.measuredTransfer,
     this.estimatedTransfer,
     this.missingCount = 0,
-    required this.isPartial,
+    required this.transferLowerBound,
+    required this.transferEstimated,
+    required this.decodedLowerBound,
     required this.documentSource,
     required this.snapshotTimeMs,
   });
 
-  /// `estimated` when the totals are a lower bound or include an estimate,
-  /// else `measured`.
-  Provenance get provenance => isPartial || estimatedTransfer != null
-      ? Provenance.estimated
-      : Provenance.measured;
+  /// `estimated` when a total is a lower bound or includes an estimate, else
+  /// `measured`.
+  Provenance get provenance =>
+      transferLowerBound || transferEstimated || decodedLowerBound
+          ? Provenance.estimated
+          : Provenance.measured;
 
-  /// Prefix for a displayed total: "≥ " when it is a lower bound (something
-  /// is missing), then "≈ " when an own estimate is included; both give
-  /// "≥ ≈ " (at least roughly this much).
-  String get totalPrefix =>
-      '${isPartial ? '≥ ' : ''}${estimatedTransfer != null ? '≈ ' : ''}';
+  /// Prefix of the transfer total: "≥ " when it is a lower bound, then "≈ "
+  /// when it includes an own estimate; both give "≥ ≈ " (at least roughly).
+  String get transferPrefix =>
+      '${transferLowerBound ? '≥ ' : ''}${transferEstimated ? '≈ ' : ''}';
+
+  /// Prefix of the decoded total: "≥ " when it is a lower bound. Never "≈".
+  String get decodedPrefix => decodedLowerBound ? '≥ ' : '';
 }
 
 /// Page weight from [p]; null unless the browser's resources are Present.
@@ -103,7 +123,8 @@ PageWeight? derivePageWeight(PageInspection p) {
     'html': WeightBucket(),
     'other': WeightBucket(),
   };
-  var partial = b.resourcesTruncated;
+  var transferGap = b.resourcesTruncated;
+  var decodedGap = b.resourcesTruncated;
   int? measured;
   var missing = 0;
 
@@ -120,7 +141,6 @@ PageWeight? derivePageWeight(PageInspection p) {
     bucket.count++;
 
     final tx = r.transfer;
-    var estimatedHere = false;
     if (tx is Present<int>) {
       bucket.addTransfer(tx.value);
       measured = (measured ?? 0) + tx.value;
@@ -130,21 +150,20 @@ PageWeight? derivePageWeight(PageInspection p) {
       final est = cached ? null : p.resourceEstimates[r.url];
       if (est is Present<int>) {
         bucket.addEstimate(est.value);
-        estimatedHere = true;
       } else {
         bucket.missingCount++;
         missing++;
-        partial = true;
+        transferGap = true;
       }
     }
 
     final dec = r.decoded;
     if (dec is Present<int>) {
       if (!(isImage && b.platform.isWebKit)) bucket.addDecoded(dec.value);
-    } else if (!isImage && !estimatedHere) {
-      // An estimated resource has no decoded size either; the headline is
-      // the transfer total, so that gap does not add a "≥".
-      partial = true;
+    } else if (!isImage) {
+      // Decoded is never estimated: an estimated resource still lacks it.
+      bucket.decodedMissingCount++;
+      decodedGap = true;
     }
   }
 
@@ -158,7 +177,10 @@ PageWeight? derivePageWeight(PageInspection p) {
       html.addTransfer(body.value.transferLength);
       measured = (measured ?? 0) + body.value.transferLength;
       html.addDecoded(body.value.byteLength);
-      if (body.value.truncated) partial = true;
+      if (body.value.truncated) {
+        transferGap = true;
+        decodedGap = true;
+      }
       documentSource = DataSource.server;
     }
   }
@@ -176,7 +198,9 @@ PageWeight? derivePageWeight(PageInspection p) {
     measuredTransfer: measured,
     estimatedTransfer: sum((x) => x.estimatedTransfer),
     missingCount: missing,
-    isPartial: partial,
+    transferLowerBound: transferGap,
+    transferEstimated: sum((x) => x.estimatedTransfer) != null,
+    decodedLowerBound: decodedGap,
     documentSource: documentSource,
     snapshotTimeMs: snap is Present<double> ? snap.value : null,
   );

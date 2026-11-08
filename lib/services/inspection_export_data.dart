@@ -290,7 +290,9 @@ class InspectionExportData {
                 source: DataSource.server),
         'missingCount': w.missingCount,
         'decoded': w.decoded,
-        'isPartial': w.isPartial,
+        'transferLowerBound': w.transferLowerBound,
+        'transferEstimated': w.transferEstimated,
+        'decodedLowerBound': w.decodedLowerBound,
         if (w.documentSource != null) 'documentSource': w.documentSource!.name,
         'breakdown': {
           for (final e in w.breakdown.entries)

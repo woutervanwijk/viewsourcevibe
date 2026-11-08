@@ -158,7 +158,7 @@ void main() {
   });
 
   group('legacyPageWeight', () {
-    test('totals sum Present values only and flag isPartial', () {
+    test('totals sum Present values only and flag the lower bounds', () {
       final w = legacyPageWeight(inspection(snap(resources: [
         res('https://a.test/a.js', tx: _b(100), dec: _b(400)),
         res('https://cdn.test/b.js', tx: _na, dec: _na),
@@ -166,7 +166,9 @@ void main() {
       ])))!;
       expect(w['transfer'], 150);
       expect(w['decoded'], 460);
-      expect(w['isPartial'], isTrue);
+      expect(w['transferLowerBound'], isTrue);
+      expect(w['decodedLowerBound'], isTrue);
+      expect(w.containsKey('isPartial'), isFalse);
       final bd = w['breakdown'] as Map;
       expect(bd['scripts'], containsPair('count', 2));
       expect(bd['scripts']['transfer'], 100);
@@ -174,18 +176,19 @@ void main() {
       expect(bd['css']['transfer'], 50);
     });
 
-    test('isPartial is false when every size is Present', () {
+    test('no lower bound when every size is Present', () {
       final w = legacyPageWeight(inspection(snap(resources: [
         res('https://a.test/a.js', tx: _b(1), dec: _b(2)),
       ])))!;
-      expect(w['isPartial'], isFalse);
+      expect(w['transferLowerBound'], isFalse);
+      expect(w['decodedLowerBound'], isFalse);
     });
 
     test('truncated resources make the total partial', () {
       final w = legacyPageWeight(inspection(snap(truncated: true, resources: [
         res('https://a.test/a.js', tx: _b(1), dec: _b(2)),
       ])))!;
-      expect(w['isPartial'], isTrue);
+      expect(w['transferLowerBound'] == true || w['decodedLowerBound'] == true, isTrue);
     });
 
     test('no Present size at all gives null totals, not 0', () {
@@ -193,7 +196,7 @@ void main() {
           inspection(snap(resources: [res('https://c.test/x.js')])))!;
       expect(w.containsKey('transfer'), isFalse);
       expect(w.containsKey('decoded'), isFalse);
-      expect(w['isPartial'], isTrue);
+      expect(w['transferLowerBound'] == true || w['decodedLowerBound'] == true, isTrue);
       expect(w['breakdown']['scripts']['count'], 1);
       expect(
           (w['breakdown']['scripts'] as Map).containsKey('transfer'), isFalse);
@@ -218,7 +221,8 @@ void main() {
       expect(w['transfer'], 30010);
       expect(w['decoded'], 20);
       // An image without a decoded size is by design, not a gap.
-      expect(w['isPartial'], isFalse);
+      expect(w['transferLowerBound'], isFalse);
+      expect(w['decodedLowerBound'], isFalse);
     });
 
     test('B10: a Present decoded size of a WebKit image is ignored', () {

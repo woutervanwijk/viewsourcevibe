@@ -229,13 +229,13 @@ Observed<TimelineModel> deriveTimeline(PageInspection p) {
     transfer = 'Size unknown';
   } else {
     transfer =
-        '${weight.totalPrefix}${FormatUtils.formatBytes(weight.transfer!)}';
+        '${weight.transferPrefix}${FormatUtils.formatBytes(weight.transfer!)}';
   }
   if (weight != null &&
       weight.decoded != null &&
       weight.decoded != weight.transfer) {
     decoded =
-        '${weight.totalPrefix}${FormatUtils.formatBytes(weight.decoded!)} decoded';
+        '${weight.decodedPrefix}${FormatUtils.formatBytes(weight.decoded!)} decoded';
   }
 
   return Present(

@@ -3,9 +3,13 @@ import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
 import '../probe_service.dart';
 
-/// Initiator types of static resources: a plain GET changes nothing on the
-/// server. Everything else (xhr, fetch, beacon, ping, iframe, navigation,
-/// other, unknown) could be an API call or tracking with side effects.
+/// Initiator types of static resources. Choice: a plain GET of a script,
+/// stylesheet, font, image or media file is treated as safe to repeat (it is
+/// what the browser already did, and such URLs are not API calls). The small
+/// remaining risk is a script URL that is really a tracking endpoint; that is
+/// accepted because the page size would otherwise stay unknown.
+/// Everything else (xhr, fetch, beacon, ping, iframe, navigation, other,
+/// unknown) could be an API call or tracking with side effects.
 const _estimableTypes = {
   'script',
   'link',
@@ -19,8 +23,9 @@ const _estimableTypes = {
 };
 
 /// Whether the app may request this resource again to learn its size.
-bool isEstimableResourceType(String type, String url) {
-  if (!_estimableTypes.contains(type.toLowerCase())) return false;
+bool isEstimableResourceType(String rawType, String url) {
+  final type = rawType.toLowerCase();
+  if (!_estimableTypes.contains(type)) return false;
   final uri = Uri.tryParse(url);
   if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
     return false;

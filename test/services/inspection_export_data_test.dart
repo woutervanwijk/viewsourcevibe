@@ -111,7 +111,10 @@ void main() {
           .firstWhere((r) => r['url'].toString().endsWith('own.js'));
       expect(own['transfer']['value'], 2048);
       final weight = json(a, 'analysis/page-weight.json');
-      expect(weight['value']['isPartial'], isTrue);
+      expect(weight['value']['transferLowerBound'], isTrue);
+      expect(weight['value']['transferEstimated'], isFalse);
+      expect(weight['value']['decodedLowerBound'], isTrue);
+      expect(weight['value'].containsKey('isPartial'), isFalse);
     });
 
     test('pending and failed cores are written as such', () {

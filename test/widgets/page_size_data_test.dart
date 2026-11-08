@@ -56,7 +56,8 @@ void main() {
   group('derivePageSize', () {
     test('the full page: totals and rows equal the fixture', () {
       final m = (derivePageSize(fullPage()) as Present<PageSizeModel>).value;
-      expect(m.weight.isPartial, isFalse);
+      expect(m.weight.transferLowerBound, isFalse);
+      expect(m.weight.decodedLowerBound, isFalse);
       expect(m.rows.map((r) => r.url),
           ['https://example.com/app.js', 'https://example.com/app.css']);
       expect(m.rows.first.size, 12000);
@@ -66,8 +67,8 @@ void main() {
 
     test('iOS: unknown sizes are counted and explained, never 0', () {
       final m = (derivePageSize(iosPartial()) as Present<PageSizeModel>).value;
-      expect(m.weight.isPartial, isTrue);
-      expect(m.weight.totalPrefix, '≥ ');
+      expect(m.weight.transferLowerBound, isTrue);
+      expect(m.weight.transferPrefix, '≥ ');
       expect(m.rowsWithoutSize, 1);
       expect(m.missingNote, contains('1 resource without size'));
       expect(m.missingNote, contains('cross-origin'));
@@ -127,7 +128,8 @@ void main() {
 
     testWidgets('(b) iOS: lower bound, explained, no 0 KB', (tester) async {
       await show(tester, iosPartial());
-      expect(find.textContaining('≥ '), findsWidgets);
+      expect(find.text('≥ 1 KB (↓ ≥ 7 KB)'), findsOneWidget);
+      expect(find.text('↓ ≥ 2 KB'), findsOneWidget);
       expect(find.textContaining('1 resource without size'), findsOneWidget);
       expect(find.textContaining('size unknown'), findsWidgets);
       expect(find.textContaining('0 KB'), findsNothing);

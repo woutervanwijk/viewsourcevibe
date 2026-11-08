@@ -638,9 +638,12 @@ Observed<BrowserCard> _browserCard(PageInspection p) {
   if (weight == null) {
     total = unknownText(res);
   } else {
-    final text =
-        formatSizePair(decoded: weight.decoded, transfer: weight.transfer);
-    total = text == null ? 'size unknown' : '${weight.totalPrefix}$text';
+    total = formatSizePair(
+            decoded: weight.decoded,
+            transfer: weight.transfer,
+            decodedPrefix: weight.decodedPrefix,
+            transferPrefix: weight.transferPrefix) ??
+        'size unknown';
   }
   return Present(
       BrowserCard(

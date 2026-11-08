@@ -52,6 +52,8 @@ void main() {
       expect(
           isEstimableResourceType('link', 'https://a.test/next.html'), isFalse);
       expect(isEstimableResourceType('link', 'https://a.test/s.css'), isTrue);
+      expect(isEstimableResourceType('LINK', 'https://a.test/next.html'),
+          isFalse);
     });
   });
 

@@ -205,8 +205,11 @@ class _PageSizeViewState extends State<PageSizeView>
 
   Widget _buildTotalsCard(BuildContext context, PageSizeModel model) {
     final weight = model.weight;
-    final known =
-        formatSizePair(decoded: weight.decoded, transfer: weight.transfer);
+    final known = formatSizePair(
+        decoded: weight.decoded,
+        transfer: weight.transfer,
+        decodedPrefix: weight.decodedPrefix,
+        transferPrefix: weight.transferPrefix);
     final note = model.missingNote;
 
     return _outlinedCard(
@@ -229,9 +232,7 @@ class _PageSizeViewState extends State<PageSizeView>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    known == null
-                        ? 'size unknown'
-                        : '${weight.totalPrefix}$known',
+                    known ?? 'size unknown',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -299,9 +300,12 @@ class _PageSizeViewState extends State<PageSizeView>
     if (bucket == null || bucket.count == 0) {
       return const SizedBox.shrink();
     }
-    final pair =
-        formatSizePair(decoded: bucket.decoded, transfer: bucket.transfer);
-    final text = pair == null ? 'size unknown' : '${bucket.prefix}$pair';
+    final text = formatSizePair(
+            decoded: bucket.decoded,
+            transfer: bucket.transfer,
+            decodedPrefix: bucket.decodedPrefix,
+            transferPrefix: bucket.transferPrefix) ??
+        'size unknown';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),

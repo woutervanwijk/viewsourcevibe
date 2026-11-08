@@ -19,9 +19,11 @@ void main() {
         w.transfer);
     expect(w.breakdown.values.fold<int>(0, (a, x) => a + (x.decoded ?? 0)),
         w.decoded);
-    expect(w.isPartial, isFalse);
+    expect(w.transferLowerBound, isFalse);
+    expect(w.decodedLowerBound, isFalse);
     expect(w.provenance, Provenance.measured);
-    expect(w.totalPrefix, '');
+    expect(w.transferPrefix, '');
+    expect(w.decodedPrefix, '');
   });
 
   test('iOS images count with transfer, never the pixel buffer', () {
@@ -31,7 +33,8 @@ void main() {
     ])))!;
     expect(w.transfer, 2000);
     expect(w.decoded, isNull);
-    expect(w.isPartial, isFalse);
+    expect(w.transferLowerBound, isFalse);
+    expect(w.decodedLowerBound, isFalse);
   });
 
   test('missing values make the total estimated and a lower bound', () {
@@ -41,9 +44,11 @@ void main() {
       res('https://cdn.test/b.js'), // blocked: no sizes
     ])))!;
     expect(w.transfer, 100);
-    expect(w.isPartial, isTrue);
+    expect(w.transferLowerBound, isTrue);
+    expect(w.decodedLowerBound, isTrue);
     expect(w.provenance, Provenance.estimated);
-    expect(w.totalPrefix, '≥ ');
+    expect(w.transferPrefix, '≥ ');
+    expect(w.decodedPrefix, '≥ ');
   });
 
   test('server document is added and labelled', () {

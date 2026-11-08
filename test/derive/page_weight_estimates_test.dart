@@ -25,8 +25,16 @@ void main() {
       expect(w.estimatedTransfer, 1000);
       expect(w.transfer, 1100);
       expect(w.missingCount, 1);
-      expect(w.totalPrefix, '≥ ≈ ');
+      expect(w.transferLowerBound, isTrue);
+      expect(w.transferEstimated, isTrue);
+      expect(w.decodedLowerBound, isTrue);
+      expect(w.transferPrefix, '≥ ≈ ');
+      // Decoded is never estimated.
+      expect(w.decodedPrefix, '≥ ');
       expect(w.provenance, Provenance.estimated);
+      expect(w.breakdown['scripts']!.transferPrefix, '≈ ');
+      expect(w.breakdown['scripts']!.decodedPrefix, '≥ ');
+      expect(w.breakdown['css']!.transferPrefix, '≥ ');
       expect(w.breakdown['scripts']!.estimatedTransfer, 1000);
       expect(w.breakdown['scripts']!.transfer, 1100);
       expect(w.breakdown['css']!.missingCount, 1);
@@ -42,7 +50,10 @@ void main() {
       expect(w.missingCount, 0);
       expect(w.measuredTransfer, isNull);
       expect(w.estimatedTransfer, 1000);
-      expect(w.totalPrefix, '≈ ');
+      expect(w.transferLowerBound, isFalse);
+      expect(w.decodedLowerBound, isFalse);
+      expect(w.transferPrefix, '≈ ');
+      expect(w.decodedPrefix, '');
     });
 
     test('a failed lookup stays missing, never 0', () {
@@ -54,7 +65,7 @@ void main() {
       expect(w.transfer, isNull);
       expect(w.estimatedTransfer, isNull);
       expect(w.missingCount, 1);
-      expect(w.totalPrefix, '≥ ');
+      expect(w.transferPrefix, '≥ ');
     });
 
     test('no estimates: unchanged numbers, measured == transfer', () {
@@ -64,7 +75,8 @@ void main() {
       expect(w.estimatedTransfer, isNull);
       expect(w.transfer, 100);
       expect(w.missingCount, 0);
-      expect(w.totalPrefix, '');
+      expect(w.transferPrefix, '');
+      expect(w.decodedPrefix, '');
     });
 
     test('a cached resource is not estimated and stays without transfer', () {
@@ -81,7 +93,35 @@ void main() {
       expect(w.estimatedTransfer, isNull);
       expect(w.decoded, 900);
       expect(w.missingCount, 1);
+      expect(w.transferLowerBound, isTrue);
+      expect(w.decodedLowerBound, isFalse);
     });
+
+    test('truncated resources make both totals lower bounds', () {
+      final w = derivePageWeight(inspection(
+          browser: browserSnap(truncated: true, resources: [measured])))!;
+      expect(w.transferLowerBound, isTrue);
+      expect(w.decodedLowerBound, isTrue);
+    });
+  });
+
+  test('each number gets its own prefix; "≈" never on decoded', () {
+    expect(
+        formatSizePair(
+            decoded: 1024,
+            transfer: 38 * 1024,
+            decodedPrefix: '≥ ',
+            transferPrefix: '≈ '),
+        '≥ 1 KB (↓ ≈ 38 KB)');
+    expect(formatSizePair(transfer: 2048, transferPrefix: '≥ ≈ '),
+        '↓ ≥ ≈ 2 KB');
+    expect(
+        formatSizePair(
+            decoded: 2048,
+            transfer: 2048,
+            decodedPrefix: '≥ ',
+            transferPrefix: '≥ '),
+        '≥ 2 KB');
   });
 
   group('derivePageSize with estimates', () {
@@ -115,7 +155,41 @@ void main() {
       expect(m.estimateNote, contains('2 sizes'));
       expect(m.estimateNote, contains('estimate'));
       expect(m.missingNote, contains('1 resource without size'));
-      expect(m.weight.totalPrefix, '≥ ≈ ');
+      expect(m.weight.transferPrefix, '≥ ≈ ');
+    });
+
+    test('lookup outcomes are told apart in the row note', () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        res('https://cdn.test/u.js'),
+        res('https://cdn.test/f.js'),
+      ])).copyWith(resourceEstimates: {
+        'https://cdn.test/u.js':
+            const Unavailable(UnavailableReason.notReportedByServer),
+        'https://cdn.test/f.js': const Failed('timeout'),
+      });
+      final m = model(p);
+      expect(m.rows.singleWhere((r) => r.url.endsWith('u.js')).sizeNote,
+          'the server reported no size');
+      expect(m.rows.singleWhere((r) => r.url.endsWith('f.js')).sizeNote,
+          'size lookup failed');
+    });
+
+    test('cache hits are counted apart from "no size"', () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        res('https://a.test/c.js',
+            tx: const Unavailable(UnavailableReason.servedFromCache),
+            dec: b(900)),
+        res('https://a.test/d.js',
+            tx: const Unavailable(UnavailableReason.servedFromCache),
+            dec: b(900)),
+        res('https://cdn.test/x.js'),
+      ]));
+      final m = model(p);
+      expect(m.missingNote, contains('1 resource without size'));
+      expect(m.missingNote,
+          contains('2 served from cache (transfer unknown, decoded known)'));
     });
 
     test('everything estimated: no missing note, no lower-bound claim', () {

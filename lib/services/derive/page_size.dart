@@ -19,13 +19,22 @@ String _kb(int bytes) {
 
 /// A size pair as text: "12 KB (↓ 4 KB)", "↓ 4 KB" when only the transfer is
 /// known, null when neither is. A missing size is never "0 KB".
-String? formatSizePair({int? decoded, int? transfer}) {
+///
+/// Each number takes its own prefix ("≥ ", "≈ "), so a lower bound on one
+/// is never read as a statement about the other. When both are equal and
+/// carry the same prefix they show as one.
+String? formatSizePair(
+    {int? decoded,
+    int? transfer,
+    String decodedPrefix = '',
+    String transferPrefix = ''}) {
   if (decoded == null && transfer == null) return null;
-  if (decoded == null) return '↓ ${_kb(transfer!)}';
-  if (transfer != null && transfer != decoded) {
-    return '${_kb(decoded)} (↓ ${_kb(transfer)})';
+  if (decoded == null) return '↓ $transferPrefix${_kb(transfer!)}';
+  if (transfer != null &&
+      (transfer != decoded || transferPrefix != decodedPrefix)) {
+    return '$decodedPrefix${_kb(decoded)} (↓ $transferPrefix${_kb(transfer)})';
   }
-  return _kb(decoded);
+  return '$decodedPrefix${_kb(decoded)}';
 }
 
 /// One loaded file. [size] is what the list is sorted and shared by: the
@@ -53,6 +62,10 @@ class PageSizeRow {
   /// The transfer size is the app's own estimate, not the browser's.
   final bool estimated;
 
+  /// Served from the browser cache: the transfer is unknown, the decoded
+  /// size is known.
+  final bool fromCache;
+
   const PageSizeRow({
     required this.url,
     required this.type,
@@ -64,6 +77,7 @@ class PageSizeRow {
     required this.shownDecoded,
     required this.sizeNote,
     this.estimated = false,
+    this.fromCache = false,
   });
 
   /// "12 KB (↓ 4 KB)" or "size unknown (reason)".
@@ -188,9 +202,11 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
             final int? size = isImage ? tx : (dec ?? tx);
             String? note;
             if (size == null) {
-              note = estimate is Failed<int> || estimate is Unavailable<int>
-                  ? 'size lookup failed'
-                  : sizeReasonWord(r.transfer);
+              note = switch (estimate) {
+                Failed<int>() => 'size lookup failed',
+                Unavailable<int>() => 'the server reported no size',
+                _ => sizeReasonWord(r.transfer),
+              };
               reasons.add(note);
             }
             final row = PageSizeRow(
@@ -205,6 +221,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
               shownDecoded: isImage ? tx : dec,
               sizeNote: note,
               estimated: estimatedTx != null,
+              fromCache: cached,
             );
             final old = byUrl[url];
             if (old == null || (row.size ?? -1) > (old.size ?? -1)) {
@@ -228,12 +245,18 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
             parts.add('$without resource${without == 1 ? '' : 's'} '
                 'without size (${why.join(', ')})');
           }
+          final cacheHits = rows.where((r) => r.fromCache).length;
+          if (cacheHits > 0) {
+            parts.add('$cacheHits served from cache '
+                '(transfer unknown, decoded known)');
+          }
           if (b.resourcesTruncated) {
             parts.add('${b.resourcesDropped} resource'
                 '${b.resourcesDropped == 1 ? '' : 's'} not collected '
                 '(the browser buffer was full)');
           }
-          if (parts.isEmpty && weight.isPartial) {
+          if (parts.isEmpty && weight.transferLowerBound ||
+              weight.decodedLowerBound) {
             parts.add('some resources report only part of their size');
           }
           return Present(
