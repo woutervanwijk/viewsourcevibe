@@ -40,8 +40,8 @@ bool isEstimableResourceType(String rawType, String url) {
 
 /// The URLs worth an own size lookup, at most [limit]: static resources the
 /// browser loaded but gave no transfer size, once each. Nothing until the
-/// browser's resources are Present. A cached resource is skipped (its decoded
-/// size is known), as is a URL that already has an estimate or a failure.
+/// browser's resources are Present. A cache hit without an encoded size is
+/// looked up too (it is counted like a fresh load). A URL that already has an estimate or a failure.
 List<String> estimateTargets(PageInspection p, {int limit = 80}) {
   final browser = p.browser;
   if (browser is! Present<BrowserSnapshot>) return const [];
@@ -52,10 +52,6 @@ List<String> estimateTargets(PageInspection p, {int limit = 80}) {
     if (out.length >= limit) break;
     final tx = r.transfer;
     if (tx is Present<int>) continue;
-    if (tx is Unavailable<int> &&
-        tx.reason == UnavailableReason.servedFromCache) {
-      continue;
-    }
     if (p.resourceEstimates.containsKey(r.url)) continue;
     if (!isEstimableResourceType(r.type, r.url)) continue;
     out.add(r.url);

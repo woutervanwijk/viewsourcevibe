@@ -62,7 +62,7 @@ void main() {
       expect(estimateTargets(iosPartial()), ['https://cdn.other.net/lib.js']);
     });
 
-    test('servedFromCache is not looked up (decoded is known)', () {
+    test('a cache hit without encoded size is looked up too', () {
       final p = inspection(
           browser: browserSnap(resources: [
         res('https://a.test/c.js',
@@ -70,7 +70,8 @@ void main() {
             dec: b(900)),
         res('https://a.test/d.js'),
       ]));
-      expect(estimateTargets(p), ['https://a.test/d.js']);
+      expect(
+          estimateTargets(p), ['https://a.test/c.js', 'https://a.test/d.js']);
     });
 
     test('measured, duplicate and already estimated URLs are skipped', () {

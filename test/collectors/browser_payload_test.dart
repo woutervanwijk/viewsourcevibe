@@ -89,11 +89,15 @@ void main() {
     });
   });
 
-  test('Android cache hit: transfer servedFromCache, decoded kept', () {
+  test('Android cache hit: counted at its encoded size, decoded kept', () {
     final s = parse('android_cache_hit.json', BrowserPlatform.android,
         'https://example.com/');
     final e = byUrl(s, 'https://example.com/app.js');
-    expect(unavailable(e.transfer), UnavailableReason.servedFromCache);
+    // transferSize 0 (cache) -> the encoded body a fresh load downloads.
+    expect(present(e.transfer), 30000);
+    expect((e.transfer as Present<int>).provenance, Provenance.derived);
+    expect(e.fromCache, isTrue);
+    expect(byUrl(s, 'https://example.com/photo.jpg').fromCache, isFalse);
     expect(present(e.decoded), 90000);
     // Android image decoded is real
     final img = byUrl(s, 'https://example.com/photo.jpg');

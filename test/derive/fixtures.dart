@@ -15,6 +15,7 @@ ResourceEntry res(
   String type = 'script',
   Observed<int> tx = const Unavailable(UnavailableReason.blockedByPlatform),
   Observed<int> dec = const Unavailable(UnavailableReason.blockedByPlatform),
+  bool fromCache = false,
 }) =>
     ResourceEntry(
       url: url,
@@ -24,6 +25,7 @@ ResourceEntry res(
       duration: const Unavailable(UnavailableReason.notReportedByPlatform),
       transfer: tx,
       decoded: dec,
+      fromCache: fromCache,
     );
 
 BrowserCookie cookie(String name,

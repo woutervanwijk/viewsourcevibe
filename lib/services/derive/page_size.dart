@@ -37,9 +37,53 @@ String? formatSizePair(
   return '$decodedPrefix${_kb(decoded)}';
 }
 
+/// The Page size tab's size text: the download (transfer) size first, the
+/// way Lighthouse's total byte weight counts a page: "2,500 KB",
+/// "40 KB (120 KB decoded)", or "120 KB decoded" when only that is known
+/// (e.g. served from cache). Null when neither is known; never "0 KB".
+String? formatDownloadSize(
+    {int? transfer,
+    int? decoded,
+    String transferPrefix = '',
+    String decodedPrefix = ''}) {
+  if (transfer == null && decoded == null) return null;
+  if (transfer == null) return '$decodedPrefix${_kb(decoded!)} decoded';
+  // Same text (equal after rounding, same prefix): show it once.
+  if (decoded == null ||
+      (_kb(decoded) == _kb(transfer) && decodedPrefix == transferPrefix)) {
+    return '$transferPrefix${_kb(transfer)}';
+  }
+  return '$transferPrefix${_kb(transfer)} ($decodedPrefix${_kb(decoded)} decoded)';
+}
+
+/// Lighthouse's "Avoid enormous network payloads" thresholds (KiB): up to
+/// 2,667 passes, up to 4,000 needs improvement, above is poor.
+const kLighthouseGoodKib = 2667;
+const kLighthousePoorKib = 4000;
+
+/// The Lighthouse verdict on the download total, or null when it is unknown.
+/// A lower bound that is still under a threshold only says "at least".
+String? lighthouseVerdict(PageWeight w) {
+  final t = w.transfer;
+  if (t == null) return null;
+  final kib = t / 1024;
+  final verdict = kib <= kLighthouseGoodKib
+      ? 'good (≤ 2,667 KB)'
+      : kib <= kLighthousePoorKib
+          ? 'needs improvement (≤ 4,000 KB)'
+          : 'poor (> 4,000 KB)';
+  final caveats = [
+    if (w.transferLowerBound && kib <= kLighthousePoorKib)
+      'the real total may be higher',
+    if (w.transferEstimated) 'includes estimates',
+  ];
+  return 'Lighthouse: $verdict'
+      '${caveats.isEmpty ? '' : '; ${caveats.join(', ')}'}';
+}
+
 /// One loaded file. [size] is what the list is sorted and shared by: the
-/// transfer size for images (WebKit's decoded size is a pixel buffer), else
-/// decoded, else transfer. Null = unknown, see [sizeNote].
+/// download (transfer) size, as Lighthouse sorts; for non-images the decoded
+/// size when no transfer is known. Null = unknown, see [sizeNote].
 class PageSizeRow {
   final String url;
 
@@ -53,7 +97,8 @@ class PageSizeRow {
   final int? size;
   final int? transfer;
 
-  /// Size shown in the row: image = transfer only.
+  /// Decoded size shown next to the download size; null for images
+  /// (WebKit's decoded size is a pixel buffer).
   final int? shownDecoded;
 
   /// Why the size is unknown (null when it is known).
@@ -62,8 +107,8 @@ class PageSizeRow {
   /// The transfer size is the app's own estimate, not the browser's.
   final bool estimated;
 
-  /// Served from the browser cache: the transfer is unknown, the decoded
-  /// size is known.
+  /// Served from the browser cache: the download size is that of a fresh
+  /// load (the encoded body).
   final bool fromCache;
 
   const PageSizeRow({
@@ -80,16 +125,16 @@ class PageSizeRow {
     this.fromCache = false,
   });
 
-  /// "12 KB (↓ 4 KB)" or "size unknown (reason)".
+  /// "4 KB (12 KB decoded)", "≈ 4 KB" (own estimate) or
+  /// "size unknown (reason)".
   String get sizeLabel {
-    if (estimated && transfer != null) {
-      // Our own request: only the transfer is estimated.
-      return shownDecoded == null || shownDecoded == transfer
-          ? '≈ ${_kb(transfer!)}'
-          : '${_kb(shownDecoded!)} (↓ ≈ ${_kb(transfer!)})';
-    }
-    return formatSizePair(decoded: shownDecoded, transfer: transfer) ??
+    final text = formatDownloadSize(
+            transfer: transfer,
+            decoded: shownDecoded,
+            // Our own request: only the transfer is estimated.
+            transferPrefix: estimated ? '≈ ' : '') ??
         'size unknown${sizeNote == null ? '' : ' ($sizeNote)'}';
+    return fromCache ? '$text · cached' : text;
   }
 }
 
@@ -109,6 +154,12 @@ class PageSizeModel {
   /// Says that and how many sizes are estimates; null when none.
   final String? estimateNote;
 
+  /// Lighthouse's verdict on the download total; null when it is unknown.
+  final String? lighthouseNote;
+
+  /// Says how cache hits are counted; null when there are none.
+  final String? cacheNote;
+
   const PageSizeModel({
     required this.weight,
     required this.rows,
@@ -116,6 +167,8 @@ class PageSizeModel {
     required this.missingNote,
     this.estimatedCount = 0,
     this.estimateNote,
+    this.lighthouseNote,
+    this.cacheNote,
   });
 
   /// Sum of the known row sizes (the share bars are relative to it).
@@ -186,11 +239,9 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
             final measuredTx = r.transfer is Present<int>
                 ? (r.transfer as Present<int>).value
                 : null;
-            final cached = r.transfer is Unavailable<int> &&
-                (r.transfer as Unavailable<int>).reason ==
-                    UnavailableReason.servedFromCache;
+            final cached = r.fromCache;
             final estimate =
-                measuredTx != null || cached ? null : p.resourceEstimates[url];
+                measuredTx != null ? null : p.resourceEstimates[url];
             final estimatedTx =
                 estimate is Present<int> ? estimate.value : null;
             final tx = measuredTx ?? estimatedTx;
@@ -199,7 +250,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                 : null;
             final isImage = type == 'image';
             // Images: the transfer size only (decoded is never used).
-            final int? size = isImage ? tx : (dec ?? tx);
+            final int? size = isImage ? tx : (tx ?? dec);
             String? note;
             if (size == null) {
               note = switch (estimate) {
@@ -218,7 +269,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
               services: externalServicesForUrl(url, pageUrl),
               size: size,
               transfer: tx,
-              shownDecoded: isImage ? tx : dec,
+              shownDecoded: isImage ? null : dec,
               sizeNote: note,
               estimated: estimatedTx != null,
               fromCache: cached,
@@ -246,10 +297,6 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                 'without size (${why.join(', ')})');
           }
           final cacheHits = rows.where((r) => r.fromCache).length;
-          if (cacheHits > 0) {
-            parts.add('$cacheHits served from cache '
-                '(transfer unknown, decoded known)');
-          }
           if (b.resourcesTruncated) {
             parts.add('${b.resourcesDropped} resource'
                 '${b.resourcesDropped == 1 ? '' : 's'} not collected '
@@ -272,6 +319,11 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                           'estimate' : 's are estimates'} from the app\'s own '
                       'request (the browser did not report them; may differ '
                       'from what the browser loaded)',
+              lighthouseNote: lighthouseVerdict(weight),
+              cacheNote: cacheHits == 0
+                  ? null
+                  : '$cacheHits served from the browser cache, counted at '
+                      'the size a fresh load downloads (the compressed body)',
             ),
             source: DataSource.browser,
             provenance: weight.provenance,

@@ -22,14 +22,14 @@ void main() {
     await tester.pump();
 
     expect(find.text('≈ 31 KB'), findsOneWidget);
-    // 31 KB estimated + 7 KB measured (+ the server document). The decoded
-    // part stays a lower bound (own.js has no decoded size): "≥ ≈".
-    // Total: decoded is a lower bound (scripts have none), only the
-    // transfer carries the estimate.
-    expect(find.text('≥ 1 KB (↓ ≈ 38 KB)'), findsOneWidget);
-    // Buckets: scripts include the estimate, images are measured.
-    expect(find.text('↓ ≈ 33 KB'), findsOneWidget);
-    expect(find.text('↓ 5 KB'), findsOneWidget);
+    // 31 KB estimated + 7 KB measured (+ the server document): the
+    // download total carries the estimate.
+    expect(find.text('≈ 38 KB'), findsOneWidget);
+    // Buckets: scripts include the estimate, images are measured (bucket
+    // and the image's own row).
+    expect(find.text('≈ 33 KB'), findsOneWidget);
+    expect(find.text('5 KB'), findsNWidgets(2));
+    expect(find.textContaining('includes estimates'), findsOneWidget);
     expect(find.textContaining('≥ ≈'), findsNothing);
     expect(find.textContaining('estimate'), findsWidgets);
     expect(find.textContaining('without size'), findsNothing);
@@ -48,8 +48,8 @@ void main() {
         service: service, child: const PageSizeView());
     await tester.pump();
 
-    expect(find.text('≥ 1 KB (↓ ≥ 7 KB)'), findsOneWidget);
-    expect(find.text('↓ ≥ 2 KB'), findsOneWidget);
+    expect(find.text('≥ 7 KB'), findsOneWidget);
+    expect(find.text('≥ 2 KB'), findsOneWidget);
     expect(find.textContaining('1 resource without size'), findsOneWidget);
     expect(find.textContaining('size lookup failed'), findsWidgets);
     expect(find.textContaining('0 KB'), findsNothing);

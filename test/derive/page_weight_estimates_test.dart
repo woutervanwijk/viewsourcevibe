@@ -79,22 +79,23 @@ void main() {
       expect(w.decodedPrefix, '');
     });
 
-    test('a cached resource is not estimated and stays without transfer', () {
+    test('cache hits count: encoded size, else an estimate', () {
       final p = inspection(
           browser: browserSnap(resources: [
+        res('https://a.test/hit.js', tx: b(300), dec: b(900), fromCache: true),
         res('https://a.test/c.js',
             tx: const Unavailable(UnavailableReason.servedFromCache),
-            dec: b(900)),
+            dec: b(900),
+            fromCache: true),
       ])).copyWith(resourceEstimates: {
-        'https://a.test/c.js': est(1),
+        'https://a.test/c.js': est(400),
       });
-      // An estimate never overrides the cache case: transfer stays unknown.
       final w = derivePageWeight(p)!;
-      expect(w.estimatedTransfer, isNull);
-      expect(w.decoded, 900);
-      expect(w.missingCount, 1);
-      expect(w.transferLowerBound, isTrue);
-      expect(w.decodedLowerBound, isFalse);
+      expect(w.transfer, 700);
+      expect(w.estimatedTransfer, 400);
+      expect(w.decoded, 1800);
+      expect(w.missingCount, 0);
+      expect(w.transferLowerBound, isFalse);
     });
 
     test('truncated resources make both totals lower bounds', () {
@@ -194,21 +195,20 @@ void main() {
           'size lookup failed');
     });
 
-    test('cache hits are counted apart from "no size"', () {
+    test('cache hits are counted and said so, apart from "no size"', () {
       final p = inspection(
           browser: browserSnap(resources: [
-        res('https://a.test/c.js',
-            tx: const Unavailable(UnavailableReason.servedFromCache),
-            dec: b(900)),
-        res('https://a.test/d.js',
-            tx: const Unavailable(UnavailableReason.servedFromCache),
-            dec: b(900)),
+        res('https://a.test/c.js', tx: b(300), dec: b(900), fromCache: true),
+        res('https://a.test/d.js', tx: b(300), dec: b(900), fromCache: true),
         res('https://cdn.test/x.js'),
       ]));
       final m = model(p);
-      expect(m.missingNote, contains('1 resource without size'));
-      expect(m.missingNote,
-          contains('2 served from cache (transfer unknown, decoded known)'));
+      expect(
+          m.missingNote, '1 resource without size (blocked by the platform)');
+      expect(m.cacheNote, startsWith('2 served from the browser cache'));
+      final c = m.rows.singleWhere((r) => r.url.endsWith('c.js'));
+      expect(c.size, 300);
+      expect(c.sizeLabel, '1 KB · cached');
     });
 
     test('everything estimated: no missing note, no lower-bound claim', () {

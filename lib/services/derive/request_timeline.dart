@@ -121,7 +121,7 @@ String _sizeLabel(ResourceEntry r, String type) {
       r.decoded is Present<int> ? (r.decoded as Present<int>).value : null;
   // Images: the transfer size only (WebKit's decoded size is a pixel buffer).
   final text = formatSizePair(decoded: isImage ? tx : dec, transfer: tx);
-  if (text != null) return text;
+  if (text != null) return r.fromCache ? '$text · cached' : text;
   return 'size unknown (${sizeReasonWord(r.transfer)})';
 }
 

@@ -205,9 +205,11 @@ class _PageSizeViewState extends State<PageSizeView>
 
   Widget _buildTotalsCard(BuildContext context, PageSizeModel model) {
     final weight = model.weight;
-    final known = formatSizePair(
-        decoded: weight.decoded,
+    // The download size, as Lighthouse counts it. The decoded total leaves
+    // out images on WebKit, so it is only shown when nothing else is known.
+    final known = formatDownloadSize(
         transfer: weight.transfer,
+        decoded: weight.transfer == null ? weight.decoded : null,
         decodedPrefix: weight.decodedPrefix,
         transferPrefix: weight.transferPrefix);
     final note = model.missingNote;
@@ -244,11 +246,35 @@ class _PageSizeViewState extends State<PageSizeView>
               ],
             ),
           ),
+          if (model.lighthouseNote != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Text(
+                '${model.lighthouseNote!}. Download size of every request, '
+                'like Lighthouse\'s total byte weight.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
           if (note != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: Text(
                 '${note[0].toUpperCase()}${note.substring(1)}. The total is a lower bound.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          if (model.cacheNote != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Text(
+                '${model.cacheNote![0].toUpperCase()}${model.cacheNote!.substring(1)}.',
                 style: TextStyle(
                   fontSize: 11,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -288,7 +314,8 @@ class _PageSizeViewState extends State<PageSizeView>
             ('other', 'Misc. Resources'),
           ])
             _buildBreakdownRow(
-                context, label, weight.breakdown[key], weight.decoded),
+                context, label, weight.breakdown[key], weight.transfer,
+                isImages: key == 'images'),
           const SizedBox(height: 8),
         ],
       ),
@@ -296,12 +323,14 @@ class _PageSizeViewState extends State<PageSizeView>
   }
 
   Widget _buildBreakdownRow(BuildContext context, String label,
-      WeightBucket? bucket, int? totalDecoded) {
+      WeightBucket? bucket, int? totalTransfer,
+      {bool isImages = false}) {
     if (bucket == null || bucket.count == 0) {
       return const SizedBox.shrink();
     }
-    final text = formatSizePair(
-            decoded: bucket.decoded,
+    final text = formatDownloadSize(
+            decoded:
+                isImages && bucket.transfer != null ? null : bucket.decoded,
             transfer: bucket.transfer,
             decodedPrefix: bucket.decodedPrefix,
             transferPrefix: bucket.transferPrefix) ??
@@ -328,7 +357,7 @@ class _PageSizeViewState extends State<PageSizeView>
             ],
           ),
           const SizedBox(height: 4),
-          _shareBar(context, bucket.decoded, totalDecoded),
+          _shareBar(context, bucket.transfer, totalTransfer),
         ],
       ),
     );
