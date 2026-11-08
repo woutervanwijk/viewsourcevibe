@@ -174,8 +174,8 @@ void main() {
           browser: browserSnap(resources: [
         res('https://a.test/a.js', tx: b(10)),
       ])));
-      expect(
-          generic.missingNote, 'some resources report only part of their size');
+      // Only the decoded size is missing: it is not shown, so no note.
+      expect(generic.missingNote, isNull);
     });
 
     test('lookup outcomes are told apart in the row note', () {

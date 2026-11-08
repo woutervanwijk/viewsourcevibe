@@ -205,13 +205,9 @@ class _PageSizeViewState extends State<PageSizeView>
 
   Widget _buildTotalsCard(BuildContext context, PageSizeModel model) {
     final weight = model.weight;
-    // The download size, as Lighthouse counts it. The decoded total leaves
-    // out images on WebKit, so it is only shown when nothing else is known.
-    final known = formatDownloadSize(
-        transfer: weight.transfer,
-        decoded: weight.transfer == null ? weight.decoded : null,
-        decodedPrefix: weight.decodedPrefix,
-        transferPrefix: weight.transferPrefix);
+    // The download size, as Lighthouse counts it.
+    final known =
+        formatDownloadSize(weight.transfer, prefix: weight.transferPrefix);
     final note = model.missingNote;
 
     return _outlinedCard(
@@ -314,8 +310,7 @@ class _PageSizeViewState extends State<PageSizeView>
             ('other', 'Misc. Resources'),
           ])
             _buildBreakdownRow(
-                context, label, weight.breakdown[key], weight.transfer,
-                isImages: key == 'images'),
+                context, label, weight.breakdown[key], weight.transfer),
           const SizedBox(height: 8),
         ],
       ),
@@ -323,18 +318,13 @@ class _PageSizeViewState extends State<PageSizeView>
   }
 
   Widget _buildBreakdownRow(BuildContext context, String label,
-      WeightBucket? bucket, int? totalTransfer,
-      {bool isImages = false}) {
+      WeightBucket? bucket, int? totalTransfer) {
     if (bucket == null || bucket.count == 0) {
       return const SizedBox.shrink();
     }
-    final text = formatDownloadSize(
-            decoded:
-                isImages && bucket.transfer != null ? null : bucket.decoded,
-            transfer: bucket.transfer,
-            decodedPrefix: bucket.decodedPrefix,
-            transferPrefix: bucket.transferPrefix) ??
-        'size unknown';
+    final text =
+        formatDownloadSize(bucket.transfer, prefix: bucket.transferPrefix) ??
+            'size unknown';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),

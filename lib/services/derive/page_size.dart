@@ -37,24 +37,11 @@ String? formatSizePair(
   return '$decodedPrefix${_kb(decoded)}';
 }
 
-/// The Page size tab's size text: the download (transfer) size first, the
-/// way Lighthouse's total byte weight counts a page: "2,500 KB",
-/// "40 KB (120 KB decoded)", or "120 KB decoded" when only that is known
-/// (e.g. served from cache). Null when neither is known; never "0 KB".
-String? formatDownloadSize(
-    {int? transfer,
-    int? decoded,
-    String transferPrefix = '',
-    String decodedPrefix = ''}) {
-  if (transfer == null && decoded == null) return null;
-  if (transfer == null) return '$decodedPrefix${_kb(decoded!)} decoded';
-  // Same text (equal after rounding, same prefix): show it once.
-  if (decoded == null ||
-      (_kb(decoded) == _kb(transfer) && decodedPrefix == transferPrefix)) {
-    return '$transferPrefix${_kb(transfer)}';
-  }
-  return '$transferPrefix${_kb(transfer)} ($decodedPrefix${_kb(decoded)} decoded)';
-}
+/// The Page size tab's size text: the download (transfer) size only, the
+/// way Lighthouse's total byte weight counts a page ("2,500 KB"). Null when
+/// unknown; never "0 KB".
+String? formatDownloadSize(int? transfer, {String prefix = ''}) =>
+    transfer == null ? null : '$prefix${_kb(transfer)}';
 
 /// Lighthouse's "Avoid enormous network payloads" thresholds (KiB): up to
 /// 2,667 passes, up to 4,000 needs improvement, above is poor.
@@ -82,8 +69,8 @@ String? lighthouseVerdict(PageWeight w) {
 }
 
 /// One loaded file. [size] is what the list is sorted and shared by: the
-/// download (transfer) size, as Lighthouse sorts; for non-images the decoded
-/// size when no transfer is known. Null = unknown, see [sizeNote].
+/// download (transfer) size, as Lighthouse sorts. Null = unknown, see
+/// [sizeNote].
 class PageSizeRow {
   final String url;
 
@@ -95,11 +82,6 @@ class PageSizeRow {
   final bool isAudioVideo;
   final List<Entity> services;
   final int? size;
-  final int? transfer;
-
-  /// Decoded size shown next to the download size; null for images
-  /// (WebKit's decoded size is a pixel buffer).
-  final int? shownDecoded;
 
   /// Why the size is unknown (null when it is known).
   final String? sizeNote;
@@ -118,21 +100,14 @@ class PageSizeRow {
     required this.isAudioVideo,
     required this.services,
     required this.size,
-    required this.transfer,
-    required this.shownDecoded,
     required this.sizeNote,
     this.estimated = false,
     this.fromCache = false,
   });
 
-  /// "4 KB (12 KB decoded)", "≈ 4 KB" (own estimate) or
-  /// "size unknown (reason)".
+  /// "4 KB", "≈ 4 KB" (own estimate) or "size unknown (reason)".
   String get sizeLabel {
-    final text = formatDownloadSize(
-            transfer: transfer,
-            decoded: shownDecoded,
-            // Our own request: only the transfer is estimated.
-            transferPrefix: estimated ? '≈ ' : '') ??
+    final text = formatDownloadSize(size, prefix: estimated ? '≈ ' : '') ??
         'size unknown${sizeNote == null ? '' : ' ($sizeNote)'}';
     return fromCache ? '$text · cached' : text;
   }
@@ -244,13 +219,8 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                 measuredTx != null ? null : p.resourceEstimates[url];
             final estimatedTx =
                 estimate is Present<int> ? estimate.value : null;
-            final tx = measuredTx ?? estimatedTx;
-            final dec = r.decoded is Present<int>
-                ? (r.decoded as Present<int>).value
-                : null;
-            final isImage = type == 'image';
-            // Images: the transfer size only (decoded is never used).
-            final int? size = isImage ? tx : (tx ?? dec);
+            // The download size only (Lighthouse); decoded is not shown.
+            final size = measuredTx ?? estimatedTx;
             String? note;
             if (size == null) {
               note = switch (estimate) {
@@ -268,8 +238,6 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                   .hasMatch(Uri.tryParse(url)?.path.toLowerCase() ?? ''),
               services: externalServicesForUrl(url, pageUrl),
               size: size,
-              transfer: tx,
-              shownDecoded: isImage ? null : dec,
               sizeNote: note,
               estimated: estimatedTx != null,
               fromCache: cached,
@@ -302,8 +270,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                 '${b.resourcesDropped == 1 ? '' : 's'} not collected '
                 '(the browser buffer was full)');
           }
-          if (parts.isEmpty &&
-              (weight.transferLowerBound || weight.decodedLowerBound)) {
+          if (parts.isEmpty && weight.transferLowerBound) {
             parts.add('some resources report only part of their size');
           }
           return Present(

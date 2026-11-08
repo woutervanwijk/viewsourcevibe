@@ -63,7 +63,7 @@ void main() {
           ['https://example.com/app.js', 'https://example.com/app.css']);
       // Download size first (Lighthouse), decoded next to it.
       expect(m.rows.first.size, 4096);
-      expect(m.rows.first.sizeLabel, '4 KB (12 KB decoded)');
+      expect(m.rows.first.sizeLabel, '4 KB');
       expect(m.lighthouseNote, 'Lighthouse: good (≤ 2,667 KB)');
       expect(m.missingNote, isNull);
     });
@@ -106,17 +106,10 @@ void main() {
           isA<Failed<PageSizeModel>>());
     });
 
-    test('formatDownloadSize: download first, never 0 for unknown', () {
-      expect(formatDownloadSize(), isNull);
-      expect(formatDownloadSize(transfer: 2048), '2 KB');
-      expect(formatDownloadSize(decoded: 2048), '2 KB decoded');
-      expect(formatDownloadSize(transfer: 2048, decoded: 2048), '2 KB');
-      expect(formatDownloadSize(transfer: 2048, decoded: 6144),
-          '2 KB (6 KB decoded)');
-      expect(
-          formatDownloadSize(
-              transfer: 2048, decoded: 6144, decodedPrefix: '≥ '),
-          '2 KB (≥ 6 KB decoded)');
+    test('formatDownloadSize: download size only, never 0 for unknown', () {
+      expect(formatDownloadSize(null), isNull);
+      expect(formatDownloadSize(2048), '2 KB');
+      expect(formatDownloadSize(2048, prefix: '≥ '), '≥ 2 KB');
     });
 
     test('lighthouseVerdict follows the Lighthouse thresholds', () {
@@ -164,7 +157,8 @@ void main() {
       await show(tester, fullPage());
       expect(find.text('Total Page Size'), findsOneWidget);
       expect(find.text('app.js'), findsOneWidget);
-      expect(find.text('4 KB (12 KB decoded)'), findsWidgets);
+      expect(find.text('4 KB'), findsWidgets);
+      expect(find.textContaining('decoded'), findsNothing);
       expect(find.textContaining('Lighthouse: good'), findsOneWidget);
       expect(find.textContaining('≥'), findsNothing);
     });
