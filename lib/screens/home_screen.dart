@@ -495,6 +495,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   const ToolbarBackButton(),
                 ],
               ),
