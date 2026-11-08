@@ -315,14 +315,26 @@ class _SourceViewerState extends State<SourceViewer> {
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                                // One line for size and charset, so switching
+                                // between DOM and server HTML (which has a
+                                // charset) doesn't change the header height.
                                 if (text != null && view.sizeLabel != null)
                                   Text(
-                                    '${formatThousands(view.lineCount ?? 1)} lines • ${view.sizeLabel}',
+                                    [
+                                      '${formatThousands(view.lineCount ?? 1)} lines',
+                                      view.sizeLabel!,
+                                      if (view.charsetLabel != null)
+                                        view.charsetLabel!,
+                                    ].join(' • '),
                                     style: _smallStyle(context),
-                                  ),
-                                if (view.charsetLabel != null)
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                else if (view.charsetLabel != null)
                                   Text(view.charsetLabel!,
-                                      style: _smallStyle(context)),
+                                      style: _smallStyle(context),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
                               ],
                             ),
                           ),

@@ -177,7 +177,8 @@ void main() {
       browserResult: const Pending(),
     );
     await show(tester, p);
-    expect(find.text('charset iso-8859-1 (HTTP header)'), findsOneWidget);
+    expect(find.textContaining('charset iso-8859-1 (HTTP header)'),
+        findsOneWidget);
   });
 
   testWidgets('unsupported charset is said, not hidden', (tester) async {
@@ -196,7 +197,9 @@ void main() {
       browserResult: const Pending(),
     );
     await show(tester, p);
-    expect(find.text('charset x-weird not supported — shown as windows-1252'),
+    expect(
+        find.textContaining(
+            'charset x-weird not supported — shown as windows-1252'),
         findsOneWidget);
   });
 
