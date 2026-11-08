@@ -68,7 +68,11 @@ List<Divergence> deriveDivergences(PageInspection p) {
     if (h1 != h2 || _pathKey(u) != _pathKey(b.url)) {
       out.add(Divergence(
           wwwOnly ? DivergenceKind.redirectHost : DivergenceKind.finalUrl,
-          "the app's request ended at $u but the browser is at ${b.url}"));
+          s.requestedUrl != u
+              ? "the app's own request was redirected to $u but the browser "
+                  'is at ${b.url} (the browser has cookies the app does not '
+                  'send, such as a consent choice)'
+              : "the app's request ended at $u but the browser is at ${b.url}"));
     }
   }
 

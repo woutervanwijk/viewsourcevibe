@@ -38,6 +38,18 @@ void main() {
     expect(host.map((x) => x.kind), [DivergenceKind.finalUrl]);
   });
 
+  test('a redirect only the app got is explained by the cookies it lacks', () {
+    final d = deriveDivergences(inspection(
+        server: serverSnap(finalUrl: 'https://consent.test/consent'),
+        browser: browserSnap(url: 'https://a.test/')));
+    expect(d.single.kind, DivergenceKind.finalUrl);
+    expect(
+        d.single.message,
+        "the app's own request was redirected to https://consent.test/consent "
+        'but the browser is at https://a.test/ (the browser has cookies the '
+        'app does not send, such as a consent choice)');
+  });
+
   test('scheme/trailing slash/fragment alone are not divergences', () {
     expect(
         deriveDivergences(inspection(

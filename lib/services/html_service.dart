@@ -143,7 +143,6 @@ class HtmlService extends ChangeNotifier {
   /// The server fetch of the current navigation (null when none runs).
   Future<void>? _serverFetch;
 
-
   bool _metadataRerunQueued = false;
 
   HtmlFile? _currentFile;
@@ -1019,8 +1018,7 @@ class HtmlService extends ChangeNotifier {
   CodeFindController? get activeFindController => _activeFindController;
 
   bool get isHtml {
-    final contentType =
-        _responseHeaders?['content-type']?.toLowerCase() ?? '';
+    final contentType = _responseHeaders?['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('text/html') ||
         contentType.contains('application/xhtml+xml')) {
       return true;
@@ -1147,8 +1145,7 @@ class HtmlService extends ChangeNotifier {
   ];
 
   bool get isSvg {
-    final contentType =
-        _responseHeaders?['content-type']?.toLowerCase() ?? '';
+    final contentType = _responseHeaders?['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('image/svg+xml')) return true;
 
     return selectedContentType == 'svg' ||
@@ -1156,8 +1153,7 @@ class HtmlService extends ChangeNotifier {
   }
 
   bool get isXml {
-    final contentType =
-        _responseHeaders?['content-type']?.toLowerCase() ?? '';
+    final contentType = _responseHeaders?['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('application/xml') ||
         contentType.contains('text/xml')) {
       return true;
@@ -1256,8 +1252,7 @@ class HtmlService extends ChangeNotifier {
   }
 
   bool get isMedia {
-    final contentType =
-        _responseHeaders?['content-type']?.toLowerCase() ?? '';
+    final contentType = _responseHeaders?['content-type']?.toLowerCase() ?? '';
     if (contentType.contains('image/') ||
         contentType.contains('video/') ||
         contentType.contains('audio/')) {
@@ -1496,19 +1491,7 @@ class HtmlService extends ChangeNotifier {
       }
     }
 
-    // 0. Save current page to navigation stack before resetting state
-    // We must do this BEFORE calling _resetLoadState because it clears _currentFile
-    // Also check if we are navigating to a different page to avoid duplicates on reload
-    // AND check for Rapid Redirects: If current file was loaded < 1s ago, assume redirect and replace it
-    final bool isRedirect = _lastCurrentFileUpdate != null &&
-        DateTime.now().difference(_lastCurrentFileUpdate!).inMilliseconds <
-            1000;
-
-    if ((_currentFile == null || !(areUrlsEqual(_currentFile!.path, url))) &&
-        !isRedirect &&
-        !_isNavigatingBack) {
-      _pushToNavigationStack();
-    }
+    _pushPreviousPageToNavigationStack(url);
 
     // 1. Clean state and update main URL
     // We don't notify yet because we want to set the correct loading path first
@@ -1546,23 +1529,7 @@ class HtmlService extends ChangeNotifier {
         _requestedTabIndex = browserTabIndex;
       }
 
-      // Add to history immediately for Browser-First Flow
-      final tempFile = HtmlFile(
-        name: url,
-        path: url,
-        content: '',
-        lastModified: DateTime.now(),
-        size: 0,
-        isUrl: true,
-      );
-
-      if (url.isNotEmpty && _shouldAddToHistory(tempFile)) {
-        _urlHistoryService?.addUrl(url);
-        _historyPendingUrl = url;
-
-        // Placeholder so _currentFile is set before the HTML arrives.
-        _currentFile = tempFile;
-      }
+      _recordBrowserFirstHistory(url);
 
       notifyListeners();
 
@@ -1592,11 +1559,102 @@ class HtmlService extends ChangeNotifier {
     }
   }
 
+  /// Save the current page to the navigation stack before state is reset.
+  /// Must run BEFORE _resetLoadState, which clears _currentFile. Skipped when
+  /// navigating to the same page (reload), on a rapid redirect (the current
+  /// file was loaded < 1s ago) and when going back.
+  void _pushPreviousPageToNavigationStack(String url) {
+    final bool isRedirect = _lastCurrentFileUpdate != null &&
+        DateTime.now().difference(_lastCurrentFileUpdate!).inMilliseconds <
+            1000;
+
+    if ((_currentFile == null || !(areUrlsEqual(_currentFile!.path, url))) &&
+        !isRedirect &&
+        !_isNavigatingBack) {
+      _pushToNavigationStack();
+    }
+  }
+
+  /// Browser-first: add [url] to the history immediately and put a
+  /// placeholder in _currentFile until the HTML arrives.
+  void _recordBrowserFirstHistory(String url) {
+    final tempFile = HtmlFile(
+      name: url,
+      path: url,
+      content: '',
+      lastModified: DateTime.now(),
+      size: 0,
+      isUrl: true,
+    );
+
+    if (url.isNotEmpty && _shouldAddToHistory(tempFile)) {
+      _urlHistoryService?.addUrl(url);
+      _historyPendingUrl = url;
+      _currentFile = tempFile;
+    }
+  }
+
+  /// The WebView started a main-frame navigation itself (link, JS location,
+  /// form, server redirect) and lets it proceed. Does what loadUrl does for
+  /// bookkeeping (history, navigation stack, new generation by the R20 rule,
+  /// loading flags) but never loads the URL in the browser, and does not
+  /// fetch the server side yet: the app's own request must not race the
+  /// browser's (one-time callback URLs, tokens). The fetch of the page the
+  /// browser ends up on starts at the browser's non-partial sync.
+  void beginBrowserNavigation(String url) {
+    if (_disposed) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
+    // The same document as the current navigation (R20) is nothing new.
+    if (store.current.target is UrlTarget && _storeCovers(uri)) {
+      _noteBrowserUrl(uri);
+      return;
+    }
+    _fileNotice = null;
+    _pushPreviousPageToNavigationStack(url);
+    _resetLoadState(newUrl: url, notify: false);
+
+    _cancelBrowserRefreshes();
+    final gen = store.beginUrl(uri);
+    store.applyServer(gen, const Pending(_waitingForBrowser));
+    store.applyRobots(gen, const Pending(_waitingForBrowser));
+    _serverFetch = null;
+    _deferredServerFetch = (gen, uri);
+
+    _webViewLoadingUrl = url;
+    _isWebViewLoading = true;
+    _recordBrowserFirstHistory(url);
+    notifyListeners();
+  }
+
+  static const _waitingForBrowser = 'waiting for the browser to finish loading';
+
+  /// Server fetch postponed until the browser finished the navigation of this
+  /// generation (see [beginBrowserNavigation]).
+  (int, Uri)? _deferredServerFetch;
+
+  /// Starts the postponed server fetch for the page the browser ended up on,
+  /// [finalUrl]. Does nothing when there is none or the navigation moved on.
+  void _runDeferredServerFetch(Uri finalUrl) {
+    final deferred = _deferredServerFetch;
+    if (deferred == null) return;
+    _deferredServerFetch = null;
+    if (deferred.$1 != store.current.generation) return;
+    if (sameUrl(deferred.$2, finalUrl)) {
+      _serverFetch = _fetchServer(finalUrl, deferred.$1, adoptBody: true);
+    } else {
+      // The browser was redirected away: the intermediate URL is never
+      // fetched, the page the browser is on is.
+      _startInspection(finalUrl, adoptBody: true);
+    }
+  }
+
   /// Starts a new inspection generation for [uri] and fetches its server side
   /// in the background. With [adoptBody] the body becomes the current file
   /// when none has content yet (browser-first).
   int _startInspection(Uri uri, {required bool adoptBody}) {
     _cancelBrowserRefreshes();
+    _deferredServerFetch = null;
     final gen = store.beginUrl(uri);
     if (uri.scheme != 'http' && uri.scheme != 'https') {
       const na = Unavailable<Never>(
@@ -1979,6 +2037,10 @@ Technical details: $message''';
 
   void handleWebViewError(String errorDescription) {
     debugPrint('WebView Error: $errorDescription');
+    // The browser will not finish: the app's own look at the page is all
+    // there will be.
+    final deferred = _deferredServerFetch;
+    if (deferred != null) _runDeferredServerFetch(deferred.$2);
     _isWebViewLoading = false;
     _isLoading = false;
     notifyListeners();
@@ -4632,6 +4694,7 @@ Technical details: $message''';
     // Server side of the page the browser is on (headers, redirects, robots).
     // A page the current navigation covers is not fetched again; any other
     // starts a new generation, synchronously, before the gen is read below.
+    if (!isPartial) _runDeferredServerFetch(uri);
     probeUrl(url).ignore();
     final gen = store.current.generation;
     bool stale() => _disposed || gen != store.current.generation;

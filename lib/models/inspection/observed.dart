@@ -37,7 +37,9 @@ class Unavailable<T> extends Observed<T> {
 }
 
 class Pending<T> extends Observed<T> {
-  const Pending();
+  /// Why it is not there yet, when there is more to say than "loading".
+  final String? detail;
+  const Pending([this.detail]);
 }
 
 class Failed<T> extends Observed<T> {

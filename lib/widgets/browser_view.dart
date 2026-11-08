@@ -7,6 +7,7 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/collectors/vsv_collect_js.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/navigation_policy.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
 import 'dart:io';
 import 'dart:collection';
@@ -282,41 +283,37 @@ class _BrowserViewState extends State<BrowserView> {
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         final uri = navigationAction.request.url!;
         final url = uri.toString();
+        final htmlService = Provider.of<HtmlService>(context, listen: false);
 
-        // Only http/https navigation is allowed; block data:, blob:, file:,
-        // javascript:, content: and any other scheme in the WebView layer.
-        final scheme = uri.scheme.toLowerCase();
-        if (scheme != 'http' && scheme != 'https') {
-          return NavigationActionPolicy.CANCEL;
-        }
+        // webViewLoadingUrl is set while a load the app started is pending
+        // and cleared once it completes.
+        final isPendingLoad = htmlService.webViewLoadingUrl != null &&
+            htmlService.areUrlsEqual(url, htmlService.webViewLoadingUrl!);
+        final isCurrentFile = htmlService.currentFile != null &&
+            htmlService.areUrlsEqual(url, htmlService.currentFile!.path);
 
-        if (url == 'about:blank') {
-          return NavigationActionPolicy.ALLOW;
-        }
-
-        if (navigationAction.isForMainFrame) {
-          final htmlService = Provider.of<HtmlService>(context, listen: false);
-          // If this is the load we just triggered internally, allow it
-          // We use null check because webViewLoadingUrl is cleared once load starts/completes
-          final isPendingLoad = htmlService.webViewLoadingUrl != null &&
-              htmlService.areUrlsEqual(url, htmlService.webViewLoadingUrl!);
-
-          // Also allow if it's the current file path (e.g. RSS template load with baseUrl)
-          final isCurrentFile = htmlService.currentFile != null &&
-              htmlService.areUrlsEqual(url, htmlService.currentFile!.path);
-
-          if (isPendingLoad || isCurrentFile) {
+        final decision = decideMainFrameNavigation(
+          uri: uri,
+          isMainFrame: navigationAction.isForMainFrame,
+          isPendingLoad: isPendingLoad,
+          isCurrentFile: isCurrentFile,
+          browserFirst: htmlService.useBrowserByDefault,
+        );
+        switch (decision) {
+          case NavigationDecision.allow:
             return NavigationActionPolicy.ALLOW;
-          }
-
-          // Otherwise, intercept and redirect through standard loadUrl flow
-          // This ensures that clicking links or redirects are handled by the app's unified loading logic
-          debugPrint('Intercepting main-frame navigation to: $url');
-          htmlService.loadUrl(url);
-          return NavigationActionPolicy.CANCEL;
+          case NavigationDecision.cancel:
+            return NavigationActionPolicy.CANCEL;
+          case NavigationDecision.allowAndNotify:
+            // The browser makes this request itself (redirects, cookies and
+            // POST bodies stay intact); the app only records it.
+            htmlService.beginBrowserNavigation(url);
+            return NavigationActionPolicy.ALLOW;
+          case NavigationDecision.interceptAndLoad:
+            debugPrint('Intercepting main-frame navigation to: $url');
+            htmlService.loadUrl(url);
+            return NavigationActionPolicy.CANCEL;
         }
-
-        return NavigationActionPolicy.ALLOW;
       },
     );
   }
