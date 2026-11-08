@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
   // Initialize Flutter binding for tests
@@ -39,7 +39,7 @@ void main() {
       // This test verifies that shareText works when iOS implementation is available
       
       expect(() async {
-        await SharingService.shareText('Test text from iOS');
+        await UnifiedSharingService.shareText('Test text from iOS');
       }, returnsNormally);
     });
 
@@ -47,7 +47,7 @@ void main() {
       // This test verifies that shareHtml works when iOS implementation is available
       
       expect(() async {
-        await SharingService.shareHtml('<html><body>Test HTML</body></html>', 
+        await UnifiedSharingService.shareHtml('<html><body>Test HTML</body></html>', 
             filename: 'test.html');
       }, returnsNormally);
     });
@@ -56,7 +56,7 @@ void main() {
       // This test verifies that shareFile works when iOS implementation is available
       
       expect(() async {
-        await SharingService.shareFile('/path/to/test.html', mimeType: 'text/html');
+        await UnifiedSharingService.shareFile('/path/to/test.html', mimeType: 'text/html');
       }, returnsNormally);
     });
 
@@ -64,7 +64,7 @@ void main() {
       // This test verifies that shareUrl works when iOS implementation is available
       
       expect(() async {
-        await SharingService.shareUrl('https://example.com');
+        await UnifiedSharingService.shareUrl('https://example.com');
       }, returnsNormally);
     });
 
@@ -77,11 +77,11 @@ void main() {
 
       // These should throw MissingPluginException but not crash
       expect(() async {
-        await SharingService.shareText('Test');
+        await UnifiedSharingService.shareText('Test');
       }, throwsA(isA<Exception>()));
 
       expect(() async {
-        await SharingService.shareHtml('<html></html>');
+        await UnifiedSharingService.shareHtml('<html></html>');
       }, throwsA(isA<Exception>()));
     });
   });

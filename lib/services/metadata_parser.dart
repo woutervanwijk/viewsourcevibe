@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
 import 'package:xml/xml.dart' as xml;
-import 'package:view_source_vibe/services/detection/engine.dart';
 
-/// Extract metadata from the file content
+/// Extract metadata from the file content. Service/tracker detection is not
+/// part of it (see derive/detections.dart); [headers] is kept for callers.
 Future<Map<String, dynamic>> extractMetadataInIsolate(
     String html, String baseUrl,
     {Map<String, String>? headers}) async {
@@ -13,10 +13,15 @@ Future<Map<String, dynamic>> extractMetadataInIsolate(
       {'html': html, 'baseUrl': baseUrl, 'headers': headers});
 }
 
+/// The same extraction without the isolate (tests, small inputs).
+Map<String, dynamic> extractMetadataSync(String html, String baseUrl,
+        {Map<String, String>? headers}) =>
+    _extractMetadataInternal(
+        {'html': html, 'baseUrl': baseUrl, 'headers': headers});
+
 Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
   final html = args['html'] as String;
   final baseUrl = args['baseUrl'] as String;
-  final headers = args['headers'] as Map<String, String>?;
 
   final Map<String, dynamic> metadata = {
     'openGraph': <String, dynamic>{},
@@ -53,11 +58,17 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
       debugPrint(
           'MetadataParser: XML parsing failed, falling back to HTML: $e');
       final doc = html_parser.parse(html);
-      _extractFromHtml(doc, metadata, baseUrl);
+      _extractFromHtml(doc, metadata, _effectiveBase(doc, baseUrl));
     }
   } else {
     final doc = html_parser.parse(html);
-    _extractFromHtml(doc, metadata, baseUrl);
+    _extractFromHtml(doc, metadata, _effectiveBase(doc, baseUrl));
+  }
+
+  // <link rel=canonical> (resolved against the effective base).
+  final canonical = metadata['pageConfig']['canonical'];
+  if (canonical is String && canonical.isNotEmpty) {
+    metadata['canonical'] = canonical;
   }
 
   // Refine Image/Favicon from OG/Meta
@@ -66,13 +77,6 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
   metadata['favicon'] = metadata['icons']['apple-touch-icon'] ??
       metadata['icons']['icon'] ??
       metadata['icons']['shortcut icon'];
-
-  // Services, trackers and technologies in the source and headers. The
-  // browser's requests and cookies are added later (HtmlService.detections).
-  metadata['detections'] = [
-    for (final d in scanSource(html: html, headers: headers, pageUrl: baseUrl))
-      d.toMap()
-  ];
 
   // Extract info from JSON-LD
   // We need a doc for this. If we used XML parser, we might not have a html.Document.
@@ -90,6 +94,25 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
   }
 
   return metadata;
+}
+
+/// The base URL links resolve against: `<base href>` (resolved against the
+/// document URL when relative) or the document URL. An empty result means
+/// there is nothing to resolve against (a local file): relative links then
+/// stay as written.
+String _effectiveBase(dom.Document doc, String baseUrl) {
+  final href = doc.querySelector('base[href]')?.attributes['href']?.trim();
+  if (href == null || href.isEmpty) return baseUrl;
+  try {
+    final uri = Uri.parse(href);
+    if (uri.hasScheme) {
+      return uri.scheme == 'http' || uri.scheme == 'https' ? href : baseUrl;
+    }
+    if (baseUrl.isEmpty) return baseUrl;
+    return Uri.parse(baseUrl).resolveUri(uri).toString();
+  } catch (_) {
+    return baseUrl;
+  }
 }
 
 void _extractFromHtml(

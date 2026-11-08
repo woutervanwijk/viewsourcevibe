@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:re_editor/re_editor.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/source_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -231,19 +233,16 @@ class _SourceViewerState extends State<SourceViewer> {
     }
   }
 
-  String _formatNumber(int number) {
-    return number.toString().replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
-  }
-
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
 
     // Add null safety and path cleanup
     final fileName = widget.file.name.split('/').last.split('\\').last;
-    final fileContent = widget.file.content;
-    final lines = fileContent.split('\n');
+    final view = context.select<HtmlService, SourceView>((s) => s.sourceView);
+    final tlsWarning =
+        context.select<HtmlService, String?>((s) => s.tlsWarning);
+    final text = view.textOrNull;
     final fileExtension =
         fileName.isNotEmpty ? fileName.split('.').last.toLowerCase() : '';
     final isHtmlFile = fileExtension == 'html' || fileExtension == 'htm';
@@ -316,16 +315,26 @@ class _SourceViewerState extends State<SourceViewer> {
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                Text(
-                                  '${_formatNumber(lines.length)} lines • ${_formatNumber(widget.file.size)} bytes',
-                                  style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withAlpha(153),
-                                    fontSize: 10,
-                                  ),
-                                ),
+                                // One line for size and charset, so switching
+                                // between DOM and server HTML (which has a
+                                // charset) doesn't change the header height.
+                                if (text != null && view.sizeLabel != null)
+                                  Text(
+                                    [
+                                      '${formatThousands(view.lineCount ?? 1)} lines',
+                                      view.sizeLabel!,
+                                      if (view.charsetLabel != null)
+                                        view.charsetLabel!,
+                                    ].join(' • '),
+                                    style: _smallStyle(context),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                else if (view.charsetLabel != null)
+                                  Text(view.charsetLabel!,
+                                      style: _smallStyle(context),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
                               ],
                             ),
                           ),
@@ -460,9 +469,9 @@ class _SourceViewerState extends State<SourceViewer> {
               );
             },
           ),
+          if (view.canSwitch) _buildSourceSwitch(context, view),
           const Divider(height: 1),
-          if (_hasTlsWarning(widget.file))
-            _buildTlsWarningBanner(context, widget.file),
+          if (tlsWarning != null) _buildTlsWarningBanner(context, tlsWarning),
 
           // File content with built-in syntax highlighting and line numbers
           Expanded(
@@ -515,6 +524,7 @@ class _SourceViewerState extends State<SourceViewer> {
                   wrapText: settings.wrapText,
                   showLineNumbers: settings.showLineNumbers,
                   themeName: settings.themeName,
+                  view: service.sourceView,
                 ),
                 builder: (context, data, child) {
                   final htmlService =
@@ -523,12 +533,11 @@ class _SourceViewerState extends State<SourceViewer> {
                     return MediaBrowser(file: widget.file);
                   }
 
-                  return _buildEditor(
-                    context,
-                    htmlService,
-                    widget.file.content,
-                    data,
-                  );
+                  final docText = data.view.textOrNull;
+                  if (docText == null) {
+                    return _buildDocumentState(context, data.view);
+                  }
+                  return _buildEditor(context, htmlService, docText, data);
                 },
               ),
             ),
@@ -582,13 +591,68 @@ class _SourceViewerState extends State<SourceViewer> {
     ) as Widget;
   }
 
-  bool _hasTlsWarning(HtmlFile file) {
-    return file.probeResult?['tlsInvalidCertificate'] == true;
+  TextStyle _smallStyle(BuildContext context) => TextStyle(
+        color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
+        fontSize: 10,
+      );
+
+  /// Rendered DOM | Server HTML (URL inspections only).
+  Widget _buildSourceSwitch(BuildContext context, SourceView view) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: SegmentedButton<DataSource>(
+        key: const ValueKey('source_switch'),
+        showSelectedIcon: false,
+        style: const ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        segments: const [
+          ButtonSegment(value: DataSource.browser, label: Text('Rendered DOM')),
+          ButtonSegment(value: DataSource.server, label: Text('Server HTML')),
+        ],
+        selected: {
+          if (view.requested == DataSource.server)
+            DataSource.server
+          else
+            DataSource.browser
+        },
+        onSelectionChanged: (s) =>
+            context.read<HtmlService>().selectSourceDocument(s.first),
+      ),
+    );
   }
 
-  Widget _buildTlsWarningBanner(BuildContext context, HtmlFile file) {
-    final warning = file.probeResult?['tlsWarning']?.toString() ??
-        'TLS certificate validation failed. Content was loaded anyway for inspection.';
+  /// The chosen document has no text: say why instead of showing nothing.
+  Widget _buildDocumentState(BuildContext context, SourceView view) {
+    final theme = Theme.of(context);
+    final muted = TextStyle(color: theme.colorScheme.onSurfaceVariant);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: switch (view.text) {
+          Pending<String>() => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 12),
+                Text(view.pendingMessage, style: muted),
+              ],
+            ),
+          Failed<String>(:final error) => Text(error,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: theme.colorScheme.error)),
+          Unavailable<String>(:final reason, :final detail) => Text(
+              unavailableMessage(reason, detail),
+              textAlign: TextAlign.center,
+              style: muted),
+          Present<String>() => const SizedBox.shrink(),
+        },
+      ),
+    );
+  }
+
+  Widget _buildTlsWarningBanner(BuildContext context, String warning) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       color: Colors.orange.withValues(alpha: 0.14),
@@ -708,6 +772,7 @@ class _SourceViewerBodyData {
   final bool wrapText;
   final bool showLineNumbers;
   final String themeName;
+  final SourceView view;
 
   const _SourceViewerBodyData({
     required this.isMedia,
@@ -717,6 +782,7 @@ class _SourceViewerBodyData {
     required this.wrapText,
     required this.showLineNumbers,
     required this.themeName,
+    required this.view,
     this.selectedContentType,
   });
 
@@ -724,6 +790,7 @@ class _SourceViewerBodyData {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is _SourceViewerBodyData &&
+          view == other.view &&
           runtimeType == other.runtimeType &&
           isMedia == other.isMedia &&
           isBeautifyEnabled == other.isBeautifyEnabled &&
@@ -743,5 +810,6 @@ class _SourceViewerBodyData {
       wrapText.hashCode ^
       showLineNumbers.hashCode ^
       themeName.hashCode ^
+      view.hashCode ^
       selectedContentType.hashCode;
 }

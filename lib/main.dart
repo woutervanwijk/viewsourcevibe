@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
+import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/file_system_service.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
@@ -78,14 +80,9 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
     if (content != null && content.isNotEmpty) {
       debugPrint('Opening text content from deep link: $content');
       try {
-        final htmlFile = HtmlFile(
-          name: '',
-          path: 'shared://text',
-          content: content,
-          lastModified: DateTime.now(),
-          size: content.length,
-          isUrl: false,
-        );
+        final htmlFile =
+            FileLoader.fromText(content, origin: FileOrigin.deepLink, name: '')
+                .toHtmlFile();
         await htmlService.loadFile(htmlFile,
             switchToTab: HtmlService.viewerTab);
       } catch (e) {
@@ -104,35 +101,12 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
     if (filePath != null && filePath.isNotEmpty) {
       debugPrint('Opening file from deep link: $filePath');
       try {
-        // Security: only allow files inside app-owned directories. A deep
-        // link is triggerable by any app or web page, so it must never read
-        // arbitrary local files.
-        final normalizedFilePath = await _resolveAllowedDeepLinkFile(filePath);
-        if (normalizedFilePath == null) {
-          debugPrint(
-              'Blocked file deep link outside app directories: $filePath');
-          return;
-        }
-
-        // Read file from filesystem
-        final file = File(normalizedFilePath);
-        if (await file.exists()) {
-          final content = await file.readAsString();
-          final fileName = normalizedFilePath.split('/').last;
-
-          final htmlFile = HtmlFile(
-            name: fileName,
-            path: normalizedFilePath,
-            content: content,
-            lastModified: await file.lastModified(),
-            size: await file.length(),
-            isUrl: false,
-          );
-          await htmlService.loadFile(htmlFile,
-              switchToTab: HtmlService.viewerTab);
-        } else {
-          debugPrint('File does not exist: $normalizedFilePath');
-        }
+        // Security: FileLoader enforces the app-directories sandbox (a deep
+        // link is triggerable by any app or web page).
+        // Refusals/missing files come back as a visible error file.
+        final snapshot = await FileLoader.fromDeepLinkPath(filePath);
+        await htmlService.loadFile(snapshot.toHtmlFile(),
+            switchToTab: HtmlService.viewerTab, snapshot: snapshot);
       } catch (e) {
         debugPrint('Error loading file from deep link: $e');
       }
@@ -227,14 +201,12 @@ Try these solutions:
 - Use a different app to share the file
 - Contact the app developer for support''';
 
-      final htmlFile = HtmlFile(
-        name: 'Content File Error',
-        path: uri.toString(),
-        content: errorContent,
-        lastModified: DateTime.now(),
-        size: errorContent.length,
-        isUrl: false,
-      );
+      final htmlFile = FileLoader.fromText(errorContent,
+              origin: FileOrigin.deepLink,
+              name: 'Content File Error',
+              path: uri.toString(),
+              isError: true)
+          .toHtmlFile();
       await htmlService.loadFile(htmlFile, switchToTab: HtmlService.viewerTab);
     } catch (e) {
       debugPrint('Error loading content URI: $e');
@@ -244,8 +216,6 @@ Try these solutions:
   else if (uri.scheme == 'http' || uri.scheme == 'https') {
     debugPrint('Opening web URL: ${uri.toString()}');
     try {
-      // Trigger probe in parallel
-      htmlService.probeUrl(uri.toString()).ignore();
       await htmlService.loadFromUrl(uri.toString());
     } catch (e) {
       debugPrint('Error loading web URL: $e');
@@ -258,13 +228,6 @@ bool get _isDesktopPlatform {
   return Platform.isMacOS || Platform.isWindows || Platform.isLinux;
 }
 
-/// Resolve a deep-link file path to an absolute path, but only when it is
-/// inside an app-owned directory. External deep links must never grant
-/// access to arbitrary local files.
-Future<String?> _resolveAllowedDeepLinkFile(String rawPath) {
-  return resolveWithinAppDirectories(rawPath);
-}
-
 void main() async {
   // Initialize Flutter binding before any async operations
   WidgetsFlutterBinding.ensureInitialized();
@@ -274,7 +237,8 @@ void main() async {
     PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
   }
 
-  final htmlService = HtmlService();
+  final inspectionStore = InspectionStore();
+  final htmlService = HtmlService(store: inspectionStore);
   final appSettings = AppSettings();
   final fileSystemService = FileSystemService();
   final appStateService = await AppStateService.create();
@@ -330,10 +294,11 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => htmlService),
-        ChangeNotifierProvider(create: (_) => appSettings),
-        ChangeNotifierProvider(create: (_) => appStateService),
-        ChangeNotifierProvider(create: (_) => urlHistoryService),
+        ChangeNotifierProvider.value(value: inspectionStore),
+        ChangeNotifierProvider.value(value: htmlService),
+        ChangeNotifierProvider.value(value: appSettings),
+        ChangeNotifierProvider.value(value: appStateService),
+        ChangeNotifierProvider.value(value: urlHistoryService),
         Provider<FileSystemService>(create: (_) => fileSystemService),
       ],
       child: const MyApp(),
@@ -381,7 +346,8 @@ Future<void> _performDelayedInitialization(
     // Check for pending shared content (Android/iOS Share Sheet)
     bool hasSharedContent = false;
     try {
-      hasSharedContent = await UnifiedSharingService.hasPendingSharedContent();
+      hasSharedContent = await UnifiedSharingService.hasPendingSharedContent(
+          htmlService: htmlService);
       if (hasSharedContent) {
         debugPrint(
             '🚀 Pending shared content detected, handling directly from cold start');
@@ -443,18 +409,16 @@ Future<void> _performDelayedInitialization(
                 final file = File(savedState.filePath!);
                 if (await file.exists()) {
                   debugPrint('📁 Restoring file: ${savedState.filePath}');
-                  final content = await file.readAsString();
-                  final htmlFile = HtmlFile(
-                    name: savedState.fileName ??
-                        savedState.filePath!.split('/').last,
-                    path: savedState.filePath!,
-                    content: content,
-                    lastModified: await file.lastModified(),
-                    size: await file.length(),
-                    isUrl: false,
-                  );
+                  // Own saved state: trusted, so no sandbox check.
+                  final snapshot = await FileLoader.fromPath(
+                      savedState.filePath!,
+                      origin: FileOrigin.restore,
+                      enforceSandbox: false);
+                  final htmlFile = snapshot
+                      .toHtmlFile()
+                      .copyWith(name: savedState.fileName ?? snapshot.name);
                   await htmlService.loadFile(htmlFile,
-                      switchToTab: HtmlService.viewerTab);
+                      switchToTab: HtmlService.viewerTab, snapshot: snapshot);
                 } else {
                   debugPrint(
                       '❌ Restored file no longer exists: ${savedState.filePath}');
@@ -476,14 +440,6 @@ Future<void> _performDelayedInitialization(
               savedState.contentType!.isNotEmpty) {
             htmlService.selectedContentType = savedState.contentType;
             debugPrint('🎨 Restored content type: ${savedState.contentType}');
-          }
-
-          // Restore probe state
-          if (savedState.isProbeVisible != null ||
-              savedState.probeResultJson != null) {
-            htmlService.restoreProbeState(
-                savedState.isProbeVisible, savedState.probeResultJson);
-            debugPrint('🔍 Restored probe state');
           }
 
           // Restore scroll positions

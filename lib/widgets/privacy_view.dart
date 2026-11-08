@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/widgets/detection_status.dart';
 import 'package:view_source_vibe/models/detection_evidence.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
@@ -10,6 +12,10 @@ import 'package:view_source_vibe/widgets/evidence_view.dart';
 /// [HtmlService.detections], with logos.
 class PrivacyView extends StatelessWidget {
   const PrivacyView({super.key});
+
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
   static (IconData, Color) style(DetectionCategory c) => switch (c) {
         DetectionCategory.advertising => (Icons.ad_units_outlined, Colors.red),
@@ -28,32 +34,19 @@ class PrivacyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final htmlService = Provider.of<HtmlService>(context);
+    builds++;
+    final view =
+        context.select<HtmlService, DetectionsView>((s) => s.detectionsView);
 
-    if (htmlService.isLoading ||
-        htmlService.isWebViewLoading ||
-        htmlService.isExtractingMetadata) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final hits =
-        htmlService.detections.where((d) => d.category.isTracking).toList();
-    final others = seesVisit(htmlService.detections);
+    final hits = view.detections.where((d) => d.category.isTracking).toList();
+    final others = seesVisit(view.detections);
 
     if (hits.isEmpty && others.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.verified_user_outlined,
-                size: 64, color: Theme.of(context).colorScheme.outlineVariant),
-            const SizedBox(height: 16),
-            const Text('No Trackers Detected'),
-            const SizedBox(height: 8),
-            const Text('No known trackers found on this page.',
-                style: TextStyle(color: Colors.grey)),
-          ],
-        ),
+      return DetectionEmptyState(
+        view: view,
+        icon: Icons.verified_user_outlined,
+        noneTitle: 'No Trackers Detected',
+        noneText: 'No known trackers found on this page.',
       );
     }
 
@@ -118,6 +111,8 @@ class PrivacyView extends StatelessWidget {
               const SizedBox(height: 8),
               ...others.map((d) => _TrackerTile(hit: d)),
             ],
+            const SizedBox(height: 24),
+            DetectionNote(view: view),
             const SizedBox(height: 80),
           ],
         ),

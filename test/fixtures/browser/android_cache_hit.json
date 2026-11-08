@@ -1,0 +1,10 @@
+{"_synthetic":true,"_note":"Models Android/Chromium: a cache hit reports transferSize 0 with decodedBodySize > 0; same-origin so sizes are real.",
+"v":1,"url":"https://example.com/","contentType":"text/html",
+"timing":{"ok":true,"now":3000.0,"timeOrigin":1760000000000},
+"dom":{"ok":true,"value":"<html><body></body></html>","iframes":0,"shadowRoots":0},
+"resources":{"ok":true,"bootstrap":true,"dropped":0,"observer":[
+{"n":"https://example.com/app.js","it":"script","st":10.0,"du":2.0,"tx":0,"enc":30000,"dec":90000},
+{"n":"https://example.com/photo.jpg","it":"img","st":12.0,"du":50.0,"tx":40000,"enc":39800,"dec":39800}],
+"patch":[]},
+"navigation":{"ok":true,"responseStart":120.5,"domInteractive":400.2,"domContentLoaded":420.0,"loadEnd":900.1,"protocol":"h2"},"storage":{"local":{"ok":true,"count":0,"items":[],"truncated":false},"session":{"ok":true,"count":0,"items":[],"truncated":false}},
+"cookies":{"ok":true,"raw":""}}

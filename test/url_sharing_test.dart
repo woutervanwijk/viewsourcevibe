@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +35,7 @@ void main() {
         'https://example.com/path/to/resource.html',
       ];
       for (final url in urls) {
-        await SharingService.shareUrl(url);
+        await UnifiedSharingService.shareUrl(url);
       }
       expect(sharedUrls, urls);
     });
@@ -43,7 +43,7 @@ void main() {
     test('wraps platform errors in a "Sharing failed" exception', () async {
       mockPlatform(fail: true);
       await expectLater(
-        SharingService.shareUrl('https://example.com'),
+        UnifiedSharingService.shareUrl('https://example.com'),
         throwsA(isA<Exception>().having(
             (e) => e.toString(), 'message', contains('Sharing failed'))),
       );

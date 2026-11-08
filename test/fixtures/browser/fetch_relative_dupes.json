@@ -1,0 +1,11 @@
+{"_synthetic":true,"_note":"fetch/XHR patch records a relative URL and the observer records the absolute one for the same request (B13); one XHR is patch-only.",
+"v":1,"url":"https://example.com/app/","contentType":"text/html",
+"timing":{"ok":true,"now":4000.0,"timeOrigin":1760000000000},
+"dom":{"ok":true,"value":"<html></html>","iframes":0,"shadowRoots":0},
+"resources":{"ok":true,"bootstrap":true,"dropped":0,"observer":[
+{"n":"https://example.com/api/data.json","it":"fetch","st":100.0,"du":50.0,"tx":700,"enc":600,"dec":2500}],
+"patch":[
+{"n":"/api/data.json","it":"fetch","cl":650,"st":150.0},
+{"n":"../other.json","it":"xhr","cl":300,"st":160.0}]},
+"navigation":{"ok":true,"responseStart":120.5,"domInteractive":400.2,"domContentLoaded":420.0,"loadEnd":900.1,"protocol":"h2"},"storage":{"local":{"ok":true,"count":0,"items":[],"truncated":false},"session":{"ok":true,"count":0,"items":[],"truncated":false}},
+"cookies":{"ok":true,"raw":""}}

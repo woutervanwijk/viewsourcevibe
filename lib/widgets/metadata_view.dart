@@ -5,55 +5,89 @@ import 'package:view_source_vibe/services/detection/engine.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:html/dom.dart' as dom;
-import 'package:html/parser.dart' as html_parser;
 import 'package:html_unescape/html_unescape.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/detections_view.dart';
+import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
-import '../utils/format_utils.dart';
 
 class MetadataView extends StatelessWidget {
   const MetadataView({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    final htmlService = Provider.of<HtmlService>(context);
-    final settings = Provider.of<AppSettings>(context);
-    final metadata = htmlService.pageMetadata;
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
-    // Show loading indicator only if we're extracting metadata
-    // (not for general loading states which might be WebView loading)
-    if (htmlService.isExtractingMetadata) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  static bool _isWebUrl(String? s) =>
+      s != null && (s.startsWith('http://') || s.startsWith('https://'));
 
-    // Show message if no metadata available
-    if (metadata == null) {
-      // Only show "no metadata" if we're not still loading the page
-      if (htmlService.isLoading || htmlService.isWebViewLoading) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      return Center(
+  Widget _status(BuildContext context, Widget lead, String title,
+      {String? text, bool error = false}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.info_outline,
-                size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+            lead,
             const SizedBox(height: 16),
-            const Text('No Metadata'),
-            const SizedBox(height: 8),
-            const Text('Load a URL to view page metadata.',
-                style: TextStyle(color: Colors.grey)),
+            Text(title, textAlign: TextAlign.center),
+            if (text != null) ...[
+              const SizedBox(height: 8),
+              Text(text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: error ? scheme.error : Colors.grey)),
+            ],
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    final settings = Provider.of<AppSettings>(context);
+    final state = context
+        .select<HtmlService, Observed<MetadataModel>>((s) => s.metadataState);
+    final detectionsView =
+        context.select<HtmlService, DetectionsView>((s) => s.detectionsView);
+
+    switch (state) {
+      case Pending<MetadataModel>():
+        return _status(context, const CircularProgressIndicator(),
+            'Reading the page metadata…');
+      case Failed<MetadataModel>(:final error):
+        return _status(
+            context,
+            Icon(Icons.error_outline,
+                size: 64, color: Theme.of(context).colorScheme.error),
+            'Metadata could not be extracted',
+            text: error,
+            error: true);
+      case Unavailable<MetadataModel>():
+        return _status(
+            context,
+            Icon(Icons.info_outline,
+                size: 64, color: Theme.of(context).colorScheme.outlineVariant),
+            'No Metadata',
+            text: 'Load a URL to view page metadata.');
+      case Present<MetadataModel>(value: final model):
+        return _buildModel(context, model, detectionsView, settings);
+    }
+  }
+
+  Widget _buildModel(BuildContext context, MetadataModel model,
+      DetectionsView detectionsView, AppSettings settings) {
+    final metadata = model.data;
+    final tech =
+        detectionsView.detections.where((d) => d.category.tech).toList();
     // Collect dynamic sections to sort them alphabetically
     final List<({String title, Widget content})> dynamicSections = [];
 
-    final tech = htmlService.detections.where((d) => d.category.tech).toList();
     if (tech.isNotEmpty) {
       dynamicSections.add((
         title: 'Technology Stack',
@@ -75,8 +109,7 @@ class MetadataView extends StatelessWidget {
     if (metadata['resourceHints']?.isNotEmpty == true) {
       dynamicSections.add((
         title: 'Optimization (Resource Hints)',
-        content:
-            _buildHintSection(context, metadata['resourceHints'], settings),
+        content: _buildHintSection(context, model, metadata['resourceHints']),
       ));
     }
     if (metadata['openGraph']?.isNotEmpty == true) {
@@ -109,15 +142,23 @@ class MetadataView extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         child: Column(
           children: [
-            _buildHeaderSection(context, metadata, settings),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(model.sourceLine,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ),
+            const SizedBox(height: 12),
+            _buildHeaderSection(context, model, settings),
             const SizedBox(height: 24),
-            _buildAccessibilitySnapshot(context, htmlService),
+            _buildAccessibilitySnapshot(context, model.checks),
             const SizedBox(height: 24),
-            _buildSeoHealthPanel(context, htmlService, metadata),
+            _buildSeoHealthPanel(context, model),
             const SizedBox(height: 24),
             if (_hasSocialPreview(metadata)) ...[
               _buildSectionTitle(context, 'Open Graph / Social Preview'),
-              _buildSocialPreviewSection(context, metadata),
+              _buildSocialPreviewSection(context, model),
               const SizedBox(height: 24),
             ],
             if ((metadata['structuredData'] as List?)?.isNotEmpty == true) ...[
@@ -125,6 +166,9 @@ class MetadataView extends StatelessWidget {
               _buildStructuredDataSection(context, metadata['structuredData']),
               const SizedBox(height: 24),
             ],
+            if (tech.isEmpty &&
+                (detectionsView.scanning || detectionsView.failure != null))
+              _detectionStatus(context, detectionsView),
             if (tech.isNotEmpty) ...[
               _buildSectionTitle(context, 'Tech Stack Confidence'),
               _buildTechConfidenceSection(context, tech),
@@ -136,14 +180,18 @@ class MetadataView extends StatelessWidget {
                   const SizedBox(height: 24),
                 ]),
             _buildSectionTitle(context, 'Linked Resources'),
-            _buildLinkSection(context, 'Stylesheets (CSS)',
-                metadata['cssLinks'], Icons.css, settings),
-            _buildLinkSection(context, 'Scripts (JS)', metadata['jsLinks'],
-                Icons.javascript, settings),
-            _buildLinkSection(context, 'Iframes (HTML)',
-                metadata['iframeLinks'], Icons.web_asset, settings),
-            _buildLinkSection(context, 'RSS/Atom Feeds', metadata['rssLinks'],
-                Icons.rss_feed, settings),
+            _buildLinkSection(context, model, 'Stylesheets (CSS)',
+                (metadata['cssLinks'] as List?) ?? const [], Icons.css),
+            _buildLinkSection(context, model, 'Scripts (JS)',
+                (metadata['jsLinks'] as List?) ?? const [], Icons.javascript),
+            _buildLinkSection(
+                context,
+                model,
+                'Iframes (HTML)',
+                (metadata['iframeLinks'] as List?) ?? const [],
+                Icons.web_asset),
+            _buildLinkSection(context, model, 'RSS/Atom Feeds',
+                (metadata['rssLinks'] as List?) ?? const [], Icons.rss_feed),
             const SizedBox(height: 80),
           ],
         ),
@@ -151,14 +199,53 @@ class MetadataView extends StatelessWidget {
     ));
   }
 
-  Widget _buildHeaderSection(BuildContext context,
-      Map<String, dynamic> metadata, AppSettings settings) {
+  /// Technologies are not listed yet (scanning) or could not be scanned: said
+  /// so, rather than showing nothing.
+  Widget _detectionStatus(BuildContext context, DetectionsView view) {
+    final failed = view.failure != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Row(
+        children: [
+          if (!failed)
+            const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2))
+          else
+            Icon(Icons.error_outline,
+                size: 16, color: Theme.of(context).colorScheme.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+                failed
+                    ? 'Technology scan failed: ${view.failure}'
+                    : 'Scanning for technologies…',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: failed
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.onSurfaceVariant)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection(
+      BuildContext context, MetadataModel model, AppSettings settings) {
+    final metadata = model.data;
     final unescape = HtmlUnescape();
-    final title = unescape.convert(metadata['title'] ?? 'No Title');
-    final description = unescape
-        .convert(metadata['description'] ?? 'No description available.');
-    final image = metadata['image'];
-    final favicon = metadata['favicon'];
+    final title = model.hasTitle
+        ? (model.title.isEmpty
+            ? 'This page has an empty <title>'
+            : unescape.convert(model.title))
+        : 'This page has no <title>';
+    final description = model.hasDescription
+        ? unescape.convert('${metadata['description']}')
+        : 'This page has no meta description';
+    final String? image = metadata['image'] as String?;
+    final String? favicon = metadata['favicon'] as String?;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,7 +253,7 @@ class MetadataView extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (favicon != null) ...[
+            if (_isWebUrl(favicon)) ...[
               MouseRegion(
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
@@ -179,7 +266,7 @@ class MetadataView extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
-                      favicon,
+                      favicon!,
                       width: 48,
                       height: 48,
                       errorBuilder: (context, error, stackTrace) => const Icon(
@@ -214,7 +301,7 @@ class MetadataView extends StatelessWidget {
             ),
           ],
         ),
-        if (image != null) ...[
+        if (_isWebUrl(image)) ...[
           const SizedBox(height: 16),
           MouseRegion(
             cursor: SystemMouseCursors.click,
@@ -228,7 +315,7 @@ class MetadataView extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
-                  image,
+                  image!,
                   width: double.infinity,
                   height: 200,
                   fit: BoxFit.cover,
@@ -256,35 +343,20 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildAccessibilitySnapshot(
-      BuildContext context, HtmlService htmlService) {
-    final doc = _parseCurrentDocument(htmlService);
-    final images = doc.querySelectorAll('img');
-    final imagesMissingAlt = images
-        .where((img) =>
-            !(img.attributes.containsKey('alt')) ||
-            img.attributes['alt']!.trim().isEmpty)
-        .length;
-    final headings = doc.querySelectorAll('h1,h2,h3,h4,h5,h6');
-    final h1Count = doc.querySelectorAll('h1').length;
-    final forms = doc.querySelectorAll('input,select,textarea');
-    final unlabeledControls =
-        forms.where((element) => _isUnlabeledControl(doc, element)).length;
-    final landmarks = doc
-        .querySelectorAll(
-          'main,nav,header,footer,aside,[role="main"],[role="navigation"],[role="banner"],[role="contentinfo"]',
-        )
-        .length;
-
+  Widget _buildAccessibilitySnapshot(BuildContext context, DocumentChecks c) {
     final checks = [
-      _SnapshotCheck('H1', h1Count == 1, '$h1Count found'),
+      _SnapshotCheck('H1', c.h1Count == 1, '${c.h1Count} found'),
+      _SnapshotCheck('Headings', c.headingCount > 0, '${c.headingCount} found'),
+      _SnapshotCheck('Image alt', c.imagesMissingAlt == 0,
+          c.imageCount == 0 ? 'No images' : '${c.imagesMissingAlt} missing'),
       _SnapshotCheck(
-          'Headings', headings.isNotEmpty, '${headings.length} found'),
-      _SnapshotCheck('Image alt', imagesMissingAlt == 0,
-          images.isEmpty ? 'No images' : '$imagesMissingAlt missing'),
-      _SnapshotCheck('Form labels', unlabeledControls == 0,
-          forms.isEmpty ? 'No controls' : '$unlabeledControls missing'),
-      _SnapshotCheck('Landmarks', landmarks > 0, '$landmarks found'),
+          'Form labels',
+          c.unlabeledControls == 0,
+          c.controlCount == 0
+              ? 'No controls'
+              : '${c.unlabeledControls} missing'),
+      _SnapshotCheck(
+          'Landmarks', c.landmarkCount > 0, '${c.landmarkCount} found'),
     ];
     return _buildSnapshotCard(
       context,
@@ -294,19 +366,14 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildSeoHealthPanel(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> metadata) {
-    final doc = _parseCurrentDocument(htmlService);
-    final title = metadata['title']?.toString() ?? '';
+  Widget _buildSeoHealthPanel(BuildContext context, MetadataModel model) {
+    final metadata = model.data;
+    final title = model.title;
     final description = metadata['description']?.toString() ?? '';
     final canonical = metadata['pageConfig'] is Map
         ? (metadata['pageConfig']['canonical']?.toString() ?? '')
         : '';
-    final robotsMeta = doc
-            .querySelector('meta[name="robots"],meta[name="googlebot"]')
-            ?.attributes['content']
-            ?.toString() ??
-        '';
+    final robotsMeta = model.checks.robotsMeta ?? '';
     final ogTitle =
         (metadata['openGraph'] as Map?)?['og:title']?.toString() ?? '';
 
@@ -426,29 +493,6 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  dom.Document _parseCurrentDocument(HtmlService htmlService) {
-    return html_parser.parse(htmlService.currentFile?.content ?? '');
-  }
-
-  bool _isUnlabeledControl(dom.Document doc, dom.Element element) {
-    final type = element.attributes['type']?.toLowerCase();
-    if (type == 'hidden' || type == 'submit' || type == 'button') return false;
-    if ((element.attributes['aria-label'] ?? '').trim().isNotEmpty) {
-      return false;
-    }
-    if ((element.attributes['aria-labelledby'] ?? '').trim().isNotEmpty) {
-      return false;
-    }
-    final id = element.attributes['id'];
-    if (id != null && id.isNotEmpty) {
-      final escaped = id.replaceAll('"', r'\"');
-      if (doc.querySelector('label[for="$escaped"]') != null) {
-        return false;
-      }
-    }
-    return element.parent?.localName != 'label';
-  }
-
   bool _hasSocialPreview(Map<String, dynamic> metadata) {
     final openGraph = metadata['openGraph'] as Map<String, dynamic>? ?? {};
     final twitter = metadata['twitter'] as Map<String, dynamic>? ?? {};
@@ -459,8 +503,8 @@ class MetadataView extends StatelessWidget {
         metadata['image'] != null;
   }
 
-  Widget _buildSocialPreviewSection(
-      BuildContext context, Map<String, dynamic> metadata) {
+  Widget _buildSocialPreviewSection(BuildContext context, MetadataModel model) {
+    final metadata = model.data;
     final openGraph = metadata['openGraph'] as Map<String, dynamic>? ?? {};
     final twitter = metadata['twitter'] as Map<String, dynamic>? ?? {};
     final title = _socialValue(
@@ -470,7 +514,7 @@ class MetadataView extends StatelessWidget {
       'title',
       'og:title',
       'twitter:title',
-      fallback: 'Untitled page',
+      fallback: model.hasTitle ? null : 'This page has no <title>',
     );
     final description = _socialValue(
       metadata,
@@ -479,9 +523,10 @@ class MetadataView extends StatelessWidget {
       'description',
       'og:description',
       'twitter:description',
-      fallback: 'No social description found.',
+      fallback:
+          'No social description (og:description, twitter:description or meta description) found',
     );
-    final image = _socialValue(
+    final rawImage = _socialValue(
       metadata,
       openGraph,
       twitter,
@@ -489,6 +534,8 @@ class MetadataView extends StatelessWidget {
       'og:image',
       'twitter:image',
     );
+    // A relative image cannot be loaded without a base URL.
+    final image = _isWebUrl(rawImage) ? rawImage : null;
     final site = openGraph['og:site_name']?.toString() ??
         twitter['twitter:site']?.toString() ??
         '';
@@ -649,7 +696,7 @@ class MetadataView extends StatelessWidget {
   }
 
   Widget _buildHintSection(
-      BuildContext context, Map<String, dynamic> hints, AppSettings settings) {
+      BuildContext context, MetadataModel model, Map<String, dynamic> hints) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -689,14 +736,23 @@ class MetadataView extends StatelessWidget {
                         fontFamily: 'Courier',
                       ),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+                    subtitle: model.unresolvedNote('$url') == null
+                        ? null
+                        : Text(model.unresolvedNote('$url')!,
+                            style: const TextStyle(fontSize: 10)),
+                    trailing: model.unresolvedNote('$url') == null
+                        ? const Icon(Icons.arrow_forward_ios, size: 12)
+                        : null,
                     dense: true,
-                    onTap: () {
-                      final htmlService =
-                          Provider.of<HtmlService>(context, listen: false);
-                      htmlService.loadFromUrl(url.toString(),
-                          switchToTab: HtmlService.viewerTab);
-                    },
+                    onTap: model.unresolvedNote('$url') != null
+                        ? null
+                        : () {
+                            final htmlService = Provider.of<HtmlService>(
+                                context,
+                                listen: false);
+                            htmlService.loadFromUrl(url.toString(),
+                                switchToTab: HtmlService.viewerTab);
+                          },
                     onLongPress: () {
                       Clipboard.setData(ClipboardData(text: url.toString()));
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1027,15 +1083,18 @@ class MetadataView extends StatelessWidget {
     );
   }
 
-  Widget _buildLinkSection(BuildContext context, String title,
-      List<dynamic> links, IconData icon, AppSettings settings) {
+  Widget _buildLinkSection(BuildContext context, MetadataModel model,
+      String title, List<dynamic> links, IconData icon) {
     if (links.isEmpty) return const SizedBox.shrink();
 
+    // Largest first; items without a known size last.
+    int sizeOf(dynamic l) => l is Map && l['size'] is Map
+        ? (l['size']['decoded'] as int? ?? -1)
+        : -1;
     final sortedLinks = List<dynamic>.from(links);
     sortedLinks.sort((a, b) {
-      final sizeA = a is Map ? (a['size']?['decoded'] as num? ?? 0) : 0;
-      final sizeB = b is Map ? (b['size']?['decoded'] as num? ?? 0) : 0;
-
+      final sizeA = sizeOf(a);
+      final sizeB = sizeOf(b);
       if (sizeB != sizeA) {
         return sizeB.compareTo(sizeA);
       }
@@ -1068,7 +1127,9 @@ class MetadataView extends StatelessWidget {
           final String url = link is Map
               ? (link['src'] ?? link['href'] ?? '')
               : link.toString();
-          final Map<String, dynamic>? size = link is Map ? link['size'] : null;
+          final unresolved = model.unresolvedNote(url);
+          final sizeText = linkSizeLabel(link is Map ? link['size'] : null,
+              unknownReason: model.sizeUnknownReason);
 
           return Card(
             elevation: 0,
@@ -1090,24 +1151,28 @@ class MetadataView extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              subtitle: size != null && (size['decoded'] as int? ?? 0) > 0
-                  ? Text(
-                      FormatUtils.formatBytesWithTransfer(size),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
+              subtitle: Text(
+                unresolved == null ? sizeText : '$unresolved; $sizeText',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: sizeText.startsWith('size unknown')
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              trailing: unresolved == null
+                  ? const Icon(Icons.arrow_forward_ios, size: 12)
                   : null,
-              trailing: const Icon(Icons.arrow_forward_ios, size: 12),
               dense: true,
-              onTap: () {
-                final htmlService =
-                    Provider.of<HtmlService>(context, listen: false);
-                htmlService.loadFromUrl(url,
-                    switchToTab: HtmlService.viewerTab);
-              },
+              onTap: unresolved != null
+                  ? null
+                  : () {
+                      final htmlService =
+                          Provider.of<HtmlService>(context, listen: false);
+                      htmlService.loadFromUrl(url,
+                          switchToTab: HtmlService.viewerTab);
+                    },
             ),
           );
         }),

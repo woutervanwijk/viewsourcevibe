@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
   group('URL Detection Edge Cases Tests', () {
@@ -21,7 +21,7 @@ void main() {
       ];
 
       for (final url in testCases) {
-        expect(SharingService.isUrl(url), true, reason: 'Should detect $url as URL');
+        expect(UnifiedSharingService.isUrl(url), true, reason: 'Should detect $url as URL');
       }
     });
 
@@ -39,7 +39,7 @@ void main() {
       ];
 
       for (final filePath in filePaths) {
-        expect(SharingService.isUrl(filePath), false, reason: 'Should NOT detect $filePath as URL');
+        expect(UnifiedSharingService.isUrl(filePath), false, reason: 'Should NOT detect $filePath as URL');
       }
     });
 
@@ -58,7 +58,7 @@ void main() {
       ];
 
       for (final url in urlsWithSpecialChars) {
-        expect(SharingService.isUrl(url), true, reason: 'Should detect $url as URL');
+        expect(UnifiedSharingService.isUrl(url), true, reason: 'Should detect $url as URL');
       }
     });
 
@@ -76,15 +76,15 @@ void main() {
       // 'file:///Users/test/Library/docs.pdf',
 
       // Test URLs (should be true)
-      expect(SharingService.isUrl('https://example.com/Users/profile.html'), true);
-      expect(SharingService.isUrl('https://example.com/Library/docs.pdf'), true);
-      expect(SharingService.isUrl('https://example.com/Applications/web/index.html'), true);
-      expect(SharingService.isUrl('https://example.com/Containers/data/file.js'), true);
+      expect(UnifiedSharingService.isUrl('https://example.com/Users/profile.html'), true);
+      expect(UnifiedSharingService.isUrl('https://example.com/Library/docs.pdf'), true);
+      expect(UnifiedSharingService.isUrl('https://example.com/Applications/web/index.html'), true);
+      expect(UnifiedSharingService.isUrl('https://example.com/Containers/data/file.js'), true);
 
       // Test file paths (should be false)
-      expect(SharingService.isUrl('/Users/test/Applications/web/index.html'), false);
-      expect(SharingService.isUrl('/Library/Application Support/Containers/data/file.js'), false);
-      expect(SharingService.isUrl('file:///Users/test/Library/docs.pdf'), false);
+      expect(UnifiedSharingService.isUrl('/Users/test/Applications/web/index.html'), false);
+      expect(UnifiedSharingService.isUrl('/Library/Application Support/Containers/data/file.js'), false);
+      expect(UnifiedSharingService.isUrl('file:///Users/test/Library/docs.pdf'), false);
     });
 
   });

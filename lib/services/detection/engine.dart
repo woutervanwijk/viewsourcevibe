@@ -1,4 +1,5 @@
 import 'package:view_source_vibe/models/detection_evidence.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/detection/catalog.dart';
 
 export 'package:view_source_vibe/services/detection/catalog.dart';
@@ -43,10 +44,18 @@ class Detection {
   String get name => entity.name;
   DetectionCategory get category => entity.category;
 
+  /// The cores that produced evidence for this detection.
+  Set<DataSource> get sources => {
+        for (final e in evidence)
+          if (e.source != null) e.source!
+      };
+
   void add(DetectionEvidence item) {
     if (evidence.length < 12 &&
-        !evidence
-            .any((e) => e.title == item.title && e.detail == item.detail)) {
+        !evidence.any((e) =>
+            e.title == item.title &&
+            e.detail == item.detail &&
+            e.source == item.source)) {
       evidence.add(item);
     }
   }

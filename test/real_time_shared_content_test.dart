@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/shared_content_manager.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
   group('Real-Time Shared Content Tests', () {
@@ -27,11 +26,11 @@ void main() {
       };
 
       // Verify it's detected as a file path
-      expect(SharingService.isFilePath(urlWithFilePath['content'] as String),
+      expect(UnifiedSharingService.isFilePath(urlWithFilePath['content'] as String),
           true);
 
       // Verify file name can be extracted
-      final fileName = SharedContentManager.extractFileNameFromPath(
+      final fileName = UnifiedSharingService.extractFileNameFromPath(
           urlWithFilePath['content'] as String);
       expect(fileName, 'file.html');
     });
@@ -45,10 +44,10 @@ void main() {
       };
 
       // Verify it's detected as a file path
-      expect(SharingService.isFilePath(iosFileData['content'] as String), true);
+      expect(UnifiedSharingService.isFilePath(iosFileData['content'] as String), true);
 
       // Verify file name extraction
-      final fileName = SharedContentManager.extractFileNameFromPath(
+      final fileName = UnifiedSharingService.extractFileNameFromPath(
           iosFileData['content'] as String);
       expect(fileName, 'sample.py');
     });
@@ -59,7 +58,7 @@ void main() {
 
       // Verify it's NOT detected as a file path
       expect(
-          SharingService.isFilePath(urlSharedData['content'] as String), false);
+          UnifiedSharingService.isFilePath(urlSharedData['content'] as String), false);
     });
 
     test('Should handle text sharing in real-time', () async {

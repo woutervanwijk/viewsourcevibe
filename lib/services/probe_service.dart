@@ -1,154 +1,8 @@
 import 'dart:io';
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:view_source_vibe/services/certificate_security_service.dart';
 
 class ProbeService {
-  static Future<Map<String, dynamic>> probeUrl(String url) async {
-    HttpClient? client;
-    try {
-      String targetUrl = url.trim();
-      if (!targetUrl.contains('://') &&
-          !targetUrl.startsWith('about:') &&
-          !targetUrl.startsWith('data:')) {
-        targetUrl = 'https://$targetUrl';
-      }
-
-      final uri = Uri.parse(targetUrl);
-      var acceptedInvalidCertificate = false;
-      final httpClient = HttpClient();
-      client = httpClient;
-      client.badCertificateCallback =
-          (X509Certificate cert, String host, int port) {
-        final trusted =
-            CertificateSecurityService.defaultBadCertificateCallback(
-                cert, host, port);
-        if (trusted) acceptedInvalidCertificate = true;
-        return trusted;
-      };
-      client.connectionTimeout = const Duration(seconds: 10);
-
-      final stopwatch = Stopwatch()..start();
-      String? ipAddress;
-
-      if (uri.host.isNotEmpty) {
-        try {
-          final addresses = await InternetAddress.lookup(uri.host)
-              .timeout(const Duration(seconds: 2));
-          if (addresses.isNotEmpty) {
-            ipAddress = addresses.first.address;
-          }
-        } catch (e) {
-          debugPrint('DNS Lookup failed for ${uri.host}: $e');
-        }
-      }
-
-      const userAgent = 'curl/7.88.1';
-      HttpClientRequest request;
-      HttpClientResponse response;
-
-      Future<HttpClientResponse> openRequest() async {
-        try {
-          request = await httpClient.openUrl('HEAD', uri);
-          request.headers.set('User-Agent', userAgent);
-          request.headers.set('Accept', '*/*');
-          request.followRedirects = false;
-          return await request.close().timeout(const Duration(seconds: 15));
-        } catch (e) {
-          request = await httpClient.openUrl('GET', uri);
-          request.headers.set('User-Agent', userAgent);
-          request.headers.set('Accept', '*/*');
-          request.headers.set('Range', 'bytes=0-0');
-          request.followRedirects = false;
-          return await request.close().timeout(const Duration(seconds: 15));
-        }
-      }
-
-      response = await CertificateSecurityService.withCertificatePrompt(
-        uri.host,
-        openRequest,
-      );
-
-      Map<String, dynamic>? certInfo;
-      try {
-        if (response.certificate != null) {
-          certInfo = extractCertificateInfo(response.certificate!);
-        }
-      } catch (e) {
-        debugPrint('Could not read SSL certificate: $e');
-      }
-
-      stopwatch.stop();
-
-      try {
-        await response.drain().timeout(const Duration(seconds: 2));
-      } catch (e) {
-        debugPrint('Response drain timed out or failed: $e');
-      }
-
-      int? contentLength = response.contentLength;
-      if (contentLength <= 0) {
-        final lengthHeader = response.headers.value('content-length');
-        if (lengthHeader != null) {
-          contentLength = int.tryParse(lengthHeader) ?? 0;
-        } else {
-          contentLength = 0;
-        }
-      }
-
-      final normalizedHeaders = <String, String>{};
-      final List<String> serverCookies = [];
-      response.headers.forEach((key, values) {
-        final lowerKey = key.toLowerCase();
-        if (lowerKey == 'set-cookie') {
-          serverCookies.addAll(values);
-        } else {
-          normalizedHeaders[lowerKey] = values.join(', ');
-        }
-      });
-
-      final securityHeaders = {
-        'Strict-Transport-Security':
-            normalizedHeaders['strict-transport-security'],
-        'Content-Security-Policy': normalizedHeaders['content-security-policy'],
-        'X-Frame-Options': normalizedHeaders['x-frame-options'],
-        'X-Content-Type-Options': normalizedHeaders['x-content-type-options'],
-        'Referrer-Policy': normalizedHeaders['referrer-policy'],
-        'Permissions-Policy': normalizedHeaders['permissions-policy'],
-      };
-
-      return {
-        'statusCode': response.statusCode,
-        'reasonPhrase': response.reasonPhrase,
-        'headers': normalizedHeaders,
-        'isRedirect': response.isRedirect,
-        'contentLength': contentLength,
-        'url': url,
-        'finalUrl': url,
-        'ip': ipAddress,
-        'ipAddress': ipAddress,
-        'timing': {
-          'total': stopwatch.elapsedMilliseconds,
-        },
-        'responseTime': stopwatch.elapsedMilliseconds,
-        'security': securityHeaders,
-        'cookies': serverCookies,
-        'certificate': certInfo,
-        'tlsInvalidCertificate': acceptedInvalidCertificate,
-        'tlsWarning': acceptedInvalidCertificate
-            ? 'TLS certificate validation failed. Content was loaded anyway for inspection.'
-            : null,
-        'analyzedCookies': <Map<String, dynamic>>[],
-      };
-    } catch (e) {
-      debugPrint('Error probing URL $url: $e');
-      rethrow;
-    } finally {
-      client?.close(force: true);
-    }
-  }
-
   static Map<String, dynamic> extractCertificateInfo(X509Certificate cert) {
     try {
       return {
@@ -182,20 +36,75 @@ class ProbeService {
     };
 
     final Map<String, String> parsed = {};
-    final parts = x509.split(RegExp(r'[/,]\s*'));
-    for (var part in parts) {
-      if (part.contains('=')) {
-        final kv = part.split('=');
-        if (kv.length >= 2) {
-          final key = kv[0].trim().toUpperCase();
-          final value = kv.sublist(1).join('=').trim();
-          if (key.isNotEmpty && value.isNotEmpty) {
-            parsed[labels[key] ?? key] = value;
-          }
-        }
+    for (final part in _splitDistinguishedName(x509)) {
+      final eq = part.indexOf('=');
+      if (eq <= 0) continue;
+      final key = part.substring(0, eq).trim().toUpperCase();
+      final value = _unquoteDnValue(part.substring(eq + 1).trim());
+      if (key.isNotEmpty && value.isNotEmpty) {
+        parsed[labels[key] ?? key] = value;
       }
     }
     return parsed;
+  }
+
+  /// Splits a distinguished name into `KEY=value` parts. Two forms occur:
+  /// the OpenSSL one-line form dart:io uses (`/C=US/O=Example, Inc./CN=x`:
+  /// '/' separates, commas are plain characters) and RFC 4514
+  /// (`CN=x,O=Example\, Inc.`: ',' or ';' separates; `\,` and quoted values
+  /// keep the separator).
+  static List<String> _splitDistinguishedName(String dn) {
+    final s = dn.trim();
+    if (s.startsWith('/')) {
+      // A '/' only starts a new part when a `KEY=` follows.
+      return s
+          .split(RegExp(r'/(?=[A-Za-z][A-Za-z0-9-]*=|\d+(?:\.\d+)+=)'))
+          .where((p) => p.isNotEmpty)
+          .toList();
+    }
+    final parts = <String>[];
+    final cur = StringBuffer();
+    var quoted = false;
+    for (var i = 0; i < s.length; i++) {
+      final c = s[i];
+      if (c == r'\' && i + 1 < s.length) {
+        cur
+          ..write(c)
+          ..write(s[++i]);
+      } else if (c == '"') {
+        quoted = !quoted;
+        cur.write(c);
+      } else if ((c == ',' || c == ';') && !quoted) {
+        parts.add(cur.toString());
+        cur.clear();
+      } else {
+        cur.write(c);
+      }
+    }
+    if (cur.isNotEmpty) parts.add(cur.toString());
+    return parts;
+  }
+
+  /// Removes surrounding quotes and resolves `\,` and `\2C` style escapes.
+  static String _unquoteDnValue(String v) {
+    if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+      v = v.substring(1, v.length - 1);
+    }
+    final out = StringBuffer();
+    for (var i = 0; i < v.length; i++) {
+      if (v[i] == r'\' && i + 1 < v.length) {
+        final hex = i + 2 < v.length ? v.substring(i + 1, i + 3) : '';
+        if (RegExp(r'^[0-9a-fA-F]{2}$').hasMatch(hex)) {
+          out.writeCharCode(int.parse(hex, radix: 16));
+          i += 2;
+        } else {
+          out.write(v[++i]);
+        }
+      } else {
+        out.write(v[i]);
+      }
+    }
+    return out.toString();
   }
 
   static String convertToPem(List<int> der) {

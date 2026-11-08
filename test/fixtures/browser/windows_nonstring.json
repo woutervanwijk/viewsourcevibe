@@ -1,0 +1,2 @@
+{"_synthetic":true,"_note":"Models Windows WebView2: evaluateJavascript may return a non-String (here a Map); the test passes this object (the 'payload' key) instead of a String.",
+"payload":{"v":1,"url":"https://example.com/"}}

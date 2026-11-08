@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/services/derive/page_size.dart';
+import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/html_service.dart';
-import 'package:view_source_vibe/utils/format_utils.dart';
-import 'package:view_source_vibe/utils/page_weight.dart';
 import 'package:view_source_vibe/widgets/safe_network_svg.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 
@@ -17,14 +19,16 @@ const _typeFilters = <(String?, String)>[
   ('other', 'Misc. Resources'),
 ];
 
-/// Images/Media files that can't be shown as a thumbnail.
-final _audioVideoPath =
-    RegExp(r'\.(mp4|webm|mov|m4v|ogv|mp3|ogg|wav|m4a|aac)$');
-
 /// Page size/weight: totals, a per-type breakdown and every loaded
-/// file/asset sorted by size.
+/// file/asset sorted by size. Everything comes from the store's browser
+/// resources ([HtmlService.pageSize]); a size that was not reported is shown
+/// as unknown, never as 0.
 class PageSizeView extends StatefulWidget {
   const PageSizeView({super.key});
+
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
   @override
   State<PageSizeView> createState() => _PageSizeViewState();
@@ -36,122 +40,126 @@ class _PageSizeViewState extends State<PageSizeView>
       TabController(length: _typeFilters.length, vsync: this)
         ..addListener(() => setState(() {}));
 
-  // HtmlService notifies often; only re-match services when the data changes.
-  Object? _resourcesKey;
-  List<ResourceSize> _resources = const [];
-
   @override
   void dispose() {
     _filterController.dispose();
     super.dispose();
   }
 
-  List<ResourceSize> _resourcesFor(HtmlService htmlService) {
-    final data = htmlService.resourceTimelineData;
-    final pageUrl = htmlService.currentFile?.path ?? '';
-    final key = (
-      pageUrl,
-      data.length,
-      data.fold<int>(0, (sum, r) => sum + (r['decoded'] as num? ?? 0).toInt()),
-      data.fold<int>(0, (sum, r) => sum + (r['transfer'] as num? ?? 0).toInt()),
+  Widget _message(
+      BuildContext context, IconData icon, String title, String text,
+      {bool error = false}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 64, color: scheme.outlineVariant),
+            const SizedBox(height: 16),
+            Text(title),
+            const SizedBox(height: 8),
+            Text(text,
+                style: TextStyle(color: error ? scheme.error : Colors.grey),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      ),
     );
-    if (key != _resourcesKey) {
-      _resourcesKey = key;
-      _resources = resourcesBySize(data, pageUrl);
-    }
-    return _resources;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<HtmlService>(
-      builder: (context, htmlService, child) {
-        final weight =
-            htmlService.pageMetadata?['pageWeight'] as Map<String, dynamic>?;
-        final resources = _resourcesFor(htmlService);
+    PageSizeView.builds++;
+    final state =
+        context.select<HtmlService, Observed<PageSizeModel>>((s) => s.pageSize);
+    final isFile = context
+        .select<HtmlService, bool>((s) => s.store.current.target is FileTarget);
 
-        if (weight == null && resources.isEmpty) {
-          if (htmlService.isLoading ||
-              htmlService.isWebViewLoading ||
-              htmlService.isExtractingMetadata) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.scale_outlined,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.outlineVariant),
-                  const SizedBox(height: 16),
-                  const Text('No Page Size'),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Page size is measured by the browser. Load a URL in the browser to see it.',
-                    style: TextStyle(color: Colors.grey),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        final totalSize = resources.fold<int>(0, (sum, r) => sum + r.size);
-        final filterType = _typeFilters[_filterController.index].$1;
-        final shown = filterType == null
-            ? resources
-            : resources.where((r) => r.type == filterType).toList();
-
-        return Scrollbar(
-          child: ListView(
-            primary: true,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
+    switch (state) {
+      case Pending<PageSizeModel>():
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              if (weight != null) ...[
-                _buildTotalsCard(context, weight),
-                const SizedBox(height: 24),
-              ],
-              _buildSectionTitle(
-                  context, 'Loaded Files & Assets (${resources.length})'),
-              if (resources.isNotEmpty) ...[
-                _buildFilterTabs(context, resources),
-                const SizedBox(height: 12),
-              ],
-              if (shown.isEmpty)
-                Text(
-                  resources.isEmpty
-                      ? 'No individual resources were reported by the browser.'
-                      : 'No files of this type.',
+              const CircularProgressIndicator(),
+              const SizedBox(height: 12),
+              Text('Waiting for the browser…',
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontStyle: FontStyle.italic,
-                  ),
-                )
-              else
-                _outlinedCard(
-                  context,
-                  Column(
-                    children: [
-                      for (var i = 0; i < shown.length; i++) ...[
-                        if (i > 0) const Divider(height: 1),
-                        _buildResourceRow(
-                            context, htmlService, shown[i], totalSize),
-                      ],
-                    ],
-                  ),
-                ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
         );
-      },
+      case Failed<PageSizeModel>(:final error):
+        return _message(context, Icons.error_outline,
+            'Page size could not be measured', error,
+            error: true);
+      case Unavailable<PageSizeModel>(:final reason, :final detail):
+        return _message(
+            context,
+            Icons.scale_outlined,
+            'Page size not available',
+            isFile
+                ? 'Page size is measured by the browser and is not available for local files.'
+                : 'Page size is measured by the browser. ${unavailableMessage(reason, detail)}.');
+      case Present<PageSizeModel>(value: final model):
+        return _buildModel(context, model);
+    }
+  }
+
+  Widget _buildModel(BuildContext context, PageSizeModel model) {
+    final htmlService = context.read<HtmlService>();
+    final resources = model.rows;
+    final totalSize = model.knownRowTotal;
+    final filterType = _typeFilters[_filterController.index].$1;
+    final shown = filterType == null
+        ? resources
+        : resources.where((r) => r.type == filterType).toList();
+
+    return Scrollbar(
+      child: ListView(
+        primary: true,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
+        children: [
+          _buildTotalsCard(context, model),
+          const SizedBox(height: 24),
+          _buildSectionTitle(
+              context, 'Loaded Files & Assets (${resources.length})'),
+          if (resources.isNotEmpty) ...[
+            _buildFilterTabs(context, resources),
+            const SizedBox(height: 12),
+          ],
+          if (shown.isEmpty)
+            Text(
+              resources.isEmpty
+                  ? 'The browser reported no individual resources.'
+                  : 'No files of this type.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          else
+            _outlinedCard(
+              context,
+              Column(
+                children: [
+                  for (var i = 0; i < shown.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    _buildResourceRow(
+                        context, htmlService, shown[i], totalSize),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildFilterTabs(BuildContext context, List<ResourceSize> resources) {
+  Widget _buildFilterTabs(BuildContext context, List<PageSizeRow> resources) {
     return TabBar(
       controller: _filterController,
       isScrollable: true,
@@ -195,10 +203,14 @@ class _PageSizeViewState extends State<PageSizeView>
     );
   }
 
-  Widget _buildTotalsCard(BuildContext context, Map<String, dynamic> weight) {
-    final breakdown = weight['breakdown'] as Map<String, dynamic>?;
-    final isPartial = weight['isPartial'] as bool? ?? false;
-    final totalDecoded = weight['decoded'] as int? ?? 0;
+  Widget _buildTotalsCard(BuildContext context, PageSizeModel model) {
+    final weight = model.weight;
+    final known = formatSizePair(
+        decoded: weight.decoded,
+        transfer: weight.transfer,
+        decodedPrefix: weight.decodedPrefix,
+        transferPrefix: weight.transferPrefix);
+    final note = model.missingNote;
 
     return _outlinedCard(
       context,
@@ -220,10 +232,7 @@ class _PageSizeViewState extends State<PageSizeView>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${isPartial ? '≥ ' : ''}${FormatUtils.formatBytesWithTransfer({
-                          'decoded': totalDecoded,
-                          'transfer': weight['transfer'] as int? ?? 0,
-                        })}',
+                    known ?? 'size unknown',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -235,11 +244,11 @@ class _PageSizeViewState extends State<PageSizeView>
               ],
             ),
           ),
-          if (isPartial)
+          if (note != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: Text(
-                'Some resources are hosted on third-party CDNs that restrict size reporting. Actual size may be larger.',
+                '${note[0].toUpperCase()}${note.substring(1)}. The total is a lower bound.',
                 style: TextStyle(
                   fontSize: 11,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -247,30 +256,56 @@ class _PageSizeViewState extends State<PageSizeView>
                 ),
               ),
             ),
-          if (breakdown != null) ...[
-            const Divider(height: 1),
-            for (final (key, label) in const [
-              ('scripts', 'External JS'),
-              ('css', 'CSS Files'),
-              ('images', 'Images/Media'),
-              ('html', 'HTML/Content'),
-              ('other', 'Misc. Resources'),
-            ])
-              _buildBreakdownRow(context, label,
-                  breakdown[key] as Map<String, dynamic>?, totalDecoded),
-            const SizedBox(height: 8),
-          ],
+          if (model.estimateNote != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Text(
+                '${model.estimateNote![0].toUpperCase()}${model.estimateNote!.substring(1)}.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          if (weight.documentSource != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Text(
+                'The page document is counted from the server response.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          const Divider(height: 1),
+          for (final (key, label) in const [
+            ('scripts', 'External JS'),
+            ('css', 'CSS Files'),
+            ('images', 'Images/Media'),
+            ('html', 'HTML/Content'),
+            ('other', 'Misc. Resources'),
+          ])
+            _buildBreakdownRow(
+                context, label, weight.breakdown[key], weight.decoded),
+          const SizedBox(height: 8),
         ],
       ),
     );
   }
 
   Widget _buildBreakdownRow(BuildContext context, String label,
-      Map<String, dynamic>? data, int totalDecoded) {
-    if (data == null || (data['count'] as int? ?? 0) == 0) {
+      WeightBucket? bucket, int? totalDecoded) {
+    if (bucket == null || bucket.count == 0) {
       return const SizedBox.shrink();
     }
-    final decoded = data['decoded'] as int? ?? 0;
+    final text = formatSizePair(
+            decoded: bucket.decoded,
+            transfer: bucket.transfer,
+            decodedPrefix: bucket.decodedPrefix,
+            transferPrefix: bucket.transferPrefix) ??
+        'size unknown';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -280,35 +315,34 @@ class _PageSizeViewState extends State<PageSizeView>
             children: [
               Expanded(
                 child: Text(
-                  '$label (${data['count']})',
+                  '$label (${bucket.count})',
                   style: const TextStyle(fontSize: 12),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
-                FormatUtils.formatBytesWithTransfer({
-                  'decoded': decoded,
-                  'transfer': data['transfer'] as int? ?? 0,
-                }),
+                text,
                 style: const TextStyle(fontSize: 12, fontFamily: 'Courier'),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          _shareBar(context, decoded, totalDecoded),
+          _shareBar(context, bucket.decoded, totalDecoded),
         ],
       ),
     );
   }
 
   Widget _buildResourceRow(BuildContext context, HtmlService htmlService,
-      ResourceSize resource, int totalSize) {
+      PageSizeRow resource, int totalSize) {
     final scheme = Theme.of(context).colorScheme;
-    final share = totalSize > 0 ? resource.size / totalSize : 0.0;
+    final size = resource.size;
+    final share = size != null && totalSize > 0 ? size / totalSize : null;
     final services = resource.services.take(2).toList();
+    final host = Uri.tryParse(resource.url)?.host ?? '';
     final subtitle = [
-      if (resource.host.isNotEmpty) resource.host,
+      if (host.isNotEmpty) host,
       ...services.map((e) => e.name),
     ].join(' · ');
 
@@ -333,10 +367,7 @@ class _PageSizeViewState extends State<PageSizeView>
                     color: resource.isPage ? scheme.primary : scheme.secondary),
               ),
               const SizedBox(width: 8),
-              if (resource.type == 'image' &&
-                  !_audioVideoPath.hasMatch(
-                      Uri.tryParse(resource.url)?.path.toLowerCase() ??
-                          '')) ...[
+              if (resource.type == 'image' && !resource.isAudioVideo) ...[
                 _buildThumbnail(context, resource.url),
                 const SizedBox(width: 8),
               ],
@@ -361,8 +392,8 @@ class _PageSizeViewState extends State<PageSizeView>
                       message: resource.url,
                       child: Text(
                         resource.isPage
-                            ? 'This page HTML (${resource.pageName})'
-                            : resource.fileName,
+                            ? 'This page HTML (${_pageName(resource.url)})'
+                            : _fileName(resource.url),
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: resource.isPage
@@ -381,36 +412,57 @@ class _PageSizeViewState extends State<PageSizeView>
                         overflow: TextOverflow.ellipsis,
                       ),
                     const SizedBox(height: 6),
-                    _shareBar(context, resource.size, totalSize),
+                    _shareBar(context, size, totalSize),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    resource.size > 0
-                        ? FormatUtils.formatBytesWithTransfer({
-                            'decoded': resource.size,
-                            'transfer': resource.transfer,
-                          })
-                        : 'size n/a',
-                    style: const TextStyle(fontSize: 12, fontFamily: 'Courier'),
-                  ),
-                  if (resource.size > 0)
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
                     Text(
-                      '${(share * 100).toStringAsFixed(1)}%',
+                      resource.sizeLabel,
+                      textAlign: TextAlign.end,
                       style: TextStyle(
-                          fontSize: 11, color: scheme.onSurfaceVariant),
+                          fontSize: 12,
+                          fontFamily: 'Courier',
+                          fontStyle: size == null
+                              ? FontStyle.italic
+                              : FontStyle.normal),
                     ),
-                ],
+                    if (share != null)
+                      Text(
+                        '${(share * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                            fontSize: 11, color: scheme.onSurfaceVariant),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// Last path segment, or the host for root URLs.
+  static String _fileName(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return url;
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty);
+    // pathSegments are already percent-decoded; decoding again throws on a
+    // stray '%' or non-ASCII (same fix as ResourceSize.fileName on main).
+    if (segments.isNotEmpty) return segments.last;
+    return uri.host.isNotEmpty ? uri.host : url;
+  }
+
+  /// File name of the page document, `index` for root URLs.
+  static String _pageName(String url) {
+    final hasPath =
+        Uri.tryParse(url)?.pathSegments.any((s) => s.isNotEmpty) ?? false;
+    return hasPath ? _fileName(url) : 'index';
   }
 
   Widget _buildThumbnail(BuildContext context, String url) {
@@ -445,12 +497,15 @@ class _PageSizeViewState extends State<PageSizeView>
     );
   }
 
-  Widget _shareBar(BuildContext context, int value, int total) {
+  /// Share of [total]; an unknown value gets an empty bar, not a measured one.
+  Widget _shareBar(BuildContext context, int? value, int? total) {
     final scheme = Theme.of(context).colorScheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(2),
       child: LinearProgressIndicator(
-        value: total > 0 ? (value / total).clamp(0.0, 1.0) : 0,
+        value: value != null && total != null && total > 0
+            ? (value / total).clamp(0.0, 1.0)
+            : 0,
         minHeight: 4,
         backgroundColor: scheme.surfaceContainerHighest,
         color: scheme.primary,

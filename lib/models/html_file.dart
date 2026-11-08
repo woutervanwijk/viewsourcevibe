@@ -6,7 +6,6 @@ class HtmlFile {
   final int size;
   final bool isUrl;
   final bool isError;
-  final Map<String, dynamic>? probeResult;
   final bool isShared;
 
   HtmlFile({
@@ -16,7 +15,6 @@ class HtmlFile {
     required this.lastModified,
     required this.size,
     this.isUrl = false,
-    this.probeResult,
     this.isError = false,
     this.isShared = false,
   });
@@ -48,7 +46,9 @@ class HtmlFile {
     }
   }
 
+  /// Lowercased text after the last dot; '' when the name has no dot.
   String get extension {
+    if (!name.contains('.')) return '';
     return name.split('.').last.toLowerCase();
   }
 
@@ -86,7 +86,9 @@ class HtmlFile {
       // Additional common text formats
       'log', 'env', 'gradle'
     };
-    return textExtensions.contains(extension);
+    // Extension-less names like Makefile/Dockerfile match by whole name.
+    final key = name.contains('.') ? extension : name.toLowerCase();
+    return textExtensions.contains(key);
   }
 
   bool get isMedia {
@@ -121,7 +123,6 @@ class HtmlFile {
     DateTime? lastModified,
     int? size,
     bool? isUrl,
-    Map<String, dynamic>? probeResult,
     bool? isError,
     bool? isShared,
   }) {
@@ -132,7 +133,6 @@ class HtmlFile {
       lastModified: lastModified ?? this.lastModified,
       size: size ?? this.size,
       isUrl: isUrl ?? this.isUrl,
-      probeResult: probeResult ?? this.probeResult,
       isError: isError ?? this.isError,
       isShared: isShared ?? this.isShared,
     );

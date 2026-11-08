@@ -214,7 +214,22 @@ const _genericCcTlds = {
 };
 
 /// A site's legal home, and how it was determined.
-typedef SiteJurisdiction = ({String jurisdiction, String source});
+///
+/// [derived] is true for every automatic result (a heuristic, not a fact);
+/// false only for a choice the user made. [warning] explains why a result
+/// is less certain than it looks.
+typedef SiteJurisdiction = ({
+  String jurisdiction,
+  String source,
+  bool derived,
+  String? warning
+});
+
+/// Certificate organisations that are CDN / hosting / platform operators:
+/// the certificate then names the provider, not necessarily the site owner.
+final _cdnCertificateOrg = RegExp(
+    r'cloudflare|akamai|fastly|amazon|google trust services|microsoft',
+    caseSensitive: false);
 
 /// Detects where the organisation behind a site is legally based:
 /// 1. TLS certificate subject (OV/EV certificates name the legal entity),
@@ -232,9 +247,14 @@ SiteJurisdiction? detectSiteJurisdiction({
   final certJurisdiction = jurisdictionOf(certCountry?.toString());
   if (certJurisdiction != null) {
     final org = subject['Organization'];
+    final cdn = org != null && _cdnCertificateOrg.hasMatch(org.toString());
     return (
       jurisdiction: certJurisdiction,
       source: 'TLS certificate: ${org != null ? '$org, ' : ''}C=$certCountry',
+      derived: true,
+      warning: cdn
+          ? 'certificate organisation may be the CDN, not the site owner'
+          : null,
     );
   }
 
@@ -243,15 +263,29 @@ SiteJurisdiction? detectSiteJurisdiction({
     return (
       jurisdiction: jurisdictionOf(schemaCountry)!,
       source: 'schema.org addressCountry: $schemaCountry',
+      derived: true,
+      warning: null,
     );
   }
 
   final tld = host.split('.').last.toLowerCase();
-  if (tld == 'eu') return (jurisdiction: eu, source: 'Domain .eu');
+  if (tld == 'eu') {
+    return (
+      jurisdiction: eu,
+      source: 'Domain .eu',
+      derived: true,
+      warning: null,
+    );
+  }
   if (tld.length == 2 && !_genericCcTlds.contains(tld)) {
     // .uk is the only ccTLD that differs from its ISO code (GB).
     final country = tld == 'uk' ? 'GB' : tld.toUpperCase();
-    return (jurisdiction: jurisdictionOf(country)!, source: 'Domain .$tld');
+    return (
+      jurisdiction: jurisdictionOf(country)!,
+      source: 'Domain .$tld',
+      derived: true,
+      warning: null,
+    );
   }
   return null;
 }

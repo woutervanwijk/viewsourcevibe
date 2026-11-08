@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_io/io.dart';
-import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
+import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/main.dart';
 
@@ -94,6 +95,10 @@ class UnifiedSharingService {
           } catch (e) {
             debugPrint(
                 'UnifiedSharingService: Error processing real-time shared content: $e');
+            if (context.mounted) {
+              _notifyFailure(context.read<HtmlService>(),
+                  'Could not process the shared content: $e');
+            }
             return false;
           }
         }
@@ -103,6 +108,10 @@ class UnifiedSharingService {
       debugPrint('UnifiedSharingService: Method channel handlers set up');
     } catch (e) {
       debugPrint('UnifiedSharingService: Error setting up handlers: $e');
+      if (context.mounted) {
+        _notifyFailure(context.read<HtmlService>(),
+            'Sharing into the app is unavailable: $e');
+      }
     }
   }
 
@@ -119,6 +128,11 @@ class UnifiedSharingService {
     } catch (e) {
       debugPrint(
           'UnifiedSharingService: No initial shared content or error checking: $e');
+      if (context.mounted) {
+        _notifyFailure(context.read<HtmlService>(),
+            'Could not check for shared content: $e',
+            error: e);
+      }
     }
   }
 
@@ -126,13 +140,16 @@ class UnifiedSharingService {
   /// This is used during app startup to decide whether to skip session restoration.
   /// Uses 'hasSharedContent' (non-destructive peek) so the content is NOT consumed
   /// and is still available for actual handling by SharedContentWrapper.
-  static Future<bool> hasPendingSharedContent() async {
+  static Future<bool> hasPendingSharedContent(
+      {HtmlService? htmlService}) async {
     try {
       final result =
           await _sharedContentChannel.invokeMethod('hasSharedContent');
       return result == true;
     } catch (e) {
       debugPrint('UnifiedSharingService: Error checking pending content: $e');
+      _notifyFailure(htmlService, 'Could not check for shared content: $e',
+          error: e);
       return false;
     }
   }
@@ -184,6 +201,8 @@ class UnifiedSharingService {
     } catch (e) {
       debugPrint(
           'UnifiedSharingService: Error handling pending shared content: $e');
+      _notifyFailure(htmlService, 'Could not open the shared content: $e',
+          error: e);
       return false;
     }
   }
@@ -245,26 +264,9 @@ class UnifiedSharingService {
             'UnifiedSharingService: Handling shared content (${content.length} characters)');
 
         if (type == 'text') {
-          final trimmedContent = content.trim();
-          String? urlToLoad;
-          // Detect if it's a URL (either the whole string or containing one)
-          if (isPotentialUrl(trimmedContent)) {
-            final uri = Uri.tryParse(trimmedContent);
-            if (uri != null &&
-                (uri.scheme == 'http' || uri.scheme == 'https')) {
-              urlToLoad = trimmedContent;
-            } else {
-              // Check if it's a URL without scheme like www.example.com
-              urlToLoad = trimmedContent;
-            }
-          } else {
-            // Check if there's a URL inside the text
-            final urlPattern = RegExp(r'https?:\/\/[^\s]+');
-            final match = urlPattern.firstMatch(content);
-            if (match != null) {
-              urlToLoad = match.group(0);
-            }
-          }
+          // Only text that is entirely one URL is loaded as a URL; text
+          // that merely contains one stays content (B24).
+          final urlToLoad = urlFromSharedText(content);
 
           // If a URL was detected, just load it
           if (urlToLoad != null) {
@@ -404,15 +406,12 @@ class UnifiedSharingService {
         final extractedFileName =
             extractFileNameFromError(text) ?? fileName ?? 'sandboxed_file';
 
-        final htmlFile = HtmlFile(
+        final htmlFile = FileLoader.fromText(
+          text,
+          origin: FileOrigin.share,
           name: extractedFileName,
           path: path ?? 'sandboxed://$extractedFileName',
-          content: text,
-          lastModified: DateTime.now(),
-          size: text.length,
-          isUrl: false,
-          isShared: true,
-        );
+        ).toHtmlFile();
 
         await htmlService.loadFile(htmlFile,
             switchToTab: HtmlService.sourceTab);
@@ -422,15 +421,12 @@ class UnifiedSharingService {
       // Determine the appropriate default filename based on content type
       final defaultFileName = type == 'text' ? 'Shared text' : 'Shared file';
 
-      final htmlFile = HtmlFile(
+      final htmlFile = FileLoader.fromText(
+        text,
+        origin: FileOrigin.share,
         name: fileName ?? defaultFileName,
         path: path ?? 'shared://text',
-        content: text,
-        lastModified: DateTime.now(),
-        size: text.length,
-        isUrl: false,
-        isShared: true,
-      );
+      ).toHtmlFile();
 
       await htmlService.loadFile(htmlFile, switchToTab: HtmlService.sourceTab);
     } catch (e) {
@@ -502,20 +498,14 @@ class UnifiedSharingService {
         throw Exception('File size exceeds maximum limit (10MB)');
       }
 
-      final content = String.fromCharCodes(bytes);
-      final name = fileName ?? 'Shared file';
-
-      final htmlFile = HtmlFile(
-        name: name,
+      final snapshot = FileLoader.fromBytes(
+        bytes,
+        name: fileName ?? 'Shared file',
+        origin: FileOrigin.share,
         path: 'shared://file',
-        content: content,
-        lastModified: DateTime.now(),
-        size: bytes.length,
-        isUrl: false,
-        isShared: true,
       );
 
-      await htmlService.loadFile(htmlFile);
+      await htmlService.loadFile(snapshot.toHtmlFile(), snapshot: snapshot);
     } catch (e) {
       debugPrint('UnifiedSharingService: Error handling file bytes: $e');
       if (context.mounted) {
@@ -628,16 +618,13 @@ Try these solutions:
 - Contact the app developer for support''';
       }
 
-      final htmlFile = HtmlFile(
+      final htmlFile = FileLoader.fromText(
+        errorContent,
+        origin: FileOrigin.share,
         name: effectiveFileName,
         path: uri,
-        content: errorContent,
-        lastModified: DateTime.now(),
-        size: errorContent.length,
-        isUrl: false,
-        isShared: true,
         isError: true,
-      );
+      ).toHtmlFile();
 
       await htmlService.loadFile(htmlFile);
     } catch (e) {
@@ -777,16 +764,13 @@ The iOS Share Extension needs to be updated to:
 
 If you're the app developer, please update the native iOS Share Extension code.''';
 
-          final htmlFile = HtmlFile(
+          final htmlFile = FileLoader.fromText(
+            errorContent,
+            origin: FileOrigin.share,
             name: fileName,
             path: 'sandboxed://$fileName',
-            content: errorContent,
-            lastModified: DateTime.now(),
-            size: errorContent.length,
-            isUrl: false,
-            isShared: true,
             isError: true,
-          );
+          ).toHtmlFile();
 
           await htmlService.loadFile(htmlFile);
           return;
@@ -801,20 +785,13 @@ If you're the app developer, please update the native iOS Share Extension code.'
         throw Exception('File size exceeds maximum limit (10MB)');
       }
 
-      final content = await file.readAsString();
-      final fileName = normalizedFilePath.split('/').last;
+      // Shared paths come from another app: the sandbox check is enforced
+      // (B31) and the bytes are decoded by charset (B14).
+      final snapshot = await FileLoader.fromPath(normalizedFilePath,
+          origin: FileOrigin.share);
+      final htmlFile = snapshot.toHtmlFile();
 
-      final htmlFile = HtmlFile(
-        name: fileName,
-        path: normalizedFilePath,
-        content: content,
-        lastModified: await file.lastModified(),
-        size: fileSize,
-        isUrl: false,
-        isShared: true,
-      );
-
-      await htmlService.loadFile(htmlFile);
+      await htmlService.loadFile(htmlFile, snapshot: snapshot);
     } catch (e) {
       debugPrint('UnifiedSharingService: Error handling file path: $e');
       if (context.mounted) {
@@ -822,6 +799,14 @@ If you're the app developer, please update the native iOS Share Extension code.'
       }
       rethrow;
     }
+  }
+
+  /// A failed incoming share is shown under the URL bar, not only logged.
+  /// A platform without the sharing channel is not a failure.
+  static void _notifyFailure(HtmlService? service, String message,
+      {Object? error}) {
+    if (error is MissingPluginException) return;
+    service?.reportNotice(message);
   }
 
   /// Show snackbar message
@@ -1013,72 +998,38 @@ If you're the app developer, please update the native iOS Share Extension code.'
     return lastComponent;
   }
 
-  /// Enhanced URL detection for shared text content
-  /// This method detects potential URLs even if they're shared as plain text
-  static bool isPotentialUrl(String text) {
-    if (text.isEmpty) return false;
-
-    final trimmed = text.trim();
-
-    // Remove common URL wrappers
-    final cleanText = trimmed
-        .replaceAll('<', '')
-        .replaceAll('>', '')
-        .replaceAll('"', '')
-        .replaceAll("'", '');
-
-    // Check for common URL patterns
-    try {
-      final uri = Uri.tryParse(cleanText);
-      if (uri != null) {
-        // Valid URL with http/https scheme
-        if (uri.scheme == 'http' || uri.scheme == 'https') {
-          return true;
-        }
-        // Valid URL that might be missing scheme (www.example.com)
-        if (uri.host.isNotEmpty && !uri.host.contains(' ')) {
-          return true;
-        }
-      }
-    } catch (e) {
-      // Parsing failed, try simpler patterns
-    }
-
-    // Check for common URL patterns without scheme
-    final urlPatterns = [
-      r'www\.',
-      r'http://',
-      r'https://',
-      r'\.com',
-      r'\.org',
-      r'\.net',
-      r'\.io',
-      r'\.co',
-      r'\.app',
-      r'\.dev',
-    ];
-
-    for (final pattern in urlPatterns) {
-      if (cleanText.contains(RegExp(pattern, caseSensitive: false))) {
-        // Additional checks to avoid false positives
-        if (cleanText.contains(' ') && !cleanText.startsWith('http')) {
-          // Contains spaces but doesn't start with http - might not be a URL
-          continue;
-        }
-        return true;
+  /// The URL to load for shared [text], or null when the text is content.
+  ///
+  /// Only text that is entirely one URL counts: one http(s) URL, or a plain
+  /// host such as `example.com` / `www.example.com/path`. Text that merely
+  /// contains a URL, or code such as `a{b:c}.d{e:f}`, stays content (B24).
+  static String? urlFromSharedText(String text) {
+    var trimmed = text.trim();
+    // Strip one pair of wrapping <> or quotes.
+    if (trimmed.length > 2) {
+      final f = trimmed[0], l = trimmed[trimmed.length - 1];
+      if ((f == '<' && l == '>') ||
+          (f == '"' && l == '"') ||
+          (f == "'" && l == "'")) {
+        trimmed = trimmed.substring(1, trimmed.length - 1).trim();
       }
     }
+    if (trimmed.isEmpty || RegExp(r'\s').hasMatch(trimmed)) return null;
 
-    // Check for common URL structures
-    if ((cleanText.contains('.') && cleanText.contains('/')) ||
-        (cleanText.contains('.') && cleanText.length > 10)) {
-      // Might be a URL, but do additional checks
-      final hasInvalidChars = RegExp(r'[\s\n\r\t]').hasMatch(cleanText);
-      if (!hasInvalidChars) {
-        return true;
-      }
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty) {
+      return trimmed;
     }
 
-    return false;
+    final bareHost = RegExp(
+      r'^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|org|net|io|co|app|dev)(:\d+)?([/?#]\S*)?$|^www\.[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?([/?#]\S*)?$',
+      caseSensitive: false,
+    );
+    return bareHost.hasMatch(trimmed) ? trimmed : null;
   }
+
+  /// Whether shared [text] is entirely one URL (see [urlFromSharedText]).
+  static bool isPotentialUrl(String text) => urlFromSharedText(text) != null;
 }

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
   group('URL Detection Fix Tests', () {
@@ -18,7 +18,7 @@ void main() {
         final uri = Uri.tryParse(url);
         expect(uri, isNotNull);
         expect(uri!.scheme, anyOf(['http', 'https']));
-        expect(SharingService.isUrl(url), true);
+        expect(UnifiedSharingService.isUrl(url), true);
       }
     });
 
@@ -38,7 +38,7 @@ void main() {
         if (uri != null) {
           expect(uri.scheme, isNot(anyOf(['http', 'https'])));
         }
-        // Note: SharingService.isUrl might return true for some cases
+        // Note: UnifiedSharingService.isUrl might return true for some cases
         // The important thing is that Dart URI parsing is more reliable
       }
     });
@@ -55,7 +55,7 @@ void main() {
       for (final edgeCase in edgeCases) {
         final uri = Uri.tryParse(edgeCase);
         if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-          expect(SharingService.isUrl(edgeCase), true);
+          expect(UnifiedSharingService.isUrl(edgeCase), true);
         }
       }
     });

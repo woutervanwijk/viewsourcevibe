@@ -5,10 +5,19 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/services/collectors/vsv_collect_js.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/navigation_policy.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
 import 'dart:io';
 import 'dart:collection';
+
+/// Whether a Content-Type names an RSS or Atom feed.
+bool isFeedContentType(String? contentType) {
+  final t = (contentType ?? '').toLowerCase();
+  return t.contains('application/rss+xml') ||
+      t.contains('application/atom+xml');
+}
 
 class BrowserView extends StatefulWidget {
   final HtmlFile? file;
@@ -118,19 +127,12 @@ class _BrowserViewState extends State<BrowserView> {
     var isRssOrXml = await RssTemplateService.isRssFeed(
         widget.file?.name ?? '', widget.file?.content ?? '');
 
-    // Robust check: if content inspection failed, check headers from probe
-    if (!isRssOrXml && widget.file?.probeResult != null) {
-      final headers = widget.file!.probeResult!['headers'];
-      if (headers is Map) {
-        final contentType =
-            headers['content-type']?.toString().toLowerCase() ?? '';
-        if (contentType.contains('application/rss+xml') ||
-            contentType.contains('application/atom+xml')) {
-          debugPrint(
-              'BrowserView: Detected RSS/Atom via Content-Type header: $contentType');
-          isRssOrXml = true;
-        }
-      }
+    // Robust check: if content inspection failed, use the server's
+    // Content-Type from the store.
+    if (!isRssOrXml && isFeedContentType(htmlService.serverContentType)) {
+      debugPrint(
+          'BrowserView: Detected RSS/Atom via Content-Type header: ${htmlService.serverContentType}');
+      isRssOrXml = true;
     }
 
     if (isRssOrXml && (widget.file?.content.isNotEmpty ?? false)) {
@@ -192,86 +194,10 @@ class _BrowserViewState extends State<BrowserView> {
         useHybridComposition: _shouldUseHybridComposition(),
       ),
       initialUserScripts: UnmodifiableListView<UserScript>([
+        // Resource observer + fetch/XHR patch, and the one-shot collector
+        // (window.__vsv_collect) that HtmlService calls on every sync.
         UserScript(
-          source: '''
-              (function() {
-                if (!window.performance) return;
-                if (performance.setResourceTimingBufferSize) {
-                  performance.setResourceTimingBufferSize(10000);
-                }
-                // Persist the accumulator across SPA navigations — never reset it.
-                // SPAs call performance.clearResourceTimings() to manage memory, but
-                // we keep our own copy of everything seen since page load.
-                if (!window.__vsv_res) window.__vsv_res = {};
-                var __vsvMaxResources = 1000;
-                function _vsvRecord(name, tx, dec, start, dur) {
-                  if (!name || name.startsWith('data:')) return;
-                  var prev = window.__vsv_res[name];
-                  if (!prev || dec > (prev.d || 0) || (!prev.d && tx > (prev.t || 0))) {
-                    window.__vsv_res[name] = {
-                      t: tx || 0,
-                      d: dec || 0,
-                      s: start || 0,
-                      u: dur || 0
-                    };
-                  }
-                  var keys = Object.keys(window.__vsv_res);
-                  while (keys.length > __vsvMaxResources) {
-                    delete window.__vsv_res[keys.shift()];
-                  }
-                }
-                // PerformanceObserver: captures resources where Timing-Allow-Origin is set.
-                function attachObserver() {
-                  try {
-                    if (window.__vsv_observerAttached) return;
-                    var obs = new PerformanceObserver(function(list) {
-                      list.getEntries().forEach(function(e) {
-                        _vsvRecord(e.name, e.transferSize || 0, e.decodedBodySize || 0, e.startTime || 0, e.duration || 0);
-                      });
-                    });
-                    obs.observe({type: 'resource', buffered: true});
-                    window.__vsv_observerAttached = true;
-                  } catch(e) {}
-                }
-                attachObserver();
-                // Re-attach after SPA navigations so new route resources are captured.
-                var _vsv_push = history.pushState;
-                history.pushState = function() {
-                  _vsv_push.apply(this, arguments);
-                };
-                // Patch fetch to capture API response sizes (cross-origin CDN static
-                // assets block size via TAO, but API endpoints usually allow it).
-                var _vsvFetch = window.fetch;
-                window.fetch = function(input, init) {
-                  var url = typeof input === 'string' ? input :
-                            (input && input.url) ? input.url : String(input);
-                  return _vsvFetch.apply(this, arguments).then(function(resp) {
-                    try {
-                      var cl = resp.headers.get('content-length');
-                      if (cl) { var sz = parseInt(cl, 10); if (sz > 0) _vsvRecord(url, sz, sz, performance.now(), 0); }
-                    } catch(e) {}
-                    return resp;
-                  });
-                };
-                // Patch XHR similarly.
-                var _vsvXhrOpen = XMLHttpRequest.prototype.open;
-                XMLHttpRequest.prototype.open = function(m, u) {
-                  this._vsvUrl = u;
-                  return _vsvXhrOpen.apply(this, arguments);
-                };
-                var _vsvXhrSend = XMLHttpRequest.prototype.send;
-                XMLHttpRequest.prototype.send = function() {
-                  var xhr = this;
-                  xhr.addEventListener('load', function() {
-                    try {
-                      var cl = xhr.getResponseHeader('content-length');
-                      if (cl && xhr._vsvUrl) { var sz = parseInt(cl,10); if (sz>0) _vsvRecord(xhr._vsvUrl, sz, sz, performance.now(), 0); }
-                    } catch(e) {}
-                  }, {once: true});
-                  return _vsvXhrSend.apply(this, arguments);
-                };
-              })();
-            ''',
+          source: '$vsvResourceBootstrapJs\n$vsvCollectJs',
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
       ]),
@@ -317,6 +243,14 @@ class _BrowserViewState extends State<BrowserView> {
           htmlService.updateWebViewLoadingProgress(1.0);
         }
       },
+      onUpdateVisitedHistory: (controller, url, isReload) {
+        // SPA route changes (pushState) never reload the page: HtmlService
+        // decides whether this is a new document.
+        if (!mounted || url == null) return;
+        Provider.of<HtmlService>(context, listen: false)
+            .handleBrowserUrlChange(url.toString())
+            .ignore();
+      },
       onProgressChanged: (controller, progress) async {
         final htmlService = Provider.of<HtmlService>(context, listen: false);
         htmlService.updateWebViewLoadingProgress(progress / 100.0);
@@ -349,41 +283,32 @@ class _BrowserViewState extends State<BrowserView> {
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         final uri = navigationAction.request.url!;
         final url = uri.toString();
+        final htmlService = Provider.of<HtmlService>(context, listen: false);
 
-        // Only http/https navigation is allowed; block data:, blob:, file:,
-        // javascript:, content: and any other scheme in the WebView layer.
-        final scheme = uri.scheme.toLowerCase();
-        if (scheme != 'http' && scheme != 'https') {
-          return NavigationActionPolicy.CANCEL;
-        }
+        // webViewLoadingUrl is set while a load the app started is pending
+        // and cleared once it completes.
+        final isPendingLoad = htmlService.webViewLoadingUrl != null &&
+            htmlService.areUrlsEqual(url, htmlService.webViewLoadingUrl!);
+        final isCurrentFile = htmlService.currentFile != null &&
+            htmlService.areUrlsEqual(url, htmlService.currentFile!.path);
 
-        if (url == 'about:blank') {
-          return NavigationActionPolicy.ALLOW;
-        }
-
-        if (navigationAction.isForMainFrame) {
-          final htmlService = Provider.of<HtmlService>(context, listen: false);
-          // If this is the load we just triggered internally, allow it
-          // We use null check because webViewLoadingUrl is cleared once load starts/completes
-          final isPendingLoad = htmlService.webViewLoadingUrl != null &&
-              htmlService.areUrlsEqual(url, htmlService.webViewLoadingUrl!);
-
-          // Also allow if it's the current file path (e.g. RSS template load with baseUrl)
-          final isCurrentFile = htmlService.currentFile != null &&
-              htmlService.areUrlsEqual(url, htmlService.currentFile!.path);
-
-          if (isPendingLoad || isCurrentFile) {
+        final decision = decideMainFrameNavigation(
+          uri: uri,
+          isMainFrame: navigationAction.isForMainFrame,
+          isPendingLoad: isPendingLoad,
+          isCurrentFile: isCurrentFile,
+        );
+        switch (decision) {
+          case NavigationDecision.allow:
             return NavigationActionPolicy.ALLOW;
-          }
-
-          // Otherwise, intercept and redirect through standard loadUrl flow
-          // This ensures that clicking links or redirects are handled by the app's unified loading logic
-          debugPrint('Intercepting main-frame navigation to: $url');
-          htmlService.loadUrl(url);
-          return NavigationActionPolicy.CANCEL;
+          case NavigationDecision.cancel:
+            return NavigationActionPolicy.CANCEL;
+          case NavigationDecision.allowAndNotify:
+            // The browser makes this request itself (redirects, cookies and
+            // POST bodies stay intact); the app only records it.
+            htmlService.beginBrowserNavigation(url);
+            return NavigationActionPolicy.ALLOW;
         }
-
-        return NavigationActionPolicy.ALLOW;
       },
     );
   }

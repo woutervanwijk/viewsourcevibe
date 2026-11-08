@@ -78,14 +78,24 @@ void main() {
         of: titleText,
         matching: find.byType(Row),
       );
-      expect(titleRow, findsOneWidget);
+      // Inner row: icon + text; outer row: logo + back button.
+      expect(titleRow, findsNWidgets(2));
 
-      // Find the Image (icon) inside the Row
+      // Find the Image (icon) inside the nearest Row
       final iconImage = find.descendant(
-        of: titleRow,
+        of: titleRow.first,
         matching: find.byType(Image),
       );
       expect(iconImage, findsOneWidget);
+
+      // The back button sits in the title, right of the logo and name.
+      final back = find.descendant(
+        of: titleRow.last,
+        matching: find.byTooltip('Back'),
+      );
+      expect(back, findsOneWidget);
+      expect(tester.getTopLeft(back).dx,
+          greaterThan(tester.getTopRight(titleText).dx));
     });
   });
 }

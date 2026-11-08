@@ -2,29 +2,16 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:html/parser.dart' as html_parser;
-import 'package:html/dom.dart' as dom;
-import 'package:xml/xml.dart' as xml;
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/dom_tree.dart';
+import 'package:view_source_vibe/services/derive/source_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:flutter_fancy_tree_view2/flutter_fancy_tree_view2.dart';
 
-class DomTreeNode {
-  final String label;
-  final String content; // Outer HTML or Text
-  final Map<String, String> attributes;
-  final List<DomTreeNode> children;
-  final bool isElement;
-
-  DomTreeNode({
-    required this.label,
-    required this.content,
-    required this.attributes,
-    required this.children,
-    required this.isElement,
-  });
-}
+export 'package:view_source_vibe/services/derive/dom_tree.dart'
+    show DomTreeNode;
 
 class DomTreeView extends StatefulWidget {
   const DomTreeView({super.key});
@@ -34,265 +21,141 @@ class DomTreeView extends StatefulWidget {
 }
 
 class _DomTreeViewState extends State<DomTreeView> {
-  late TreeController<DomTreeNode> _treeController;
-  String? _lastContent;
+  TreeController<DomTreeNode>? _treeController;
+  DomTree? _controllerTree;
 
-  @override
-  void initState() {
-    super.initState();
-    _treeController = TreeController<DomTreeNode>(
-      roots: [],
+  /// A controller for [tree]: root expanded, plus head/body/channel.
+  TreeController<DomTreeNode> _controllerFor(DomTree tree) {
+    if (identical(tree, _controllerTree)) return _treeController!;
+    final old = _treeController;
+    if (old != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    }
+    final controller = TreeController<DomTreeNode>(
+      roots: tree.roots,
       childrenProvider: (DomTreeNode node) => node.children,
     );
-  }
-
-  void _updateTree(HtmlService htmlService, String content) {
-    if (content.isEmpty) {
-      setState(() {
-        _treeController.roots = [];
-      });
-      return;
-    }
-
-    List<DomTreeNode> roots = [];
-
-    // RSS, ATOM, SVG, XML should use the XML parser for better accuracy
-    final isStrictXml = htmlService.isXml || htmlService.isSvg;
-
-    // Additional check: if content looks like XML but wasn't detected as such
-    final looksLikeXmlContent = content.trim().startsWith('<') &&
-        !content.trim().startsWith('<!DOCTYPE html') &&
-        !content.trim().startsWith('<html') &&
-        !content.trim().startsWith('<HTML');
-
-    final shouldUseXmlParser = isStrictXml || looksLikeXmlContent;
-
-    if (shouldUseXmlParser) {
-      try {
-        // First try strict XML parsing
-        final doc = xml.XmlDocument.parse(content);
-        roots = doc.children
-            .map((node) => _buildFromXml(node))
-            .whereType<DomTreeNode>()
-            .toList();
-      } catch (e) {
-        debugPrint('DomTreeView: Strict XML parsing failed: $e');
-        // If strict parsing fails, try to parse as corrupt XML by showing raw structure
-        roots = _parseCorruptXml(content);
-      }
-    } else if (shouldUseXmlParser) {
-      // If we determined it should be XML but parsing failed, show error
-      roots = [
-        DomTreeNode(
-          label: 'error',
-          content: 'Failed to parse XML content',
-          attributes: {},
-          children: [],
-          isElement: false,
-        )
-      ];
-    } else {
-      final doc = html_parser.parse(content);
-      if (doc.documentElement != null) {
-        final root = _buildFromHtml(doc.documentElement!);
-        if (root != null) roots = [root];
-      }
-    }
-
-    setState(() {
-      _treeController.roots = roots;
-      // Expand root by default
-      if (roots.isNotEmpty) {
-        final root = roots.first;
-        _treeController.expand(root);
-
-        // Also expand head and body elements by default for better visibility
-        for (var child in root.children) {
-          if (child.label == 'head' ||
-              child.label == 'body' ||
-              child.label == 'channel') {
-            _treeController.expand(child);
-          }
+    if (tree.roots.isNotEmpty) {
+      final root = tree.roots.first;
+      controller.expand(root);
+      for (final child in root.children) {
+        if (child.label == 'head' ||
+            child.label == 'body' ||
+            child.label == 'channel') {
+          controller.expand(child);
         }
       }
-    });
-  }
-
-  DomTreeNode? _buildFromXml(xml.XmlNode node) {
-    if (node is xml.XmlElement) {
-      final children = node.children
-          .map((n) => _buildFromXml(n))
-          .whereType<DomTreeNode>()
-          .toList();
-
-      return DomTreeNode(
-        label: node.name.toString(),
-        content: node.toXmlString(),
-        attributes: node.attributes.fold<Map<String, String>>({}, (map, attr) {
-          map[attr.name.toString()] = attr.value;
-          return map;
-        }),
-        children: children,
-        isElement: true,
-      );
-    } else if (node is xml.XmlText) {
-      final text = node.value.trim();
-      if (text.isEmpty) return null;
-
-      return DomTreeNode(
-        label: text,
-        content: text,
-        attributes: {},
-        children: [],
-        isElement: false,
-      );
     }
-    return null;
-  }
-
-  DomTreeNode? _buildFromHtml(dom.Node node) {
-    if (node is dom.Element) {
-      final children = node.nodes
-          .map((n) => _buildFromHtml(n))
-          .whereType<DomTreeNode>()
-          .toList();
-
-      return DomTreeNode(
-        label: node.localName ?? 'unknown',
-        content: node.outerHtml,
-        attributes: node.attributes
-            .map((key, value) => MapEntry(key.toString(), value)),
-        children: children,
-        isElement: true,
-      );
-    } else if (node is dom.Text) {
-      final text = node.text.trim();
-      if (text.isEmpty) return null;
-
-      return DomTreeNode(
-        label: text,
-        content: text,
-        attributes: {},
-        children: [],
-        isElement: false,
-      );
-    }
-    return null;
-  }
-
-  /// Attempt to parse corrupt XML by showing its raw structure
-  List<DomTreeNode> _parseCorruptXml(String content) {
-    try {
-      // Try to extract tag-like structures using regex
-      final tagRegex = RegExp(r'<(/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>');
-      final matches = tagRegex.allMatches(content);
-
-      if (matches.isEmpty) {
-        // No tags found, show as raw text
-        return [
-          DomTreeNode(
-            label: 'corrupt-xml',
-            content: content,
-            attributes: {},
-            children: [],
-            isElement: false,
-          )
-        ];
-      }
-
-      // Build a tree structure from the tags we found
-      final root = DomTreeNode(
-        label: 'corrupt-xml',
-        content: '(malformed XML)',
-        attributes: {},
-        children: [],
-        isElement: true,
-      );
-
-      // Simple approach: show each opening tag as a child node
-      for (final match in matches) {
-        final isClosing = match.group(1) == '/';
-        final tagName = match.group(2) ?? 'unknown';
-        final attributesStr = match.group(3) ?? '';
-
-        if (!isClosing) {
-          // For corrupt XML, skip complex attribute parsing
-          // Just show the tag with its raw attributes string
-          final attrs = <String, String>{};
-          if (attributesStr.isNotEmpty) {
-            attrs['attributes'] = attributesStr;
-          }
-
-          root.children.add(DomTreeNode(
-            label: tagName,
-            content: '(corrupt)',
-            attributes: attrs,
-            children: [],
-            isElement: true,
-          ));
-        }
-      }
-
-      return [root];
-    } catch (e) {
-      debugPrint('DomTreeView: Corrupt XML parsing also failed: $e');
-      // Final fallback - show as raw text
-      return [
-        DomTreeNode(
-          label: 'corrupt-xml',
-          content: content,
-          attributes: {},
-          children: [],
-          isElement: false,
-        )
-      ];
-    }
+    _controllerTree = tree;
+    return _treeController = controller;
   }
 
   @override
   void dispose() {
-    _treeController.dispose();
+    _treeController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final htmlService = Provider.of<HtmlService>(context);
-    final content = htmlService.currentFile?.content ?? '';
+    final view = context.select<HtmlService, SourceView>((s) => s.sourceView);
+    final tree = context.select<HtmlService, DomTree?>((s) => s.domTree);
+    final loading = context
+        .select<HtmlService, bool>((s) => s.isLoading || s.isWebViewLoading);
 
-    if (content != _lastContent) {
-      _lastContent = content;
-      Future.microtask(() {
-        if (mounted) _updateTree(htmlService, content);
-      });
+    final building = context.select<HtmlService, bool>((s) => s.domTreePending);
+    final error = context.select<HtmlService, String?>((s) => s.domTreeError);
+    if (tree == null && error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Could not build the tree: $error',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ),
+      );
     }
-
-    // Show loading while tree is being built
-    if (_treeController.roots.isEmpty && content.isNotEmpty) {
-      return const Center(child: CircularProgressIndicator());
+    if (tree == null && building) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text('Building the tree…',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      );
     }
-
-    // Show message if no content to parse
-    if (content.isEmpty) {
-      // Only show "no content" if we're not still loading the page
-      if (htmlService.isLoading || htmlService.isWebViewLoading) {
-        return const Center(child: CircularProgressIndicator());
-      }
+    if (tree == null) {
+      return _statusFor(context, view, loading);
+    }
+    if (tree.roots.isEmpty) {
       return const Center(child: Text('No content to parse'));
     }
 
     final bottomInset = MediaQuery.of(context).padding.bottom + 50;
-    return Scrollbar(
-      child: TreeView<DomTreeNode>(
-        primary: true,
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.only(bottom: bottomInset),
-        treeController: _treeController,
-        nodeBuilder: (BuildContext context, TreeEntry<DomTreeNode> entry) {
-          return DomTreeTile(
-            entry: entry,
-            onTap: () => _treeController.toggleExpansion(entry.node),
-          );
+    final theme = Theme.of(context);
+    final muted =
+        TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant);
+    final controller = _controllerFor(tree);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Text(
+            'Source: ${view.label}${tree.note == null ? '' : ' • ${tree.note}'}',
+            style: muted,
+          ),
+        ),
+        Expanded(
+          child: Scrollbar(
+            child: TreeView<DomTreeNode>(
+              primary: true,
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(bottom: bottomInset),
+              treeController: controller,
+              nodeBuilder:
+                  (BuildContext context, TreeEntry<DomTreeNode> entry) {
+                return DomTreeTile(
+                  entry: entry,
+                  onTap: () => controller.toggleExpansion(entry.node),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// No text to parse: show why (the tree never shows another document).
+  Widget _statusFor(BuildContext context, SourceView view, bool loading) {
+    final theme = Theme.of(context);
+    final muted = TextStyle(color: theme.colorScheme.onSurfaceVariant);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: switch (view.text) {
+          Pending<String>() => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 12),
+                Text(view.pendingMessage, style: muted),
+              ],
+            ),
+          Failed<String>(:final error) => Text(error,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: theme.colorScheme.error)),
+          Unavailable<String>(:final reason, :final detail) => loading
+              ? const CircularProgressIndicator()
+              : Text(unavailableMessage(reason, detail),
+                  textAlign: TextAlign.center, style: muted),
+          Present<String>() => const SizedBox.shrink(),
         },
       ),
     );

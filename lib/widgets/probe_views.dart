@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 import 'package:view_source_vibe/widgets/evidence_view.dart';
 import 'package:view_source_vibe/models/detection_evidence.dart';
@@ -7,517 +6,490 @@ import 'package:view_source_vibe/services/logo_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/cookies_view.dart';
+import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/header_insights.dart';
+import 'package:view_source_vibe/services/derive/probe_general.dart';
+import 'package:view_source_vibe/services/derive/security_audit.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/utils/format_utils.dart';
 
-abstract class ProbeViewBase extends StatelessWidget {
-  const ProbeViewBase({super.key});
+// ---------------------------------------------------------------------------
+// Shared pieces of the migrated probe tabs
+// ---------------------------------------------------------------------------
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<HtmlService>(builder: (context, htmlService, child) {
-      final result = htmlService.probeResult;
-
-      // Show spinner if we are in any loading/parsing phase and don't have results yet
-      if ((htmlService.isProbing ||
-              htmlService.isLoading ||
-              htmlService.isWebViewLoading ||
-              htmlService.isExtractingMetadata) &&
-          result == null) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      if (htmlService.probeError != null && result == null) {
-        return Center(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.all(16),
-            constraints: const BoxConstraints(maxWidth: 600),
-            decoration: BoxDecoration(
-              color: Colors.red.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-            ),
-            child: SelectableText(
-              'Error: ${htmlService.probeError}',
-              style: const TextStyle(color: Colors.red),
-            ),
+Widget _detailRow(String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 128,
+          child: Text(
+            '$label:',
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-        );
-      }
+        ),
+        Expanded(
+          child: SelectableText(FormatUtils.formatHumanData(value)),
+        ),
+      ],
+    ),
+  );
+}
 
-      if (result == null) {
-        return const Center(
-            child: Text('Probe a URL to see details',
-                style: TextStyle(color: Colors.grey)));
-      }
+Widget _chip(IconData icon, String label, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withValues(alpha: 0.24)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 14),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    ),
+  );
+}
 
-      return Stack(
+Widget _cardTitle(BuildContext context, IconData icon, String title,
+    {Color? color}) {
+  return Row(
+    children: [
+      Icon(icon,
+          size: 20, color: color ?? Theme.of(context).colorScheme.primary),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          title,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _card(BuildContext context, List<Widget> children,
+    {Color? border, bool filled = false}) {
+  final scheme = Theme.of(context).colorScheme;
+  return Card(
+    elevation: 0,
+    color:
+        filled ? scheme.surfaceContainerHighest.withValues(alpha: 0.3) : null,
+    shape: RoundedRectangleBorder(
+      side: BorderSide(color: border ?? scheme.outlineVariant),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    ),
+  );
+}
+
+/// The body of a card whose value is not there: loading, failed or
+/// unavailable, each with its own text.
+Widget _notThere<T>(Observed<T> state, String pendingText) {
+  switch (state) {
+    case Pending<T>():
+      return Row(
         children: [
-          Positioned.fill(child: buildContent(context, htmlService, result)),
-          if (htmlService.isProbing)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(minHeight: 2),
-            ),
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Text(state.detail ?? pendingText,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12))),
         ],
       );
-    });
-  }
-
-  Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result);
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 128,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(
-            child: SelectableText(FormatUtils.formatHumanData(value)),
-          ),
-        ],
-      ),
-    );
+    case Failed<T>(:final error):
+      return SelectableText(error,
+          style: const TextStyle(color: Colors.red, fontSize: 12));
+    case Unavailable<T>(:final reason, :final detail):
+      return Text(unavailableMessage(reason, detail),
+          style: const TextStyle(color: Colors.grey, fontSize: 12));
+    case Present<T>():
+      return const SizedBox.shrink();
   }
 }
 
-class ProbeGeneralView extends ProbeViewBase {
+/// The message of a tab that has nothing to show for this target.
+Widget _tabMessage(String text, {bool error = false}) {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: SelectableText(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: error ? Colors.red : Colors.grey),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Shows a tab's top-level state: the model builder runs for Present only.
+Widget _tabBody<T>(Observed<T> state, Widget Function(T) present) {
+  return switch (state) {
+    Present<T>(:final value) => present(value),
+    Pending<T>() => const Center(child: CircularProgressIndicator()),
+    Failed<T>(:final error) => _tabMessage('Error: $error', error: true),
+    Unavailable<T>(:final detail, :final reason) =>
+      _tabMessage(detail.isEmpty ? unavailableMessage(reason, detail) : detail),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// General
+// ---------------------------------------------------------------------------
+
+class ProbeGeneralView extends StatelessWidget {
   const ProbeGeneralView({super.key});
 
-  @override
-  @override
-  Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    // Check if we have browser probe results
-    final browserResult = htmlService.browserProbeResult;
-    final hasBrowserProbe = browserResult != null && browserResult.isNotEmpty;
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    final state = context
+        .select<HtmlService, Observed<GeneralModel>>((s) => s.generalView);
+    return _tabBody(state, (m) => _content(context, m));
+  }
+
+  Widget _content(BuildContext context, GeneralModel m) {
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.bold,
+        );
+    final status = m.status;
     return Scrollbar(
         child: ListView(
       primary: true,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
-        if (hasBrowserProbe) ...[
-          // Section Header for CURL Probe
-          Text(
-            'Curl Probe (Server-Side)',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-        ],
-        _buildStatusCard(context, htmlService, result),
-        const SizedBox(height: 16),
-        _buildContentTypeTruthCard(context, htmlService, result),
-        const SizedBox(height: 16),
-        _buildSourceDiffCard(context, htmlService),
-        const SizedBox(height: 16),
-        if (_redirectChainFrom(result).isNotEmpty) ...[
-          _buildRedirectChainView(
-              context, htmlService, _redirectChainFrom(result)),
+        Text('Curl Probe (Server-Side)', style: titleStyle),
+        const SizedBox(height: 8),
+        _buildStatusCard(context, status),
+        if (m.divergences.isNotEmpty) ...[
           const SizedBox(height: 16),
+          _buildDivergences(context, m.divergences),
         ],
-        _buildRobotsSitemapCard(context, htmlService, result),
         const SizedBox(height: 16),
-        _buildStorageInspector(context, browserResult),
+        _buildContentTypeTruthCard(context, m.contentType),
         const SizedBox(height: 16),
-        _buildNetworkInfoCard(context, result),
-        if (hasBrowserProbe || htmlService.isWebViewLoading) ...[
-          const SizedBox(height: 24),
-          const Divider(),
+        _buildSourceDiffCard(context, m.diff),
+        if (status is Present<ServerStatus> &&
+            status.value.redirects.isNotEmpty) ...[
           const SizedBox(height: 16),
-          Text(
-            'Browser Probe (Client-Side)',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-          if (hasBrowserProbe)
-            _buildBrowserProbeCard(context, browserResult)
-          else
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: CircularProgressIndicator(),
-              ),
-            ),
+          _buildRedirectChainView(context, status.value.redirects),
         ],
+        const SizedBox(height: 16),
+        _buildRobotsSitemapCard(context, m.robots),
+        const SizedBox(height: 16),
+        _buildNetworkInfoCard(context, m.network),
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 16),
+        Text('Browser Probe (Client-Side)', style: titleStyle),
+        const SizedBox(height: 8),
+        _buildBrowserProbeCard(context, m.browser),
+        const SizedBox(height: 16),
+        _buildStorageInspector(context, m.storage),
       ],
     ));
   }
 
-  Widget _buildContentTypeTruthCard(BuildContext context,
-      HtmlService htmlService, Map<String, dynamic> result) {
-    final headers = result['headers'] as Map?;
-    final rawContentType = headers?['content-type']?.toString() ??
-        headers?['Content-Type']?.toString() ??
-        '';
-    final declaredMime = rawContentType.split(';').first.trim().toLowerCase();
-    final content = htmlService.currentFile?.content ?? '';
-    final filename =
-        htmlService.currentFile?.name ?? result['finalUrl']?.toString();
-    final sniffed = _sniffContentType(content, filename);
-    final status = _contentTypeTruthStatus(declaredMime, sniffed);
-    final color = status.$1;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: color.withValues(alpha: 0.36)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+  Widget _buildDivergences(BuildContext context, List<Divergence> items) {
+    return _card(
+      context,
+      [
+        _cardTitle(context, Icons.compare_arrows,
+            "The app's request and the browser differ",
+            color: Colors.orange),
+        const SizedBox(height: 10),
+        for (final d in items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(status.$2, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Content-Type Truth Check',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildDetailRow(
-                'Declared', declaredMime.isEmpty ? 'N/A' : rawContentType),
-            _buildDetailRow('Sniffed', sniffed),
-            _buildDetailRow('Verdict', status.$3),
-          ],
-        ),
-      ),
-    );
-  }
-
-  (Color, IconData, String) _contentTypeTruthStatus(
-      String declaredMime, String sniffed) {
-    if (declaredMime.isEmpty) {
-      return (
-        Colors.orange,
-        Icons.help_outline,
-        'No Content-Type header to compare.'
-      );
-    }
-    if (_mimeMatchesSniff(declaredMime, sniffed)) {
-      return (
-        Colors.green,
-        Icons.check_circle_outline,
-        'Header and content look aligned.'
-      );
-    }
-    return (
-      Colors.red,
-      Icons.warning_amber_rounded,
-      'Header does not match the loaded content shape.'
-    );
-  }
-
-  bool _mimeMatchesSniff(String mime, String sniffed) {
-    if (sniffed == 'empty') return true;
-    if (mime.contains('html')) return sniffed == 'html';
-    if (mime.contains('xml') || mime.contains('svg')) return sniffed == 'xml';
-    if (mime.contains('json')) return sniffed == 'json';
-    if (mime.contains('javascript') || mime.contains('ecmascript')) {
-      return sniffed == 'javascript' || sniffed == 'text';
-    }
-    if (mime == 'text/css') return sniffed == 'css' || sniffed == 'text';
-    if (mime == 'text/plain') return sniffed == 'text';
-    if (mime.startsWith('text/')) {
-      return sniffed == 'text';
-    }
-    return true;
-  }
-
-  String _sniffContentType(String content, String? filename) {
-    final trimmed = content.trimLeft();
-    final lowerName = filename?.toLowerCase() ?? '';
-    if (trimmed.isEmpty) return 'empty';
-
-    final lower = trimmed.toLowerCase();
-    final withoutLeadingComments = lower.replaceFirst(
-      RegExp(r'^(<!--.*?-->\s*)+', dotAll: true),
-      '',
-    );
-
-    // HTML wins before CSS/JS. Full documents and fragments often contain
-    // inline <style> or <script> blocks that look like standalone CSS/JS.
-    if (withoutLeadingComments.startsWith('<!doctype html') ||
-        withoutLeadingComments.startsWith('<html') ||
-        RegExp(r'<(head|body|title|meta|script|style|div|main|section|article)\b')
-            .hasMatch(lower)) {
-      return 'html';
-    }
-
-    if (lower.startsWith('<?xml') ||
-        lower.startsWith('<rss') ||
-        lower.startsWith('<feed') ||
-        lower.startsWith('<svg')) {
-      return 'xml';
-    }
-
-    if (_looksLikeJson(trimmed)) return 'json';
-
-    if (lowerName.endsWith('.css') || _looksLikeStandaloneCss(trimmed)) {
-      return 'css';
-    }
-    if (lowerName.endsWith('.js') ||
-        lowerName.endsWith('.mjs') ||
-        _looksLikeStandaloneJavascript(trimmed)) {
-      return 'javascript';
-    }
-    return 'text';
-  }
-
-  bool _looksLikeJson(String content) {
-    final trimmed = content.trimLeft();
-    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) return false;
-    try {
-      jsonDecode(trimmed);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  bool _looksLikeStandaloneCss(String content) {
-    final trimmed = content.trimLeft();
-    final lower = trimmed.toLowerCase();
-    if (lower.contains('<style') || lower.contains('<script')) return false;
-    if (RegExp(r'^(const|let|var|function|class|import|export)\b')
-        .hasMatch(lower)) {
-      return false;
-    }
-    if (lower.startsWith('@charset') ||
-        lower.startsWith('@import') ||
-        lower.startsWith('@media') ||
-        lower.startsWith('@font-face') ||
-        lower.startsWith('@keyframes')) {
-      return true;
-    }
-    return RegExp(r'^[.#]?[a-z0-9_:\-\*\[\]="\s,>+~]+\{[^}]*:[^}]*\}',
-            caseSensitive: false, dotAll: true)
-        .hasMatch(trimmed);
-  }
-
-  bool _looksLikeStandaloneJavascript(String content) {
-    final trimmed = content.trimLeft();
-    final lower = trimmed.toLowerCase();
-    if (lower.contains('<script') || lower.contains('<style')) return false;
-    return RegExp(
-      r'^(import\s|export\s|const\s|let\s|var\s|function\s|class\s|async\s+function\s|\(\s*function|\w+\s*=>)',
-      caseSensitive: false,
-    ).hasMatch(trimmed);
-  }
-
-  Widget _buildRobotsSitemapCard(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    final discovery = result['robotsSitemap'] as Map<String, dynamic>?;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.travel_explore,
-                    size: 20, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Robots / Sitemap Discovery',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (discovery == null)
-              const Text('Discovery is running or unavailable for this URL.',
-                  style: TextStyle(color: Colors.grey, fontSize: 12))
-            else ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildDiscoveryChip(
-                    discovery['robotsPresent'] == true
-                        ? Icons.check_circle_outline
+                Icon(
+                    d.lowSeverity
+                        ? Icons.info_outline
                         : Icons.warning_amber_rounded,
-                    'robots ${discovery['robotsStatus'] ?? 'N/A'}',
-                    discovery['robotsPresent'] == true
-                        ? Colors.green
-                        : Colors.orange,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.map_outlined,
-                    '${(discovery['sitemaps'] as List? ?? []).length} sitemap${(discovery['sitemaps'] as List? ?? []).length == 1 ? '' : 's'}',
-                    Colors.blue,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.block,
-                    '${discovery['disallowCount'] ?? 0} disallow',
-                    Colors.red,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.done_outline,
-                    '${discovery['allowCount'] ?? 0} allow',
-                    Colors.green,
-                  ),
-                ],
+                    size: 15,
+                    color: d.lowSeverity ? Colors.grey : Colors.orange),
+                const SizedBox(width: 7),
+                Expanded(
+                    child:
+                        Text(d.message, style: const TextStyle(fontSize: 12))),
+              ],
+            ),
+          ),
+      ],
+      border: Colors.orange.withValues(alpha: 0.4),
+    );
+  }
+
+  Widget _buildStatusCard(BuildContext context, Observed<ServerStatus> state) {
+    if (state is! Present<ServerStatus>) {
+      return _card(
+          context,
+          [
+            _cardTitle(context, Icons.dns_outlined, 'Server response'),
+            const SizedBox(height: 12),
+            _notThere(state, 'Fetching…'),
+          ],
+          filled: true);
+    }
+    final s = state.value;
+    final code = s.last.status;
+    var statusColor = Colors.green;
+    if (code >= 300 && code < 400) statusColor = Colors.orange;
+    if (code >= 400) statusColor = Colors.red;
+    final htmlService = context.read<HtmlService>();
+
+    return _card(
+      context,
+      [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: statusColor),
               ),
-              const SizedBox(height: 12),
-              _buildDetailRow(
-                  'Robots URL', discovery['robotsUrl']?.toString() ?? 'N/A'),
-              if ((discovery['sitemaps'] as List? ?? []).isNotEmpty) ...[
-                const SizedBox(height: 8),
-                ...(discovery['sitemaps'] as List).map((url) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      leading:
-                          const Icon(Icons.account_tree_outlined, size: 18),
-                      title: Text(
-                        url.toString(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12, fontFamily: 'monospace'),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 12),
-                      onTap: () => htmlService.loadFromUrl(url.toString()),
-                    )),
-              ],
-              if ((discovery['sampleDisallow'] as List? ?? []).isNotEmpty) ...[
-                const Divider(height: 20),
-                Text(
-                  'Sample disallow rules',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                  ),
+              child: Text(
+                s.finalStatusText,
+                style:
+                    TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (s.isRedirect)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.blue),
                 ),
-                const SizedBox(height: 6),
-                ...(discovery['sampleDisallow'] as List).map(
-                  (rule) => Text(rule.toString(),
-                      style: const TextStyle(
-                          fontSize: 12, fontFamily: 'monospace')),
-                ),
-              ],
-            ],
+                child: const Text('Redirect',
+                    style: TextStyle(
+                        color: Colors.blue, fontWeight: FontWeight.bold)),
+              ),
           ],
         ),
-      ),
+        const SizedBox(height: 4),
+        const Text('Answer to the app\'s own request, not the browser\'s',
+            style: TextStyle(color: Colors.grey, fontSize: 11)),
+        const SizedBox(height: 12),
+        _detailRow('Content-Type', s.contentType ?? 'not sent by the server'),
+        _detailRow('Final URL', s.finalUrlLabel),
+        if (s.redirectTo != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(
+                  width: 128,
+                  child: Text('Redirect to:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => htmlService.loadFromUrl(s.redirectTo!),
+                    child: Text(
+                      s.redirectTo!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        _detailRow('Content Length', s.contentLengthLabel),
+        _detailRow('Body received', s.bodyLabel),
+        _detailRow('User-Agent', s.userAgent),
+      ],
+      filled: true,
     );
+  }
+
+  Widget _buildContentTypeTruthCard(
+      BuildContext context, Observed<ContentTypeTruth> state) {
+    if (state is! Present<ContentTypeTruth>) {
+      return _card(context, [
+        _cardTitle(context, Icons.help_outline, 'Content-Type Truth Check'),
+        const SizedBox(height: 12),
+        _notThere(state, 'Waiting for the server response…'),
+      ]);
+    }
+    final c = state.value;
+    final (color, icon) = switch (c.verdict) {
+      ContentTypeVerdict.aligned => (Colors.green, Icons.check_circle_outline),
+      ContentTypeVerdict.mismatch => (Colors.red, Icons.warning_amber_rounded),
+      ContentTypeVerdict.noHeader => (Colors.orange, Icons.help_outline),
+    };
+    return _card(
+      context,
+      [
+        _cardTitle(context, icon, 'Content-Type Truth Check', color: color),
+        const SizedBox(height: 12),
+        _detailRow('Declared', c.declared ?? 'not sent by the server'),
+        _detailRow('Sniffed', '${c.sniffed} (server response)'),
+        _detailRow('Verdict', c.verdictText),
+      ],
+      border: color.withValues(alpha: 0.36),
+    );
+  }
+
+  Widget _buildRobotsSitemapCard(
+      BuildContext context, Observed<RobotsCard> state) {
+    if (state is! Present<RobotsCard>) {
+      return _card(context, [
+        _cardTitle(context, Icons.travel_explore, 'Robots / Sitemap Discovery'),
+        const SizedBox(height: 12),
+        _notThere(state, 'Checking robots.txt and sitemap.xml…'),
+      ]);
+    }
+    final r = state.value;
+    final htmlService = context.read<HtmlService>();
+    return _card(context, [
+      _cardTitle(context, Icons.travel_explore, 'Robots / Sitemap Discovery'),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _chip(
+            r.robotsFound == true
+                ? Icons.check_circle_outline
+                : Icons.warning_amber_rounded,
+            r.robotsLabel,
+            r.robotsFound == true ? Colors.green : Colors.orange,
+          ),
+          _chip(Icons.map_outlined, r.sitemapsLabel, Colors.blue),
+          _chip(Icons.block, r.disallowLabel, Colors.red),
+          _chip(Icons.done_outline, r.allowLabel, Colors.green),
+        ],
+      ),
+      const SizedBox(height: 12),
+      _detailRow('Robots URL', r.robotsUrl),
+      if (r.truncatedNote != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(r.truncatedNote!,
+              style: const TextStyle(color: Colors.orange, fontSize: 12)),
+        ),
+      if (r.sitemaps.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        ...r.sitemaps.map((url) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: const Icon(Icons.account_tree_outlined, size: 18),
+              title: Text(
+                url,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+              onTap: () => htmlService.loadFromUrl(url),
+            )),
+      ],
+      if (r.sampleDisallow.isNotEmpty) ...[
+        const Divider(height: 20),
+        Text(
+          'Sample disallow rules',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 6),
+        ...r.sampleDisallow.map(
+          (rule) => Text(rule,
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
+        ),
+      ],
+    ]);
   }
 
   Widget _buildStorageInspector(
-      BuildContext context, Map<String, dynamic>? browserResult) {
-    final storage = browserResult?['storage'] as Map<String, dynamic>?;
-    final local = storage?['localStorage'] as Map<String, dynamic>?;
-    final session = storage?['sessionStorage'] as Map<String, dynamic>?;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
+      BuildContext context, Observed<StorageCard> state) {
+    if (state is! Present<StorageCard>) {
+      return _card(context, [
+        _cardTitle(context, Icons.inventory_2_outlined, 'Storage Inspector'),
+        const SizedBox(height: 12),
+        _notThere(state, 'Waiting for the browser…'),
+      ]);
+    }
+    final s = state.value;
+    return _card(context, [
+      _cardTitle(context, Icons.inventory_2_outlined, 'Storage Inspector'),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (s.local != null) ...[
+            _chip(Icons.storage, s.local!.countLabel, Colors.blue),
+            _chip(Icons.memory, s.local!.sizeLabel, Colors.blue),
+          ] else
+            _chip(
+                Icons.storage, 'localStorage: ${s.localUnknown}', Colors.grey),
+          if (s.session != null) ...[
+            _chip(Icons.tab, s.session!.countLabel, Colors.purple),
+            _chip(Icons.memory, s.session!.sizeLabel, Colors.purple),
+          ] else
+            _chip(
+                Icons.tab, 'sessionStorage: ${s.sessionUnknown}', Colors.grey),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.inventory_2_outlined,
-                    color: Theme.of(context).colorScheme.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Storage Inspector',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (storage == null)
-              const Text(
-                'Open or reload the Browser tab to collect localStorage and sessionStorage.',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              )
-            else ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildDiscoveryChip(
-                    Icons.storage,
-                    'local ${local?['count'] ?? 0} keys',
-                    Colors.blue,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.memory,
-                    FormatUtils.formatBytes(
-                        (local?['bytes'] as num? ?? 0).toInt()),
-                    Colors.blue,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.tab,
-                    'session ${session?['count'] ?? 0} keys',
-                    Colors.purple,
-                  ),
-                  _buildDiscoveryChip(
-                    Icons.memory,
-                    FormatUtils.formatBytes(
-                        (session?['bytes'] as num? ?? 0).toInt()),
-                    Colors.purple,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _buildStorageKeyList(context, 'localStorage', local),
-              _buildStorageKeyList(context, 'sessionStorage', session),
-            ],
-          ],
-        ),
-      ),
-    );
+      const SizedBox(height: 12),
+      if (s.local != null)
+        _buildStorageKeyList(context, 'localStorage', s.local!),
+      if (s.session != null)
+        _buildStorageKeyList(context, 'sessionStorage', s.session!),
+    ]);
   }
 
   Widget _buildStorageKeyList(
-      BuildContext context, String label, Map<String, dynamic>? storage) {
-    final items = storage?['items'] as List? ?? const [];
-    if (items.isEmpty) return const SizedBox.shrink();
+      BuildContext context, String label, StorageAreaCard area) {
+    if (area.items.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -531,888 +503,486 @@ class ProbeGeneralView extends ProbeViewBase {
           ),
         ),
         const SizedBox(height: 4),
-        ...items.take(8).map((item) {
-          final map = item as Map;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 3),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    map['k']?.toString() ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        ...area.items.take(8).map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.key,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontFamily: 'monospace', fontSize: 12),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  FormatUtils.formatBytes((map['s'] as num? ?? 0).toInt()),
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-              ],
-            ),
-          );
-        }),
+                  const SizedBox(width: 8),
+                  Text(
+                    item.size,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            )),
       ],
     );
   }
 
-  Widget _buildSourceDiffCard(BuildContext context, HtmlService htmlService) {
-    final serverSource = htmlService.serverSource;
-    final browserSource = htmlService.currentFile?.content;
-    final hasBrowserSource = browserSource != null && browserSource.isNotEmpty;
-    final hasServerSource = serverSource != null && serverSource.isNotEmpty;
+  Widget _buildSourceDiffCard(BuildContext context, SourceDiffCard card) {
+    final diff = card.diff;
+    final changed = diff?.changed ?? 0;
+    final color = diff == null
+        ? Theme.of(context).colorScheme.primary
+        : changed == 0
+            ? Colors.green
+            : changed < 30
+                ? Colors.orange
+                : Colors.red;
+    final muted =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.68);
 
-    if (!hasServerSource || !hasBrowserSource) {
-      return Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(12),
+    return _card(
+      context,
+      [
+        _cardTitle(context, Icons.difference_outlined, 'Diff Two Sources',
+            color: color),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final side in card.sides)
+              _chip(
+                side.ready ? Icons.check_circle_outline : Icons.hourglass_empty,
+                '${side.name}: ${side.status}',
+                side.ready ? Colors.green : Colors.orange,
+              ),
+          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        if (diff == null) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Both the server HTML and the rendered DOM are needed to compare them.',
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.difference_outlined,
-                      color: Theme.of(context).colorScheme.primary, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Diff Two Sources',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                !hasBrowserSource
-                    ? 'Open or reload the Browser tab first so there is a rendered DOM snapshot to compare.'
-                    : 'Fetch the original server source to compare it with the browser DOM snapshot.',
-                style: TextStyle(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.68),
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildDiscoveryChip(
-                    hasServerSource
-                        ? Icons.check_circle_outline
-                        : Icons.download_outlined,
-                    hasServerSource
-                        ? 'server source ready'
-                        : 'server source missing',
-                    hasServerSource ? Colors.green : Colors.orange,
-                  ),
-                  _buildDiscoveryChip(
-                    hasBrowserSource
-                        ? Icons.check_circle_outline
-                        : Icons.web_asset_off_outlined,
-                    hasBrowserSource
-                        ? 'browser DOM ready'
-                        : 'browser DOM missing',
-                    hasBrowserSource ? Colors.green : Colors.orange,
-                  ),
-                ],
-              ),
-              if (hasBrowserSource && !hasServerSource) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    icon: htmlService.isLoading
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.download_outlined, size: 16),
-                    label: const Text('Fetch server source'),
-                    onPressed: htmlService.isLoading
-                        ? null
-                        : () => htmlService.loadServerSourceForDiff(),
-                  ),
-                ),
-              ],
+              _chip(Icons.dns, '${diff.serverLines} server lines', Colors.blue),
+              _chip(Icons.web, '${diff.browserLines} DOM lines', Colors.purple),
+              _chip(Icons.add, '+${diff.addedLines}', Colors.green),
+              _chip(Icons.remove, '-${diff.removedLines}', Colors.red),
+              _chip(Icons.percent, '${diff.similarity}% similar', color),
             ],
           ),
-        ),
-      );
-    }
-
-    final diff = _sourceDiff(serverSource, browserSource);
-    final changed = diff.addedLines + diff.removedLines;
-    final color = changed == 0
-        ? Colors.green
-        : changed < 30
-            ? Colors.orange
-            : Colors.red;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: color.withValues(alpha: 0.34)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.difference_outlined, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Diff Two Sources',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+          const SizedBox(height: 12),
+          Text(
+            changed == 0
+                ? 'Server HTML and rendered DOM look identical.'
+                : 'Compact line-level diff between the server HTML (-) and the rendered DOM (+).',
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+          if (diff.samples.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildDiscoveryChip(
-                    Icons.dns, '${diff.serverLines} server lines', Colors.blue),
-                _buildDiscoveryChip(Icons.web,
-                    '${diff.browserLines} browser lines', Colors.purple),
-                _buildDiscoveryChip(
-                    Icons.add, '+${diff.addedLines}', Colors.green),
-                _buildDiscoveryChip(
-                    Icons.remove, '-${diff.removedLines}', Colors.red),
-                _buildDiscoveryChip(
-                    Icons.percent, '${diff.similarity}% similar', color),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              changed == 0
-                  ? 'Server source and browser DOM snapshot look identical.'
-                  : 'Shows a compact line-level diff between curl/server HTML and the browser DOM snapshot.',
-              style: TextStyle(
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
                 color: Theme.of(context)
                     .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.68),
-                fontSize: 12,
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SelectableText(
+                diff.samples.join('\n'),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
               ),
             ),
-            if (diff.samples.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SelectableText(
-                  diff.samples.join('\n'),
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                ),
-              ),
-            ],
           ],
-        ),
-      ),
-    );
-  }
-
-  _SourceDiffSummary _sourceDiff(String serverSource, String browserSource) {
-    final serverLines = _normalizedLines(serverSource);
-    final browserLines = _normalizedLines(browserSource);
-    final serverSet = serverLines.toSet();
-    final browserSet = browserLines.toSet();
-    final removed =
-        serverLines.where((line) => !browserSet.contains(line)).toList();
-    final added =
-        browserLines.where((line) => !serverSet.contains(line)).toList();
-    final shared = serverSet.intersection(browserSet).length;
-    final total = serverSet.union(browserSet).length;
-    final similarity = total == 0 ? 100 : ((shared / total) * 100).round();
-
-    final samples = <String>[
-      ...removed.take(4).map((line) => '- ${_shortDiffLine(line)}'),
-      ...added.take(4).map((line) => '+ ${_shortDiffLine(line)}'),
-    ];
-
-    return _SourceDiffSummary(
-      serverLines: serverLines.length,
-      browserLines: browserLines.length,
-      addedLines: added.length,
-      removedLines: removed.length,
-      similarity: similarity,
-      samples: samples,
-    );
-  }
-
-  List<String> _normalizedLines(String source) {
-    return source
-        .split(RegExp(r'\r?\n'))
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-  }
-
-  String _shortDiffLine(String line) {
-    final collapsed = line.replaceAll(RegExp(r'\s+'), ' ');
-    return collapsed.length > 140
-        ? '${collapsed.substring(0, 137)}...'
-        : collapsed;
-  }
-
-  Widget _buildDiscoveryChip(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 14),
-          const SizedBox(width: 5),
-          Text(label,
-              style: TextStyle(
-                  color: color, fontSize: 11, fontWeight: FontWeight.bold)),
         ],
-      ),
+      ],
+      border: color.withValues(alpha: 0.34),
     );
   }
 
-  Widget _buildRedirectChainView(BuildContext context, HtmlService htmlService,
-      List<Map<String, dynamic>> redirects) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.alt_route,
-                    size: 20, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Redirect Chain View',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+  Widget _buildRedirectChainView(
+      BuildContext context, List<RedirectStep> redirects) {
+    final htmlService = context.read<HtmlService>();
+    return _card(context, [
+      _cardTitle(context, Icons.alt_route, 'Redirect Chain View'),
+      const SizedBox(height: 12),
+      ...redirects.asMap().entries.map((entry) {
+        final step = entry.value;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 13,
+                backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                child: Text(
+                  '${entry.key + 1}',
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...redirects.asMap().entries.map((entry) {
-              final redirect = entry.value;
-              final status = redirect['statusCode']?.toString() ?? '3xx';
-              final from = redirect['from']?.toString() ?? '';
-              final to = redirect['to']?.toString() ?? '';
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 13,
-                      backgroundColor: Colors.orange.withValues(alpha: 0.15),
-                      child: Text(
-                        '${entry.key + 1}',
+                    Text(step.statusText,
                         style: const TextStyle(
-                          color: Colors.orange,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(status,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 13)),
-                          const SizedBox(height: 3),
-                          SelectableText(from,
-                              style: const TextStyle(fontSize: 11)),
-                          const SizedBox(height: 3),
-                          InkWell(
-                            onTap: () => htmlService.loadFromUrl(to),
-                            child: Text(
-                              to,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontSize: 11,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Map<String, dynamic>> _redirectChainFrom(Map<String, dynamic> result) {
-    final raw = result['redirectChain'];
-    if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    }
-    final redirectLocation = result['redirectLocation']?.toString();
-    if (redirectLocation == null || redirectLocation.isEmpty) return [];
-    return [
-      {
-        'from': result['url'],
-        'to': redirectLocation,
-        'statusCode': result['statusCode'],
-        'reasonPhrase': result['reasonPhrase'],
-      }
-    ];
-  }
-
-  Widget _buildBrowserProbeCard(
-      BuildContext context, Map<String, dynamic> result) {
-    final pageWeight = result['pageWeight'] as Map<String, dynamic>? ?? {};
-    final totalTx = pageWeight['totalTransfer'] as int? ?? 0;
-    final totalDec = pageWeight['totalDecoded'] as int? ?? 0;
-    final mainDocTx = pageWeight['mainDocumentTransfer'] as int? ?? 0;
-    final mainDocDec = pageWeight['mainDocumentDecoded'] as int? ?? 0;
-    final resourceCount = result['resourceCount'] as int? ?? 0;
-    final url = result['url'] as String? ?? 'N/A';
-    final statusCode = result['serverStatusCode'];
-
-    return Card(
-      elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.3),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDetailRow('Effective URL', url),
-            if (statusCode != null)
-              _buildDetailRow('HTTP Status', statusCode.toString()),
-            const SizedBox(height: 8),
-            const Divider(),
-            const SizedBox(height: 8),
-            _buildDetailRow(
-                'Document Size',
-                mainDocDec > 0
-                    ? FormatUtils.formatBytesWithTransfer(
-                        {'decoded': mainDocDec, 'transfer': mainDocTx})
-                    : 'N/A'),
-            const Divider(),
-            _buildDetailRow('Total Resources', '$resourceCount requests'),
-            _buildDetailRow(
-                'Total Size',
-                totalDec > 0
-                    ? FormatUtils.formatBytesWithTransfer(
-                        {'decoded': totalDec, 'transfer': totalTx})
-                    : 'N/A'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusCard(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    final status = result['statusCode'];
-    final reason = result['reasonPhrase'];
-    final isRedirect = result['isRedirect'] == true;
-
-    Color statusColor = Colors.green;
-    if (status != null) {
-      if (status >= 300 && status < 400) statusColor = Colors.orange;
-      if (status >= 400) statusColor = Colors.red;
-    }
-
-    return Card(
-      elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.3),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor),
-                  ),
-                  child: Text(
-                    '$status $reason'.trim(),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                if (isRedirect)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blue),
-                    ),
-                    child: const Text(
-                      'Redirect',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (result['headers']?['content-type'] != null)
-              _buildDetailRow(
-                  'Content-Type', result['headers']['content-type']),
-            _buildDetailRow('Final URL', result['finalUrl'] ?? 'N/A'),
-            if (isRedirect && result['redirectLocation'] != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      width: 128,
-                      child: Text(
-                        'Redirect to:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          // Load the redirect URL
-                          final redirectUrl = result['redirectLocation'];
-                          Provider.of<HtmlService>(context, listen: false)
-                              .loadFromUrl(redirectUrl);
-                          Provider.of<HtmlService>(context, listen: false)
-                              .probeUrl(redirectUrl)
-                              .ignore();
-                        },
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 3),
+                    SelectableText(step.from,
+                        style: const TextStyle(fontSize: 11)),
+                    const SizedBox(height: 3),
+                    if (step.to == null)
+                      const Text('no Location header',
+                          style: TextStyle(color: Colors.grey, fontSize: 11))
+                    else
+                      InkWell(
+                        onTap: () => htmlService.loadFromUrl(step.to!),
                         child: Text(
-                          result['redirectLocation'],
+                          step.to!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.primary,
+                            fontSize: 11,
                             decoration: TextDecoration.underline,
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
-            if (result['contentLength'] != null ||
-                (htmlService.currentFile?.content.isNotEmpty ?? false))
-              _buildDetailRow(
-                'Content Length',
-                () {
-                  final probeLength = result['contentLength'] ?? 0;
-                  final fileLength =
-                      htmlService.currentFile?.content.length ?? 0;
-                  if (fileLength > 0) {
-                    return '$probeLength ($fileLength bytes loaded)';
-                  }
-                  return '$probeLength bytes';
-                }(),
-              ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      }),
+    ]);
+  }
+
+  Widget _buildBrowserProbeCard(
+      BuildContext context, Observed<BrowserCard> state) {
+    if (state is! Present<BrowserCard>) {
+      return _card(context, [_notThere(state, 'Waiting for the browser…')],
+          filled: true);
+    }
+    final b = state.value;
+    return _card(
+      context,
+      [
+        _detailRow('Effective URL', b.url),
+        _detailRow('Environment', b.environment),
+        const SizedBox(height: 8),
+        const Divider(),
+        const SizedBox(height: 8),
+        _detailRow('Document Size', b.documentSizeLabel),
+        const Divider(),
+        _detailRow('Total Resources', b.resourcesLabel),
+        _detailRow('Total Size', b.totalSizeLabel),
+      ],
+      filled: true,
     );
   }
 
   Widget _buildNetworkInfoCard(
-      BuildContext context, Map<String, dynamic> result) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Network & Performance',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            if (result['ipAddress'] != null)
-              _buildDetailRow('Server IP', result['ipAddress']),
-            if (result['responseTime'] != null)
-              _buildDetailRow('Response Time', '${result['responseTime']} ms'),
-            if (result['headers']?['server'] != null)
-              _buildDetailRow('Server Software', result['headers']['server']),
-            if (result['headers']?['via'] != null)
-              _buildDetailRow('Proxy/Via', result['headers']['via']),
-          ],
-        ),
-      ),
+      BuildContext context, Observed<NetworkCard> state) {
+    final title = Text(
+      'Network & Performance',
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.primary,
+          ),
     );
+    if (state is! Present<NetworkCard>) {
+      return _card(context, [
+        title,
+        const SizedBox(height: 12),
+        _notThere(state, 'Fetching…'),
+      ]);
+    }
+    final n = state.value;
+    return _card(context, [
+      title,
+      const SizedBox(height: 12),
+      _detailRow('Remote address', n.remoteAddress),
+      _detailRow('Response Time', n.responseTime),
+      if (n.serverSoftware != null)
+        _detailRow('Server Software', n.serverSoftware!),
+      if (n.via != null) _detailRow('Proxy/Via', n.via!),
+      for (final (label, value) in n.browserTiming)
+        _detailRow(label, '$value (measured by the browser)'),
+    ]);
   }
 }
 
-class ProbeHeadersView extends ProbeViewBase {
+// ---------------------------------------------------------------------------
+// Headers
+// ---------------------------------------------------------------------------
+
+Color _toneColor(InsightTone tone) => switch (tone) {
+      InsightTone.good => Colors.green,
+      InsightTone.warn => Colors.orange,
+      InsightTone.bad => Colors.red,
+      InsightTone.neutral => Colors.grey,
+      InsightTone.info => Colors.blue,
+      InsightTone.brand => Colors.purple,
+    };
+
+class ProbeHeadersView extends StatelessWidget {
   const ProbeHeadersView({super.key});
 
-  @override
-  Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    final Map<String, dynamic> headers = result['headers'] ?? {};
-    final sortedKeys = headers.keys.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    final state = context
+        .select<HtmlService, Observed<HeadersModel>>((s) => s.headersView);
+    return _tabBody(state, (m) => _content(context, m));
+  }
+
+  Widget _content(BuildContext context, HeadersModel m) {
     return Scrollbar(
       child: ListView(
         primary: true,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         children: [
-          _buildHeaderIntelligence(context, headers),
-          const SizedBox(height: 16),
-          _buildHeaderCategorySection(context, headers),
-          const SizedBox(height: 16),
-          Text(
-            'All Response Headers',
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              side: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: sortedKeys.asMap().entries.map((entry) {
-                final index = entry.key;
-                final key = entry.value;
-                final value = headers[key]!;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (index > 0) const Divider(height: 1),
-                    ListTile(
-                      title: Text(
-                        key,
-                        style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(
-                        FormatUtils.formatHumanData(value),
-                        style: const TextStyle(
-                            fontFamily: 'monospace', fontSize: 13),
-                      ),
-                      dense: true,
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: '$key: $value'));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Header copied to clipboard'),
-                              duration: Duration(milliseconds: 500)),
-                        );
-                      },
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderIntelligence(
-      BuildContext context, Map<String, dynamic> headers) {
-    final lookup = _headerLookup(headers);
-    final cache = _cacheVerdict(lookup);
-    final compression = _compressionVerdict(lookup);
-    final cdn = _cdnVerdict(lookup);
-    final cors = _corsVerdict(lookup);
-    final negotiation = _negotiationVerdict(lookup);
-    final validators = _validatorVerdict(lookup);
-    // Each insight with the response headers it is based on.
-    final chips = [
-      (cache, ['cache-control', 'age', 'expires']),
-      (compression, ['content-encoding']),
-      (cdn, ['server', 'via', 'cf-cache-status', 'cf-ray', 'x-cache']),
-      (
-        cors,
-        ['access-control-allow-origin', 'access-control-allow-credentials']
-      ),
-      (negotiation, ['vary']),
-      (validators, ['etag', 'last-modified']),
-    ];
-
-    return Card(
-      elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.28),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.rule_folder_outlined,
-                    color: Theme.of(context).colorScheme.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Header Intelligence',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: chips.map((chip) {
-                final (insight, names) = chip;
-                final evidence = [
-                  for (final name in names)
-                    if (lookup[name] != null)
-                      DetectionEvidence(
-                          EvidenceKind.header, 'Response header $name',
-                          detail: '$name: ${lookup[name]}'),
-                ];
-                return InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => showEvidenceSheet(
-                      context, insight.label, evidence,
-                      description: insight.detail),
-                  child: _buildHeaderInsightChip(insight),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            ..._headerNotes(lookup).map(
-              (note) => Padding(
-                padding: const EdgeInsets.only(top: 5),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(note.icon, size: 15, color: note.color),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child:
-                          Text(note.text, style: const TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          if (!m.known) ...[
+            _card(context, [
+              if (m.loading)
+                _notThere<Object>(const Pending(), m.stateNote ?? 'Fetching…')
+              else
+                _notThere<Object>(Failed(m.stateNote ?? 'No response'), ''),
+            ]),
+            const SizedBox(height: 16),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderCategorySection(
-      BuildContext context, Map<String, dynamic> headers) {
-    final categories = <String, List<String>>{
-      'Caching': [
-        'cache-control',
-        'etag',
-        'last-modified',
-        'expires',
-        'age',
-      ],
-      'Delivery': [
-        'server',
-        'via',
-        'x-cache',
-        'cf-cache-status',
-        'x-served-by',
-        'content-encoding',
-      ],
-      'Negotiation': [
-        'vary',
-        'content-type',
-        'content-language',
-        'accept-ranges',
-      ],
-      'CORS': [
-        'access-control-allow-origin',
-        'access-control-allow-methods',
-        'access-control-allow-headers',
-        'access-control-allow-credentials',
-      ],
-    };
-    final lookup = _headerLookup(headers);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          _buildHeaderIntelligence(context, m),
+          if (m.groups.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildHeaderCategorySection(context, m.groups),
+          ],
+          if (m.hops.isNotEmpty) ...[
+            const SizedBox(height: 16),
             Text(
-              'Header Groups',
+              'All Response Headers',
               style: Theme.of(context)
                   .textTheme
                   .titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
-            ...categories.entries.map((category) {
-              final present = category.value
-                  .where((key) => (lookup[key] ?? '').isNotEmpty)
-                  .toList();
-              if (present.isEmpty) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category.key,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Wrap(
-                      spacing: 7,
-                      runSpacing: 7,
-                      children: present.map((key) {
-                        return Tooltip(
-                          message: lookup[key]!,
-                          child: Chip(
-                            visualDensity: VisualDensity.compact,
-                            label: Text(key),
-                            avatar: const Icon(Icons.label_outline, size: 15),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              );
-            }),
+            const SizedBox(height: 8),
+            for (final hop in m.hops.reversed) ...[
+              _buildHopHeaders(context, hop, isFinal: hop == m.hops.last),
+              const SizedBox(height: 8),
+            ],
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildHeaderInsightChip(_HeaderInsight insight) {
+  Widget _buildHopHeaders(BuildContext context, HopHeaders hop,
+      {required bool isFinal}) {
+    final rows = Column(
+      children: hop.lines.asMap().entries.map((entry) {
+        final line = entry.value;
+        final value = line.values.join('\n');
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (entry.key > 0) const Divider(height: 1),
+            ListTile(
+              title: Text(
+                line.name,
+                style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                value,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              ),
+              dense: true,
+              onTap: () {
+                Clipboard.setData(ClipboardData(
+                    text:
+                        line.values.map((v) => '${line.name}: $v').join('\n')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Header copied to clipboard'),
+                      duration: Duration(milliseconds: 500)),
+                );
+              },
+            ),
+          ],
+        );
+      }).toList(),
+    );
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: isFinal
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Text(hop.title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+                if (hop.lines.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: Text('The server sent no headers.',
+                        style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  )
+                else
+                  rows,
+              ],
+            )
+          : ExpansionTile(
+              title: Text(hop.title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 12)),
+              subtitle: Text(hop.url,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11)),
+              children: [rows],
+            ),
+    );
+  }
+
+  Widget _buildHeaderIntelligence(BuildContext context, HeadersModel m) {
+    return _card(
+      context,
+      [
+        _cardTitle(context, Icons.rule_folder_outlined, 'Header Intelligence'),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: m.insights.map((insight) {
+            final evidence = [
+              for (final (name, value) in insight.evidence)
+                DetectionEvidence(EvidenceKind.header, 'Response header $name',
+                    detail: '$name: $value'),
+            ];
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => showEvidenceSheet(context, insight.label, evidence,
+                  description: insight.detail),
+              child: _buildHeaderInsightChip(insight),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        ...m.notes.map(
+          (note) => Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(note.icon, size: 15, color: _toneColor(note.tone)),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(note.text, style: const TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+      filled: true,
+    );
+  }
+
+  Widget _buildHeaderCategorySection(
+      BuildContext context, List<HeaderGroup> groups) {
+    return _card(context, [
+      Text(
+        'Header Groups',
+        style: Theme.of(context)
+            .textTheme
+            .titleSmall
+            ?.copyWith(fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 12),
+      ...groups.map((group) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  group.name,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: group.headers.map((h) {
+                    return Tooltip(
+                      message: h.$2,
+                      child: Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(h.$1),
+                        avatar: const Icon(Icons.label_outline, size: 15),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          )),
+    ]);
+  }
+
+  Widget _buildHeaderInsightChip(HeaderInsight insight) {
+    final color = _toneColor(insight.tone);
     return Tooltip(
       message: insight.detail,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
-          color: insight.color.withValues(alpha: 0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: insight.color.withValues(alpha: 0.24)),
+          border: Border.all(color: color.withValues(alpha: 0.24)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(insight.icon, color: insight.color, size: 15),
+            Icon(insight.icon, color: color, size: 15),
             const SizedBox(width: 5),
             Text(
               insight.label,
               style: TextStyle(
-                color: insight.color,
+                color: color,
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
@@ -1422,207 +992,44 @@ class ProbeHeadersView extends ProbeViewBase {
       ),
     );
   }
-
-  Map<String, String> _headerLookup(Map<String, dynamic> headers) {
-    return {
-      for (final entry in headers.entries)
-        entry.key.toString().toLowerCase(): entry.value.toString(),
-    };
-  }
-
-  _HeaderInsight _cacheVerdict(Map<String, String> headers) {
-    final cacheControl = headers['cache-control']?.toLowerCase() ?? '';
-    final age = headers['age'];
-    if (cacheControl.contains('no-store')) {
-      return const _HeaderInsight(
-        'No-store',
-        Icons.lock_outline,
-        Colors.orange,
-        'Response should not be stored by caches.',
-      );
-    }
-    final maxAge = RegExp(r'max-age=(\d+)').firstMatch(cacheControl);
-    if (maxAge != null) {
-      final seconds = int.tryParse(maxAge.group(1) ?? '') ?? 0;
-      return _HeaderInsight(
-        seconds >= 86400 ? 'Cacheable' : 'Short cache',
-        Icons.cached,
-        seconds >= 86400 ? Colors.green : Colors.orange,
-        'Cache-Control max-age is ${seconds}s${age == null ? '' : ', Age is $age'}.',
-      );
-    }
-    return const _HeaderInsight(
-      'No cache policy',
-      Icons.help_outline,
-      Colors.grey,
-      'No explicit Cache-Control max-age/no-store directive found.',
-    );
-  }
-
-  _HeaderInsight _compressionVerdict(Map<String, String> headers) {
-    final encoding = headers['content-encoding']?.toLowerCase();
-    if (encoding == null || encoding.isEmpty) {
-      return const _HeaderInsight(
-        'No compression',
-        Icons.compress,
-        Colors.orange,
-        'No Content-Encoding header found.',
-      );
-    }
-    return _HeaderInsight(
-      encoding.toUpperCase(),
-      Icons.compress,
-      Colors.green,
-      'Response uses Content-Encoding: $encoding.',
-    );
-  }
-
-  _HeaderInsight _cdnVerdict(Map<String, String> headers) {
-    final server = '${headers['server'] ?? ''} ${headers['via'] ?? ''} '
-            '${headers['cf-cache-status'] ?? ''} ${headers['x-cache'] ?? ''}'
-        .toLowerCase();
-    if (server.contains('cloudflare') ||
-        headers.containsKey('cf-cache-status')) {
-      return const _HeaderInsight(
-        'Cloudflare',
-        Icons.cloud_outlined,
-        Colors.purple,
-        'Cloudflare headers detected.',
-      );
-    }
-    if (server.contains('hit')) {
-      return const _HeaderInsight(
-        'Cache hit',
-        Icons.speed,
-        Colors.green,
-        'Proxy/cache header suggests a cache hit.',
-      );
-    }
-    if (headers.containsKey('via') || headers.containsKey('x-cache')) {
-      return const _HeaderInsight(
-        'Proxy/CDN',
-        Icons.hub_outlined,
-        Colors.blue,
-        'Proxy or cache headers detected.',
-      );
-    }
-    return const _HeaderInsight(
-      'Origin-ish',
-      Icons.dns_outlined,
-      Colors.grey,
-      'No obvious CDN/proxy headers detected.',
-    );
-  }
-
-  _HeaderInsight _corsVerdict(Map<String, String> headers) {
-    final origin = headers['access-control-allow-origin'];
-    final credentials =
-        headers['access-control-allow-credentials']?.toLowerCase() == 'true';
-    if (origin == null || origin.isEmpty) {
-      return const _HeaderInsight(
-        'No CORS',
-        Icons.public_off,
-        Colors.grey,
-        'No Access-Control-Allow-Origin header found.',
-      );
-    }
-    if (origin == '*' && credentials) {
-      return const _HeaderInsight(
-        'Risky CORS',
-        Icons.warning_amber_rounded,
-        Colors.red,
-        'Wildcard origin with credentials is unsafe and usually rejected.',
-      );
-    }
-    return _HeaderInsight(
-      origin == '*' ? 'Open CORS' : 'CORS set',
-      Icons.public,
-      origin == '*' ? Colors.orange : Colors.green,
-      'Access-Control-Allow-Origin: $origin.',
-    );
-  }
-
-  _HeaderInsight _negotiationVerdict(Map<String, String> headers) {
-    final vary = headers['vary'];
-    if (vary == null || vary.isEmpty) {
-      return const _HeaderInsight(
-        'No Vary',
-        Icons.swap_vert,
-        Colors.grey,
-        'No Vary header found.',
-      );
-    }
-    return _HeaderInsight(
-      'Vary: ${vary.split(',').length}',
-      Icons.swap_vert,
-      Colors.blue,
-      'Vary controls cache variants: $vary.',
-    );
-  }
-
-  _HeaderInsight _validatorVerdict(Map<String, String> headers) {
-    final hasEtag = (headers['etag'] ?? '').isNotEmpty;
-    final hasLastModified = (headers['last-modified'] ?? '').isNotEmpty;
-    if (hasEtag || hasLastModified) {
-      return _HeaderInsight(
-        hasEtag && hasLastModified ? '2 validators' : 'Validator',
-        Icons.verified_outlined,
-        Colors.green,
-        'Conditional request validator is present.',
-      );
-    }
-    return const _HeaderInsight(
-      'No validator',
-      Icons.remove_circle_outline,
-      Colors.orange,
-      'No ETag or Last-Modified header found.',
-    );
-  }
-
-  List<_HeaderNote> _headerNotes(Map<String, String> headers) {
-    final notes = <_HeaderNote>[];
-    if ((headers['content-type'] ?? '').isEmpty) {
-      notes.add(const _HeaderNote(Icons.warning_amber_rounded, Colors.orange,
-          'Missing Content-Type makes content sniffing more likely.'));
-    }
-    if ((headers['x-content-type-options'] ?? '').toLowerCase() != 'nosniff') {
-      notes.add(const _HeaderNote(Icons.security, Colors.orange,
-          'X-Content-Type-Options: nosniff is not present.'));
-    }
-    if ((headers['server'] ?? '').isNotEmpty ||
-        (headers['x-powered-by'] ?? '').isNotEmpty) {
-      notes.add(const _HeaderNote(Icons.badge_outlined, Colors.grey,
-          'Server technology is disclosed in response headers.'));
-    }
-    if ((headers['content-length'] ?? '').isEmpty &&
-        (headers['transfer-encoding'] ?? '').isNotEmpty) {
-      notes.add(const _HeaderNote(Icons.alt_route, Colors.blue,
-          'Transfer-Encoding is used instead of a fixed Content-Length.'));
-    }
-    if (notes.isEmpty) {
-      notes.add(const _HeaderNote(Icons.check_circle_outline, Colors.green,
-          'No obvious header hygiene notes.'));
-    }
-    return notes.take(4).toList();
-  }
 }
 
-class ProbeSecurityView extends ProbeViewBase {
+// ---------------------------------------------------------------------------
+// Security
+// ---------------------------------------------------------------------------
+
+Color _certColor(CertTone tone) => switch (tone) {
+      CertTone.good => Colors.green,
+      CertTone.warn => Colors.orange,
+      CertTone.bad => Colors.red,
+      CertTone.neutral => Colors.grey,
+    };
+
+class ProbeSecurityView extends StatelessWidget {
   const ProbeSecurityView({super.key});
 
-  @override
-  Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    final Map<String, dynamic> security = result['security'] ?? {};
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
 
+  @override
+  Widget build(BuildContext context) {
+    builds++;
+    final state = context
+        .select<HtmlService, Observed<SecurityModel>>((s) => s.securityView);
+    return _tabBody(state, (m) => _content(context, m));
+  }
+
+  Widget _content(BuildContext context, SecurityModel m) {
+    final audit = m.audit;
     return Scrollbar(
         child: ListView(
       primary: true,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
       children: [
-        _buildSecurityScorecard(context, result, security),
+        _buildSecurityScorecard(context, audit),
         const SizedBox(height: 16),
-        _buildCspSimulator(context, security),
+        _buildCspSimulator(context, m.csp),
         const SizedBox(height: 16),
         Text(
           'Security Header Audit',
@@ -1632,16 +1039,13 @@ class ProbeSecurityView extends ProbeViewBase {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        if (result['tlsInvalidCertificate'] == true) ...[
-          _buildTlsWarningCard(context, result),
+        if (m.tlsWarning != null) ...[
+          _buildTlsWarningCard(context, m.tlsWarning!),
           const SizedBox(height: 12),
         ],
-        ...(() {
-          final sortedSecurity = security.entries.toList()
-            ..sort(
-                (a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
-          return sortedSecurity.map((e) {
-            final isPresent = e.value != null;
+        if (audit is Present<SecurityAudit>)
+          ...audit.value.rows.map((row) {
+            final isPresent = row.value != null;
             return Card(
               elevation: 0,
               margin: const EdgeInsets.only(bottom: 8),
@@ -1660,12 +1064,12 @@ class ProbeSecurityView extends ProbeViewBase {
                       : Icons.warning_amber_rounded,
                   color: isPresent ? Colors.green : Colors.orange,
                 ),
-                title: Text(e.key,
+                title: Text(row.name,
                     style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.bold)),
                 subtitle: Text(
                   isPresent
-                      ? FormatUtils.formatHumanData(e.value!)
+                      ? FormatUtils.formatHumanData(row.value!)
                       : 'Missing Header',
                   style: TextStyle(
                     fontSize: 12,
@@ -1676,8 +1080,9 @@ class ProbeSecurityView extends ProbeViewBase {
                 dense: true,
               ),
             );
-          }).toList();
-        }()),
+          })
+        else
+          _notThere(audit, 'Fetching the response headers…'),
         const SizedBox(height: 24),
         Text(
           'SSL Certificate',
@@ -1687,21 +1092,26 @@ class ProbeSecurityView extends ProbeViewBase {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        _buildCertificateCard(context, result),
+        _buildCertificateCard(context, m.certificate),
       ],
     ));
   }
 
-  Widget _buildSecurityScorecard(BuildContext context,
-      Map<String, dynamic> result, Map<String, dynamic> security) {
-    final checks = _buildSecurityHeaderChecks(result, security);
-    final applicableChecks =
-        checks.where((check) => check.isApplicable).toList();
-    final passed = applicableChecks.where((check) => check.isPassing).length;
-    final total = applicableChecks.length;
-    final score = total == 0 ? 0.0 : passed / total;
-    final percentage = (score * 100).round();
-
+  Widget _buildSecurityScorecard(
+      BuildContext context, Observed<SecurityAudit> state) {
+    if (state is! Present<SecurityAudit> || state.value.percentage == null) {
+      return _card(
+          context,
+          [
+            _cardTitle(context, Icons.security, 'Security Headers Score'),
+            const SizedBox(height: 12),
+            _notThere(state, 'Fetching the response headers…'),
+          ],
+          filled: true);
+    }
+    final audit = state.value;
+    final percentage = audit.percentage!;
+    final score = percentage / 100;
     final Color scoreColor;
     if (percentage >= 80) {
       scoreColor = Colors.green;
@@ -1711,387 +1121,212 @@ class ProbeSecurityView extends ProbeViewBase {
       scoreColor = Colors.red;
     }
 
-    return Card(
-      elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.32),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: scoreColor.withValues(alpha: 0.45)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return _card(
+      context,
+      [
+        Row(
           children: [
-            Row(
-              children: [
-                SizedBox(
-                  width: 54,
-                  height: 54,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CircularProgressIndicator(
-                        value: score,
-                        strokeWidth: 6,
-                        color: scoreColor,
-                        backgroundColor: scoreColor.withValues(alpha: 0.14),
-                      ),
-                      Center(
-                        child: Text(
-                          '$percentage',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: scoreColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                      ),
-                    ],
+            SizedBox(
+              width: 54,
+              height: 54,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: score,
+                    strokeWidth: 6,
+                    color: scoreColor,
+                    backgroundColor: scoreColor.withValues(alpha: 0.14),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Security Headers Score',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '$passed of $total controls present',
-                        style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.72),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: checks.map((check) {
-                final color = !check.isApplicable
-                    ? Colors.grey
-                    : check.isPassing
-                        ? Colors.green
-                        : Colors.orange;
-                return Tooltip(
-                  message: check.detail,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: color.withValues(alpha: 0.35)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          !check.isApplicable
-                              ? Icons.remove_circle_outline
-                              : check.isPassing
-                                  ? Icons.check_circle_outline
-                                  : Icons.warning_amber_rounded,
-                          color: color,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          check.label,
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                  Center(
+                    child: Text(
+                      '$percentage',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: scoreColor,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ),
-                      ],
                     ),
                   ),
-                );
-              }).toList(),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<_SecurityHeaderCheck> _buildSecurityHeaderChecks(
-      Map<String, dynamic> result, Map<String, dynamic> security) {
-    final csp = _headerValue(security, 'Content-Security-Policy');
-    final frameOptions = _headerValue(security, 'X-Frame-Options');
-    final contentTypeOptions = _headerValue(security, 'X-Content-Type-Options');
-    final hsts = _headerValue(security, 'Strict-Transport-Security');
-    final referrerPolicy = _headerValue(security, 'Referrer-Policy');
-    final permissionsPolicy = _headerValue(security, 'Permissions-Policy');
-    final finalUrl =
-        result['finalUrl']?.toString() ?? result['url']?.toString();
-    final isHttps = finalUrl?.startsWith('https://') ?? false;
-
-    final hasFrameProtection =
-        _isPresent(frameOptions) || (csp?.contains('frame-ancestors') ?? false);
-    final hasNoSniff =
-        contentTypeOptions?.toLowerCase().contains('nosniff') ?? false;
-
-    return [
-      _SecurityHeaderCheck(
-        label: 'HSTS',
-        isApplicable: isHttps,
-        isPassing: _isPresent(hsts),
-        detail: isHttps
-            ? (_isPresent(hsts)
-                ? 'Strict-Transport-Security is present.'
-                : 'Missing Strict-Transport-Security on HTTPS.')
-            : 'HSTS is only meaningful on HTTPS responses.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'CSP',
-        isPassing: _isPresent(csp),
-        detail: _isPresent(csp)
-            ? 'Content-Security-Policy is present.'
-            : 'Missing Content-Security-Policy.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'Frames',
-        isPassing: hasFrameProtection,
-        detail: hasFrameProtection
-            ? 'Frame protection is present.'
-            : 'Missing X-Frame-Options or CSP frame-ancestors.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'No Sniff',
-        isPassing: hasNoSniff,
-        detail: hasNoSniff
-            ? 'X-Content-Type-Options includes nosniff.'
-            : 'Missing X-Content-Type-Options: nosniff.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'Referrer',
-        isPassing: _isPresent(referrerPolicy),
-        detail: _isPresent(referrerPolicy)
-            ? 'Referrer-Policy is present.'
-            : 'Missing Referrer-Policy.',
-      ),
-      _SecurityHeaderCheck(
-        label: 'Permissions',
-        isPassing: _isPresent(permissionsPolicy),
-        detail: _isPresent(permissionsPolicy)
-            ? 'Permissions-Policy is present.'
-            : 'Missing Permissions-Policy.',
-      ),
-    ];
-  }
-
-  String? _headerValue(Map<String, dynamic> security, String key) {
-    final value = security[key];
-    if (value == null) return null;
-    final text = value.toString().trim();
-    return text.isEmpty ? null : text.toLowerCase();
-  }
-
-  bool _isPresent(String? value) => value != null && value.isNotEmpty;
-
-  Widget _buildCspSimulator(
-      BuildContext context, Map<String, dynamic> security) {
-    final csp = security['Content-Security-Policy']?.toString() ?? '';
-    final directives = _parseCsp(csp);
-    final findings = _cspFindings(directives);
-    final score = directives.isEmpty
-        ? 0
-        : (100 -
-                findings.where((f) => f.severity == _CspSeverity.high).length *
-                    22 -
-                findings
-                        .where((f) => f.severity == _CspSeverity.medium)
-                        .length *
-                    12)
-            .clamp(0, 100);
-    final color = score >= 80
-        ? Colors.green
-        : score >= 50
-            ? Colors.orange
-            : Colors.red;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: color.withValues(alpha: 0.34)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.policy_outlined, color: color, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'CSP Simulator',
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Security Headers Score',
                     style: Theme.of(context)
                         .textTheme
                         .titleSmall
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
-                ),
-                Text('$score',
+                  const SizedBox(height: 3),
+                  Text(
+                    '${audit.passed} of ${audit.total} controls present',
                     style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (directives.isEmpty)
-              const Text(
-                'No Content-Security-Policy header found.',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              )
-            else ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: directives.entries.map((entry) {
-                  return _buildCspChip(
-                    Icons.rule,
-                    '${entry.key} ${entry.value.length}',
-                    Colors.blue,
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-              ...findings.map((finding) {
-                final findingColor = finding.severity.color;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 7),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(finding.severity.icon,
-                          color: findingColor, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          finding.text,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ],
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.72),
+                      fontSize: 12,
+                    ),
                   ),
-                );
-              }),
-            ],
+                ],
+              ),
+            ),
           ],
         ),
-      ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: audit.checks.map((check) {
+            final color = !check.applicable
+                ? Colors.grey
+                : check.passing
+                    ? Colors.green
+                    : Colors.orange;
+            return Tooltip(
+              message: check.detail,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: color.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      !check.applicable
+                          ? Icons.remove_circle_outline
+                          : check.passing
+                              ? Icons.check_circle_outline
+                              : Icons.warning_amber_rounded,
+                      color: color,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      check.label,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+      filled: true,
+      border: scoreColor.withValues(alpha: 0.45),
     );
   }
 
-  Map<String, List<String>> _parseCsp(String csp) {
-    final result = <String, List<String>>{};
-    for (final part in csp.split(';')) {
-      final tokens = part.trim().split(RegExp(r'\s+'));
-      if (tokens.isEmpty || tokens.first.isEmpty) continue;
-      result[tokens.first.toLowerCase()] = tokens.skip(1).toList();
+  Widget _buildCspSimulator(BuildContext context, Observed<CspModel> state) {
+    if (state is! Present<CspModel>) {
+      return _card(context, [
+        _cardTitle(context, Icons.policy_outlined, 'CSP Simulator'),
+        const SizedBox(height: 12),
+        _notThere(state, 'Fetching the response headers…'),
+      ]);
     }
-    return result;
-  }
+    final csp = state.value;
+    final score = csp.score;
+    final color = score == null
+        ? Colors.grey
+        : score >= 80
+            ? Colors.green
+            : score >= 50
+                ? Colors.orange
+                : Colors.red;
 
-  Widget _buildCspChip(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 14),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+    return _card(
+      context,
+      [
+        Row(
+          children: [
+            Icon(Icons.policy_outlined, color: color, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'CSP Simulator',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
-        ],
-      ),
+            if (score != null)
+              Text('$score',
+                  style: TextStyle(
+                      color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (csp.policies.isEmpty)
+          const Text(
+            'No Content-Security-Policy header found.',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          )
+        else
+          for (final (i, policy) in csp.policies.indexed) ...[
+            if (csp.policies.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6, top: 4),
+                child: Text('Policy ${i + 1} (score ${policy.score})',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: policy.directives
+                  .map((d) => _chip(Icons.rule, '${d.$1} ${d.$2}', Colors.blue))
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
+            ...policy.findings.map((finding) {
+              final findingColor = switch (finding.severity) {
+                CspSeverity.low => Colors.green,
+                CspSeverity.medium => Colors.orange,
+                CspSeverity.high => Colors.red,
+              };
+              final icon = switch (finding.severity) {
+                CspSeverity.low => Icons.check_circle_outline,
+                CspSeverity.medium => Icons.warning_amber_rounded,
+                CspSeverity.high => Icons.dangerous_outlined,
+              };
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(icon, color: findingColor, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(finding.text,
+                          style: const TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+      ],
+      border: color.withValues(alpha: 0.34),
     );
   }
 
-  List<_CspFinding> _cspFindings(Map<String, List<String>> directives) {
-    if (directives.isEmpty) {
-      return const [
-        _CspFinding(_CspSeverity.high,
-            'Missing CSP allows any source by browser default.'),
-      ];
-    }
-    final findings = <_CspFinding>[];
-    final defaultSrc = directives['default-src'] ?? const [];
-    final scriptSrc = directives['script-src'] ?? defaultSrc;
-    final objectSrc = directives['object-src'];
-    final baseUri = directives['base-uri'];
-    final frameAncestors = directives['frame-ancestors'];
-
-    if (scriptSrc.contains("'unsafe-inline'")) {
-      findings.add(const _CspFinding(
-          _CspSeverity.high, "script-src allows 'unsafe-inline'."));
-    }
-    if (scriptSrc.contains("'unsafe-eval'")) {
-      findings.add(const _CspFinding(
-          _CspSeverity.high, "script-src allows 'unsafe-eval'."));
-    }
-    if (defaultSrc.contains('*') || scriptSrc.contains('*')) {
-      findings.add(const _CspFinding(
-          _CspSeverity.medium, 'Wildcard source allows broad loading.'));
-    }
-    if (objectSrc == null || !objectSrc.contains("'none'")) {
-      findings.add(const _CspFinding(
-          _CspSeverity.medium, "object-src should usually be 'none'."));
-    }
-    if (baseUri == null) {
-      findings.add(const _CspFinding(
-          _CspSeverity.medium, 'Missing base-uri protection.'));
-    }
-    if (frameAncestors == null) {
-      findings.add(const _CspFinding(_CspSeverity.medium,
-          'Missing frame-ancestors clickjacking control.'));
-    }
-    if (findings.isEmpty) {
-      findings.add(const _CspFinding(
-          _CspSeverity.low, 'Policy looks reasonably constrained.'));
-    }
-    return findings;
-  }
-
-  Widget _buildTlsWarningCard(
-      BuildContext context, Map<String, dynamic> result) {
-    final warning = result['tlsWarning']?.toString() ??
-        'TLS certificate validation failed. Content was loaded anyway for inspection.';
+  Widget _buildTlsWarningCard(BuildContext context, String warning) {
     return Card(
       elevation: 0,
       color: Colors.orange.withValues(alpha: 0.1),
@@ -2112,142 +1347,99 @@ class ProbeSecurityView extends ProbeViewBase {
   }
 
   Widget _buildCertificateCard(
-      BuildContext context, Map<String, dynamic> result) {
-    final cert = result['certificate'] as Map<String, dynamic>?;
-    if (cert == null) {
-      return Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              Icon(Icons.no_encryption_gmailerrorred, color: Colors.orange),
-              SizedBox(width: 12),
-              Expanded(child: Text('No certificate information available')),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final Map<String, dynamic>? subjectParsed = cert['subjectParsed'];
-    final Map<String, dynamic>? issuerParsed = cert['issuerParsed'];
-    final String start = cert['startValidity'] ?? '';
-    final String end = cert['endValidity'] ?? '';
-    final finalUrl =
-        result['finalUrl']?.toString() ?? result['url']?.toString();
-    final host = Uri.tryParse(finalUrl ?? '')?.host ?? '';
-    final commonName = subjectParsed?['Common Name']?.toString() ?? '';
-    final validity = _certificateValidity(end);
-    final hostMatch = _certificateHostMatches(host, commonName);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      BuildContext context, Observed<CertificateModel> state) {
+    if (state is! Present<CertificateModel>) {
+      return _card(context, [
+        Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildCertSignal(
-                    context,
-                    validity.$2,
-                    validity.$1,
-                    validity.$3,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildCertSignal(
-                    context,
-                    hostMatch ? Colors.green : Colors.orange,
-                    hostMatch
-                        ? Icons.verified_user_outlined
-                        : Icons.help_outline,
-                    host.isEmpty
-                        ? 'Host unknown'
-                        : hostMatch
-                            ? 'CN matches host'
-                            : 'CN differs from host',
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            Text(
-              'Subject (Owner)',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildParsedInfo(context, subjectParsed, cert['subject']),
-            const Divider(height: 24),
-            Text(
-              'Issuer',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildParsedInfo(context, issuerParsed, cert['issuer']),
-            const Divider(height: 24),
-            Row(
-              children: [
-                Expanded(
-                    child: _buildCertDetail(
-                        context, 'Valid From', _formatDate(start))),
-                Expanded(
-                    child: _buildCertDetail(
-                        context, 'Valid Until', _formatDate(end))),
-              ],
-            ),
-            if (cert['der'] != null) ...[
-              const Divider(height: 24),
-              _buildCertDetail(
-                context,
-                'DER Fingerprint Hint',
-                cert['der'].toString().substring(
-                      0,
-                      cert['der'].toString().length.clamp(0, 32),
-                    ),
-              ),
-            ],
-            if (cert['pem'] != null) ...[
-              const Divider(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.copy, size: 16),
-                  label: const Text('Copy PEM Certificate'),
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: cert['pem']));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Certificate copied')),
-                    );
-                  },
-                ),
-              ),
-            ],
+            const Icon(Icons.no_encryption_gmailerrorred, color: Colors.orange),
+            const SizedBox(width: 12),
+            Expanded(child: _notThere(state, 'Fetching the certificate…')),
           ],
         ),
+      ]);
+    }
+    final cert = state.value;
+    final validityColor = _certColor(cert.validityTone);
+    final hostColor = cert.hostMatches ? Colors.green : Colors.orange;
+
+    return _card(context, [
+      Row(
+        children: [
+          Expanded(
+            child: _buildCertSignal(
+                context,
+                validityColor,
+                cert.validityExpired
+                    ? Icons.dangerous_outlined
+                    : cert.validityTone == CertTone.neutral
+                        ? Icons.help_outline
+                        : cert.validityTone == CertTone.good
+                            ? Icons.check_circle_outline
+                            : Icons.warning_amber_rounded,
+                cert.validityLabel),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildCertSignal(
+              context,
+              hostColor,
+              cert.hostMatches
+                  ? Icons.verified_user_outlined
+                  : Icons.help_outline,
+              cert.hostLabel,
+            ),
+          ),
+        ],
       ),
-    );
+      const Divider(height: 24),
+      _certSectionTitle(context, 'Subject (Owner)'),
+      const SizedBox(height: 8),
+      _buildParsedInfo(context, cert.subject, cert.subjectRaw),
+      const Divider(height: 24),
+      _certSectionTitle(context, 'Issuer'),
+      const SizedBox(height: 8),
+      _buildParsedInfo(context, cert.issuer, cert.issuerRaw),
+      const Divider(height: 24),
+      Row(
+        children: [
+          Expanded(
+              child: _buildCertDetail(context, 'Valid From', cert.validFrom)),
+          Expanded(
+              child: _buildCertDetail(context, 'Valid Until', cert.validUntil)),
+        ],
+      ),
+      if (cert.derHint != null) ...[
+        const Divider(height: 24),
+        _buildCertDetail(context, 'DER Fingerprint Hint', cert.derHint!),
+      ],
+      if (cert.pem != null) ...[
+        const Divider(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Copy PEM Certificate'),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: cert.pem!));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Certificate copied')),
+              );
+            },
+          ),
+        ),
+      ],
+    ]);
   }
+
+  Widget _certSectionTitle(BuildContext context, String text) => Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      );
 
   Widget _buildCertSignal(
       BuildContext context, Color color, IconData icon, String label) {
@@ -2279,51 +1471,11 @@ class ProbeSecurityView extends ProbeViewBase {
     );
   }
 
-  (IconData, Color, String) _certificateValidity(String end) {
-    try {
-      final endDate = DateTime.parse(end);
-      final days = endDate.difference(DateTime.now()).inDays;
-      if (days < 0) {
-        return (
-          Icons.dangerous_outlined,
-          Colors.red,
-          'Expired ${days.abs()}d ago'
-        );
-      }
-      if (days < 14) {
-        return (Icons.warning_amber_rounded, Colors.red, 'Expires in ${days}d');
-      }
-      if (days < 45) {
-        return (
-          Icons.warning_amber_rounded,
-          Colors.orange,
-          'Expires in ${days}d'
-        );
-      }
-      return (Icons.check_circle_outline, Colors.green, 'Valid for ${days}d');
-    } catch (_) {
-      return (Icons.help_outline, Colors.grey, 'Validity unknown');
-    }
-  }
-
-  bool _certificateHostMatches(String host, String commonName) {
-    if (host.isEmpty || commonName.isEmpty) return false;
-    final normalizedHost = host.toLowerCase();
-    final normalizedCn = commonName.toLowerCase();
-    if (normalizedCn == normalizedHost) return true;
-    if (normalizedCn.startsWith('*.')) {
-      final suffix = normalizedCn.substring(1);
-      return normalizedHost.endsWith(suffix) &&
-          normalizedHost.split('.').length == normalizedCn.split('.').length;
-    }
-    return false;
-  }
-
   Widget _buildParsedInfo(
-      BuildContext context, Map<String, dynamic>? parsed, String? raw) {
-    if (parsed == null || parsed.isEmpty) {
+      BuildContext context, Map<String, String> parsed, String raw) {
+    if (parsed.isEmpty) {
       return SelectableText(
-        raw ?? 'Unknown',
+        raw,
         style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
       );
     }
@@ -2345,7 +1497,7 @@ class ProbeSecurityView extends ProbeViewBase {
               ),
               Expanded(
                 child: SelectableText(
-                  e.value.toString(),
+                  e.value,
                   style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w500),
                 ),
@@ -2361,14 +1513,7 @@ class ProbeSecurityView extends ProbeViewBase {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
+        _certSectionTitle(context, label),
         const SizedBox(height: 4),
         SelectableText(
           value,
@@ -2377,634 +1522,264 @@ class ProbeSecurityView extends ProbeViewBase {
       ],
     );
   }
-
-  String _formatDate(String isoString) {
-    try {
-      if (isoString.isEmpty) return 'Unknown';
-      final date = DateTime.parse(isoString);
-      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
-          '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return isoString;
-    }
-  }
 }
 
-class ProbeCookiesView extends ProbeViewBase {
+// ---------------------------------------------------------------------------
+// Cookies
+// ---------------------------------------------------------------------------
+
+class ProbeCookiesView extends StatelessWidget {
   const ProbeCookiesView({super.key});
 
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
+
   @override
-  Widget buildContent(BuildContext context, HtmlService htmlService,
-      Map<String, dynamic> result) {
-    // Prefer analyzed cookies if available (merged Server + Browser + Categories)
-    final List<dynamic>? analyzedCookies = result['analyzedCookies'];
+  Widget build(BuildContext context) {
+    builds++;
+    final state = context
+        .select<HtmlService, Observed<CookiesModel>>((s) => s.cookiesView);
+    return _tabBody(state, (m) => _content(context, m));
+  }
 
-    if (analyzedCookies != null && analyzedCookies.isNotEmpty) {
-      final sortedCookies = List<Map<String, dynamic>>.from(analyzedCookies);
-      sortedCookies.sort((a, b) {
-        final categoryA = a['category'] as String? ?? 'unknown';
-        final categoryB = b['category'] as String? ?? 'unknown';
-
-        // Known cookies first (essential, analytics, advertising, social)
-        bool isKnown(String cat) => cat != 'unknown';
-        final aKnown = isKnown(categoryA);
-        final bKnown = isKnown(categoryB);
-
-        if (aKnown != bKnown) {
-          return aKnown ? -1 : 1;
-        }
-
-        // If known, sort by provider name first, then cookie name
-        if (aKnown) {
-          final providerA = (a['provider'] as String? ?? '').toLowerCase();
-          final providerB = (b['provider'] as String? ?? '').toLowerCase();
-          if (providerA != providerB) {
-            return providerA.compareTo(providerB);
-          }
-        }
-
-        // Default: sort by name
-        final nameA = (a['name'] as String? ?? '').toLowerCase();
-        final nameB = (b['name'] as String? ?? '').toLowerCase();
-        return nameA.compareTo(nameB);
-      });
-
-      return Scrollbar(
-          child: ListView(
-        primary: true,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
-        children: [
-          _buildCookiePrivacyLens(context, sortedCookies),
-          const SizedBox(height: 12),
-          ...sortedCookies.map((cookie) {
-            final name = cookie['name'] as String? ?? 'Unknown';
-            final value = cookie['value'] as String? ?? '';
-            final category = cookie['category'] as String? ?? 'unknown';
-            final provider = cookie['provider'] as String?;
-            final source = cookie['source'] as String? ?? 'Unknown';
-
-            Color badgeColor;
-            switch (category) {
-              case 'essential':
-                badgeColor = Colors.green;
-                break;
-              case 'analytics':
-                badgeColor = Colors.blue;
-                break;
-              case 'advertising':
-                badgeColor = Colors.orange;
-                break;
-              case 'social':
-                badgeColor = Colors.purple;
-                break;
-              default:
-                badgeColor = Colors.grey;
-            }
-
-            return Card(
-              elevation: 0,
-              margin: const EdgeInsets.only(bottom: 8),
-              shape: RoundedRectangleBorder(
-                side: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ListTile(
-                title: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'monospace'),
-                      ),
-                    ),
-                    if (provider != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: badgeColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                              color: badgeColor.withValues(alpha: 0.5)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (logoDomainFor(provider) != null) ...[
-                              ServiceLogo(
-                                  label: provider,
-                                  fallback: Icons.cookie_outlined,
-                                  size: 14),
-                              const SizedBox(width: 4),
-                            ],
-                            Text(
-                              provider,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: badgeColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 4),
-                    Text(
-                      value,
-                      style: const TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                          color: Colors.grey),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.category, size: 12, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          category.toUpperCase(),
-                          style:
-                              TextStyle(fontSize: 11, color: Colors.grey[600]),
-                        ),
-                        const SizedBox(width: 12),
-                        Icon(
-                            source == 'Browser'
-                                ? Icons.web
-                                : source == 'Server'
-                                    ? Icons.dns
-                                    : Icons.merge_type,
-                            size: 12,
-                            color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          source,
-                          style:
-                              TextStyle(fontSize: 11, color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.copy, size: 18),
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: '$name=$value'));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Cookie copied'),
-                          duration: Duration(milliseconds: 500)),
-                    );
-                  },
-                ),
-              ),
-            );
-          }),
-        ],
-      ));
-    }
-
-    // Fallback to basic list if no analysis available
-    final List<String> cookies =
-        (result['cookies'] as List?)?.map((e) => e.toString()).toList() ?? [];
-    cookies.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-
-    if (cookies.isEmpty) {
-      if (htmlService.isLoading ||
-          htmlService.isProbing ||
-          htmlService.isWebViewLoading ||
-          htmlService.isExtractingMetadata) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.cookie_outlined, size: 48, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('No cookies detected.'),
-            Text('(Try reloading the browser)',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
-          ],
-        ),
-      );
-    }
-
+  Widget _content(BuildContext context, CookiesModel m) {
     return Scrollbar(
-        child: ListView.builder(
+        child: ListView(
       primary: true,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
-      itemCount: cookies.length,
-      itemBuilder: (context, index) {
-        final cookie = cookies[index];
-        final parts = cookie.split(';');
-        final nameValue = parts[0];
-        final attributes = parts.length > 1 ? parts.sublist(1).join(';') : '';
-
-        return Card(
-          elevation: 0,
-          margin: const EdgeInsets.only(bottom: 8),
-          shape: RoundedRectangleBorder(
-            side:
-                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ListTile(
-            title: Text(nameValue,
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Text(FormatUtils.formatHumanData(attributes.trim()),
-                style: const TextStyle(fontSize: 12)),
-            trailing: IconButton(
-              icon: const Icon(Icons.copy, size: 18),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: cookie));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Cookie copied'),
-                      duration: Duration(milliseconds: 500)),
-                );
-              },
+      children: [
+        _buildCookiePrivacyLens(context, m),
+        const SizedBox(height: 12),
+        if (m.rows.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              children: [
+                const Icon(Icons.cookie_outlined, size: 48, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(m.complete
+                    ? 'No cookies detected.'
+                    : 'No cookies seen in the sources read so far.'),
+              ],
             ),
           ),
-        );
-      },
+        ...m.rows.map((cookie) => _buildCookieCard(context, cookie)),
+      ],
     ));
   }
 
-  Widget _buildCookiePrivacyLens(
-      BuildContext context, List<Map<String, dynamic>> cookies) {
-    final analytics = _countCategory(cookies, 'analytics');
-    final advertising = _countCategory(cookies, 'advertising');
-    final social = _countCategory(cookies, 'social');
-    final unknown = _countCategory(cookies, 'unknown');
-    final secure = cookies.where((cookie) => cookie['secure'] == true).length;
-    final httpOnly =
-        cookies.where((cookie) => cookie['httpOnly'] == true).length;
-    final thirdPartyish = cookies.where(_isThirdPartyishCookie).length;
-    final weakSameSite = cookies.where(_hasWeakSameSite).length;
-    final score = _cookiePrivacyScore(cookies);
-    final color = score >= 75
-        ? Colors.green
-        : score >= 45
-            ? Colors.orange
-            : Colors.red;
+  Widget _buildCookieCard(BuildContext context, CookieRow cookie) {
+    final badgeColor = switch (cookie.category) {
+      'essential' => Colors.green,
+      'analytics' => Colors.blue,
+      'advertising' => Colors.orange,
+      'social' => Colors.purple,
+      _ => Colors.grey,
+    };
+    final provider = cookie.provider;
+    final muted = TextStyle(fontSize: 11, color: Colors.grey[600]);
 
     return Card(
       elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.3),
+      margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListTile(
+        title: Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: color.withValues(alpha: 0.36)),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '$score',
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Cookie Privacy Lens',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _cookiePrivacyVerdict(score),
-                        style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.68),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            Expanded(
+              child: Text(
+                cookie.name,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace'),
+              ),
             ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildCookieLensChip(
-                    context,
-                    Icons.cookie_outlined,
-                    '${cookies.length} total',
-                    Theme.of(context).colorScheme.primary),
-                if (analytics > 0)
-                  _buildCookieLensChip(context, Icons.analytics_outlined,
-                      '$analytics analytics', Colors.blue),
-                if (advertising > 0)
-                  _buildCookieLensChip(context, Icons.ad_units_outlined,
-                      '$advertising ads', Colors.orange),
-                if (social > 0)
-                  _buildCookieLensChip(context, Icons.share_outlined,
-                      '$social social', Colors.purple),
-                if (unknown > 0)
-                  _buildCookieLensChip(context, Icons.help_outline,
-                      '$unknown unknown', Colors.grey),
-                _buildCookieLensChip(context, Icons.lock_outline,
-                    '$secure secure', Colors.green),
-                _buildCookieLensChip(context, Icons.shield_outlined,
-                    '$httpOnly HttpOnly', Colors.teal),
-                if (thirdPartyish > 0)
-                  _buildCookieLensChip(context, Icons.public,
-                      '$thirdPartyish cross-site-ish', Colors.red),
-                if (weakSameSite > 0)
-                  _buildCookieLensChip(context, Icons.open_in_new,
-                      '$weakSameSite weak SameSite', Colors.red),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ..._cookiePrivacyNotes(cookies).map(
-              (note) => Padding(
-                padding: const EdgeInsets.only(top: 5),
+            if (provider != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: badgeColor.withValues(alpha: 0.5)),
+                ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(note.icon, size: 15, color: note.color),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        note.text,
-                        style: const TextStyle(fontSize: 12),
+                    if (logoDomainFor(provider) != null) ...[
+                      ServiceLogo(
+                          label: provider,
+                          fallback: Icons.cookie_outlined,
+                          size: 14),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      provider,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: badgeColor,
                       ),
                     ),
                   ],
                 ),
               ),
+            ],
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              cookie.value,
+              style: const TextStyle(
+                  fontSize: 12, fontFamily: 'monospace', color: Colors.grey),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            Text(cookie.flagsLine, style: muted),
+            const SizedBox(height: 2),
+            Text(cookie.scopeLine, style: muted),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.category, size: 12, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Text(cookie.category.toUpperCase(), style: muted),
+                const SizedBox(width: 12),
+                Icon(
+                    cookie.source == 'Browser'
+                        ? Icons.web
+                        : cookie.source == 'Server'
+                            ? Icons.dns
+                            : Icons.merge_type,
+                    size: 12,
+                    color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Text(cookie.source, style: muted),
+              ],
             ),
           ],
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.copy, size: 18),
+          onPressed: () {
+            Clipboard.setData(
+                ClipboardData(text: '${cookie.name}=${cookie.value}'));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Cookie copied'),
+                  duration: Duration(milliseconds: 500)),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildCookieLensChip(
-      BuildContext context, IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+  Widget _buildCookiePrivacyLens(BuildContext context, CookiesModel m) {
+    final score = m.score;
+    final color = score == null
+        ? Colors.grey
+        : score >= 75
+            ? Colors.green
+            : score >= 45
+                ? Colors.orange
+                : Colors.red;
+
+    return _card(
+      context,
+      [
+        Row(
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: color.withValues(alpha: 0.36)),
+              ),
+              child: Center(
+                child: score == null
+                    ? Icon(Icons.help_outline, color: color)
+                    : Text(
+                        '$score',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Cookie Privacy Lens',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    m.verdict,
+                    style: TextStyle(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.68),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final chip in m.chips)
+              _chip(chip.icon, chip.label, _toneColor(chip.tone)),
+          ],
+        ),
+        if (m.notes.isNotEmpty) const SizedBox(height: 12),
+        ...m.notes.map(
+          (note) => Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(note.icon, size: 15, color: _toneColor(note.tone)),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(note.text, style: const TextStyle(fontSize: 12)),
+                ),
+              ],
             ),
           ),
+        ),
+        if (m.sourcesNote != null) ...[
+          const SizedBox(height: 10),
+          Text(m.sourcesNote!,
+              style: const TextStyle(color: Colors.orange, fontSize: 12)),
         ],
-      ),
+      ],
+      filled: true,
     );
   }
-
-  int _cookiePrivacyScore(List<Map<String, dynamic>> cookies) {
-    if (cookies.isEmpty) return 100;
-    var score = 100;
-    score -= _countCategory(cookies, 'advertising') * 12;
-    score -= _countCategory(cookies, 'analytics') * 7;
-    score -= _countCategory(cookies, 'social') * 6;
-    score -= _countCategory(cookies, 'unknown') * 3;
-    score -= cookies.where(_isThirdPartyishCookie).length * 6;
-    score -= cookies.where(_hasWeakSameSite).length * 5;
-    score -= cookies.where(_isMissingSecure).length * 2;
-    return score.clamp(0, 100);
-  }
-
-  int _countCategory(List<Map<String, dynamic>> cookies, String category) {
-    return cookies.where((cookie) => cookie['category'] == category).length;
-  }
-
-  bool _isThirdPartyishCookie(Map<String, dynamic> cookie) {
-    final category = cookie['category']?.toString();
-    final domain = cookie['domain']?.toString() ?? '';
-    final provider = cookie['provider']?.toString() ?? '';
-    return category == 'advertising' ||
-        category == 'social' ||
-        domain.startsWith('.') ||
-        provider.contains('Google') ||
-        provider.contains('Meta') ||
-        provider.contains('Facebook') ||
-        provider.contains('DoubleClick');
-  }
-
-  bool _hasWeakSameSite(Map<String, dynamic> cookie) {
-    final source = cookie['source']?.toString() ?? '';
-    if (!source.contains('Server')) return false;
-    final sameSite = cookie['sameSite']?.toString().toLowerCase();
-    if (sameSite == null || sameSite.isEmpty) return true;
-    return sameSite == 'none' && cookie['secure'] != true;
-  }
-
-  bool _isMissingSecure(Map<String, dynamic> cookie) {
-    final source = cookie['source']?.toString() ?? '';
-    return source.contains('Server') && cookie['secure'] != true;
-  }
-
-  String _cookiePrivacyVerdict(int score) {
-    if (score >= 75) return 'Low visible tracking pressure from cookies.';
-    if (score >= 45) return 'Moderate cookie tracking signals detected.';
-    return 'Heavy tracking or weak cookie boundaries detected.';
-  }
-
-  List<_CookiePrivacyNote> _cookiePrivacyNotes(
-      List<Map<String, dynamic>> cookies) {
-    final notes = <_CookiePrivacyNote>[];
-    final advertising = _countCategory(cookies, 'advertising');
-    final analytics = _countCategory(cookies, 'analytics');
-    final weakSameSite = cookies.where(_hasWeakSameSite).length;
-    final notSecure = cookies.where(_isMissingSecure).length;
-    final httpOnly =
-        cookies.where((cookie) => cookie['httpOnly'] == true).length;
-
-    if (advertising > 0) {
-      notes.add(_CookiePrivacyNote(
-        Icons.ad_units_outlined,
-        Colors.orange,
-        '$advertising advertising cookie${advertising == 1 ? '' : 's'} can support cross-site profiling.',
-      ));
-    }
-    if (analytics > 0) {
-      notes.add(_CookiePrivacyNote(
-        Icons.analytics_outlined,
-        Colors.blue,
-        '$analytics analytics cookie${analytics == 1 ? '' : 's'} can measure repeat visits.',
-      ));
-    }
-    if (weakSameSite > 0) {
-      notes.add(_CookiePrivacyNote(
-        Icons.open_in_new,
-        Colors.red,
-        '$weakSameSite cookie${weakSameSite == 1 ? '' : 's'} missing strict SameSite protection.',
-      ));
-    }
-    if (notSecure > 0) {
-      notes.add(_CookiePrivacyNote(
-        Icons.lock_open,
-        Colors.red,
-        '$notSecure cookie${notSecure == 1 ? '' : 's'} not marked Secure.',
-      ));
-    }
-    if (httpOnly > 0) {
-      notes.add(_CookiePrivacyNote(
-        Icons.shield_outlined,
-        Colors.green,
-        '$httpOnly cookie${httpOnly == 1 ? '' : 's'} protected from JavaScript access.',
-      ));
-    }
-    if (notes.isEmpty) {
-      notes.add(const _CookiePrivacyNote(
-        Icons.check_circle_outline,
-        Colors.green,
-        'No obvious cookie privacy issues detected.',
-      ));
-    }
-    return notes.take(4).toList();
-  }
-}
-
-class _CookiePrivacyNote {
-  final IconData icon;
-  final Color color;
-  final String text;
-
-  const _CookiePrivacyNote(this.icon, this.color, this.text);
-}
-
-class _SourceDiffSummary {
-  final int serverLines;
-  final int browserLines;
-  final int addedLines;
-  final int removedLines;
-  final int similarity;
-  final List<String> samples;
-
-  const _SourceDiffSummary({
-    required this.serverLines,
-    required this.browserLines,
-    required this.addedLines,
-    required this.removedLines,
-    required this.similarity,
-    required this.samples,
-  });
-}
-
-enum _CspSeverity {
-  low,
-  medium,
-  high;
-
-  Color get color {
-    switch (this) {
-      case _CspSeverity.low:
-        return Colors.green;
-      case _CspSeverity.medium:
-        return Colors.orange;
-      case _CspSeverity.high:
-        return Colors.red;
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case _CspSeverity.low:
-        return Icons.check_circle_outline;
-      case _CspSeverity.medium:
-        return Icons.warning_amber_rounded;
-      case _CspSeverity.high:
-        return Icons.dangerous_outlined;
-    }
-  }
-}
-
-class _CspFinding {
-  final _CspSeverity severity;
-  final String text;
-
-  const _CspFinding(this.severity, this.text);
-}
-
-class _HeaderInsight {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final String detail;
-
-  const _HeaderInsight(this.label, this.icon, this.color, this.detail);
-}
-
-class _HeaderNote {
-  final IconData icon;
-  final Color color;
-  final String text;
-
-  const _HeaderNote(this.icon, this.color, this.text);
-}
-
-class _SecurityHeaderCheck {
-  final String label;
-  final bool isApplicable;
-  final bool isPassing;
-  final String detail;
-
-  const _SecurityHeaderCheck({
-    required this.label,
-    this.isApplicable = true,
-    required this.isPassing,
-    required this.detail,
-  });
 }

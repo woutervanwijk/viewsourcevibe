@@ -1,3 +1,5 @@
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 
 enum CookieCategory {
@@ -19,8 +21,17 @@ class CookieInfo {
 
   final String? expires;
   final String? sameSite;
-  final bool secure;
-  final bool httpOnly;
+
+  /// The Path attribute / the browser's cookie path; null = unknown.
+  final String? path;
+
+  /// For a server cookie: the host the Set-Cookie came from, used to match a
+  /// host-only cookie (no Domain attribute) with the browser's copy.
+  final String? requestHost;
+
+  /// null = unknown (the browser did not expose the flag); never assumed false.
+  final bool? secure;
+  final bool? httpOnly;
 
   CookieInfo({
     required this.name,
@@ -31,8 +42,10 @@ class CookieInfo {
     required this.source,
     this.expires,
     this.sameSite,
-    this.secure = false,
-    this.httpOnly = false,
+    this.secure,
+    this.httpOnly,
+    this.path,
+    this.requestHost,
   });
 }
 
@@ -4312,7 +4325,8 @@ class CookieUtils {
         _ => CookieCategory.functional,
       };
 
-  static CookieInfo analyze(String rawCookie, String source) {
+  static CookieInfo analyze(String rawCookie, String source,
+      {DateTime? now, String? requestHost}) {
     // Parse name and value, and handle attributes
     final parts = rawCookie.split(';');
     final pair = parts[0].split('=');
@@ -4321,6 +4335,8 @@ class CookieUtils {
 
     String? domain;
     String? expires;
+    String? path;
+    int? maxAge;
     String? sameSite;
     bool secure = false;
     bool httpOnly = false;
@@ -4335,6 +4351,15 @@ class CookieUtils {
         if (eqIndex != -1) domain = attr.substring(eqIndex + 1).trim();
       } else if (lowerAttr.startsWith('expires=')) {
         if (eqIndex != -1) expires = attr.substring(eqIndex + 1).trim();
+      } else if (lowerAttr.startsWith('max-age=')) {
+        if (eqIndex != -1) {
+          maxAge = int.tryParse(attr.substring(eqIndex + 1).trim());
+        }
+      } else if (lowerAttr.startsWith('path=')) {
+        if (eqIndex != -1) {
+          final v = attr.substring(eqIndex + 1).trim();
+          if (v.isNotEmpty) path = v;
+        }
       } else if (lowerAttr.startsWith('samesite=')) {
         if (eqIndex != -1) sameSite = attr.substring(eqIndex + 1).trim();
       } else if (lowerAttr == 'secure') {
@@ -4382,10 +4407,20 @@ class CookieUtils {
 
     final known = knownData ?? {};
 
+    // Max-Age wins over Expires (RFC 6265 5.3): expires = now + Max-Age.
+    if (maxAge != null) {
+      expires = (now ?? DateTime.now())
+          .toUtc()
+          .add(Duration(seconds: maxAge))
+          .toIso8601String();
+    }
+
     return CookieInfo(
       name: name,
       value: value,
       domain: domain,
+      path: path,
+      requestHost: requestHost,
       expires: expires,
       sameSite: sameSite,
       secure: secure,
@@ -4396,52 +4431,25 @@ class CookieUtils {
     );
   }
 
-  static List<CookieInfo> parseBrowserCookies(String documentCookie) {
-    if (documentCookie.isEmpty) return [];
-
-    return documentCookie
-        .split(';')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .map((s) => analyze(s, 'Browser'))
-        .toList();
-  }
-
-  static List<CookieInfo> mergeCookies(
-      List<String> serverCookies, String browserCookies) {
-    final Map<String, CookieInfo> merged = {};
-
-    // process server headers first
-    for (var sc in serverCookies) {
-      final firstPart = sc.split(';')[0];
-      final name = firstPart.split('=')[0].trim();
-      if (name.isEmpty) continue;
-      merged[name] = analyze(sc, 'Server');
-    }
-
-    final browserList = parseBrowserCookies(browserCookies);
-    for (var bc in browserList) {
-      if (merged.containsKey(bc.name)) {
-        final existing = merged[bc.name]!;
-        merged[bc.name] = CookieInfo(
-          name: bc.name,
-          value: bc.value,
-          domain: existing.domain ?? bc.domain,
-          expires: existing.expires ?? bc.expires,
-          sameSite: existing.sameSite ?? bc.sameSite,
-          secure: existing.secure || bc.secure,
-          httpOnly: existing.httpOnly || bc.httpOnly,
-          category: existing.category == CookieCategory.unknown
-              ? bc.category
-              : existing.category,
-          provider: existing.provider ?? bc.provider,
-          source: 'Server + Browser',
-        );
-      } else {
-        merged[bc.name] = bc;
-      }
-    }
-
-    return merged.values.toList();
+  /// A cookie the browser reported, with its real flags: a flag the browser
+  /// does not expose stays null (unknown), never false.
+  static CookieInfo fromBrowser(BrowserCookie c) {
+    final base = analyze('${c.name}=${c.value}', 'Browser');
+    String? text<T>(Observed<T> o, String Function(T) f) =>
+        o is Present<T> ? f(o.value) : null;
+    bool? flag(Observed<bool> o) => o is Present<bool> ? o.value : null;
+    return CookieInfo(
+      name: c.name,
+      value: c.value,
+      domain: text<String>(c.domain, (v) => v),
+      path: text<String>(c.path, (v) => v),
+      expires: text<DateTime>(c.expires, (v) => v.toUtc().toIso8601String()),
+      sameSite: text<String>(c.sameSite, (v) => v),
+      secure: flag(c.isSecure),
+      httpOnly: flag(c.isHttpOnly),
+      category: base.category,
+      provider: base.provider,
+      source: 'Browser',
+    );
   }
 }

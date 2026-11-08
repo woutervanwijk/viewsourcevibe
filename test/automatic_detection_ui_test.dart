@@ -45,7 +45,7 @@ void main() {
       );
 
       print('  No extension file extension: ${noExtFile.extension}');
-      expect(noExtFile.extension, 'test'); // This is the problem!
+      expect(noExtFile.extension, ''); // No dot -> empty extension (B37)
 
       print('  ✅ File extensions work as expected');
     });
@@ -98,7 +98,7 @@ void main() {
 
       final contentType3 = noExtFile.extension; // Simulate Automatic mode
       print('  Automatic + no extension: $contentType3');
-      expect(contentType3, 'test'); // This is problematic!
+      expect(contentType3, ''); // No dot -> empty extension (B37)
 
       print('  ✅ Content type fallback logic tested');
     });

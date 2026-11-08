@@ -1,0 +1,8 @@
+{"_synthetic":true,"_note":"Models a sandboxed/blocked-storage context: localStorage access throws SecurityError; sessionStorage, resources and cookies still work.",
+"v":1,"url":"https://example.com/","contentType":"text/html",
+"timing":{"ok":true,"now":1000.0,"timeOrigin":1760000000000},
+"dom":{"ok":true,"value":"<html></html>","iframes":0,"shadowRoots":0},
+"resources":{"ok":true,"bootstrap":true,"dropped":0,"observer":[{"n":"https://example.com/a.js","it":"script","st":1.0,"du":3.0,"tx":900,"enc":800,"dec":2000}],"patch":[]},
+"navigation":{"ok":true,"responseStart":120.5,"domInteractive":400.2,"domContentLoaded":420.0,"loadEnd":900.1,"protocol":"h2"},
+"storage":{"local":{"ok":false,"error":"SecurityError: The operation is insecure."},"session":{"ok":true,"count":1,"items":[{"k":"s","v":"v"}],"truncated":false}},
+"cookies":{"ok":true,"raw":"k=v"}}

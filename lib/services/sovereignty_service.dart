@@ -4,6 +4,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
@@ -354,7 +358,14 @@ class HostInfo {
   final String host;
   final Set<String> roles = {};
   int requests = 0;
-  int bytes = 0;
+
+  /// Transfer bytes of the requests whose size is known; null when none is
+  /// (never 0 for "unknown").
+  int? bytes;
+
+  /// True when some of the requests have no known size, so [bytes] is a
+  /// lower bound.
+  bool bytesPartial = false;
   String? ip;
   int? asn;
   String? asnHolder;
@@ -381,6 +392,7 @@ class HostInfo {
         'roles': roles.toList(),
         'requests': requests,
         'bytes': bytes,
+        'bytesPartial': bytesPartial,
         'ip': ip,
         'asn': asn,
         'asnHolder': asnHolder,
@@ -441,8 +453,9 @@ class SovereigntyReport {
     return pillarMax[pillar]! * earned / totalWeight;
   }
 
-  /// 0–100 over the pillars that could be verified.
-  int get score {
+  /// 0–100 over the pillars that could be verified; null when none could be
+  /// (an unverifiable report has no score, not a score of 0).
+  int? get score {
     var earned = 0.0, max = 0;
     for (final p in Pillar.values) {
       final s = pillarScore(p);
@@ -450,14 +463,18 @@ class SovereigntyReport {
       earned += s;
       max += pillarMax[p]!;
     }
-    return max == 0 ? 0 : (100 * earned / max).round();
+    return max == 0 ? null : (100 * earned / max).round();
   }
 
-  String get grade => score >= 80
-      ? 'Good'
-      : score >= 50
-          ? 'Fair'
-          : 'Poor';
+  String? get grade {
+    final s = score;
+    if (s == null) return null;
+    return s >= 80
+        ? 'Good'
+        : s >= 50
+            ? 'Fair'
+            : 'Poor';
+  }
 
   int count(CheckStatus status) =>
       checks.where((c) => c.status == status).length;
@@ -519,10 +536,88 @@ class SovereigntyService {
   static final Map<String, ({int? asn, String? holder})> _asnCache = {};
   static final Map<String, String?> _countryCache = {};
 
+  /// The hosts the page talks to, the main host first, then by number of
+  /// requests. A resource without a known transfer size adds a request but
+  /// no bytes.
+  static List<HostInfo> collectHosts({
+    required String pageUrl,
+    required PageInspection inspection,
+    Map<String, dynamic>? metadata,
+  }) {
+    final resources = browserResources(inspection);
+    final mainHost = Uri.tryParse(pageUrl)?.host ?? '';
+    final hosts = <String, HostInfo>{};
+    final withUnknownSize = <String>{};
+
+    void add(String url, int? bytes, String role) {
+      final host = Uri.tryParse(url)?.host ?? '';
+      if (host.isEmpty) return;
+      final info = hosts.putIfAbsent(host, () => HostInfo(host));
+      info.requests++;
+      if (bytes == null) {
+        // Only a loaded resource can have a size; the document itself and
+        // static links are not measured here.
+        if (role != 'document') withUnknownSize.add(host);
+      } else {
+        info.bytes = (info.bytes ?? 0) + bytes;
+      }
+      info.roles.add(role);
+    }
+
+    if (mainHost.isNotEmpty) add(pageUrl, null, 'document');
+    for (final r in resources) {
+      if (!r.url.startsWith('http')) continue;
+      final transfer = r.transfer;
+      add(
+        r.url,
+        transfer is Present<int> ? transfer.value : null,
+        ProbeService.categorizeResource(r.url, pageUrl),
+      );
+    }
+    // Static links as fallback when no runtime resource data exists.
+    if (resources.isEmpty && metadata != null) {
+      for (final key in ['externalJsLinks', 'jsLinks']) {
+        for (final u in (metadata[key] as List? ?? const [])) {
+          add(u.toString(), null, 'script');
+        }
+      }
+      for (final key in ['externalCssLinks', 'cssLinks']) {
+        for (final u in (metadata[key] as List? ?? const [])) {
+          add(u.toString(), null, 'style');
+        }
+      }
+    }
+
+    for (final h in hosts.values) {
+      h.bytesPartial = h.bytes != null && withUnknownSize.contains(h.host);
+    }
+    return hosts.values.toList()
+      ..sort((a, b) {
+        if (a.host == mainHost) return -1;
+        if (b.host == mainHost) return 1;
+        return b.requests.compareTo(a.requests);
+      });
+  }
+
+  /// The resources the browser reported; empty unless they are Present.
+  static List<ResourceEntry> browserResources(PageInspection inspection) {
+    final b = inspection.browser;
+    if (b is! Present<BrowserSnapshot>) return const [];
+    final r = b.value.resources;
+    return r is Present<List<ResourceEntry>> ? r.value : const [];
+  }
+
+  /// The app's own server answer; null unless it is Present with a hop.
+  static ServerSnapshot? serverOf(PageInspection inspection) {
+    final s = inspection.server;
+    return s is Present<ServerSnapshot> && s.value.hops.isNotEmpty
+        ? s.value
+        : null;
+  }
+
   static Future<SovereigntyReport> analyze({
     required String pageUrl,
-    required Map<String, dynamic>? probeResult,
-    required List<Map<String, dynamic>> resources,
+    required PageInspection inspection,
     Map<String, dynamic>? metadata,
     List<Detection> detections = const [],
     String? html,
@@ -530,54 +625,17 @@ class SovereigntyService {
   }) async {
     final mainUri = Uri.tryParse(pageUrl);
     final mainHost = mainUri?.host ?? '';
-    final hosts = <String, HostInfo>{};
-
-    void add(String url, int bytes, String role) {
-      final host = Uri.tryParse(url)?.host ?? '';
-      if (host.isEmpty) return;
-      final info = hosts.putIfAbsent(host, () => HostInfo(host));
-      info.requests++;
-      info.bytes += bytes;
-      info.roles.add(role);
-    }
-
-    if (mainHost.isNotEmpty) add(pageUrl, 0, 'document');
-    for (final r in resources) {
-      final name = r['name']?.toString() ?? '';
-      if (!name.startsWith('http')) continue;
-      add(
-        name,
-        (r['transfer'] as num? ?? 0).toInt(),
-        ProbeService.categorizeResource(name, pageUrl),
-      );
-    }
-    // Static links as fallback when no runtime resource data exists.
-    if (resources.isEmpty && metadata != null) {
-      for (final key in ['externalJsLinks', 'jsLinks']) {
-        for (final u in (metadata[key] as List? ?? const [])) {
-          add(u.toString(), 0, 'script');
-        }
-      }
-      for (final key in ['externalCssLinks', 'cssLinks']) {
-        for (final u in (metadata[key] as List? ?? const [])) {
-          add(u.toString(), 0, 'style');
-        }
-      }
-    }
-
-    final ordered = hosts.values.toList()
-      ..sort((a, b) {
-        if (a.host == mainHost) return -1;
-        if (b.host == mainHost) return 1;
-        return b.requests.compareTo(a.requests);
-      });
+    final server = serverOf(inspection);
+    final ordered = collectHosts(
+        pageUrl: pageUrl, inspection: inspection, metadata: metadata);
     final analyzed = ordered.take(_maxHosts).toList();
 
     await Future.wait(analyzed.map(_enrichHost));
 
     final headers = <String, String>{
-      for (final e in (probeResult?['headers'] as Map? ?? const {}).entries)
-        e.key.toString(): e.value.toString(),
+      if (server != null)
+        for (final e in server.hops.last.headers.entries)
+          if (e.key != 'set-cookie') e.key: e.value.join(', '),
     };
     final mainProvider = analyzed.isEmpty ? null : analyzed.first.provider;
     final cdn = detectCdnFromHeaders(headers) ??
@@ -596,11 +654,14 @@ class SovereigntyService {
     ]);
     final securityTxt = mainHost.isEmpty
         ? null
-        : await _exists('https://$mainHost/.well-known/security.txt');
+        : classifySecurityTxt(
+            await _statusOf('https://$mainHost/.well-known/security.txt'));
 
-    final issuer =
-        (probeResult?['certificate']?['issuerParsed'] as Map?)?['Organization']
-            ?.toString();
+    final issuer = switch (server?.certificate) {
+      Present<Map<String, dynamic>>(:final value) =>
+        (value['issuerParsed'] as Map?)?['Organization']?.toString(),
+      _ => null,
+    };
     final tlsProvider = matchProvider([issuer]);
 
     final [nameServers, mailServers] = await Future.wait([
@@ -621,13 +682,13 @@ class SovereigntyService {
         home: home,
       ),
       ..._residencyChecks(analyzed, cdn, home),
-      ..._securityChecks(
+      ...securityChecks(
         txt: lookups[2],
         dmarc: lookups[3],
         caa: lookups[4],
         ds: lookups[5],
         securityTxt: securityTxt,
-        probeResult: probeResult,
+        server: server,
       ),
       ..._privacyChecks(analyzed, detections, html, home),
     ];
@@ -1002,13 +1063,14 @@ class SovereigntyService {
     );
   }
 
-  static List<SovereigntyCheck> _securityChecks({
+  @visibleForTesting
+  static List<SovereigntyCheck> securityChecks({
     required List<String>? txt,
     required List<String>? dmarc,
     required List<String>? caa,
     required List<String>? ds,
     required bool? securityTxt,
-    required Map<String, dynamic>? probeResult,
+    required ServerSnapshot? server,
   }) {
     const p = Pillar.security;
     SovereigntyCheck dnsCheck(
@@ -1022,7 +1084,7 @@ class SovereigntyService {
           p,
           title,
           CheckStatus.unknown,
-          'DNS lookup failed',
+          'DNS lookup failed or the resolver could not answer (unknown)',
           weight: weight,
         );
       }
@@ -1030,8 +1092,8 @@ class SovereigntyService {
       return SovereigntyCheck(p, title, status, evidence, weight: weight);
     }
 
-    final hsts =
-        (probeResult?['security'] as Map?)?['Strict-Transport-Security'];
+    final hsts = server?.hops.last.headers['strict-transport-security']
+        ?.join(', ');
     return [
       dnsCheck('SPF (email sender policy)', txt, classifySpf),
       dnsCheck('DMARC (email authentication)', dmarc, classifyDmarc),
@@ -1045,14 +1107,16 @@ class SovereigntyService {
       SovereigntyCheck(
         p,
         'HSTS enabled',
-        probeResult == null
+        server == null
             ? CheckStatus.unknown
             : hsts != null
                 ? CheckStatus.pass
                 : CheckStatus.fail,
-        hsts != null
-            ? 'Strict-Transport-Security: $hsts'
-            : 'No Strict-Transport-Security header',
+        server == null
+            ? 'No server response to read the headers from'
+            : hsts != null
+                ? 'Strict-Transport-Security: $hsts'
+                : 'No Strict-Transport-Security header',
       ),
       dnsCheck(
         'CAA (allowed certificate authorities)',
@@ -1161,19 +1225,54 @@ class SovereigntyService {
     ];
   }
 
-  /// True if [url] answers 200 (HEAD), null when unreachable.
-  static Future<bool?> _exists(String url) async {
+  /// security.txt: 200 = published, 404 = not published, any other status
+  /// (403, 429, 5xx) or no answer = unknown.
+  static bool? classifySecurityTxt(int? status) => switch (status) {
+        200 => true,
+        404 => false,
+        _ => null,
+      };
+
+  /// The HTTP status of a GET (HEAD is often refused), null when unreachable.
+  static Future<int?> _statusOf(String url) async {
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
-      final req = await client.headUrl(Uri.parse(url)).timeout(_timeout);
+      final req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
       final res = await req.close().timeout(_timeout);
       await res.drain<void>();
-      return res.statusCode == 200;
+      return res.statusCode;
     } catch (_) {
       return null;
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// RIPEstat is rate limited: at most this many requests in flight.
+  static const ripeConcurrency = 6;
+  static final _Gate _ripeGate = _Gate(ripeConcurrency);
+
+  @visibleForTesting
+  static Future<T> ripeLimitedForTest<T>(Future<T> Function() task) =>
+      _ripeGate.run(task);
+
+  /// Runs [tasks] with at most [limit] in flight; results keep the order.
+  /// A task that throws gives null for that entry (unknown), not a failed
+  /// batch.
+  @visibleForTesting
+  static Future<List<T?>> limited<T>(List<Future<T> Function()> tasks,
+      {int limit = ripeConcurrency}) {
+    final gate = _Gate(limit);
+    return Future.wait([
+      for (final task in tasks)
+        gate.run<T?>(() async {
+          try {
+            return await task();
+          } catch (_) {
+            return null;
+          }
+        }),
+    ]);
   }
 
   static Future<void> _enrichHost(HostInfo info) async {
@@ -1195,7 +1294,10 @@ class SovereigntyService {
     info.provider = matchProvider([info.host, info.asnHolder]);
   }
 
-  static Future<Map<String, dynamic>?> _getJson(String url) async {
+  static Future<Map<String, dynamic>?> _getJson(String url) =>
+      _ripeGate.run(() => _fetchJson(url));
+
+  static Future<Map<String, dynamic>?> _fetchJson(String url) async {
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
       final req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
@@ -1257,16 +1359,37 @@ class SovereigntyService {
     return country;
   }
 
-  /// Naive registrable domain: last two labels, three for common
-  /// second-level suffixes (co.uk, com.au, ...).
+  /// Multi-label public suffixes that are common enough to matter here. This
+  /// is a PSL-lite, NOT the full Public Suffix List: an unlisted suffix is
+  /// treated as a single label (so `x.example.co.id` gives `co.id`).
+  static const _publicSuffixes = {
+    'co.uk', 'ac.uk', 'gov.uk', 'org.uk',
+    'com.au', 'net.au', 'org.au',
+    'co.nz',
+    'co.jp', 'ne.jp', 'or.jp',
+    'com.br', 'com.cn', 'com.tr', 'co.za',
+    // Hosting platforms where every customer gets a subdomain.
+    'github.io', 'gitlab.io', 'netlify.app', 'vercel.app', 'pages.dev',
+    'herokuapp.com', 'azurewebsites.net', 'cloudfront.net', 'blogspot.com',
+    'appspot.com', 'web.app', 'firebaseapp.com',
+  };
+
+  /// Registrable domain: the public suffix (from [_publicSuffixes], else the
+  /// generic `{co,com,org,net,gov,ac,edu}.<ccTLD>` pattern, else the last
+  /// label) plus one label. `foo.github.io` stays `foo.github.io`; an IP
+  /// address is returned unchanged; the result is lowercase.
   static String registrableDomain(String host) {
-    final parts = host.split('.');
-    if (parts.length <= 2) return host;
-    const sld = {'co', 'com', 'org', 'net', 'gov', 'ac'};
-    final take =
-        (sld.contains(parts[parts.length - 2]) && parts.last.length == 2)
-            ? 3
-            : 2;
+    final h = host.toLowerCase();
+    if (h.contains(':') || RegExp(r'^\d+(\.\d+){3}$').hasMatch(h)) return h;
+    final parts = h.split('.');
+    if (parts.length <= 2) return h;
+    final twoLabel = parts.sublist(parts.length - 2).join('.');
+    const genericSld = {'co', 'com', 'org', 'net', 'gov', 'ac', 'edu'};
+    final take = _publicSuffixes.contains(twoLabel) ||
+            (genericSld.contains(parts[parts.length - 2]) &&
+                parts.last.length == 2)
+        ? 3
+        : 2;
     return parts.sublist(parts.length - take).join('.');
   }
 
@@ -1294,7 +1417,9 @@ class SovereigntyService {
         final bytes = await res
             .fold<BytesBuilder>(BytesBuilder(), (b, c) => b..add(c))
             .timeout(_timeout);
-        return parseDnsRecords(bytes.takeBytes(), type);
+        final records = classifyDnsResponse(bytes.takeBytes(), type);
+        if (records == null) continue; // SERVFAIL/REFUSED: try the next one
+        return records;
       } catch (e) {
         debugPrint('DNS query via $resolver failed for $domain: $e');
       } finally {
@@ -1302,6 +1427,22 @@ class SovereigntyService {
       }
     }
     return null;
+  }
+
+  /// The RCODE of a DNS response (0 NOERROR, 2 SERVFAIL, 3 NXDOMAIN,
+  /// 5 REFUSED); null for a message too short to have one.
+  @visibleForTesting
+  static int? dnsRcode(Uint8List d) => d.length < 4 ? null : d[3] & 0x0F;
+
+  /// Records of [type] in a response, with the RCODE taken into account:
+  /// NOERROR and NXDOMAIN are real answers (possibly empty = "no record");
+  /// SERVFAIL, REFUSED and anything else mean the resolver could not tell,
+  /// so null (unknown), never an empty list.
+  @visibleForTesting
+  static List<String>? classifyDnsResponse(Uint8List d, int type) {
+    final rcode = dnsRcode(d);
+    if (rcode != 0 && rcode != 3) return null;
+    return parseDnsRecords(d, type);
   }
 
   @visibleForTesting
@@ -1388,5 +1529,28 @@ class SovereigntyService {
     final tag = utf8.decode(rdata.sublist(2, tagEnd), allowMalformed: true);
     final value = utf8.decode(rdata.sublist(tagEnd), allowMalformed: true);
     return '$tag $value';
+  }
+}
+
+/// At most [limit] tasks run at once; the rest wait their turn.
+class _Gate {
+  final int limit;
+  int _running = 0;
+  final List<Completer<void>> _waiting = [];
+  _Gate(this.limit);
+
+  Future<T> run<T>(Future<T> Function() task) async {
+    while (_running >= limit) {
+      final c = Completer<void>();
+      _waiting.add(c);
+      await c.future;
+    }
+    _running++;
+    try {
+      return await task();
+    } finally {
+      _running--;
+      if (_waiting.isNotEmpty) _waiting.removeAt(0).complete();
+    }
   }
 }

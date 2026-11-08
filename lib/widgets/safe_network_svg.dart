@@ -1,76 +1,11 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:view_source_vibe/services/derive/media.dart';
 
-/// Sanitizes SVG bytes so the vector graphics compiler always has a viewport.
-///
-/// The compiler throws 'Bad state: SVG did not specify dimensions' unless the
-/// root `<svg>` has a `viewBox` or both `width` and `height` attributes, so a
-/// fallback `viewBox` is injected when neither is present. Percentage
-/// coordinates are converted to absolute values based on the viewBox, which
-/// fixes 'Invalid double: 50%' errors.
-Uint8List sanitizeSvgData(Uint8List bytes) {
-  try {
-    String content = utf8.decode(bytes, allowMalformed: true).trim();
-    if (content.isEmpty) return bytes;
+export 'package:view_source_vibe/services/derive/media.dart' show sanitizeSvgData;
 
-    // The compiler needs a viewBox or width+height on the root <svg> tag.
-    final svgTag = RegExp('<svg\\b[^>]*>', caseSensitive: false)
-        .firstMatch(content);
-    if (svgTag != null) {
-      final tag = svgTag.group(0)!;
-      final hasViewBox =
-          RegExp('\\bviewBox\\s*=', caseSensitive: false).hasMatch(tag);
-      final hasWidth =
-          RegExp('\\bwidth\\s*=', caseSensitive: false).hasMatch(tag);
-      final hasHeight =
-          RegExp('\\bheight\\s*=', caseSensitive: false).hasMatch(tag);
-      if (!hasViewBox && !(hasWidth && hasHeight)) {
-        // Add a fallback viewBox if missing to prevent 'Bad state' error
-        content = content.replaceFirstMapped(
-            RegExp('<svg\\b', caseSensitive: false),
-            (m) => '${m.group(0)} viewBox="0 0 24 24"');
-      }
-    }
-
-    // Find viewBox="x y w h" - allow commas as well as spaces
-    final vbRegex = RegExp(
-        'viewBox\\s*=\\s*["\']\\s*(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)[,\\s]+(-?\\d+\\.?\\d*)\\s*["\']',
-        caseSensitive: false);
-    final viewBoxMatch = vbRegex.firstMatch(content);
-
-    if (viewBoxMatch != null) {
-      final double vbWidth = double.tryParse(viewBoxMatch.group(3)!) ?? 100.0;
-      final double vbHeight = double.tryParse(viewBoxMatch.group(4)!) ?? 100.0;
-
-      // Replace 50% / 100% in cx, cy, x, y, width, height, r, rx, ry
-      final attrRegex = RegExp(
-          '\\b(cx|cy|x|y|width|height|r|rx|ry)\\s*=\\s*["\']\\s*(\\d+\\.?\\d*)\\s*%\\s*["\']',
-          caseSensitive: false);
-      content = content.replaceAllMapped(attrRegex, (match) {
-        final attr = match.group(1);
-        final percentString = match.group(2);
-        final percent = double.tryParse(percentString!) ?? 0.0;
-        final base = (attr == 'cx' ||
-                attr == 'x' ||
-                attr == 'width' ||
-                attr == 'r' ||
-                attr == 'rx')
-            ? vbWidth
-            : vbHeight;
-        final absolute = (percent / 100.0) * base;
-        return '$attr="$absolute"';
-      });
-    }
-
-    return utf8.encode(content);
-  } catch (e) {
-    debugPrint('Error sanitizing SVG: $e');
-    return bytes;
-  }
-}
 
 /// Network SVG that never crashes the vector compiler: the bytes are fetched,
 /// checked for HTML error pages and sanitized (see [sanitizeSvgData]) before

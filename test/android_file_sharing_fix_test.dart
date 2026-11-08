@@ -1,90 +1,43 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/shared_content_manager.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
+import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
   // Initialize Flutter binding for tests
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Android File Sharing Fix Tests', () {
-    test('SharedContentManager handles Android file content correctly', () {
-      // Test that SharedContentManager can handle file content provided by Android
-
-      // Simulate Android providing file content directly
-      final androidFileData = {
-        'type': 'file',
-        'content': 'Hello World from Android',
-        'fileName': 'test.txt',
-        'filePath': '/storage/emulated/0/Download/test.txt',
-      };
-
-      // This should be converted to fileBytes
-      final result =
-          SharedContentManager.convertToStringDynamicMap(androidFileData);
-
-      expect(result, isNotNull);
-      expect(result!['type'], 'file');
-      expect(result['fileName'], 'test.txt');
-      expect(result['filePath'], '/storage/emulated/0/Download/test.txt');
-    });
-
-    test('SharedContentManager handles content URIs gracefully', () {
-      // Test that SharedContentManager can handle content URIs
-
-      // Simulate Android providing a content URI
-      final contentUriData = {
-        'type': 'file',
-        'filePath':
-            'content://com.android.providers.downloads.documents/document/123',
-        'fileName': 'document.txt',
-        'uri':
-            'content://com.android.providers.downloads.documents/document/123',
-      };
-
-      // This should be handled without crashing
-      final result =
-          SharedContentManager.convertToStringDynamicMap(contentUriData);
-
-      expect(result, isNotNull);
-      expect(result!['type'], 'file');
-      expect(result['fileName'], 'document.txt');
-    });
-
-    test('SharedContentManager handles various file path formats', () {
-      // Test that SharedContentManager can handle different file path formats
+    test('UnifiedSharingService handles various file path formats', () {
+      // Test that UnifiedSharingService can handle different file path formats
 
       // Test regular file path
       var result =
-          SharedContentManager.extractFileNameFromPath('/path/to/file.txt');
+          UnifiedSharingService.extractFileNameFromPath('/path/to/file.txt');
       expect(result, 'file.txt');
 
       // Test file:// URL
-      result = SharedContentManager.extractFileNameFromPath(
+      result = UnifiedSharingService.extractFileNameFromPath(
           'file:///path/to/file.txt');
       expect(result, 'file.txt');
 
       // Test content URI
-      result = SharedContentManager.extractFileNameFromPath(
+      result = UnifiedSharingService.extractFileNameFromPath(
           'content://com.android.providers/downloads/documents/document/123');
       expect(result, '123'); // Last path segment
     });
 
-    test('SharingService file path detection works with content URIs', () {
-      // Test that SharingService can detect content URIs as file paths
+    test('UnifiedSharingService file path detection works with content URIs', () {
+      // Test that UnifiedSharingService can detect content URIs as file paths
 
-      // Content URIs should be detected as file paths
-      expect(
-          SharingService.isFilePath(
-              'content://com.android.providers.downloads.documents/document/123'),
-          isTrue);
+      // content:// URIs are not file paths: they have their own error
+      // page (UnifiedSharingService._handleContentUriError).
 
       // Regular file paths should still work
-      expect(SharingService.isFilePath('/storage/emulated/0/Download/file.txt'),
+      expect(UnifiedSharingService.isFilePath('/storage/emulated/0/Download/file.txt'),
           isTrue);
 
       // URLs should not be detected as file paths
       expect(
-          SharingService.isFilePath('https://example.com/file.txt'), isFalse);
+          UnifiedSharingService.isFilePath('https://example.com/file.txt'), isFalse);
     });
 
     test(
@@ -97,7 +50,7 @@ void main() {
         // This would normally fail in test environment due to MissingPluginException
         // but we're just testing that the method call doesn't crash
         try {
-          await SharingService.shareFile('/path/to/test.txt');
+          await UnifiedSharingService.shareFile('/path/to/test.txt');
         } catch (e) {
           // Expected to fail in test environment
           expect(e, isA<Exception>());

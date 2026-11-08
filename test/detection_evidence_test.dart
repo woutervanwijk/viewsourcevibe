@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/detection_evidence.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
-import 'package:view_source_vibe/services/metadata_parser.dart';
+import 'detection_helpers.dart';
 
 const _html = '''<!doctype html>
 <html>
@@ -16,7 +16,7 @@ const _html = '''<!doctype html>
 
 void main() {
   test('records line and tag for detected services and technologies', () async {
-    final metadata = await extractMetadataInIsolate(
+    final metadata = await extractMetadataWithDetections(
         _html, 'https://example.com/',
         headers: {'server': 'nginx/1.25'});
     final detections = {

@@ -1,68 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/derive/detections_view.dart';
+import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/widgets/detection_status.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 import 'package:view_source_vibe/widgets/evidence_view.dart';
 import 'package:view_source_vibe/widgets/privacy_view.dart';
 import 'package:view_source_vibe/models/detection_evidence.dart';
-import '../utils/format_utils.dart';
 
 class ServicesView extends StatelessWidget {
   const ServicesView({super.key});
 
+  /// Counts builds (tests check that unrelated changes do not rebuild).
+  @visibleForTesting
+  static int builds = 0;
+
   @override
   Widget build(BuildContext context) {
-    final htmlService = Provider.of<HtmlService>(context);
-    final metadata = htmlService.pageMetadata;
-    final detections = htmlService.detections;
+    builds++;
+    final view =
+        context.select<HtmlService, DetectionsView>((s) => s.detectionsView);
+    final meta = context
+        .select<HtmlService, Observed<MetadataModel>>((s) => s.metadataState);
+    final detections = view.detections;
     final services = servicesByCategory(detections);
     final evidence = {for (final d in detections) d.name: d.evidence};
     final trackerFindings = _trackerFindings(detections);
 
-    // Show loading indicator only if we're still loading or extracting metadata
-    if (htmlService.isLoading ||
-        htmlService.isWebViewLoading ||
-        htmlService.isExtractingMetadata) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    // Show message if no services detected or metadata is not available
     if (services.isEmpty && trackerFindings.isEmpty) {
-      // For XML files, we should never show progress - they don't have services
-      if (htmlService.isXml) {
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.layers_clear_outlined,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.outlineVariant),
-              const SizedBox(height: 16),
-              const Text('No Services Detected'),
-              const SizedBox(height: 8),
-              const Text('Services are not available for XML content.',
-                  style: TextStyle(color: Colors.grey),
-                  textAlign: TextAlign.center),
-            ],
-          ),
-        );
-      }
-
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.layers_clear_outlined,
-                size: 64, color: Theme.of(context).colorScheme.outlineVariant),
-            const SizedBox(height: 16),
-            const Text('No Services Detected'),
-            const SizedBox(height: 8),
-            const Text('No common third-party services found on this page.',
-                style: TextStyle(color: Colors.grey),
-                textAlign: TextAlign.center),
-          ],
-        ),
+      return DetectionEmptyState(
+        view: view,
+        icon: Icons.layers_clear_outlined,
+        noneTitle: 'No Services Detected',
+        noneText: 'No common third-party services found on this page.',
       );
     }
 
@@ -79,7 +52,7 @@ class ServicesView extends StatelessWidget {
         child: Column(
           children: [
             _buildSectionTitle(context, 'Tracker Radar'),
-            _buildTrackerRadar(context, trackerFindings),
+            _buildTrackerRadar(context, trackerFindings, view),
             const SizedBox(height: 24),
             if (sortedEntries.isNotEmpty) ...[
               _buildSectionTitle(context, 'Detected Services'),
@@ -93,41 +66,16 @@ class ServicesView extends StatelessWidget {
                     context, entry.key, entry.value, evidence);
               }),
             ],
-            if (metadata != null) ...[
-              const Divider(height: 48),
-              _buildSectionTitle(context, 'External Resources'),
-              const Text(
-                'JavaScript and CSS files loaded by this page.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              _buildResourceSection(
-                  context,
-                  'Scripts (JS)',
-                  [
-                    ...(metadata['jsLinks'] ?? []),
-                    ...(metadata['externalJsLinks'] ?? [])
-                  ],
-                  Icons.javascript),
-              const SizedBox(height: 16),
-              _buildResourceSection(
-                  context,
-                  'Stylesheets (CSS)',
-                  [
-                    ...(metadata['cssLinks'] ?? []),
-                    ...(metadata['externalCssLinks'] ?? [])
-                  ],
-                  Icons.css),
-              const SizedBox(height: 16),
-              _buildResourceSection(
-                  context,
-                  'Iframes (HTML)',
-                  [
-                    ...(metadata['iframeLinks'] ?? []),
-                    ...(metadata['externalIframeLinks'] ?? [])
-                  ],
-                  Icons.web_asset),
-            ],
+            const Divider(height: 48),
+            _buildSectionTitle(context, 'External Resources'),
+            const Text(
+              'JavaScript and CSS files loaded by this page.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            ..._buildExternalResources(context, meta),
+            const SizedBox(height: 24),
+            DetectionNote(view: view),
             const SizedBox(height: 80),
           ],
         ),
@@ -135,8 +83,37 @@ class ServicesView extends StatelessWidget {
     ));
   }
 
-  Widget _buildTrackerRadar(
-      BuildContext context, List<_TrackerFinding> findings) {
+  List<Widget> _buildExternalResources(
+      BuildContext context, Observed<MetadataModel> meta) {
+    switch (meta) {
+      case Present<MetadataModel>(value: final model):
+        final m = model.data;
+        List<dynamic> list(String a, String b) =>
+            [...(m[a] as List? ?? []), ...(m[b] as List? ?? [])];
+        return [
+          _buildResourceSection(context, model, 'Scripts (JS)',
+              list('jsLinks', 'externalJsLinks'), Icons.javascript),
+          const SizedBox(height: 16),
+          _buildResourceSection(context, model, 'Stylesheets (CSS)',
+              list('cssLinks', 'externalCssLinks'), Icons.css),
+          const SizedBox(height: 16),
+          _buildResourceSection(context, model, 'Iframes (HTML)',
+              list('iframeLinks', 'externalIframeLinks'), Icons.web_asset),
+        ];
+      case Pending<MetadataModel>():
+        return [const Text('Reading the page metadata…')];
+      case Failed<MetadataModel>(:final error):
+        return [
+          Text('Metadata could not be extracted: $error',
+              style: TextStyle(color: Theme.of(context).colorScheme.error))
+        ];
+      case Unavailable<MetadataModel>():
+        return [const Text('No page metadata is available.')];
+    }
+  }
+
+  Widget _buildTrackerRadar(BuildContext context,
+      List<_TrackerFinding> findings, DetectionsView view) {
     final high =
         findings.where((item) => item.risk == _TrackerRisk.high).length;
     final medium =
@@ -177,7 +154,11 @@ class ServicesView extends StatelessWidget {
             const SizedBox(height: 14),
             if (findings.isEmpty)
               Text(
-                'No obvious tracker patterns found.',
+                view.complete
+                    ? 'No obvious tracker patterns found.'
+                    : view.failure != null
+                        ? 'Tracker patterns could not be fully checked (scan failed).'
+                        : 'Scanning for tracker patterns…',
                 style: TextStyle(
                   color: Theme.of(context)
                       .colorScheme
@@ -310,14 +291,15 @@ class ServicesView extends StatelessWidget {
     );
   }
 
-  Widget _buildResourceSection(
-      BuildContext context, String title, List<dynamic>? links, IconData icon) {
-    if (links == null || links.isEmpty) return const SizedBox.shrink();
+  Widget _buildResourceSection(BuildContext context, MetadataModel model,
+      String title, List<dynamic> links, IconData icon) {
+    if (links.isEmpty) return const SizedBox.shrink();
 
     final sortedLinks = List<dynamic>.from(links);
     sortedLinks.sort((a, b) {
-      final sizeA = a is Map ? (a['size']?['decoded'] as num? ?? 0) : 0;
-      final sizeB = b is Map ? (b['size']?['decoded'] as num? ?? 0) : 0;
+      // Largest first; unknown sizes last.
+      final sizeA = a is Map ? (a['size']?['decoded'] as num? ?? -1) : -1;
+      final sizeB = b is Map ? (b['size']?['decoded'] as num? ?? -1) : -1;
 
       if (sizeB != sizeA) {
         return sizeB.compareTo(sizeA);
@@ -367,7 +349,9 @@ class ServicesView extends StatelessWidget {
           final String url = link is Map
               ? (link['src'] ?? link['href'] ?? '')
               : link.toString();
-          final Map<String, dynamic>? size = link is Map ? link['size'] : null;
+          final unresolved = model.unresolvedNote(url);
+          final sizeText = linkSizeLabel(link is Map ? link['size'] : null,
+              unknownReason: model.sizeUnknownReason);
 
           return Card(
             elevation: 0,
@@ -386,24 +370,28 @@ class ServicesView extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              subtitle: size != null && (size['decoded'] as int? ?? 0) > 0
-                  ? Text(
-                      FormatUtils.formatBytesWithTransfer(size),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
+              subtitle: Text(
+                unresolved == null ? sizeText : '$unresolved; $sizeText',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: sizeText.startsWith('size unknown')
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              trailing: unresolved == null
+                  ? const Icon(Icons.arrow_forward_ios, size: 12)
                   : null,
-              trailing: const Icon(Icons.arrow_forward_ios, size: 12),
               dense: true,
-              onTap: () {
-                final htmlService =
-                    Provider.of<HtmlService>(context, listen: false);
-                htmlService.loadFromUrl(url,
-                    switchToTab: HtmlService.sourceTab);
-              },
+              onTap: unresolved != null
+                  ? null
+                  : () {
+                      final htmlService =
+                          Provider.of<HtmlService>(context, listen: false);
+                      htmlService.loadFromUrl(url,
+                          switchToTab: HtmlService.sourceTab);
+                    },
             ),
           );
         }),
@@ -534,6 +522,8 @@ class ServicesView extends StatelessWidget {
                 '${d.requests} request${d.requests == 1 ? '' : 's'}',
               if (d.cookies.isNotEmpty) 'cookies: ${d.cookies.join(', ')}',
               if (d.hintOnly) 'connection hint only',
+              if (d.sources.isNotEmpty)
+                'seen in ${(d.sources.map((x) => x.name).toList()..sort()).join(' + ')}',
             ].join(' · '),
             evidence: d.evidence,
           ),

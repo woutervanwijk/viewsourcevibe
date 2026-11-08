@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/sharing_service.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 void main() {
@@ -25,7 +24,7 @@ void main() {
 
       for (final url in problematicUrls) {
         // Test both sharing services
-        expect(SharingService.isUrl(url), true, reason: 'SharingService should detect $url as URL');
+        expect(UnifiedSharingService.isUrl(url), true, reason: 'UnifiedSharingService should detect $url as URL');
         expect(UnifiedSharingService.isUrl(url), true, reason: 'UnifiedSharingService should detect $url as URL');
       }
     });
@@ -43,7 +42,7 @@ void main() {
 
       for (final filePath in actualFilePaths) {
         // Test both sharing services
-        expect(SharingService.isUrl(filePath), false, reason: 'SharingService should NOT detect $filePath as URL');
+        expect(UnifiedSharingService.isUrl(filePath), false, reason: 'UnifiedSharingService should NOT detect $filePath as URL');
         expect(UnifiedSharingService.isUrl(filePath), false, reason: 'UnifiedSharingService should NOT detect $filePath as URL');
       }
     });
@@ -78,7 +77,7 @@ void main() {
         final text = testCase['text'] as String;
         final shouldBeUrl = testCase['shouldBeUrl'] as bool;
         
-        expect(SharingService.isUrl(text), shouldBeUrl, reason: 'SharingService: $text should ${shouldBeUrl ? '' : 'NOT '}be URL');
+        expect(UnifiedSharingService.isUrl(text), shouldBeUrl, reason: 'UnifiedSharingService: $text should ${shouldBeUrl ? '' : 'NOT '}be URL');
         expect(UnifiedSharingService.isUrl(text), shouldBeUrl, reason: 'UnifiedSharingService: $text should ${shouldBeUrl ? '' : 'NOT '}be URL');
       }
     });

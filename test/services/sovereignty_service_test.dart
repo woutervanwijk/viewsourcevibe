@@ -1,9 +1,12 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/detection/catalog.dart';
 import '../detection_helpers.dart';
+import '../fixtures/inspection/builders.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
-import 'package:view_source_vibe/services/metadata_parser.dart';
+import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
 
 void main() {
@@ -648,10 +651,10 @@ void main() {
   });
 
   test('TYPO3 detection', () async {
-    final byGenerator = await extractMetadataInIsolate(
+    final byGenerator = await extractMetadataWithDetections(
         '<html><head><meta name="generator" content="TYPO3 CMS"></head></html>',
         'https://example.nl/');
-    final byPath = await extractMetadataInIsolate(
+    final byPath = await extractMetadataWithDetections(
         '<html><head><link href="/typo3temp/assets/x.css" rel="stylesheet"></head></html>',
         'https://example.nl/');
     expect(techOf(byGenerator)['CMS'], 'TYPO3');
@@ -708,6 +711,287 @@ void main() {
             certificateSubject: {'Common Name': 'www.bol.com'}),
         isNull,
       );
+    });
+  });
+
+  group('Task 9: rcode, PSL-lite, security.txt, concurrency, HSTS', () {
+    Uint8List response(int rcode, {int answers = 0}) => Uint8List.fromList([
+          0, 0, 0x81, 0x80 | rcode, 0, 1, 0, answers, 0, 0, 0, 0,
+          3, 110, 111, 115, 2, 110, 108, 0, 0, 16, 0, 1, // question TXT
+        ]);
+
+    test('SERVFAIL / REFUSED are unknown (null), not a missing record', () {
+      expect(SovereigntyService.dnsRcode(response(2)), 2);
+      expect(SovereigntyService.classifyDnsResponse(response(2), 16), isNull);
+      expect(SovereigntyService.classifyDnsResponse(response(5), 16), isNull);
+    });
+
+    test('NXDOMAIN and NOERROR-without-answers are a genuine "no record"', () {
+      expect(SovereigntyService.classifyDnsResponse(response(3), 16), isEmpty);
+      expect(SovereigntyService.classifyDnsResponse(response(0), 16), isEmpty);
+    });
+
+    test('an unknown record (null) gives CheckStatus.unknown, not fail', () {
+      final checks = SovereigntyService.securityChecks(
+          txt: null,
+          dmarc: null,
+          caa: null,
+          ds: null,
+          securityTxt: null,
+          server: null);
+      expect(checks.where((c) => c.title.contains('SPF')).single.status,
+          CheckStatus.unknown);
+      expect(checks.where((c) => c.title.contains('DMARC')).single.status,
+          CheckStatus.unknown);
+    });
+
+    test('registrableDomain knows common multi-label public suffixes', () {
+      expect(SovereigntyService.registrableDomain('foo.github.io'),
+          'foo.github.io');
+      expect(SovereigntyService.registrableDomain('a.b.foo.github.io'),
+          'foo.github.io');
+      expect(SovereigntyService.registrableDomain('x.example.ne.jp'),
+          'example.ne.jp');
+      expect(SovereigntyService.registrableDomain('www.app.vercel.app'),
+          'app.vercel.app');
+      expect(
+          SovereigntyService.registrableDomain('www.bbc.co.uk'), 'bbc.co.uk');
+      expect(SovereigntyService.registrableDomain('www.example.com.au'),
+          'example.com.au');
+      expect(SovereigntyService.registrableDomain('www.nos.nl'), 'nos.nl');
+      expect(SovereigntyService.registrableDomain('localhost'), 'localhost');
+      expect(SovereigntyService.registrableDomain('github.io'), 'github.io');
+    });
+
+    test('security.txt: 200 present, 404 absent, anything else unknown', () {
+      expect(SovereigntyService.classifySecurityTxt(200), isTrue);
+      expect(SovereigntyService.classifySecurityTxt(404), isFalse);
+      expect(SovereigntyService.classifySecurityTxt(403), isNull);
+      expect(SovereigntyService.classifySecurityTxt(429), isNull);
+      expect(SovereigntyService.classifySecurityTxt(500), isNull);
+      expect(SovereigntyService.classifySecurityTxt(null), isNull);
+    });
+
+    test('limited() never runs more than the limit at once', () async {
+      var running = 0, peak = 0;
+      Future<int> task(int i) async {
+        running++;
+        if (running > peak) peak = running;
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        running--;
+        return i;
+      }
+
+      final out = await SovereigntyService.limited(
+          [for (var i = 0; i < 30; i++) () => task(i)],
+          limit: 6);
+      expect(out, List.generate(30, (i) => i));
+      expect(peak, lessThanOrEqualTo(6));
+      expect(peak, greaterThan(1));
+    });
+
+    test('HSTS uses the real server headers; no server is unknown', () {
+      ServerSnapshot snapshot(Map<String, List<String>> headers) =>
+          serverSnapshot(
+              url: 'https://a.test/',
+              hops: [hop('https://a.test/', 200, headers: headers)],
+              body: 'x');
+      SovereigntyCheck hsts(ServerSnapshot? server) =>
+          SovereigntyService.securityChecks(
+                  txt: const [],
+                  dmarc: const [],
+                  caa: const [],
+                  ds: const [],
+                  securityTxt: null,
+                  server: server)
+              .firstWhere((c) => c.title.startsWith('HSTS'));
+      expect(hsts(null).status, CheckStatus.unknown);
+      expect(
+          hsts(snapshot({
+            'strict-transport-security': ['max-age=31536000']
+          })).status,
+          CheckStatus.pass);
+      expect(hsts(snapshot({})).status, CheckStatus.fail);
+    });
+  });
+
+  group('Task 9 fix 1', () {
+    test('registrableDomain generic ccTLD rule, IPs and case (I3)', () {
+      String r(String h) => SovereigntyService.registrableDomain(h);
+      expect(r('x.foo.com.mx'), 'foo.com.mx');
+      expect(r('a.b.com.pl'), 'b.com.pl');
+      expect(r('shop.co.at'), 'shop.co.at');
+      expect(r('1.2.3.4'), '1.2.3.4');
+      expect(r('2001:db8::1'), '2001:db8::1');
+      expect(r('Foo.Example.COM'), 'example.com');
+    });
+
+    test('the production limiter is the tested one: ripeConcurrency <= 6', () {
+      expect(SovereigntyService.ripeConcurrency, lessThanOrEqualTo(6));
+    });
+
+    test('a throwing task is unknown for that host, not a failed batch',
+        () async {
+      final out = await SovereigntyService.limited<int?>([
+        () async => 1,
+        () async => throw StateError('boom'),
+        () async => 3,
+      ], limit: 2);
+      expect(out, [1, null, 3]);
+    });
+
+    test('RIPEstat gate runs at most 6 requests at once', () async {
+      var running = 0, peak = 0;
+      final tasks = [
+        for (var i = 0; i < 20; i++)
+          () => SovereigntyService.ripeLimitedForTest(() async {
+                running++;
+                if (running > peak) peak = running;
+                await Future<void>.delayed(const Duration(milliseconds: 5));
+                running--;
+                return i;
+              })
+      ];
+      await Future.wait(tasks.map((f) => f()));
+      expect(peak, lessThanOrEqualTo(6));
+    });
+  });
+
+  group('Task 9: certificate subject parsing (B28)', () {
+    test('dart:io slash format keeps commas inside values', () {
+      final p = ProbeService.parseX509String(
+          '/C=US/ST=California/O=Example, Inc./CN=example.com');
+      expect(p['Organization'], 'Example, Inc.');
+      expect(p['Common Name'], 'example.com');
+      expect(p['Country'], 'US');
+    });
+
+    test('RFC 4514 escaped comma', () {
+      final p =
+          ProbeService.parseX509String(r'CN=example.com,O=Example\, Inc.,C=US');
+      expect(p['Organization'], 'Example, Inc.');
+      expect(p['Country'], 'US');
+    });
+
+    test('RFC 4514 quoted value', () {
+      final p =
+          ProbeService.parseX509String('CN=example.com,O="Example, Inc.",C=US');
+      expect(p['Organization'], 'Example, Inc.');
+      expect(p['Common Name'], 'example.com');
+    });
+
+    test('hex escape and unknown keys survive', () {
+      final p =
+          ProbeService.parseX509String(r'O=A\2C B,1.3.6.1.4.1.311.60.2.1.3=NL');
+      expect(p['Organization'], 'A, B');
+      expect(p['1.3.6.1.4.1.311.60.2.1.3'], 'NL');
+    });
+  });
+
+  group('Task 9: jurisdiction from a CDN certificate', () {
+    test('CDN organisation: derived with a warning', () {
+      final site = detectSiteJurisdiction(
+          host: 'shop.com',
+          certificateSubject: {
+            'Country': 'US',
+            'Organization': 'Cloudflare, Inc.'
+          })!;
+      expect(site.jurisdiction, 'US');
+      expect(site.derived, isTrue);
+      expect(site.warning, contains('may be the CDN'));
+    });
+
+    test('a normal organisation has no warning', () {
+      final site = detectSiteJurisdiction(
+          host: 'tweakers.net',
+          certificateSubject: {
+            'Country': 'BE',
+            'Organization': 'DPG Media Group NV'
+          })!;
+      expect(site.warning, isNull);
+    });
+
+    test('issuer-looking CDN names are recognised', () {
+      for (final o in [
+        'Akamai Technologies',
+        'Fastly, Inc.',
+        'Amazon.com',
+        'Google Trust Services LLC',
+        'Microsoft Corporation'
+      ]) {
+        expect(
+            detectSiteJurisdiction(
+                    host: 'x.com',
+                    certificateSubject: {'Country': 'US', 'Organization': o})!
+                .warning,
+            isNotNull,
+            reason: o);
+      }
+    });
+  });
+
+  group('unknown is never 0 (10c)', () {
+    SovereigntyReport report(List<SovereigntyCheck> checks,
+            {List<HostInfo> hosts = const []}) =>
+        SovereigntyReport(
+          mainHost: 'a',
+          hosts: hosts,
+          cdn: null,
+          nameServers: const [],
+          mailServers: const [],
+          tlsIssuer: null,
+          tlsProvider: null,
+          checks: checks,
+        );
+
+    test('nothing verifiable: no score and no grade, not "0 / Poor"', () {
+      final r = report([
+        const SovereigntyCheck(Pillar.security, 'c', CheckStatus.unknown, ''),
+      ]);
+      expect(r.score, isNull);
+      expect(r.grade, isNull);
+      expect(r.toJson()['score'], isNull);
+      expect(r.toJson()['grade'], isNull);
+    });
+
+    test('a verified failing report really scores 0', () {
+      final r = report([
+        const SovereigntyCheck(Pillar.security, 'c', CheckStatus.fail, ''),
+      ]);
+      expect(r.score, 0);
+      expect(r.grade, 'Poor');
+    });
+
+    test('host bytes: unknown stays null, known sums, mixed is partial', () {
+      final hosts = SovereigntyService.collectHosts(
+        pageUrl: 'https://a.test/',
+        inspection: urlInspection(
+          url: 'https://a.test/',
+          serverResult: const Pending(),
+          browserResult: browser(browserSnapshot(
+            url: 'https://a.test/',
+            dom: '',
+            resources: [
+              resource('https://cdn.test/a.js', 'script'),
+              resource('https://cdn.test/b.js', 'script',
+                  transfer: browser(100)),
+              resource('https://img.test/c.png', 'img'),
+              resource('https://ok.test/d.css', 'link', transfer: browser(50)),
+              resource('https://ok.test/e.css', 'link', transfer: browser(25)),
+            ],
+          )),
+        ),
+        metadata: null,
+      );
+      HostInfo of(String h) => hosts.singleWhere((x) => x.host == h);
+      expect(of('img.test').bytes, isNull);
+      expect(of('img.test').bytesPartial, isFalse);
+      expect(of('cdn.test').bytes, 100);
+      expect(of('cdn.test').bytesPartial, isTrue);
+      expect(of('ok.test').bytes, 75);
+      expect(of('ok.test').bytesPartial, isFalse);
+      expect(of('a.test').bytes, isNull); // the document itself: no size here
+      expect(hosts.first.host, 'a.test');
     });
   });
 }
