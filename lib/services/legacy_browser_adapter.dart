@@ -55,7 +55,8 @@ List<Map<String, dynamic>> legacyResourceTimeline(PageInspection p) {
 }
 
 /// The page weight as the old map: totals over the values that are Present,
-/// a breakdown per type, `transferLowerBound` / `transferEstimated` / `decodedLowerBound`. See
+/// a breakdown per type, and the flags `transferLowerBound`,
+/// `transferEstimated` and `decodedLowerBound`. See
 /// [derivePageWeight]. Null unless the browser's resources are Present.
 Map<String, dynamic>? legacyPageWeight(PageInspection p) {
   final w = derivePageWeight(p);

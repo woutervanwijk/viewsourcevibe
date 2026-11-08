@@ -255,8 +255,8 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                 '${b.resourcesDropped == 1 ? '' : 's'} not collected '
                 '(the browser buffer was full)');
           }
-          if (parts.isEmpty && weight.transferLowerBound ||
-              weight.decodedLowerBound) {
+          if (parts.isEmpty &&
+              (weight.transferLowerBound || weight.decodedLowerBound)) {
             parts.add('some resources report only part of their size');
           }
           return Present(
