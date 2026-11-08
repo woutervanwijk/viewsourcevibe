@@ -3,6 +3,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
+import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/widgets/page_size_view.dart';
@@ -60,8 +61,10 @@ void main() {
       expect(m.weight.decodedLowerBound, isFalse);
       expect(m.rows.map((r) => r.url),
           ['https://example.com/app.js', 'https://example.com/app.css']);
-      expect(m.rows.first.size, 12000);
-      expect(m.rows.first.sizeLabel, '12 KB (↓ 4 KB)');
+      // Download size first (Lighthouse), decoded next to it.
+      expect(m.rows.first.size, 4096);
+      expect(m.rows.first.sizeLabel, '4 KB (12 KB decoded)');
+      expect(m.lighthouseNote, 'Lighthouse: good (≤ 2,667 KB)');
       expect(m.missingNote, isNull);
     });
 
@@ -84,6 +87,9 @@ void main() {
       // A script with a transfer size only is still sized.
       final own = m.rows.singleWhere((r) => r.url.endsWith('own.js'));
       expect(own.size, 2048);
+      // A lower bound under the threshold only says "at least".
+      expect(m.lighthouseNote,
+          'Lighthouse: good (≤ 2,667 KB); the real total may be higher');
     });
 
     test('sizeless rows sort last', () {
@@ -98,6 +104,42 @@ void main() {
       expect(derivePageSize(localFile()), isA<Unavailable<PageSizeModel>>());
       expect(derivePageSize(p.copyWith(browser: const Failed('boom'))),
           isA<Failed<PageSizeModel>>());
+    });
+
+    test('formatDownloadSize: download first, never 0 for unknown', () {
+      expect(formatDownloadSize(), isNull);
+      expect(formatDownloadSize(transfer: 2048), '2 KB');
+      expect(formatDownloadSize(decoded: 2048), '2 KB decoded');
+      expect(formatDownloadSize(transfer: 2048, decoded: 2048), '2 KB');
+      expect(formatDownloadSize(transfer: 2048, decoded: 6144),
+          '2 KB (6 KB decoded)');
+      expect(
+          formatDownloadSize(
+              transfer: 2048, decoded: 6144, decodedPrefix: '≥ '),
+          '2 KB (≥ 6 KB decoded)');
+    });
+
+    test('lighthouseVerdict follows the Lighthouse thresholds', () {
+      PageWeight w(int? kib, {bool lower = false, bool est = false}) =>
+          PageWeight(
+              breakdown: const {},
+              transfer: kib == null ? null : kib * 1024,
+              decoded: null,
+              transferLowerBound: lower,
+              transferEstimated: est,
+              decodedLowerBound: false,
+              documentSource: null,
+              snapshotTimeMs: null);
+      expect(lighthouseVerdict(w(null)), isNull);
+      expect(lighthouseVerdict(w(2667)), 'Lighthouse: good (≤ 2,667 KB)');
+      expect(lighthouseVerdict(w(2668)),
+          'Lighthouse: needs improvement (≤ 4,000 KB)');
+      expect(lighthouseVerdict(w(4001)), 'Lighthouse: poor (> 4,000 KB)');
+      // Already poor as a lower bound: the verdict cannot get better.
+      expect(lighthouseVerdict(w(4001, lower: true)),
+          'Lighthouse: poor (> 4,000 KB)');
+      expect(lighthouseVerdict(w(100, est: true)),
+          'Lighthouse: good (≤ 2,667 KB); includes estimates');
     });
 
     test('formatSizePair never prints 0 for unknown', () {
@@ -122,14 +164,15 @@ void main() {
       await show(tester, fullPage());
       expect(find.text('Total Page Size'), findsOneWidget);
       expect(find.text('app.js'), findsOneWidget);
-      expect(find.text('12 KB (↓ 4 KB)'), findsWidgets);
+      expect(find.text('4 KB (12 KB decoded)'), findsWidgets);
+      expect(find.textContaining('Lighthouse: good'), findsOneWidget);
       expect(find.textContaining('≥'), findsNothing);
     });
 
     testWidgets('(b) iOS: lower bound, explained, no 0 KB', (tester) async {
       await show(tester, iosPartial());
-      expect(find.text('≥ 1 KB (↓ ≥ 7 KB)'), findsOneWidget);
-      expect(find.text('↓ ≥ 2 KB'), findsOneWidget);
+      expect(find.text('≥ 7 KB'), findsOneWidget);
+      expect(find.text('≥ 2 KB'), findsOneWidget);
       expect(find.textContaining('1 resource without size'), findsOneWidget);
       expect(find.textContaining('size unknown'), findsWidgets);
       expect(find.textContaining('0 KB'), findsNothing);

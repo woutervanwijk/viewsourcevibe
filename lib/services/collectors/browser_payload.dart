@@ -225,6 +225,7 @@ ResourceEntry _observerEntry(
 
   Observed<int> transfer;
   Observed<int> decoded;
+  var fromCache = false;
   final allZero = tx == 0 && enc == 0 && dec == 0;
   if (!_isWebPage(pageUrl)) {
     transfer = _noOwnSizes;
@@ -243,8 +244,14 @@ ResourceEntry _observerEntry(
     if (tx == null) {
       transfer = missing;
     } else if (tx == 0 && ((dec ?? 0) > 0 || (enc ?? 0) > 0)) {
-      transfer = const Unavailable(UnavailableReason.servedFromCache,
-          'transferSize is 0 for a cached response');
+      // A cache hit downloads nothing now; a fresh load downloads the
+      // encoded body, so that is its download size (without headers).
+      fromCache = true;
+      transfer = (enc ?? 0) > 0
+          ? Present(enc!,
+              source: DataSource.browser, provenance: Provenance.derived)
+          : const Unavailable(UnavailableReason.servedFromCache,
+              'transferSize is 0 for a cached response, no encoded size');
     } else {
       transfer = _measured(tx);
     }
@@ -265,6 +272,7 @@ ResourceEntry _observerEntry(
     duration: _time(e['du']),
     transfer: transfer,
     decoded: decoded,
+    fromCache: fromCache,
   );
 }
 
@@ -296,6 +304,10 @@ List<ResourceEntry> mergeResources(
         duration: _prefer(f.duration, o.duration),
         transfer: _prefer(f.transfer, o.transfer),
         decoded: _prefer(f.decoded, o.decoded),
+        // Follows the transfer value that was kept.
+        fromCache: f.transfer is Present<int> || o.transfer is! Present<int>
+            ? f.fromCache
+            : o.fromCache,
       );
     }
   }

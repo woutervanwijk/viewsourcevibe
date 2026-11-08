@@ -55,6 +55,11 @@ class ResourceEntry {
   /// Decoded body bytes. Never a fabricated 0.
   final Observed<int> decoded;
 
+  /// Served from the browser cache. [transfer] is then the encoded
+  /// (compressed) body size, what a fresh load downloads (derived, without
+  /// headers), so cache hits are counted like everything else.
+  final bool fromCache;
+
   const ResourceEntry({
     required this.url,
     required this.type,
@@ -63,6 +68,7 @@ class ResourceEntry {
     required this.duration,
     required this.transfer,
     required this.decoded,
+    this.fromCache = false,
   });
 }
 

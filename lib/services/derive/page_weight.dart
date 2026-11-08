@@ -145,9 +145,7 @@ PageWeight? derivePageWeight(PageInspection p) {
       bucket.addTransfer(tx.value);
       measured = (measured ?? 0) + tx.value;
     } else {
-      final cached = tx is Unavailable<int> &&
-          tx.reason == UnavailableReason.servedFromCache;
-      final est = cached ? null : p.resourceEstimates[r.url];
+      final est = p.resourceEstimates[r.url];
       if (est is Present<int>) {
         bucket.addEstimate(est.value);
       } else {
