@@ -231,50 +231,54 @@ class Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<HtmlService, bool>(
-      selector: (context, service) => service.canGoBack,
-      builder: (context, canGoBack, child) {
-        final htmlService = Provider.of<HtmlService>(context, listen: false);
-        return Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back, size: 24),
-              tooltip: 'Back',
-              onPressed: canGoBack ? () => htmlService.goBack() : null,
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.folder_open),
+          tooltip: 'Open File',
+          onPressed: () => _pickFile(context),
+        ),
+        if (Platform.isIOS || Platform.isAndroid)
+          IconButton(
+            icon: Icon(
+              Platform.isIOS ? CupertinoIcons.share : Icons.share,
+              size: 24,
             ),
-            IconButton(
-              icon: const Icon(Icons.folder_open),
-              tooltip: 'Open File',
-              onPressed: () => _pickFile(context),
-            ),
-            if (Platform.isIOS || Platform.isAndroid)
-              IconButton(
-                icon: Icon(
-                  Platform.isIOS ? CupertinoIcons.share : Icons.share,
-                  size: 24,
-                ),
-                tooltip: 'Share',
-                onPressed: () => _shareCurrentFile(context),
-              ),
-            Selector<HtmlService, bool>(
-              selector: (context, service) => service.currentFile != null,
-              builder: (context, hasFile, child) {
-                return IconButton(
-                  icon: const Icon(Icons.archive_outlined),
-                  tooltip: 'Export Inspection Package',
-                  onPressed:
-                      hasFile ? () => _exportInspectionPackage(context) : null,
-                );
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings),
-              tooltip: 'Settings',
-              onPressed: () => _showSettingsScreen(context),
-            ),
-          ],
-        );
-      },
+            tooltip: 'Share',
+            onPressed: () => _shareCurrentFile(context),
+          ),
+        Selector<HtmlService, bool>(
+          selector: (context, service) => service.currentFile != null,
+          builder: (context, hasFile, child) {
+            return IconButton(
+              icon: const Icon(Icons.archive_outlined),
+              tooltip: 'Export Inspection Package',
+              onPressed:
+                  hasFile ? () => _exportInspectionPackage(context) : null,
+            );
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.settings),
+          tooltip: 'Settings',
+          onPressed: () => _showSettingsScreen(context),
+        ),
+      ],
+    );
+  }
+}
+
+/// Back button shown in the app bar title, right of the app icon and name.
+class ToolbarBackButton extends StatelessWidget {
+  const ToolbarBackButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final canGoBack = context.select<HtmlService, bool>((s) => s.canGoBack);
+    return IconButton(
+      icon: const Icon(Icons.arrow_back, size: 24),
+      tooltip: 'Back',
+      onPressed: canGoBack ? () => context.read<HtmlService>().goBack() : null,
     );
   }
 }

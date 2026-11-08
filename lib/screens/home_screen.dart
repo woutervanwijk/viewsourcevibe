@@ -462,35 +462,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           },
           child: Scaffold(
             appBar: AppBar(
-              title: GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const AboutScreen(),
-                    ),
-                  );
-                },
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: Image.asset(
-                          'assets/icon.webp',
-                          width: 28,
-                          height: 28,
-                          fit: BoxFit.contain,
+              title: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const AboutScreen(),
                         ),
+                      );
+                    },
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: Image.asset(
+                              'assets/icon.webp',
+                              width: 28,
+                              height: 28,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const Text(
+                            'View\nSource\nVibe',
+                            style: TextStyle(fontSize: 10, height: 1),
+                          ),
+                        ],
                       ),
-                      const Text(
-                        'View\nSource\nVibe',
-                        style: TextStyle(fontSize: 10, height: 1),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                  const ToolbarBackButton(),
+                ],
               ),
               actions: const [
                 Toolbar(),
