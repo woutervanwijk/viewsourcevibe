@@ -8,10 +8,6 @@ enum NavigationDecision {
   /// cookies, POST bodies and Referer; the app never re-issues the request.
   allowAndNotify,
 
-  /// Cancel it and load the URL through HtmlService (source-first mode,
-  /// where the app owns the page content).
-  interceptAndLoad,
-
   /// Block it.
   cancel,
 }
@@ -23,7 +19,6 @@ NavigationDecision decideMainFrameNavigation({
   required bool isMainFrame,
   required bool isPendingLoad,
   required bool isCurrentFile,
-  required bool browserFirst,
 }) {
   if (uri.toString() == 'about:blank') return NavigationDecision.allow;
   final scheme = uri.scheme.toLowerCase();
@@ -32,7 +27,5 @@ NavigationDecision decideMainFrameNavigation({
   // The load the app started itself (or the current file, e.g. an RSS
   // template with a baseUrl).
   if (isPendingLoad || isCurrentFile) return NavigationDecision.allow;
-  return browserFirst
-      ? NavigationDecision.allowAndNotify
-      : NavigationDecision.interceptAndLoad;
+  return NavigationDecision.allowAndNotify;
 }

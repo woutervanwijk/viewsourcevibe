@@ -117,7 +117,7 @@ Widget _notThere<T>(Observed<T> state, String pendingText) {
               child: CircularProgressIndicator(strokeWidth: 2)),
           const SizedBox(width: 10),
           Expanded(
-              child: Text(pendingText,
+              child: Text(state.detail ?? pendingText,
                   style: const TextStyle(color: Colors.grey, fontSize: 12))),
         ],
       );

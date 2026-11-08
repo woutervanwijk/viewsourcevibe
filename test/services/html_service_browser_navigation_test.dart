@@ -112,4 +112,18 @@ void main() {
     service.beginBrowserNavigation('https://a.test/');
     expect(service.store.current.generation, gen);
   });
+
+  test('source-first mode defers the same way and adopts the server body',
+      () async {
+    service.setAppSettings(AppSettings()..useBrowserByDefault = false);
+    service.beginBrowserNavigation(callback);
+    await pumpEventQueue();
+    expect(fetcher.calls, isEmpty);
+    expect(loader.calls, isEmpty);
+
+    await service.syncWebViewState('https://www.ad.nl/');
+    await pumpEventQueue();
+    expect(fetcher.calls.map((u) => u.toString()), ['https://www.ad.nl/']);
+    expect(loader.calls, isEmpty);
+  });
 }

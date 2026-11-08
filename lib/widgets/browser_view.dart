@@ -297,7 +297,6 @@ class _BrowserViewState extends State<BrowserView> {
           isMainFrame: navigationAction.isForMainFrame,
           isPendingLoad: isPendingLoad,
           isCurrentFile: isCurrentFile,
-          browserFirst: htmlService.useBrowserByDefault,
         );
         switch (decision) {
           case NavigationDecision.allow:
@@ -309,10 +308,6 @@ class _BrowserViewState extends State<BrowserView> {
             // POST bodies stay intact); the app only records it.
             htmlService.beginBrowserNavigation(url);
             return NavigationActionPolicy.ALLOW;
-          case NavigationDecision.interceptAndLoad:
-            debugPrint('Intercepting main-frame navigation to: $url');
-            htmlService.loadUrl(url);
-            return NavigationActionPolicy.CANCEL;
         }
       },
     );

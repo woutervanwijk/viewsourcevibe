@@ -7,14 +7,12 @@ void main() {
     bool isMainFrame = true,
     bool isPendingLoad = false,
     bool isCurrentFile = false,
-    bool browserFirst = true,
   }) =>
       decideMainFrameNavigation(
         uri: Uri.parse(url),
         isMainFrame: isMainFrame,
         isPendingLoad: isPendingLoad,
         isCurrentFile: isCurrentFile,
-        browserFirst: browserFirst,
       );
 
   test('a navigation started inside the WebView proceeds and is announced', () {
@@ -48,10 +46,5 @@ void main() {
   test('sub-frame navigations are allowed', () {
     expect(decide('https://a.test/frame', isMainFrame: false),
         NavigationDecision.allow);
-  });
-
-  test('source-first mode keeps routing through the app (cancel + load)', () {
-    expect(decide('https://a.test/x', browserFirst: false),
-        NavigationDecision.interceptAndLoad);
   });
 }
