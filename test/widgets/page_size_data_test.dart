@@ -61,10 +61,10 @@ void main() {
       expect(m.weight.decodedLowerBound, isFalse);
       expect(m.rows.map((r) => r.url),
           ['https://example.com/app.js', 'https://example.com/app.css']);
-      // Download size first (Lighthouse), decoded next to it.
+      // Download size first, decoded next to it.
       expect(m.rows.first.size, 4096);
       expect(m.rows.first.sizeLabel, '4 KB');
-      expect(m.lighthouseNote, 'Lighthouse (this load): good (≤ 2,667 KB)');
+      expect(m.lighthouseNote, 'Verdict (this load): good (≤ 2,667 KB)');
       expect(m.missingNote, isNull);
     });
 
@@ -89,7 +89,7 @@ void main() {
       expect(own.size, 2048);
       // A lower bound under the threshold only says "at least".
       expect(m.lighthouseNote,
-          'Lighthouse (this load): good (≤ 2,667 KB); the real total may be higher');
+          'Verdict (this load): good (≤ 2,667 KB); the real total may be higher');
     });
 
     test('sizeless rows sort last', () {
@@ -112,7 +112,7 @@ void main() {
       expect(formatDownloadSize(2048, prefix: '≥ '), '≥ 2 KB');
     });
 
-    test('lighthouseVerdict follows the Lighthouse thresholds', () {
+    test('lighthouseVerdict follows the size thresholds', () {
       PageWeight w(int? kib, {bool lower = false, bool est = false}) =>
           PageWeight(
               breakdown: const {},
@@ -124,15 +124,15 @@ void main() {
               documentSource: null,
               snapshotTimeMs: null);
       expect(lighthouseVerdict(w(null)), isNull);
-      expect(lighthouseVerdict(w(2667)), 'Lighthouse: good (≤ 2,667 KB)');
+      expect(lighthouseVerdict(w(2667)), 'Verdict: good (≤ 2,667 KB)');
       expect(lighthouseVerdict(w(2668)),
-          'Lighthouse: needs improvement (≤ 4,000 KB)');
-      expect(lighthouseVerdict(w(4001)), 'Lighthouse: poor (> 4,000 KB)');
+          'Verdict: needs improvement (≤ 4,000 KB)');
+      expect(lighthouseVerdict(w(4001)), 'Verdict: poor (> 4,000 KB)');
       // Already poor as a lower bound: the verdict cannot get better.
       expect(lighthouseVerdict(w(4001, lower: true)),
-          'Lighthouse: poor (> 4,000 KB)');
+          'Verdict: poor (> 4,000 KB)');
       expect(lighthouseVerdict(w(100, est: true)),
-          'Lighthouse: good (≤ 2,667 KB); includes estimates');
+          'Verdict: good (≤ 2,667 KB); includes estimates');
     });
 
     test('formatSizePair never prints 0 for unknown', () {
@@ -247,11 +247,12 @@ void main() {
       expect(find.text('This load'), findsWidgets);
       expect(find.text('Fresh load'), findsOneWidget);
       expect(find.text('Measure'), findsOneWidget);
-      expect(find.textContaining('like Lighthouse'), findsOneWidget);
+      expect(find.textContaining('the network is quiet'), findsOneWidget);
+      expect(find.textContaining('Lighthouse'), findsNothing);
       expect(find.text('app.js'), findsOneWidget);
       expect(find.text('4 KB'), findsWidgets);
       expect(find.textContaining('decoded'), findsNothing);
-      expect(find.textContaining('Lighthouse (this load): good'),
+      expect(find.textContaining('Verdict (this load): good'),
           findsOneWidget);
       expect(find.textContaining('≥'), findsNothing);
     });

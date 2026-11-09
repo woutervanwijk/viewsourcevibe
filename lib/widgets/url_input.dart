@@ -6,14 +6,17 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/utils/path_name.dart';
 
+/// Key of the home screen's [UrlInput]; the Cmd/Ctrl+L shortcut focuses it.
+final GlobalKey<UrlInputState> urlInputKey = GlobalKey<UrlInputState>();
+
 class UrlInput extends StatefulWidget {
   const UrlInput({super.key});
 
   @override
-  State<UrlInput> createState() => _UrlInputState();
+  State<UrlInput> createState() => UrlInputState();
 }
 
-class _UrlInputState extends State<UrlInput> {
+class UrlInputState extends State<UrlInput> {
   final _urlController = TextEditingController();
   final _focusNode = FocusNode();
   String _errorMessage = '';
@@ -46,6 +49,13 @@ class _UrlInputState extends State<UrlInput> {
 
     // If it's already just a filename, return as-is
     return path;
+  }
+
+  /// Focus the field and select its text, like Cmd/Ctrl+L in a browser.
+  void focusLocationBar() {
+    _focusNode.requestFocus();
+    _urlController.selection =
+        TextSelection(baseOffset: 0, extentOffset: _urlController.text.length);
   }
 
   void _onUrlChanged() {
@@ -197,9 +207,8 @@ class _UrlInputState extends State<UrlInput> {
                           // For local files, use just the filename in the URL bar
                           final isUrl = selection.startsWith('http://') ||
                               selection.startsWith('https://');
-                          _urlController.text = isUrl
-                              ? selection
-                              : fileNameOfPath(selection);
+                          _urlController.text =
+                              isUrl ? selection : fileNameOfPath(selection);
                           // Hide keyboard on mobile after selection
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) {
