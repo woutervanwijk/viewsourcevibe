@@ -155,11 +155,15 @@ void main() {
 
     testWidgets('(a) values equal the fixture', (tester) async {
       await show(tester, fullPage());
-      expect(find.text('Total Page Size'), findsOneWidget);
+      expect(find.text('This load'), findsOneWidget);
+      expect(find.text('Fresh load'), findsOneWidget);
+      expect(find.text('Measure'), findsOneWidget);
+      expect(find.textContaining('like Lighthouse'), findsOneWidget);
       expect(find.text('app.js'), findsOneWidget);
       expect(find.text('4 KB'), findsWidgets);
       expect(find.textContaining('decoded'), findsNothing);
-      expect(find.textContaining('Lighthouse: good'), findsOneWidget);
+      expect(find.textContaining('Lighthouse (this load): good'),
+          findsOneWidget);
       expect(find.textContaining('≥'), findsNothing);
     });
 
