@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
@@ -77,6 +78,12 @@ Map<String, Object?> obs(String url,
       'dec': dec,
     };
 
+/// One later pass after [ms] milliseconds.
+NetworkQuietPolicy once(int ms) => NetworkQuietPolicy(
+    interval: Duration(milliseconds: ms),
+    quiet: const Duration(hours: 1),
+    max: Duration(milliseconds: ms));
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -88,7 +95,8 @@ void main() {
   late Future<Object?> Function(String url) collect;
   late Future<List<Map>> Function(String url) native;
 
-  HtmlService make({List<Duration>? refreshDelays}) {
+  HtmlService make(
+      {NetworkQuietPolicy? poll, Duration? late, bool scrollToLoadLazy = false}) {
     final s = HtmlService(
       store: store,
       serverFetcher: fetcher,
@@ -100,10 +108,13 @@ void main() {
       },
       nativeCookies: (url) => native(url),
       browserPlatform: BrowserPlatform.macos,
-      browserRefreshDelays: refreshDelays ?? const [],
+      browserPoll: poll ?? NetworkQuietPolicy.off,
+      lateCollectDelay: late ?? const Duration(milliseconds: 10),
       spaSettleDelay: Duration.zero,
     );
-    s.setAppSettings(AppSettings()..useBrowserByDefault = true);
+    s.setAppSettings(AppSettings()
+      ..useBrowserByDefault = true
+      ..scrollToLoadLazy = scrollToLoadLazy);
     return s;
   }
 
@@ -288,7 +299,7 @@ void main() {
         'a refresh merges: startTime/duration of the first sync survive '
         '(B12)', () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 20)]);
+      service = make(poll: once(20));
       var n = 0;
       collect = (url) async {
         n++;
@@ -318,10 +329,48 @@ void main() {
       expect(t['https://a.test/a.js']!['duration'], 20.0);
     });
 
+    test(
+        'scrollToLoadLazy: when the load is quiet, the page is scrolled once '
+        'and polling continues until the lazy loads are in', () async {
+      service.dispose();
+      service = make(poll: once(20), scrollToLoadLazy: true);
+      var n = 0;
+      collect = (url) async {
+        n++;
+        // After the scroll, a lazy image arrives.
+        return payload(url: url, observer: [
+          obs('https://a.test/a.js', st: 5.0, du: 20.0, tx: 100),
+          if (n >= 3)
+            {
+              'n': 'https://a.test/lazy.gif',
+              'it': 'img',
+              'st': 9000.0,
+              'du': 30.0,
+              'tx': 2400,
+              'enc': 2400,
+              'dec': 0
+            },
+        ]);
+      };
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await pumpEventQueue();
+      // initial sync + first poll + post-scroll poll, then settled
+      expect(collectCalls.length, greaterThanOrEqualTo(3));
+      expect(store.current.browserSettled, isTrue);
+      final names =
+          service.resourceTimelineData.map((r) => r['name']).toSet();
+      expect(names, contains('https://a.test/lazy.gif'));
+      // The toast explains the scroll and how to disable it.
+      expect(HtmlService.scrollThroughToast, contains('Settings'));
+      expect(HtmlService.scrollThroughToast, contains('Load lazy content'));
+    });
+
     test('a refresh whose collect completes after navigation is dropped',
         () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 20)]);
+      service = make(poll: once(20));
       final slow = Completer<Object?>();
       var n = 0;
       collect = (url) {
@@ -342,9 +391,98 @@ void main() {
       expect(service.resourceTimelineData, isEmpty);
     });
 
+    test('polls until nothing new arrives, then marks the load settled',
+        () async {
+      service.dispose();
+      service = make(
+          poll: const NetworkQuietPolicy(
+              interval: Duration(milliseconds: 10),
+              quiet: Duration(milliseconds: 25),
+              max: Duration(seconds: 5)));
+      var n = 0;
+      collect = (url) async {
+        n++;
+        // Resources keep arriving for the first three collects.
+        return payload(url: url, observer: [
+          for (var i = 0; i < (n < 3 ? n : 3); i++) obs('https://a.test/$i.js')
+        ]);
+      };
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(store.current.browserSettled, isFalse);
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await pumpEventQueue();
+
+      expect(store.current.browserSettled, isTrue);
+      final calls = collectCalls.length;
+      expect(calls, greaterThanOrEqualTo(4));
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(collectCalls, hasLength(calls), reason: 'polling stopped');
+    });
+
+    test('after settling, late resources (lazy images) are collected again',
+        () async {
+      var n = 0;
+      collect = (url) async {
+        n++;
+        return payload(url: url, observer: [
+          obs('https://a.test/app.js', tx: 1000),
+          if (n > 1) obs('https://a.test/lazy.gif', tx: 3000000),
+        ]);
+      };
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(collectCalls, hasLength(1));
+
+      // The page reports new resources several times: one collect.
+      service.onBrowserResourcesChanged();
+      service.onBrowserResourcesChanged();
+      service.onBrowserResourcesChanged();
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await pumpEventQueue();
+
+      expect(collectCalls, hasLength(2));
+      final b = store.current.browser as Present<BrowserSnapshot>;
+      final res = (b.value.resources as Present<List<ResourceEntry>>).value;
+      expect(res.map((r) => r.url), contains('https://a.test/lazy.gif'));
+    });
+
+    test('before settling the polling covers late resources', () async {
+      service.dispose();
+      service = make(
+          poll: const NetworkQuietPolicy(
+              interval: Duration(hours: 1),
+              quiet: Duration(hours: 1),
+              max: Duration(hours: 1)));
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(store.current.browserSettled, isFalse);
+      service.onBrowserResourcesChanged();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(collectCalls, hasLength(1));
+    });
+
+    test('a navigation cancels a waiting late collect', () async {
+      service.dispose();
+      service = make(late: const Duration(milliseconds: 40));
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      service.onBrowserResourcesChanged();
+      await service.loadUrl('https://b.test/');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(collectCalls, hasLength(1));
+    });
+
+    test('without polling the load is settled at once', () async {
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(store.current.browserSettled, isTrue);
+    });
+
     test('pending refreshes are cancelled by a navigation', () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 50)]);
+      service = make(poll: once(50));
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
       expect(collectCalls, hasLength(1));
@@ -357,7 +495,7 @@ void main() {
 
     test('pending refreshes are cancelled by dispose', () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 50)]);
+      service = make(poll: once(50));
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
       service.dispose();
@@ -369,7 +507,7 @@ void main() {
 
     test('a partial sync schedules no refreshes', () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 20)]);
+      service = make(poll: once(20));
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/', isPartial: true);
       await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -488,7 +626,7 @@ void main() {
         ]),
         nativeCookies: (u) async => [],
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (url) async => 777,
       );
@@ -577,7 +715,7 @@ void main() {
         ]),
         nativeCookies: (u) async => [],
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (url) async => null,
       );
@@ -621,7 +759,7 @@ void main() {
         ]),
         nativeCookies: (u) async => [],
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (url) async {
           looked.add(url);
@@ -660,7 +798,7 @@ void main() {
         browserCollect: (url) async => payload(url: url),
         nativeCookies: (u) async => [],
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (url) => gate.future,
       );

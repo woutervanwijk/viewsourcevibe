@@ -46,10 +46,15 @@ InspectionStore seedStore(InspectionStore store, PageInspection p) {
       final b = p.browser;
       if (b is Present<BrowserSnapshot>) {
         store.applyBrowser(gen, b.value);
+        // A fixture is a finished load.
+        store.markBrowserSettled(gen);
       } else if (b is! Pending<BrowserSnapshot>) {
         store.applyBrowserFailure(gen, b);
       }
       if (p.robots is! Pending<RobotsInfo>) store.applyRobots(gen, p.robots);
+      if (p.freshLoad is! Unavailable<BrowserSnapshot>) {
+        store.applyFreshLoad(gen, p.freshLoad);
+      }
     case FileTarget():
       store.beginFile(t.file);
     case NoTarget():

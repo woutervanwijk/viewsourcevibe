@@ -64,7 +64,7 @@ void main() {
       // Download size first (Lighthouse), decoded next to it.
       expect(m.rows.first.size, 4096);
       expect(m.rows.first.sizeLabel, '4 KB');
-      expect(m.lighthouseNote, 'Lighthouse: good (≤ 2,667 KB)');
+      expect(m.lighthouseNote, 'Lighthouse (this load): good (≤ 2,667 KB)');
       expect(m.missingNote, isNull);
     });
 
@@ -89,7 +89,7 @@ void main() {
       expect(own.size, 2048);
       // A lower bound under the threshold only says "at least".
       expect(m.lighthouseNote,
-          'Lighthouse: good (≤ 2,667 KB); the real total may be higher');
+          'Lighthouse (this load): good (≤ 2,667 KB); the real total may be higher');
     });
 
     test('sizeless rows sort last', () {
@@ -142,6 +142,95 @@ void main() {
     });
   });
 
+  group('declared media (lazy images the browser never fetched)', () {
+    test('isSameImageVariant matches host + last path segment only', () {
+      expect(
+          isSameImageVariant(
+              'https://images.ad.nl/aaa/0.50/0.50/666/499/slug-a',
+              'https://images.ad.nl/bbb/0.75/0.75/999/749/slug-a'),
+          isTrue);
+      expect(
+          isSameImageVariant(
+              'https://images.ad.nl/aaa/slug-a', 'https://other.test/slug-a'),
+          isFalse);
+      expect(isSameImageVariant('https://a.test/slug-a', 'https://a.test/other'),
+          isFalse);
+    });
+
+    test('unfetchedDeclaredMedia skips fetched URLs and srcset variants', () {
+      expect(
+        unfetchedDeclaredMedia(
+          [
+            'https://images.ad.nl/aaa/0.50/0.50/666/499/slug-a',
+            'https://a.test/x.png',
+          ],
+          [
+            'https://images.ad.nl/bbb/0.75/0.75/999/749/slug-a', // variant of fetched
+            'https://a.test/x.png', // fetched exactly
+            'https://images.ad.nl/ccc/lazy-big.gif', // never fetched
+          ],
+        ),
+        ['https://images.ad.nl/ccc/lazy-big.gif'],
+      );
+    });
+
+    test('a declared image becomes an estimated row; the weight counts it',
+        () {
+      final p = inspection(
+              browser: browserSnap(resources: [
+        res('https://a.test/app.js', tx: b(1024)),
+      ])).copyWith(
+        declaredMedia: const ['https://images.ad.nl/x/lazy-big.gif'],
+        resourceEstimates: {
+          'https://images.ad.nl/x/lazy-big.gif': Present(2400 * 1024,
+              source: DataSource.server, provenance: Provenance.estimated),
+        },
+      );
+      final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+      final row =
+          m.rows.singleWhere((r) => r.url.contains('lazy-big.gif'));
+      expect(row.type, 'image');
+      expect(row.estimated, isTrue);
+      expect(row.size, 2400 * 1024);
+      expect(row.sizeLabel, startsWith('≈ '));
+      expect(m.declaredCount, 1);
+      expect(m.declaredNote, contains('not loaded by this browser'));
+      expect(m.weight.transfer, 1024 + 2400 * 1024);
+      expect(m.weight.transferEstimated, isTrue);
+      // The row sorts with the measured ones (largest first).
+      expect(m.rows.first.url, contains('lazy-big.gif'));
+    });
+
+    test('without an estimate the row says it was declared, not loaded', () {
+      final p = inspection(
+              browser: browserSnap(resources: [
+        res('https://a.test/app.js', tx: b(1024)),
+      ])).copyWith(declaredMedia: const ['https://images.ad.nl/x/lazy.gif']);
+      final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+      final row = m.rows.singleWhere((r) => r.url.contains('lazy.gif'));
+      expect(row.size, isNull);
+      expect(row.estimated, isFalse);
+      expect(row.sizeNote, contains('not loaded by this browser'));
+      expect(m.weight.transferLowerBound, isTrue);
+      expect(m.declaredCount, 1);
+    });
+
+    test('a declared URL the browser did fetch is not added twice', () {
+      final p = inspection(
+              browser: browserSnap(resources: [
+        res('https://a.test/app.js', tx: b(1024)),
+        res('https://images.ad.nl/aaa/666/pic.gif', type: 'img', tx: b(500)),
+      ])).copyWith(declaredMedia: const [
+        'https://images.ad.nl/aaa/666/pic.gif', // exact
+        'https://images.ad.nl/bbb/999/pic.gif', // same image, other variant
+      ]);
+      final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+      expect(m.declaredCount, 0);
+      expect(m.declaredNote, isNull);
+      expect(m.rows.where((r) => r.url.contains('pic.gif')), hasLength(1));
+    });
+  });
+
   group('PageSizeView', () {
     late HtmlService service;
 
@@ -155,11 +244,15 @@ void main() {
 
     testWidgets('(a) values equal the fixture', (tester) async {
       await show(tester, fullPage());
-      expect(find.text('Total Page Size'), findsOneWidget);
+      expect(find.text('This load'), findsWidgets);
+      expect(find.text('Fresh load'), findsOneWidget);
+      expect(find.text('Measure'), findsOneWidget);
+      expect(find.textContaining('like Lighthouse'), findsOneWidget);
       expect(find.text('app.js'), findsOneWidget);
       expect(find.text('4 KB'), findsWidgets);
       expect(find.textContaining('decoded'), findsNothing);
-      expect(find.textContaining('Lighthouse: good'), findsOneWidget);
+      expect(find.textContaining('Lighthouse (this load): good'),
+          findsOneWidget);
       expect(find.textContaining('≥'), findsNothing);
     });
 

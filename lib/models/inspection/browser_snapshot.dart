@@ -9,7 +9,11 @@ extension BrowserPlatformX on BrowserPlatform {
 }
 
 /// Where a resource entry came from. The observer wins over the patch (B13).
-enum ResourceSource { observer, patch }
+/// Where an entry came from: the resource-timing observer, the fetch/XHR
+/// patch, an image shown on the page that neither reported (WebKit gives
+/// no timing entry for an image served from its memory cache), or a URL the
+/// collector's buffer dropped (no sizes at all; any real source beats it).
+enum ResourceSource { observer, patch, shownImage, dropped }
 
 /// The serialized DOM as the browser currently holds it.
 class RenderedDom {
@@ -60,6 +64,13 @@ class ResourceEntry {
   /// headers), so cache hits are counted like everything else.
   final bool fromCache;
 
+  /// Origin of the iframe that loaded it (ads, embeds), as the iframe
+  /// reported it; '' when it could not tell. Null: the page itself.
+  final String? frameOrigin;
+
+  /// Loaded inside an iframe, not by the page itself.
+  bool get inFrame => frameOrigin != null;
+
   const ResourceEntry({
     required this.url,
     required this.type,
@@ -69,6 +80,7 @@ class ResourceEntry {
     required this.transfer,
     required this.decoded,
     this.fromCache = false,
+    this.frameOrigin,
   });
 }
 

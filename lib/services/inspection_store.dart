@@ -112,16 +112,69 @@ class InspectionStore extends ChangeNotifier {
   /// Nothing new = no change, no notify.
   void applyEstimates(int gen, Map<String, Observed<int>> estimates) {
     if (!_accepts(gen)) return;
-    final merged = {..._current.resourceEstimates};
+    final merged = _mergeEstimates(_current.resourceEstimates, estimates);
+    if (merged == null) return;
+    _set(_current.copyWith(resourceEstimates: merged));
+  }
+
+  /// Null when nothing changes.
+  static Map<String, Observed<int>>? _mergeEstimates(
+      Map<String, Observed<int>> current, Map<String, Observed<int>> fresh) {
+    final merged = {...current};
     var changed = false;
-    for (final e in estimates.entries) {
+    for (final e in fresh.entries) {
       final old = merged[e.key];
       if (old is Present<int> && e.value is! Present<int>) continue;
       merged[e.key] = e.value;
       changed = true;
     }
-    if (!changed) return;
-    _set(_current.copyWith(resourceEstimates: merged));
+    return changed ? merged : null;
+  }
+
+  /// The media the page declares in its DOM (see
+  /// [PageInspection.declaredMedia]): lazy images the browser may never
+  /// fetch still belong in the Page size tab.
+  void applyDeclaredMedia(int gen, List<String> urls) {
+    if (!_accepts(gen)) return;
+    if (listEquals(_current.declaredMedia, urls)) return;
+    _set(_current.copyWith(declaredMedia: urls));
+  }
+
+  /// The live load stopped requesting (see [PageInspection.browserSettled]).
+  void markBrowserSettled(int gen) {
+    if (!_accepts(gen) || _current.browserSettled) return;
+    _set(_current.copyWith(browserSettled: true));
+  }
+
+  /// The fresh (Lighthouse-like) load: Pending while it runs, then its
+  /// result and screenshot. A new result drops the lookups and screenshot of
+  /// the previous one.
+  void applyFreshLoad(int gen, Observed<BrowserSnapshot> result,
+      {Observed<Uint8List> screenshot = kNoScreenshot}) {
+    if (!_accepts(gen)) return;
+    _set(_current.copyWith(
+        freshLoad: result,
+        freshEstimates: const {},
+        freshScreenshot: screenshot));
+  }
+
+  /// A screenshot of the live browser; a missing one never replaces a
+  /// screenshot already there.
+  void applyLiveScreenshot(int gen, Observed<Uint8List> shot) {
+    if (!_accepts(gen)) return;
+    if (shot is! Present<Uint8List> &&
+        _current.liveScreenshot is Present<Uint8List>) {
+      return;
+    }
+    _set(_current.copyWith(liveScreenshot: shot));
+  }
+
+  /// Own size lookups for the fresh load, merged like [applyEstimates].
+  void applyFreshEstimates(int gen, Map<String, Observed<int>> estimates) {
+    if (!_accepts(gen)) return;
+    final merged = _mergeEstimates(_current.freshEstimates, estimates);
+    if (merged == null) return;
+    _set(_current.copyWith(freshEstimates: merged));
   }
 
   void setPrimaryDocument(DataSource? s) {

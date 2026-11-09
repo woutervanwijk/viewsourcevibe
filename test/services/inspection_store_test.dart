@@ -394,4 +394,24 @@ void main() {
       expect(store.current.resourceEstimates, isEmpty);
     });
   });
+
+  group('applyDeclaredMedia', () {
+    test('one apply = one notify; same list is a no-op; stale is dropped', () {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      notifies = 0;
+      store.applyDeclaredMedia(g, ['https://img.a.test/a.gif']);
+      expect(notifies, 1);
+      expect(store.current.declaredMedia, ['https://img.a.test/a.gif']);
+      store.applyDeclaredMedia(g, ['https://img.a.test/a.gif']);
+      expect(notifies, 1);
+      store.applyDeclaredMedia(g, ['https://img.a.test/a.gif', 'https://img.a.test/b.gif']);
+      expect(notifies, 2);
+      expect(store.current.declaredMedia.length, 2);
+      store.beginUrl(Uri.parse('https://b.test/'));
+      notifies = 0;
+      store.applyDeclaredMedia(g, ['https://img.a.test/c.gif']);
+      expect(notifies, 0);
+      expect(store.current.declaredMedia, isEmpty);
+    });
+  });
 }

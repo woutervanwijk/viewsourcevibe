@@ -211,8 +211,60 @@ List<ResourceEntry> _parseResources(
     byUrl[url] =
         existing == null ? entry : mergeResources([existing], [entry]).single;
   }
+  // Images on screen that no timing entry covers: loaded, but unmeasured.
+  if (_isWebPage(pageUrl)) {
+    for (final e in (m['shown'] as List? ?? const [])) {
+      final url = _absoluteUrl(e, pageUrl);
+      if (url == null || byUrl.containsKey(url)) continue;
+      byUrl[url] = ResourceEntry(
+        url: url,
+        type: 'img',
+        source: ResourceSource.shownImage,
+        startTime: const Unavailable(UnavailableReason.notReportedByPlatform,
+            _shownImageDetail),
+        duration: const Unavailable(UnavailableReason.notReportedByPlatform,
+            _shownImageDetail),
+        transfer: const Unavailable(UnavailableReason.notReportedByPlatform,
+            _shownImageDetail),
+        decoded: const Unavailable(UnavailableReason.notReportedByPlatform,
+            _shownImageDetail),
+      );
+    }
+  }
+  // URLs the collector's buffer dropped (lazy images and ads that loaded
+  // after a flood of unique tracker URLs): listed without sizes, so the app
+  // can still size them with its own request.
+  for (final e in (m['droppedNames'] as List? ?? const [])) {
+    if (e is! Map) continue;
+    final url = _absoluteUrl(e['n'], pageUrl);
+    if (url == null || byUrl.containsKey(url)) continue;
+    final fo = e['fo'];
+    byUrl[url] = ResourceEntry(
+      url: url,
+      type: '${e['it'] ?? ''}',
+      source: ResourceSource.dropped,
+      startTime: const Unavailable(
+          UnavailableReason.notReportedByPlatform, _droppedDetail),
+      duration: const Unavailable(
+          UnavailableReason.notReportedByPlatform, _droppedDetail),
+      transfer: _isWebPage(pageUrl)
+          ? const Unavailable(
+              UnavailableReason.notReportedByPlatform, _droppedDetail)
+          : _noOwnSizes,
+      decoded: _isWebPage(pageUrl)
+          ? const Unavailable(
+              UnavailableReason.notReportedByPlatform, _droppedDetail)
+          : _noOwnSizes,
+      frameOrigin: fo is String && fo.isNotEmpty ? fo : null,
+    );
+  }
   return byUrl.values.toList();
 }
+
+const _shownImageDetail = 'shown on the page, but the browser reported no '
+    'timing for it (likely served from its memory cache)';
+
+const _droppedDetail = 'not collected: the collector buffer was full';
 
 ResourceEntry _observerEntry(
     Map e, String url, BrowserPlatform platform, Uri pageUrl) {
@@ -273,6 +325,7 @@ ResourceEntry _observerEntry(
     transfer: transfer,
     decoded: decoded,
     fromCache: fromCache,
+    frameOrigin: e['fr'] == 1 ? '${e['fo'] ?? ''}' : null,
   );
 }
 
@@ -292,8 +345,15 @@ List<ResourceEntry> mergeResources(
     final o = byUrl[f.url];
     if (o == null) {
       byUrl[f.url] = f;
-    } else if (o.source == ResourceSource.observer &&
-        f.source == ResourceSource.patch) {
+    } else if (f.source == ResourceSource.dropped &&
+        o.source != ResourceSource.dropped) {
+      // A dropped placeholder never replaces a real entry.
+      continue;
+    } else if ((o.source == ResourceSource.observer &&
+            f.source == ResourceSource.patch) ||
+        // A shown image never replaces a measured entry.
+        (f.source == ResourceSource.shownImage &&
+            o.source != ResourceSource.shownImage)) {
       continue;
     } else {
       byUrl[f.url] = ResourceEntry(
@@ -308,6 +368,8 @@ List<ResourceEntry> mergeResources(
         fromCache: f.transfer is Present<int> || o.transfer is! Present<int>
             ? f.fromCache
             : o.fromCache,
+        // The first report of where it was loaded stays.
+        frameOrigin: o.frameOrigin ?? f.frameOrigin,
       );
     }
   }

@@ -30,7 +30,7 @@ void main() {
   test('every fixture is marked synthetic with a note', () {
     final dir = Directory('test/fixtures/browser');
     final files = dir.listSync().whereType<File>().toList();
-    expect(files.length, 7);
+    expect(files.length, 9);
     for (final f in files) {
       final j = jsonDecode(f.readAsStringSync()) as Map;
       expect(j['_synthetic'], true, reason: f.path);
@@ -103,6 +103,207 @@ void main() {
     final img = byUrl(s, 'https://example.com/photo.jpg');
     expect(present(img.decoded), 39800);
     expect(present(s.cookies), isEmpty);
+  });
+
+  test('iframe entries keep the frame origin; the page\'s own do not', () {
+    final s = parse('iframe_resources.json', BrowserPlatform.android,
+        'https://example.com/');
+    final own = byUrl(s, 'https://example.com/app.js');
+    expect(own.inFrame, isFalse);
+    // The iframe document itself is loaded by the page.
+    expect(byUrl(s, 'https://ads.example.net/frame.html').inFrame, isFalse);
+    final ad = byUrl(s, 'https://ads.example.net/ad.js');
+    expect(ad.frameOrigin, 'https://ads.example.net');
+    expect(present(ad.transfer), 5000);
+    final img = byUrl(s, 'https://ads.example.net/creative.jpg');
+    expect(img.inFrame, isTrue);
+    // Zeros from a cross-origin creative stay unknown, never 0.
+    expect(img.transfer, isA<Unavailable<int>>());
+    // A later report keeps where it was first seen.
+    final merged = mergeResources([ad], [
+      ResourceEntry(
+          url: ad.url,
+          type: 'script',
+          source: ResourceSource.observer,
+          startTime: ad.startTime,
+          duration: ad.duration,
+          transfer: ad.transfer,
+          decoded: ad.decoded)
+    ]).single;
+    expect(merged.frameOrigin, 'https://ads.example.net');
+  });
+
+  test('the bootstrap runs in iframes and posts to the top frame', () {
+    expect(vsvResourceBootstrapJs, contains('__vsv_frame'));
+    expect(vsvResourceBootstrapJs, contains('ev.source === window'));
+    expect(vsvCollectJs, contains('item.fr = 1'));
+  });
+
+  test('images on screen without a timing entry are added, unmeasured', () {
+    final s = parse('shown_images.json', BrowserPlatform.ios,
+        'https://example.com/');
+    // The timed one keeps its measured entry.
+    final logo = byUrl(s, 'https://example.com/logo.png');
+    expect(logo.source, ResourceSource.observer);
+    expect(present(logo.transfer), 3000);
+    for (final u in [
+      'https://cdn.example.net/big1.gif',
+      'https://example.com/rel/big2.gif',
+    ]) {
+      final e = byUrl(s, u);
+      expect(e.source, ResourceSource.shownImage);
+      expect(e.type, 'img');
+      // Never 0: the size is unknown until the app's own lookup.
+      expect(unavailable(e.transfer), UnavailableReason.notReportedByPlatform);
+      expect((e.transfer as Unavailable).detail, contains('memory cache'));
+    }
+    // A later timing entry replaces the shown one; a shown one never
+    // replaces a timing entry.
+    final shown = byUrl(s, 'https://cdn.example.net/big1.gif');
+    final timed = ResourceEntry(
+        url: shown.url,
+        type: 'img',
+        source: ResourceSource.observer,
+        startTime: logo.startTime,
+        duration: logo.duration,
+        transfer: logo.transfer,
+        decoded: logo.decoded);
+    expect(mergeResources([shown], [timed]).single.source,
+        ResourceSource.observer);
+    expect(mergeResources([timed], [shown]).single.source,
+        ResourceSource.observer);
+  });
+
+  test('the collector lists loaded images with pixels only', () {
+    expect(vsvCollectJs, contains('im.complete'));
+    expect(vsvCollectJs, contains('naturalWidth > 0'));
+    expect(vsvCollectJs, contains('currentSrc'));
+  });
+
+  group('dropped resources (collector buffer full)', () {
+    test('droppedNames become entries without sizes; known URLs are skipped',
+        () {
+      final s = parseBrowserPayload(
+          jsonEncode({
+            'v': 1,
+            'url': 'https://ad.test/',
+            'contentType': 'text/html',
+            'timing': {'ok': true, 'now': 5000.0},
+            'dom': {'ok': true, 'value': '<html></html>'},
+            'resources': {
+              'ok': true,
+              'bootstrap': true,
+              'dropped': 2,
+              'observer': [
+                {
+                  'n': 'https://ad.test/app.js',
+                  'it': 'script',
+                  'st': 1.0,
+                  'du': 2.0,
+                  'tx': 100,
+                  'enc': 90,
+                  'dec': 200
+                }
+              ],
+              'patch': [],
+              'shown': [],
+              'droppedNames': [
+                {
+                  'n': 'https://ad.test/app.js',
+                  'it': 'script'
+                }, // already measured: ignored
+                {
+                  'n': 'https://images.ad.test/big-lazy.gif',
+                  'it': 'img',
+                  'fo': ''
+                },
+                {
+                  'n': 'https://ads.other.net/pixel.gif?x=1',
+                  'it': 'img',
+                  'fo': 'https://ads.other.net'
+                },
+              ],
+            },
+            'navigation': {'ok': false, 'error': 'x'},
+            'storage': {
+              'local': {'ok': false, 'error': 'x'},
+              'session': {'ok': false, 'error': 'x'},
+            },
+            'cookies': {'ok': true, 'raw': ''},
+          }),
+          BrowserPlatform.android,
+          pageUrl: Uri.parse('https://ad.test/'));
+      expect(s.resourcesTruncated, true);
+      expect(s.resourcesDropped, 2);
+      // The measured entry is untouched.
+      expect(byUrl(s, 'https://ad.test/app.js').source,
+          ResourceSource.observer);
+      final gif = byUrl(s, 'https://images.ad.test/big-lazy.gif');
+      expect(gif.source, ResourceSource.dropped);
+      expect(gif.type, 'img');
+      expect(gif.inFrame, isFalse);
+      expect(unavailable(gif.transfer), UnavailableReason.notReportedByPlatform);
+      expect((gif.transfer as Unavailable).detail,
+          contains('collector buffer was full'));
+      final px = byUrl(s, 'https://ads.other.net/pixel.gif?x=1');
+      expect(px.source, ResourceSource.dropped);
+      expect(px.frameOrigin, 'https://ads.other.net');
+      expect(px.inFrame, isTrue);
+    });
+
+    test('a real entry always beats a dropped placeholder, never the reverse',
+        () {
+      ResourceEntry entry(String url, ResourceSource src, Observed<int> tx) =>
+          ResourceEntry(
+            url: url,
+            type: 'img',
+            source: src,
+            startTime: const Unavailable(UnavailableReason.notReportedByPlatform),
+            duration: const Unavailable(UnavailableReason.notReportedByPlatform),
+            transfer: tx,
+            decoded: const Unavailable(UnavailableReason.notReportedByPlatform),
+          );
+      final dropped = entry('https://x.test/a.gif', ResourceSource.dropped,
+          const Unavailable(UnavailableReason.notReportedByPlatform, 'full'));
+      final measured = entry('https://x.test/a.gif', ResourceSource.observer,
+          Present(1234, source: DataSource.browser));
+      expect(mergeResources([dropped], [measured]).single.source,
+          ResourceSource.observer);
+      expect(mergeResources([measured], [dropped]).single.source,
+          ResourceSource.observer);
+      expect(present(
+              mergeResources([dropped], [measured]).single.transfer),
+          1234);
+      // dropped vs dropped: still one entry.
+      expect(
+          mergeResources([dropped], [dropped]).single.source, ResourceSource.dropped);
+    });
+
+    test('the bootstrap records dropped URLs and still notifies the app', () {
+      expect(vsvResourceBootstrapJs, contains('__vsv_dropped'));
+      expect(vsvResourceBootstrapJs, contains('function noteDropped'));
+      // The drop path no longer returns before notifyApp().
+      expect(vsvResourceBootstrapJs,
+          contains('noteDropped(name, cur.it, cur.fo); return;'));
+      // The app-side buffer matches the browser buffer it sets.
+      expect(vsvResourceBootstrapJs, contains('var MAX = 10000;'));
+      expect(vsvResourceBootstrapJs,
+          contains('performance.setResourceTimingBufferSize(10000)'));
+      // Iframes forward their dropped URLs to the top frame.
+      expect(vsvResourceBootstrapJs, contains('markDropped'));
+      expect(vsvResourceBootstrapJs, contains('d: dout'));
+      // The collector reports them.
+      expect(vsvCollectJs, contains('droppedNames'));
+      // The shown fallback reports currentSrc and src (srcset differs).
+      expect(vsvCollectJs, contains('[im.currentSrc, im.src]'));
+    });
+  });
+
+  test('the top frame tells the app about late resources, batched', () {
+    expect(vsvResourceBootstrapJs, contains("callHandler('vsvResources'"));
+    expect(vsvResourceBootstrapJs, contains('notifyTimer'));
+    // Memory-cache images have no timing entry but fire 'load'.
+    expect(vsvResourceBootstrapJs, contains("addEventListener('load'"));
   });
 
   test('macOS: patch-only entry carries content-length as transfer', () {
@@ -528,6 +729,7 @@ void main() {
     for (final entry in {
       'collector': vsvCollectJs,
       'bootstrap': vsvResourceBootstrapJs,
+      'scrollThrough': vsvScrollThroughJs,
     }.entries) {
       test('${entry.key} has balanced braces and parens', () {
         expect(count(entry.value, '{'), count(entry.value, '}'));
@@ -541,6 +743,17 @@ void main() {
       expect(vsvCollectJs, isNot(contains('=>')));
       expect(vsvResourceBootstrapJs, isNot(contains('?.')));
       expect(vsvResourceBootstrapJs, isNot(contains('=>')));
+      expect(vsvScrollThroughJs, isNot(contains('?.')));
+      expect(vsvScrollThroughJs, isNot(contains('=>')));
+    });
+    test('the scroll-through drives the browser\'s lazy loading', () {
+      expect(vsvScrollThroughJs, contains('window.__vsv_scrollThrough'));
+      expect(vsvScrollThroughJs, contains('window.scrollTo'));
+      expect(vsvScrollThroughJs, contains('scrollingElement'));
+      // viewport-sized steps, capped, optional return to the top
+      expect(vsvScrollThroughJs, contains('window.innerHeight'));
+      expect(vsvScrollThroughJs, contains('steps < 60'));
+      expect(vsvScrollThroughJs, contains('backToTop'));
     });
   });
 }

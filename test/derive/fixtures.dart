@@ -16,6 +16,7 @@ ResourceEntry res(
   Observed<int> tx = const Unavailable(UnavailableReason.blockedByPlatform),
   Observed<int> dec = const Unavailable(UnavailableReason.blockedByPlatform),
   bool fromCache = false,
+  String? frameOrigin,
 }) =>
     ResourceEntry(
       url: url,
@@ -26,6 +27,7 @@ ResourceEntry res(
       transfer: tx,
       decoded: dec,
       fromCache: fromCache,
+      frameOrigin: frameOrigin,
     );
 
 BrowserCookie cookie(String name,

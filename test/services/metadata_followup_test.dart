@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -123,7 +124,7 @@ void main() {
         browserCollect: (u) async => collected,
         nativeCookies: (u) async => throw UnsupportedError('none'),
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (u) => lookupGate?.future ?? Future.value(null),
       );
@@ -175,6 +176,39 @@ void main() {
       expect(identical(s.mediaState, media), isFalse);
       expect(jsLabel(s), '8 KB (↓ 2 KB)');
       expect(imgLabel(s), '3 KB');
+    });
+
+    test('a srcset variant the browser measured sizes the DOM src (no ≈)',
+        () async {
+      fetcher = FakeServerFetcher();
+      store = InspectionStore();
+      const variantHtml = '<html><head><title>S</title></head><body>'
+          '<img src="https://images.ad.nl/aaa/0.50/0.50/666/499/some-slug" alt="P">'
+          '</body></html>';
+      collected = payload(url: url, dom: variantHtml);
+      final s = make();
+      addTearDown(s.dispose);
+      await s.loadUrl(url);
+      fetcher.pending.last.complete(okSnapshot(url, variantHtml));
+      await pumpEventQueue();
+      await s.syncWebViewState(url);
+      await pumpEventQueue();
+      // The markup src was never fetched; a measured variant was.
+      expect(imgLabel(s), startsWith('size unknown'));
+
+      collected = payload(url: url, domOk: false, observer: [
+        {
+          ...obs('https://images.ad.nl/bbb/0.75/0.75/999/749/some-slug',
+              tx: 2400 * 1024, dec: 0),
+          'it': 'img',
+        },
+      ]);
+      await s.syncWebViewState(url);
+      await pumpEventQueue();
+
+      // Same host + same last path segment = the same image: the measured
+      // size shows, not an estimate.
+      expect(imgLabel(s), '2,400 KB');
     });
 
     test('an own size lookup updates both tabs, marked as an estimate',

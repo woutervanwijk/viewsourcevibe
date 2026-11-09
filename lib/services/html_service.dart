@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:view_source_vibe/main.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
-import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:convert';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
@@ -36,11 +36,16 @@ import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/request_timeline.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart';
+import 'package:view_source_vibe/services/collectors/fresh_load_measurer.dart';
+import 'package:view_source_vibe/services/collectors/transfer_size_lookup.dart';
 import 'package:view_source_vibe/services/derive/media.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
+import 'package:view_source_vibe/services/derive/page_weight.dart'
+    show isSameImageVariant;
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
@@ -94,10 +99,16 @@ class HtmlService extends ChangeNotifier {
   final BrowserCollect? _browserCollectOverride;
   final NativeCookieReader _nativeCookies;
   final ResourceSizeLookup _sizeLookup;
+  final FreshLoadMeasurer _freshMeasurer;
+  final BrowserScreenshot? _browserScreenshotOverride;
   final BrowserPlatform _platform;
-  final List<Duration> _refreshDelays;
+  final NetworkQuietPolicy _browserPoll;
   final Duration _spaSettleDelay;
   final List<Timer> _refreshTimers = [];
+  final Duration _lateCollectDelay;
+  Timer? _lateCollectTimer;
+  bool _lateCollecting = false;
+  bool _lateCollectAgain = false;
   bool _disposed = false;
 
   /// The raw payload of the last collect and the generation it belongs to
@@ -194,6 +205,10 @@ class HtmlService extends ChangeNotifier {
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
+
+  /// The document text the current [_pageMetadata] was extracted from, so a
+  /// changed rendered DOM (lazy srcs swapped in) triggers re-extraction.
+  String? _metadataDomText;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
 
   // What the last extraction produced besides the map; reset with it.
@@ -1359,11 +1374,11 @@ class HtmlService extends ChangeNotifier {
     BrowserCollect? browserCollect,
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
+    FreshLoadMeasurer? freshLoadMeasurer,
+    BrowserScreenshot? browserScreenshot,
     BrowserPlatform? browserPlatform,
-    List<Duration> browserRefreshDelays = const [
-      Duration(seconds: 4),
-      Duration(seconds: 14),
-    ],
+    NetworkQuietPolicy browserPoll = NetworkQuietPolicy.live,
+    Duration lateCollectDelay = const Duration(seconds: 2),
     Duration spaSettleDelay = const Duration(milliseconds: 400),
   })  : _sovereigntyDebounce = sovereigntyDebounce,
         _sovereigntyAnalyzer =
@@ -1375,9 +1390,15 @@ class HtmlService extends ChangeNotifier {
         _browserCollectOverride = browserCollect,
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
         _sizeLookup = sizeLookup ?? _lookupResourceSize,
+        _browserScreenshotOverride = browserScreenshot,
+        _freshMeasurer = freshLoadMeasurer ??
+            (HeadlessFreshLoadMeasurer.supported
+                ? const HeadlessFreshLoadMeasurer()
+                : const NoFreshLoad()),
         _platform =
             browserPlatform ?? browserPlatformFor(defaultTargetPlatform),
-        _refreshDelays = browserRefreshDelays,
+        _browserPoll = browserPoll,
+        _lateCollectDelay = lateCollectDelay,
         _spaSettleDelay = spaSettleDelay,
         store = store ?? InspectionStore(),
         _ownsStore = store == null,
@@ -4076,8 +4097,12 @@ Technical details: $message''';
         _metadataChecks = checks;
         _metadataUnresolved = derived?.unresolvedLinks ?? const [];
         _metadataDocSource = input.source;
+        _metadataDomText = html;
         _metadataRevision++;
         if (metadata != null) {
+          // The media the page declares in its DOM, so the Page size tab can
+          // list (and size) lazy images this browser never fetched.
+          store.applyDeclaredMedia(gen, _declaredMediaUrls(metadata));
           final weight = _pageWeight;
           if (weight != null) metadata['pageWeight'] = weight;
           // Correlate resource sizes with metadata
@@ -4090,6 +4115,24 @@ Technical details: $message''';
       _isExtractingMetadata = false;
       if (!_disposed) notifyListeners();
     }
+  }
+
+  /// Absolute http(s) image URLs the page declares in its DOM (the media the
+  /// Media tab lists), deduplicated. Lazy images the browser never fetched
+  /// have no resource entry; the Page size tab lists them anyway, sized by
+  /// the app's own lookup when possible.
+  static List<String> _declaredMediaUrls(Map<String, dynamic> metadata) {
+    final media = metadata['media'];
+    if (media is! Map || media['images'] is! List) return const [];
+    final out = <String>{};
+    for (final item in media['images']) {
+      if (item is! Map) continue;
+      final src = item['src'];
+      if (src is! String || src.isEmpty) continue;
+      if (!src.startsWith('http://') && !src.startsWith('https://')) continue;
+      out.add(src);
+    }
+    return out.toList();
   }
 
   /// The size of a timeline entry for the metadata lists; null when the
@@ -4192,6 +4235,24 @@ Technical details: $message''';
           if (match.isNotEmpty) {
             return _sizeOf(match);
           }
+        }
+      } catch (_) {}
+
+      // Tier 5: same image, different srcset variant. Image CDNs put the
+      // size in the path or query (images.ad.nl/<id>/0.50/.../slug), so the
+      // browser may have fetched a different variant than the markup's src:
+      // same host + same last path segment = the same image. Only when the
+      // browser actually measured that variant (a Present size); a
+      // cross-origin entry with 0/0/0 still has no real size.
+      try {
+        match = timeline.firstWhere(
+          (r) =>
+              isSameImageVariant(src, r['name'].toString()) &&
+              r['transfer'] is int,
+          orElse: () => {},
+        );
+        if (match.isNotEmpty) {
+          return _sizeOf(match);
         }
       } catch (_) {}
 
@@ -4517,8 +4578,8 @@ Technical details: $message''';
     _fetchResourceEstimatesAsync().ignore();
   }
 
-  static const int _maxEstimateLookups = 80;
-  static const int _estimateConcurrency = 5;
+  static const int _maxEstimateLookups = 400;
+  static const int _estimateConcurrency = 8;
   bool _estimating = false;
   bool _estimateRerun = false;
   int? _estimateGen;
@@ -4530,6 +4591,111 @@ Technical details: $message''';
   /// [_maxEstimateLookups] per page, [_estimateConcurrency] at a time; each
   /// result goes to the store (which drops it when the navigation moved on).
   /// A call while a run is active makes that run look again when it is done.
+  static Observed<Uint8List> _screenshotOf(Uint8List? bytes) =>
+      bytes == null || bytes.isEmpty
+          ? const Unavailable(UnavailableReason.notReportedByPlatform,
+              'the browser gave no screenshot')
+          : Present(bytes, source: DataSource.browser);
+
+  /// A thumbnail of what the live browser shows now (for the Page size tab).
+  Future<void> _captureLiveScreenshot(int gen) async {
+    Uint8List? bytes;
+    try {
+      final override = _browserScreenshotOverride;
+      bytes = override != null
+          ? await override()
+          : await activeWebViewController?.takeScreenshot(
+              screenshotConfiguration: kThumbnailScreenshot);
+    } catch (e) {
+      debugPrint('Screenshot unavailable: $e');
+    }
+    if (_disposed || gen != store.current.generation) return;
+    store.applyLiveScreenshot(gen, _screenshotOf(bytes));
+  }
+
+  /// Loads the page once more like Lighthouse (empty cache, phone screen,
+  /// quiet network) in an off-screen browser, then sizes what it could not
+  /// see with the app's own lookups. Only on the user's request: it is a
+  /// second page load. Dropped when the user navigates meanwhile.
+  Future<void> measureFreshLoad() async {
+    final target = store.current.target;
+    if (target is! UrlTarget || store.current.freshLoad is Pending) return;
+    final gen = store.current.generation;
+    bool stale() => _disposed || gen != store.current.generation;
+    final browser = store.current.browser;
+    final url =
+        browser is Present<BrowserSnapshot> ? browser.value.url : target.url;
+    store.applyFreshLoad(gen, const Pending());
+    FreshLoadRaw raw;
+    try {
+      raw = await _freshMeasurer.measure(url, NetworkQuietPolicy.fresh);
+    } on UnsupportedError catch (e) {
+      if (!stale()) {
+        store.applyFreshLoad(gen,
+            Unavailable(UnavailableReason.unsupportedPlatform, '${e.message}'));
+      }
+      return;
+    } catch (e) {
+      if (!stale()) store.applyFreshLoad(gen, Failed('Fresh load failed: $e'));
+      return;
+    }
+    if (stale()) return;
+    BrowserSnapshot snapshot;
+    try {
+      snapshot = parseBrowserPayload(raw.payload, _platform, pageUrl: url);
+    } catch (e) {
+      store.applyFreshLoad(gen, Failed('Fresh load could not be read: $e'));
+      return;
+    }
+    final res = snapshot.resources;
+    if (res is! Present<List<ResourceEntry>>) {
+      store.applyFreshLoad(
+          gen,
+          switch (res) {
+            Unavailable(reason: final r, detail: final d) => Unavailable(r, d),
+            Failed(error: final e) => Failed(e),
+            _ => const Failed('The fresh load reported no resources'),
+          });
+      return;
+    }
+    store.applyFreshLoad(gen, Present(snapshot, source: DataSource.browser),
+        screenshot: _screenshotOf(raw.screenshot));
+
+    // Hidden sizes, like the live load (shared lookup cache per page).
+    final urls = estimateTargetsOf(store.current.freshLoad, const {},
+        limit: _maxEstimateLookups,
+        declaredMedia: store.current.declaredMedia);
+    var next = 0;
+    Future<void> worker() async {
+      while (next < urls.length && !stale()) {
+        final u = urls[next++];
+        final result = await _estimateOf(gen, u);
+        if (!stale()) store.applyFreshEstimates(gen, {u: result});
+      }
+    }
+
+    await Future.wait([
+      for (var i = 0; i < _estimateConcurrency && i < urls.length; i++)
+        worker(),
+    ]);
+  }
+
+  /// One own size lookup as an estimate: Present, or why there is none.
+  Future<Observed<int>> _estimateOf(int gen, String url) async {
+    try {
+      final size = await _cachedSizeLookup(gen, url);
+      return size == null
+          ? const Unavailable(UnavailableReason.notReportedByServer,
+              'the size lookup returned no size')
+          : Present(size,
+              source: DataSource.server, provenance: Provenance.estimated);
+    } on SizeLimitExceeded catch (e) {
+      return Unavailable(UnavailableReason.exceedsLimit, '$e');
+    } catch (e) {
+      return Failed('Size lookup failed: $e');
+    }
+  }
+
   Future<void> _fetchResourceEstimatesAsync() async {
     if (_estimating) {
       _estimateRerun = true;
@@ -4553,18 +4719,7 @@ Technical details: $message''';
         Future<void> worker() async {
           while (next < urls.length && !stale()) {
             final url = urls[next++];
-            Observed<int> result;
-            try {
-              final size = await _cachedSizeLookup(gen, url);
-              result = size == null
-                  ? const Unavailable(UnavailableReason.notReportedByServer,
-                      'the size lookup returned no size')
-                  : Present(size,
-                      source: DataSource.server,
-                      provenance: Provenance.estimated);
-            } catch (e) {
-              result = Failed('Size lookup failed: $e');
-            }
+            final result = await _estimateOf(gen, url);
             if (!stale()) store.applyEstimates(gen, {url: result});
           }
         }
@@ -4590,57 +4745,10 @@ Technical details: $message''';
     return [for (final c in cookies) c.toMap()];
   }
 
-  /// Ranged GET (then HEAD) for a resource's size. A size is only reported
-  /// when the server states one; 0 and failures are "unknown" (null).
-  static Future<int?> _lookupResourceSize(String url) async {
-    final client = http.Client();
-    try {
-      final uri = Uri.parse(url);
-      final headers = {'User-Agent': kServerUserAgent};
-
-      // A ranged GET runs the same pipeline as the browser's GET, so query
-      // transforms on image CDNs are applied; HEAD can report the origin
-      // object's size instead.
-      try {
-        final request = http.Request('GET', uri);
-        request.headers.addAll(headers);
-        request.headers['Range'] = 'bytes=0-0';
-        final response =
-            await client.send(request).timeout(const Duration(seconds: 5));
-        final contentLength = response.headers['content-length'];
-        final contentRange = response.headers['content-range'];
-        response.stream.listen((_) {}).cancel();
-        if (response.statusCode >= 200 && response.statusCode < 400) {
-          final parts = contentRange?.split('/');
-          if (parts != null && parts.length == 2) {
-            final size = int.tryParse(parts[1]);
-            if (size != null && size > 0) return size;
-          }
-          final size = int.tryParse(contentLength ?? '');
-          if (size != null && size > 0) return size;
-        }
-      } catch (_) {
-        // Fall back to HEAD.
-      }
-
-      try {
-        final head = await client
-            .head(uri, headers: headers)
-            .timeout(const Duration(seconds: 5));
-        if (head.statusCode >= 200 && head.statusCode < 400) {
-          final size = int.tryParse(head.headers['content-length'] ?? '');
-          if (size != null && size > 0) return size;
-        }
-      } catch (_) {
-        // unknown
-      }
-    } catch (e) {
-      debugPrint('Error getting resource size for $url: $e');
-    } finally {
-      client.close();
-    }
-    return null;
-  }
+  /// Our own download of a resource, measured like the browser's transfer
+  /// size (compressed bytes plus headers); see [lookupTransferSize].
+  static Future<int?> _lookupResourceSize(String url) =>
+      lookupTransferSize(url, userAgent: kServerUserAgent);
 
   /// The browser reported a URL change (history API / SPA route, redirect).
   /// The same document as the current navigation (R20) is nothing new; any
@@ -4737,19 +4845,129 @@ Technical details: $message''';
   }
 
   /// Later passes catch resources that load after onLoadStop (lazy images,
-  /// analytics, slow hydration). Each is another collect; the store merges it
-  /// into what it has.
+  /// ads, analytics, slow hydration): collect every interval until nothing
+  /// new arrived for a while or the time limit passed, then mark the load
+  /// settled. Each pass is another collect; the store merges it.
   void _scheduleBrowserRefreshes(int gen, String url, Uri uri) {
     _cancelBrowserRefreshes();
-    for (final delay in _refreshDelays) {
-      _refreshTimers.add(Timer(delay, () async {
-        if (_disposed || gen != store.current.generation) return;
-        if (!_browserReachable) return;
+    final policy = _browserPoll;
+    _captureLiveScreenshot(gen).ignore();
+    if (!policy.enabled) {
+      store.markBrowserSettled(gen);
+      return;
+    }
+    bool stale() => _disposed || gen != store.current.generation;
+    final clock = Stopwatch()..start();
+    var lastChange = Duration.zero;
+    var signature = _browserSignature();
+    var scrolled = false;
+    void next() {
+      _refreshTimers.add(Timer(policy.interval, () async {
+        if (stale() || !_browserReachable) return;
         await _collectAndApply(gen, url, uri);
-        if (_disposed || gen != store.current.generation) return;
+        if (stale()) return;
         _applyBrowserDerivedToMetadata();
+        final now = clock.elapsed;
+        final sig = _browserSignature();
+        if (sig != signature) {
+          signature = sig;
+          lastChange = now;
+        }
+        if (policy.done(elapsed: now, sinceLastChange: now - lastChange)) {
+          // Use the browser's own lazy loading once: scroll through the
+          // page so loading=lazy / IntersectionObserver content is fetched
+          // and measured, then keep collecting until it is quiet again.
+          if (!scrolled && (_appSettings?.scrollToLoadLazy ?? true)) {
+            scrolled = true;
+            await _scrollThroughPage();
+            if (stale()) return;
+            signature = _browserSignature();
+            lastChange = clock.elapsed;
+            next();
+            return;
+          }
+          // The scroll-through ran and its lazy loads were collected.
+          if (scrolled) _showScrollThroughToast();
+          store.markBrowserSettled(gen);
+          _captureLiveScreenshot(gen).ignore();
+        } else {
+          next();
+        }
       }));
     }
+
+    next();
+  }
+
+  /// Scrolls the live page to the bottom and back to the top once, so lazy
+  /// content loads and the resource observer measures it. The polling loop
+  /// picks the new resources up; the scroll itself needs no awaiting here.
+  Future<void> _scrollThroughPage() async {
+    final c = activeWebViewController;
+    if (c == null) return;
+    try {
+      await c.evaluateJavascript(
+          source:
+              'window.__vsv_scrollThrough && window.__vsv_scrollThrough(true)');
+    } catch (_) {}
+  }
+
+  /// Toast text for when the automatic scroll-through finished.
+  @visibleForTesting
+  static const String scrollThroughToast =
+      'Scrolled the page once so lazy images and embeds loaded and could be '
+      'measured in the Page size tab. Turn off in Settings → Behavior → '
+      '"Load lazy content".';
+
+  /// Tells the user the page was scrolled automatically, and how to disable it.
+  void _showScrollThroughToast() {
+    final context = MyApp.navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text(scrollThroughToast)),
+    );
+  }
+
+  /// The page reported new resources (the bootstrap calls this at most once
+  /// a second). Before the load settled the polling picks them up; after
+  /// it, collect again (lazy images and ads load when the user scrolls), at
+  /// most once per [_lateCollectDelay] and never two at a time.
+  void onBrowserResourcesChanged() {
+    if (_disposed || !store.current.browserSettled) return;
+    if (_lateCollecting) {
+      _lateCollectAgain = true;
+      return;
+    }
+    _lateCollectTimer ??= Timer(_lateCollectDelay, _collectLate);
+  }
+
+  Future<void> _collectLate() async {
+    _lateCollectTimer = null;
+    final b = store.current.browser;
+    if (_disposed || !_browserReachable || b is! Present<BrowserSnapshot>) {
+      return;
+    }
+    final gen = store.current.generation;
+    _lateCollecting = true;
+    try {
+      await _collectAndApply(gen, b.value.url.toString(), b.value.url);
+      if (!_disposed && gen == store.current.generation) {
+        _applyBrowserDerivedToMetadata();
+      }
+    } finally {
+      _lateCollecting = false;
+    }
+    if (_lateCollectAgain) {
+      _lateCollectAgain = false;
+      onBrowserResourcesChanged();
+    }
+  }
+
+  int _browserSignature() {
+    final b = store.current.browser;
+    return b is Present<BrowserSnapshot>
+        ? resourceSignature(b.value.resources)
+        : -1;
   }
 
   void _cancelBrowserRefreshes() {
@@ -4757,11 +4975,21 @@ Technical details: $message''';
       t.cancel();
     }
     _refreshTimers.clear();
+    _lateCollectTimer?.cancel();
+    _lateCollectTimer = null;
+    _lateCollectAgain = false;
   }
 
   /// New browser numbers: update the weight in the metadata and re-match the
-  /// sizes of its links.
+  /// sizes of its links. When the rendered DOM itself changed since the
+  /// metadata was extracted (lazy loading swapped srcs in after the
+  /// scroll-through), re-extract instead.
   void _applyBrowserDerivedToMetadata() {
+    final domText = primaryDocumentInput(store.current)?.text;
+    if (domText != null && domText != _metadataDomText) {
+      _extractMetadata().ignore();
+      return;
+    }
     final metadata = _pageMetadata;
     if (metadata != null) {
       final weight = _pageWeight;

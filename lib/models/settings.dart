@@ -28,6 +28,7 @@ class AppSettings with ChangeNotifier {
   static const String _prefsShowLineNumbers = 'showLineNumbers';
   static const String _prefsWrapText = 'wrapText';
   static const String _prefsUseBrowserByDefault = 'useBrowserByDefault';
+  static const String _prefsScrollToLoadLazy = 'scrollToLoadLazy';
   static const String _prefsHomeJurisdiction = 'homeJurisdiction';
   static const String _prefsSiteJurisdictions = 'siteJurisdictions';
   static const int _maxSiteJurisdictions = 255;
@@ -47,6 +48,7 @@ class AppSettings with ChangeNotifier {
   // Behavior settings
   bool _wrapText = false;
   bool _useBrowserByDefault = true;
+  bool _scrollToLoadLazy = true;
   String? _homeJurisdiction; // null = from device locale
   Map<String, String> _siteJurisdictions = {}; // domain -> jurisdiction
 
@@ -58,6 +60,10 @@ class AppSettings with ChangeNotifier {
   bool get showLineNumbers => _showLineNumbers;
   bool get wrapText => _wrapText;
   bool get useBrowserByDefault => _useBrowserByDefault;
+
+  /// Scroll the page once after it settles, so lazy content (loading=lazy,
+  /// IntersectionObserver) is fetched and measured for real.
+  bool get scrollToLoadLazy => _scrollToLoadLazy;
 
   /// Fallback jurisdiction for sites whose legal home isn't detected;
   /// null = from the device locale.
@@ -274,6 +280,14 @@ class AppSettings with ChangeNotifier {
     }
   }
 
+  set scrollToLoadLazy(bool value) {
+    if (_scrollToLoadLazy != value) {
+      _scrollToLoadLazy = value;
+      _saveSetting(_prefsScrollToLoadLazy, value);
+      notifyListeners();
+    }
+  }
+
   /// Manually chosen legal home for a site (by registrable domain).
   String? siteJurisdiction(String domain) => _siteJurisdictions[domain];
 
@@ -322,6 +336,7 @@ class AppSettings with ChangeNotifier {
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
     _useBrowserByDefault = _prefs!.getBool(_prefsUseBrowserByDefault) ?? true;
+    _scrollToLoadLazy = _prefs!.getBool(_prefsScrollToLoadLazy) ?? true;
     final home = _prefs!.getString(_prefsHomeJurisdiction);
     _homeJurisdiction = (home == null || home.isEmpty) ? null : home;
     try {
@@ -358,6 +373,7 @@ class AppSettings with ChangeNotifier {
     _showLineNumbers = true;
     _wrapText = false;
     _useBrowserByDefault = true;
+    _scrollToLoadLazy = true;
 
     // Save the default values
     _saveAllSettings();
@@ -375,6 +391,7 @@ class AppSettings with ChangeNotifier {
     await _saveSetting(_prefsShowLineNumbers, _showLineNumbers);
     await _saveSetting(_prefsWrapText, _wrapText);
     await _saveSetting(_prefsUseBrowserByDefault, _useBrowserByDefault);
+    await _saveSetting(_prefsScrollToLoadLazy, _scrollToLoadLazy);
   }
 
   // Theme categories and metadata

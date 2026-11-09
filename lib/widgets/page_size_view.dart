@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
@@ -39,6 +41,9 @@ class _PageSizeViewState extends State<PageSizeView>
   late final TabController _filterController =
       TabController(length: _typeFilters.length, vsync: this)
         ..addListener(() => setState(() {}));
+
+  /// Show the fresh load's files (when there is one) or this load's.
+  bool _showFresh = true;
 
   @override
   void dispose() {
@@ -110,7 +115,12 @@ class _PageSizeViewState extends State<PageSizeView>
 
   Widget _buildModel(BuildContext context, PageSizeModel model) {
     final htmlService = context.read<HtmlService>();
-    final resources = model.rows;
+    final fresh = model.fresh;
+    // The fresh load's files once there is one, unless the user picked this
+    // load.
+    final active =
+        _showFresh && fresh is Present<PageSizeModel> ? fresh.value : model;
+    final resources = active.rows;
     final totalSize = model.knownRowTotal;
     final filterType = _typeFilters[_filterController.index].$1;
     final shown = filterType == null
@@ -122,7 +132,7 @@ class _PageSizeViewState extends State<PageSizeView>
         primary: true,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         children: [
-          _buildTotalsCard(context, model),
+          _buildTotalsCard(context, model, active),
           const SizedBox(height: 24),
           _buildSectionTitle(
               context, 'Loaded Files & Assets (${resources.length})'),
@@ -203,104 +213,237 @@ class _PageSizeViewState extends State<PageSizeView>
     );
   }
 
-  Widget _buildTotalsCard(BuildContext context, PageSizeModel model) {
-    final weight = model.weight;
-    // The download size, as Lighthouse counts it.
-    final known =
-        formatDownloadSize(weight.transfer, prefix: weight.transferPrefix);
-    final note = model.missingNote;
+  Widget _note(BuildContext context, String text, {bool italic = true}) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        child: Text(
+          '${text[0].toUpperCase()}${text.substring(1)}',
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+          ),
+        ),
+      );
+
+  /// One total line: label, then the size or what stands in for it.
+  Widget _totalLine(BuildContext context, String label, Widget value,
+      {bool selected = false, VoidCallback? onTap}) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Align(alignment: Alignment.centerRight, child: value),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A small phone-shaped screenshot of a load; tap to see it larger.
+  Widget _thumbnail(
+      BuildContext context, String label, Observed<Uint8List> shot) {
+    final scheme = Theme.of(context).colorScheme;
+    final bytes = shot is Present<Uint8List> ? shot.value : null;
+    return Tooltip(
+      message: bytes == null ? '$label: no screenshot' : label,
+      child: InkWell(
+        onTap: bytes == null
+            ? null
+            : () => showDialog<void>(
+                  context: context,
+                  builder: (_) => Dialog(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(label),
+                        ),
+                        Flexible(child: Image.memory(bytes)),
+                      ],
+                    ),
+                  ),
+                ),
+        child: Column(
+          children: [
+            Container(
+              width: 52,
+              height: 92,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                border: Border.all(color: scheme.outlineVariant),
+                borderRadius: BorderRadius.circular(6),
+                color: scheme.surfaceContainerHighest,
+              ),
+              child: bytes == null
+                  ? Icon(Icons.image_not_supported_outlined,
+                      size: 18, color: scheme.onSurfaceVariant)
+                  : Image.memory(bytes,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      gaplessPlayback: true),
+            ),
+            const SizedBox(height: 2),
+            Text(label,
+                style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sizeText(String text) => Text(
+        text,
+        style: const TextStyle(
+            fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'Courier'),
+        textAlign: TextAlign.end,
+      );
+
+  Widget _freshValue(BuildContext context, Observed<PageSizeModel> fresh) {
+    final service = context.read<HtmlService>();
+    final small = TextStyle(
+        fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant);
+    return switch (fresh) {
+      Present<PageSizeModel>(value: final f) => _sizeText(formatDownloadSize(
+              f.weight.transfer,
+              prefix: f.weight.transferPrefix) ??
+          'size unknown'),
+      Pending<PageSizeModel>() => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 8),
+            Text('measuring… (up to 45 s)', style: small),
+          ],
+        ),
+      Unavailable<PageSizeModel>(
+        reason: UnavailableReason.unsupportedPlatform
+      ) =>
+        Text('not available on this platform', style: small),
+      Failed<PageSizeModel>(:final error) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(error,
+                  style: small.copyWith(
+                      color: Theme.of(context).colorScheme.error),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            TextButton(
+                onPressed: service.measureFreshLoad,
+                child: const Text('Retry')),
+          ],
+        ),
+      Unavailable<PageSizeModel>() => FilledButton.tonal(
+          onPressed: service.measureFreshLoad,
+          child: const Text('Measure'),
+        ),
+    };
+  }
+
+  Widget _buildTotalsCard(
+      BuildContext context, PageSizeModel model, PageSizeModel active) {
+    final weight = active.weight;
+    final fresh = model.fresh;
+    final hasFresh = fresh is Present<PageSizeModel>;
+    final live = formatDownloadSize(model.weight.transfer,
+            prefix: model.weight.transferPrefix) ??
+        'size unknown';
+    final note = active.missingNote;
 
     return _outlinedCard(
       context,
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Row(
-              children: [
-                Text(
-                  'Total Page Size',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    known ?? 'size unknown',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Courier',
-                    ),
-                    textAlign: TextAlign.end,
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 4),
+          _totalLine(
+            context,
+            'This load',
+            _sizeText(model.stillCollecting ? '$live …' : live),
+            selected: identical(active, model),
+            onTap: hasFresh ? () => setState(() => _showFresh = false) : null,
           ),
-          if (model.lighthouseNote != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Text(
-                '${model.lighthouseNote!}. Download size of every request, '
-                'like Lighthouse\'s total byte weight.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+          _totalLine(
+            context,
+            'Fresh load',
+            _freshValue(context, fresh),
+            selected: !identical(active, model),
+            onTap: hasFresh ? () => setState(() => _showFresh = true) : null,
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _note(
+                        context,
+                        'This load: what your browser fetched now (cache and '
+                        'ads vary${model.stillCollecting ? '; still collecting' : ''}). '
+                        'Fresh load: empty cache, phone screen, waits until '
+                        'the network is quiet, like Lighthouse. Both are '
+                        'download sizes.',
+                        italic: false),
+                    if (model.lighthouseNote != null)
+                      _note(context, '${model.lighthouseNote!}.',
+                          italic: false),
+                    if (model.differenceNote != null)
+                      _note(context, '${model.differenceNote!}.',
+                          italic: false),
+                  ],
                 ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.only(right: 16, bottom: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _thumbnail(context, 'This load', model.liveScreenshot),
+                    if (fresh is! Unavailable<PageSizeModel>) ...[
+                      const SizedBox(width: 8),
+                      _thumbnail(context, 'Fresh load', model.freshScreenshot),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (hasFresh)
+            _note(
+                context,
+                'Files below: ${identical(active, model) ? 'this load' : 'fresh load'}. '
+                'Tap a total to switch.'),
           if (note != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Text(
-                '${note[0].toUpperCase()}${note.substring(1)}. The total is a lower bound.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
-          if (model.cacheNote != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Text(
-                '${model.cacheNote![0].toUpperCase()}${model.cacheNote!.substring(1)}.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
-          if (model.estimateNote != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Text(
-                '${model.estimateNote![0].toUpperCase()}${model.estimateNote!.substring(1)}.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
+            _note(context, '$note. The total is a lower bound.'),
+          if (active.cacheNote != null) _note(context, '${active.cacheNote!}.'),
+          if (active.estimateNote != null)
+            _note(context, '${active.estimateNote!}.'),
+          if (active.declaredNote != null)
+            _note(context, '${active.declaredNote!}.',),
           if (weight.documentSource != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: Text(
+            _note(context,
                 'The page document is counted from the server response.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
+                italic: false),
           const Divider(height: 1),
           for (final (key, label) in const [
             ('scripts', 'External JS'),
@@ -308,6 +451,7 @@ class _PageSizeViewState extends State<PageSizeView>
             ('images', 'Images/Media'),
             ('html', 'HTML/Content'),
             ('other', 'Misc. Resources'),
+            ('thirdPartyFrames', 'Third-party iframes (ads, embeds)'),
           ])
             _buildBreakdownRow(
                 context, label, weight.breakdown[key], weight.transfer),
@@ -361,6 +505,7 @@ class _PageSizeViewState extends State<PageSizeView>
     final services = resource.services.take(2).toList();
     final host = Uri.tryParse(resource.url)?.host ?? '';
     final subtitle = [
+      if (resource.thirdPartyFrame) 'third-party iframe',
       if (host.isNotEmpty) host,
       ...services.map((e) => e.name),
     ].join(' · ');

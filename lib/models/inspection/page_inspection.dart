@@ -1,7 +1,17 @@
+import 'dart:typed_data';
+
 import 'browser_snapshot.dart';
 import 'file_snapshot.dart';
 import 'observed.dart';
 import 'server_snapshot.dart';
+
+/// [PageInspection.freshLoad] before the user asked for one.
+const kFreshLoadNotMeasured = Unavailable<BrowserSnapshot>(
+    UnavailableReason.notApplicable, 'not measured');
+
+/// No screenshot (yet) of a load.
+const kNoScreenshot =
+    Unavailable<Uint8List>(UnavailableReason.notApplicable, 'no screenshot');
 
 /// What is being inspected.
 sealed class InspectionTarget {
@@ -40,8 +50,30 @@ class PageInspection {
   /// from the browser's); Unavailable/Failed = the lookup gave no size.
   final Map<String, Observed<int>> resourceEstimates;
 
+  /// Image URLs declared in the page's DOM (the media the Media tab lists).
+  /// Lazy images the browser never fetched (no scroll in the embedded view)
+  /// have no resource entry; the Page size tab lists them anyway, sized by
+  /// the app's own lookup in [resourceEstimates] when possible.
+  final List<String> declaredMedia;
+
   /// The user's choice for the Source tab; null = default rule.
   final DataSource? primaryDocumentPreference;
+
+  /// The live load stopped requesting: no new resources for a while (or the
+  /// time limit). Until then later resources may still be added.
+  final bool browserSettled;
+
+  /// A separate load like Lighthouse's (empty cache, private session, phone
+  /// screen, wait for a quiet network), only when the user asks for it.
+  final Observed<BrowserSnapshot> freshLoad;
+
+  /// The app's own size lookups for [freshLoad] (see [resourceEstimates]).
+  final Map<String, Observed<int>> freshEstimates;
+
+  /// Small JPEG screenshots of what each load showed (the live browser once
+  /// it settled; the off-screen fresh load before it closed).
+  final Observed<Uint8List> liveScreenshot;
+  final Observed<Uint8List> freshScreenshot;
 
   const PageInspection({
     required this.generation,
@@ -51,7 +83,13 @@ class PageInspection {
     required this.file,
     this.robots = const Pending(),
     this.resourceEstimates = const {},
+    this.declaredMedia = const [],
     this.primaryDocumentPreference,
+    this.browserSettled = false,
+    this.freshLoad = kFreshLoadNotMeasured,
+    this.freshEstimates = const {},
+    this.liveScreenshot = kNoScreenshot,
+    this.freshScreenshot = kNoScreenshot,
   });
 
   const PageInspection.empty()
@@ -66,7 +104,13 @@ class PageInspection {
         robots = const Unavailable(
             UnavailableReason.notApplicable, 'nothing loaded'),
         resourceEstimates = const {},
-        primaryDocumentPreference = null;
+        declaredMedia = const [],
+        primaryDocumentPreference = null,
+        browserSettled = false,
+        freshLoad = kFreshLoadNotMeasured,
+        freshEstimates = const {},
+        liveScreenshot = kNoScreenshot,
+        freshScreenshot = kNoScreenshot;
 
   PageInspection copyWith({
     Observed<ServerSnapshot>? server,
@@ -74,7 +118,13 @@ class PageInspection {
     Observed<FileSnapshot>? file,
     Observed<RobotsInfo>? robots,
     Map<String, Observed<int>>? resourceEstimates,
+    List<String>? declaredMedia,
     Object? primaryDocumentPreference = _keep,
+    bool? browserSettled,
+    Observed<BrowserSnapshot>? freshLoad,
+    Map<String, Observed<int>>? freshEstimates,
+    Observed<Uint8List>? liveScreenshot,
+    Observed<Uint8List>? freshScreenshot,
   }) =>
       PageInspection(
         generation: generation,
@@ -84,9 +134,15 @@ class PageInspection {
         file: file ?? this.file,
         robots: robots ?? this.robots,
         resourceEstimates: resourceEstimates ?? this.resourceEstimates,
+        declaredMedia: declaredMedia ?? this.declaredMedia,
         primaryDocumentPreference: identical(primaryDocumentPreference, _keep)
             ? this.primaryDocumentPreference
             : primaryDocumentPreference as DataSource?,
+        browserSettled: browserSettled ?? this.browserSettled,
+        freshLoad: freshLoad ?? this.freshLoad,
+        freshEstimates: freshEstimates ?? this.freshEstimates,
+        liveScreenshot: liveScreenshot ?? this.liveScreenshot,
+        freshScreenshot: freshScreenshot ?? this.freshScreenshot,
       );
 
   bool _has(DataSource s) => switch (s) {

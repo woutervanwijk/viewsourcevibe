@@ -1,0 +1,163 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/services/derive/estimate_targets.dart';
+import 'package:view_source_vibe/services/derive/page_size.dart';
+import 'package:view_source_vibe/services/derive/page_weight.dart';
+
+import 'fixtures.dart';
+
+Present<int> bt(int v) => Present(v, source: DataSource.browser);
+
+void main() {
+  final page = browserSnap(url: 'https://www.a.test/page', resources: [
+    res('https://www.a.test/app.js', tx: bt(1000)),
+    // The ad iframe document and what it loaded.
+    res('https://ads.test/frame.html', type: 'iframe', tx: bt(300)),
+    res('https://ads.test/ad.js',
+        tx: bt(5000), frameOrigin: 'https://ads.test'),
+    res('https://cdn.ads.test/creative.jpg',
+        type: 'img', frameOrigin: 'https://ads.test'),
+    // A same-origin frame counts as the page's own.
+    res('https://a.test/widget.css',
+        type: 'link', tx: bt(200), frameOrigin: 'https://a.test'),
+  ]);
+
+  test('cross-origin iframes and their contents form their own bucket', () {
+    final w = derivePageWeightOf(page)!;
+    final frames = w.breakdown['thirdPartyFrames']!;
+    expect(frames.count, 3);
+    expect(frames.transfer, 5300);
+    expect(frames.missingCount, 1, reason: 'creative.jpg has no size');
+    expect(w.breakdown['scripts']!.transfer, 1000);
+    expect(w.breakdown['css']!.transfer, 200);
+    // Iframe content counts in the total, as Lighthouse counts it.
+    expect(w.transfer, 6500);
+    expect(w.transferLowerBound, isTrue);
+  });
+
+  test('an own lookup sizes hidden iframe content', () {
+    final w = derivePageWeightOf(page, estimates: {
+      'https://cdn.ads.test/creative.jpg': Present(40000,
+          source: DataSource.server, provenance: Provenance.estimated),
+    })!;
+    expect(w.breakdown['thirdPartyFrames']!.transfer, 45300);
+    expect(w.transferLowerBound, isFalse);
+    expect(w.transferEstimated, isTrue);
+  });
+
+  test('live and fresh loads go through the same derivation', () {
+    final fresh = browserSnap(resources: [
+      res('https://a.test/app.js', tx: bt(1000)),
+      res('https://a.test/late.js', tx: bt(9000)),
+    ]);
+    final p = inspection(browser: browserSnap(resources: [
+      res('https://a.test/app.js', tx: bt(1000)),
+    ])).copyWith(
+        freshLoad: Present(fresh, source: DataSource.browser),
+        browserSettled: true);
+    expect(derivePageWeight(p)!.transfer, 1000);
+    expect(deriveFreshPageWeight(p)!.transfer, 10000);
+    final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+    expect(m.weight.transfer, 1000);
+    final f = (m.fresh as Present<PageSizeModel>).value;
+    expect(f.weight.transfer, 10000);
+    expect(f.rows.first.url, 'https://a.test/late.js');
+    // The verdict uses the fresh load and says so.
+    expect(m.lighthouseNote, startsWith('Lighthouse (fresh load): good'));
+    expect(m.stillCollecting, isFalse);
+    // 1 KB vs 10 KB: very different, with the usual causes named.
+    expect(m.differenceNote, contains('differ a lot'));
+    expect(m.differenceNote, contains('cookie or consent wall'));
+    expect(m.differenceNote, contains('paywall'));
+  });
+
+  test('loadDifferenceNote: only from 2x, never on an unknown total', () {
+    PageWeight w(int? t) => PageWeight(
+        breakdown: const {},
+        transfer: t,
+        decoded: null,
+        transferLowerBound: false,
+        transferEstimated: false,
+        decodedLowerBound: false,
+        documentSource: null,
+        snapshotTimeMs: null);
+    expect(loadDifferenceNote(w(1000), w(1900)), isNull);
+    expect(loadDifferenceNote(w(2000), w(1000)), isNotNull);
+    expect(loadDifferenceNote(w(1000), w(2000)), isNotNull);
+    expect(loadDifferenceNote(w(null), w(2000)), isNull);
+  });
+
+  test('without a fresh load the verdict is on this load; not measured', () {
+    final p = inspection(browser: page);
+    final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+    expect(m.fresh, isA<Unavailable<PageSizeModel>>());
+    expect(m.lighthouseNote, startsWith('Lighthouse (this load)'));
+    expect(m.stillCollecting, isTrue);
+    expect(m.rows.where((r) => r.thirdPartyFrame).map((r) => r.url).toSet(), {
+      'https://ads.test/frame.html',
+      'https://ads.test/ad.js',
+      'https://cdn.ads.test/creative.jpg',
+    });
+  });
+
+  test('a pending or failed fresh load passes through', () {
+    final p = inspection(browser: page);
+    Observed<PageSizeModel> freshOf(PageInspection q) =>
+        (derivePageSize(q) as Present<PageSizeModel>).value.fresh;
+    expect(freshOf(p.copyWith(freshLoad: const Pending())),
+        isA<Pending<PageSizeModel>>());
+    expect(freshOf(p.copyWith(freshLoad: const Failed('timeout'))),
+        isA<Failed<PageSizeModel>>());
+  });
+
+  test('a shown image without timing is looked up and explained', () {
+    const detail = 'shown on the page, but the browser reported no timing '
+        'for it (likely served from its memory cache)';
+    final p = inspection(
+        browser: browserSnap(resources: [
+      res('https://a.test/big.gif',
+          type: 'img',
+          tx: const Unavailable(UnavailableReason.notReportedByPlatform, detail),
+          dec:
+              const Unavailable(UnavailableReason.notReportedByPlatform, detail)),
+    ]));
+    expect(estimateTargets(p), ['https://a.test/big.gif']);
+    final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+    expect(m.rows.single.sizeLabel,
+        'size unknown (shown, but served from the memory cache)');
+    final sized = (derivePageSize(p.copyWith(resourceEstimates: {
+      'https://a.test/big.gif': Present(3 * 1024 * 1024,
+          source: DataSource.server, provenance: Provenance.estimated),
+    })) as Present<PageSizeModel>)
+        .value;
+    expect(sized.rows.single.sizeLabel, '≈ 3,072 KB');
+    expect(sized.weight.breakdown['images']!.transfer, 3 * 1024 * 1024);
+  });
+
+  test('the browser\'s initiator type decides the category before the URL',
+      () {
+    const page = 'https://www.ad.nl/';
+    // DPG image CDN: no extension, the browser says it is an image.
+    final cdn = res(
+        'https://images.ad.nl/ZjE2ZDQ4/dio/280136008/focus-and-fill/0.50/'
+        '0.50/666/499/stille-tocht-schiedam-weverpad',
+        type: 'img',
+        tx: bt(2345 * 1024));
+    expect(resourceCategory(cdn, page), 'image');
+    // A url() in a stylesheet is judged by its URL (image or font).
+    expect(resourceCategory(res('https://a.test/bg.png', type: 'css'), page),
+        'image');
+    expect(resourceCategory(res('https://a.test/x.css', type: 'link'), page),
+        'style');
+    // 'lifestyle' in an image URL no longer makes it a stylesheet.
+    expect(
+        resourceCategory(
+            res('https://img.test/lifestyle/a', type: 'img'), page),
+        'image');
+    final p = inspection(browser: browserSnap(url: page, resources: [cdn]));
+    final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+    expect(m.rows.single.type, 'image');
+    expect(m.weight.breakdown['images']!.transfer, 2345 * 1024);
+  });
+}

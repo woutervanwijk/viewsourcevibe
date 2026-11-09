@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 
@@ -15,9 +16,6 @@ void main() {
         'font',
         'img',
         'image',
-        'video',
-        'audio',
-        'media',
         'IMG',
       ]) {
         expect(isEstimableResourceType(t, 'https://a.test/x.bin'), isTrue,
@@ -34,6 +32,10 @@ void main() {
         'ping',
         'iframe',
         'frame',
+        // Streamed partly by the browser: a full download would overcount.
+        'video',
+        'audio',
+        'media',
         'navigation',
         'other',
         '',
@@ -106,8 +108,62 @@ void main() {
       expect(estimateTargets(p), [
         'https://a.test/f.woff2',
         'https://a.test/g.png',
-        'https://a.test/h.mp4',
       ]);
+    });
+
+    test('a dropped (buffer-full) image is looked up like any unsized one', () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        ResourceEntry(
+            url: 'https://images.a.test/big-lazy.gif',
+            type: 'img',
+            source: ResourceSource.dropped,
+            startTime: const Pending(),
+            duration: const Pending(),
+            transfer: const Unavailable(
+                UnavailableReason.notReportedByPlatform, 'buffer full'),
+            decoded: const Unavailable(
+                UnavailableReason.notReportedByPlatform, 'buffer full')),
+      ]));
+      expect(estimateTargets(p), ['https://images.a.test/big-lazy.gif']);
+    });
+
+    test('iframe content (ads, embeds) is looked up like the page\'s own', () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        ResourceEntry(
+            url: 'https://ads.test/ad.js',
+            type: 'script',
+            source: ResourceSource.observer,
+            startTime: const Pending(),
+            duration: const Pending(),
+            transfer: const Unavailable(UnavailableReason.blockedByPlatform),
+            decoded: const Unavailable(UnavailableReason.blockedByPlatform),
+            frameOrigin: 'https://ads.test'),
+      ]));
+      expect(estimateTargets(p), ['https://ads.test/ad.js']);
+    });
+
+    test('declared but never fetched images are looked up; fetched ones are not',
+        () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        res('https://a.test/app.js', tx: b(10)),
+        res('https://images.a.test/aaa/666/pic.gif', type: 'img', tx: b(5)),
+      ])).copyWith(declaredMedia: const [
+        'https://images.a.test/lazy.gif', // never fetched: look it up
+        'https://a.test/app.js', // fetched and measured: skip
+        'https://images.a.test/bbb/999/pic.gif', // srcset variant of a fetched one: skip
+      ]);
+      expect(estimateTargets(p), ['https://images.a.test/lazy.gif']);
+    });
+
+    test('up to 400 lookups by default', () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        for (var i = 0; i < 450; i++) res('https://a.test/$i.js'),
+      ]));
+      expect(estimateTargets(p), hasLength(400));
     });
 
     test('limit caps the list; nothing without Present resources', () {

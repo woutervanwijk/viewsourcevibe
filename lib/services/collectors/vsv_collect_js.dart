@@ -6,14 +6,31 @@
 /// Must run at document start (UserScriptInjectionTime.AT_DOCUMENT_START).
 /// Buffers resource-timing entries (survives clearResourceTimings) in
 /// `window.__vsv_obs` and fetch/XHR content-lengths in `window.__vsv_patch`.
+/// When the buffer is full, further URLs are not lost: they are recorded in
+/// `window.__vsv_dropped` (URL + initiator type), so the app can still list
+/// them and look up their size itself.
+///
+/// Injected into every frame. An iframe (ads, embeds) only observes its own
+/// resources and posts them to the top frame (`{__vsv_frame: 1, ...}`), which
+/// records them with `fr: 1` and the frame's origin in `fo`. Start times are
+/// moved to the top frame's time origin.
 const String vsvResourceBootstrapJs = r'''
 (function() {
   if (window.__vsv_boot) return;
   window.__vsv_boot = true;
-  var MAX = 2000;
+  var isTop = true;
+  try { isTop = window === window.top; } catch (e) { isTop = false; }
+  // Matches the resource-timing buffer size set below: the app-side buffer
+  // must not be the smaller one, or late resources (lazy images) are lost.
+  var MAX = 10000;
+  // Cap on the dropped-URL list, so a flood of unique ad URLs cannot grow it
+  // without bound.
+  var DROP_MAX = 2000;
   window.__vsv_obs = {};
   window.__vsv_obsCount = 0;
   window.__vsv_obsDropped = 0;
+  window.__vsv_dropped = [];
+  window.__vsv_droppedSet = {};
   window.__vsv_obsOk = false;
   window.__vsv_patch = [];
   window.__vsv_patchDropped = 0;
@@ -38,17 +55,131 @@ const String vsvResourceBootstrapJs = r'''
       enc: num(e.encodedBodySize),
       dec: num(e.decodedBodySize)
     };
-    var prev = window.__vsv_obs[e.name];
+    // Keep the first start/duration; take the sizes when they are larger.
+    store(e.name, cur);
+  }
+  // A resource the buffer no longer holds: keep its URL (the app lists it
+  // and can still size it with its own request) and tell the app to collect,
+  // so the 'shown images' fallback can pick the resource up.
+  function noteDropped(name, it, fo) {
+    window.__vsv_obsDropped++;
+    var known = !!window.__vsv_droppedSet[name];
+    if (!known && window.__vsv_dropped.length < DROP_MAX) {
+      window.__vsv_droppedSet[name] = true;
+      window.__vsv_dropped.push({n: name, it: it || '', fo: fo || ''});
+    }
+    if (!known) { if (!isTop) markDropped(name); else notifyApp(); }
+  }
+  function store(name, cur) {
+    var prev = window.__vsv_obs[name];
     if (prev) {
-      // Keep the first start/duration; take the sizes when they are larger.
       if (sum(cur) > sum(prev)) {
         prev.tx = cur.tx; prev.enc = cur.enc; prev.dec = cur.dec;
+        if (!isTop) markDirty(name); else notifyApp();
       }
       return;
     }
-    if (window.__vsv_obsCount >= MAX) { window.__vsv_obsDropped++; return; }
-    window.__vsv_obs[e.name] = cur;
+    if (window.__vsv_obsCount >= MAX) { noteDropped(name, cur.it, cur.fo); return; }
+    window.__vsv_obs[name] = cur;
     window.__vsv_obsCount++;
+    if (!isTop) markDirty(name); else notifyApp();
+  }
+  // Top frame: tell the app that resources arrived (lazy images, ads after
+  // scrolling), at most once a second. The app collects again when it
+  // wants; nothing is sent here but the count.
+  var notifyTimer = null;
+  function notifyApp() {
+    if (notifyTimer !== null) return;
+    notifyTimer = setTimeout(function() {
+      notifyTimer = null;
+      try {
+        var b = window.flutter_inappwebview;
+        if (b && typeof b.callHandler === 'function') {
+          var r = b.callHandler('vsvResources', window.__vsv_obsCount);
+          if (r && typeof r.catch === 'function') r.catch(function() {});
+        }
+      } catch (e) {}
+    }, 1000);
+  }
+  // Iframe: post new/grown entries to the top frame, batched. Dropped URLs
+  // go along in `d`, so the top frame can list them too.
+  var dirty = {}, droppedDirty = {}, flushTimer = null;
+  function markDirty(name) {
+    dirty[name] = true;
+    if (flushTimer === null) flushTimer = setTimeout(flush, 500);
+  }
+  function markDropped(name) {
+    droppedDirty[name] = true;
+    if (flushTimer === null) flushTimer = setTimeout(flush, 500);
+  }
+  function flush() {
+    flushTimer = null;
+    var out = [];
+    for (var n in dirty) {
+      if (!Object.prototype.hasOwnProperty.call(dirty, n)) continue;
+      var o = window.__vsv_obs[n];
+      if (o) out.push({n: n, it: o.it, st: o.st, du: o.du, tx: o.tx, enc: o.enc, dec: o.dec});
+    }
+    dirty = {};
+    var dout = [];
+    for (var m in droppedDirty) {
+      if (!Object.prototype.hasOwnProperty.call(droppedDirty, m)) continue;
+      for (var i = 0; i < window.__vsv_dropped.length; i++) {
+        if (window.__vsv_dropped[i].n === m) { dout.push(window.__vsv_dropped[i]); break; }
+      }
+    }
+    droppedDirty = {};
+    if (!out.length && !dout.length) return;
+    try {
+      var origin = '';
+      try { origin = location.origin; } catch (e) {}
+      window.top.postMessage({__vsv_frame: 1, fo: origin,
+          to: performance.timeOrigin || null, e: out, d: dout}, '*');
+    } catch (e) {}
+  }
+  // Top frame: an image served from the memory cache creates no timing
+  // entry, but it still fires 'load'; that is a reason to collect again too.
+  if (isTop) {
+    try {
+      document.addEventListener('load', function(ev) {
+        var t = ev.target;
+        if (t && t.tagName === 'IMG') notifyApp();
+      }, true);
+    } catch (e) {}
+  }
+  // Top frame: take what the iframes post. Only messages of this shape from
+  // another window; the entries are page-provided data, like the timings.
+  if (isTop) {
+    try {
+      window.addEventListener('message', function(ev) {
+        try {
+          var d = ev.data;
+          if (!d || d.__vsv_frame !== 1 || ev.source === window) return;
+          if (!d.e || typeof d.e.length !== 'number') return;
+          var shift = (typeof d.to === 'number' && performance.timeOrigin)
+              ? d.to - performance.timeOrigin : null;
+          var fo = typeof d.fo === 'string' ? d.fo.slice(0, 200) : '';
+          for (var i = 0; i < d.e.length && i < MAX; i++) {
+            var x = d.e[i];
+            if (!x || typeof x.n !== 'string' || skip(x.n)) continue;
+            var st = num(x.st);
+            store(x.n, {it: typeof x.it === 'string' ? x.it : '',
+                st: st === null ? null : (shift === null ? null : st + shift),
+                du: num(x.du), tx: num(x.tx), enc: num(x.enc), dec: num(x.dec),
+                fr: 1, fo: fo});
+          }
+          // URLs the iframe's own buffer dropped.
+          var dl = d.d;
+          if (dl && typeof dl.length === 'number') {
+            for (var j = 0; j < dl.length && j < DROP_MAX; j++) {
+              var y = dl[j];
+              if (!y || typeof y.n !== 'string' || skip(y.n)) continue;
+              noteDropped(y.n, typeof y.it === 'string' ? y.it : '', fo);
+            }
+          }
+        } catch (e) {}
+      });
+    } catch (e) {}
   }
   try {
     var obs = new PerformanceObserver(function(list) {
@@ -68,7 +199,7 @@ const String vsvResourceBootstrapJs = r'''
   }
   try {
     var origFetch = window.fetch;
-    if (typeof origFetch === 'function') {
+    if (isTop && typeof origFetch === 'function') {
       window.fetch = function(input, init) {
         var url = typeof input === 'string' ? input :
             (input && input.url) ? input.url : String(input);
@@ -83,7 +214,7 @@ const String vsvResourceBootstrapJs = r'''
       };
     }
   } catch (e) {}
-  try {
+  if (isTop) try {
     var xhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(m, u) {
       this.__vsvUrl = u;
@@ -181,7 +312,9 @@ window.__vsv_collect = function() {
       for (var name in window.__vsv_obs) {
         if (!Object.prototype.hasOwnProperty.call(window.__vsv_obs, name)) continue;
         var o = window.__vsv_obs[name];
-        observer.push({n: name, it: o.it, st: o.st, du: o.du, tx: o.tx, enc: o.enc, dec: o.dec});
+        var item = {n: name, it: o.it, st: o.st, du: o.du, tx: o.tx, enc: o.enc, dec: o.dec};
+        if (o.fr === 1) { item.fr = 1; item.fo = o.fo; }
+        observer.push(item);
       }
     } else {
       var es = performance.getEntriesByType('resource');
@@ -192,12 +325,44 @@ window.__vsv_collect = function() {
           tx: num(e.transferSize), enc: num(e.encodedBodySize), dec: num(e.decodedBodySize)});
       }
     }
+    // Images actually shown (loaded, with pixels), as the page uses them.
+    // A lazy placeholder that has not loaded yet is not one. currentSrc and
+    // src are both reported: with srcset the fetched URL (currentSrc) differs
+    // from the attribute the page markup shows.
+    var shown = [];
+    try {
+      var imgs = document.images, seen = {};
+      for (var j = 0; j < imgs.length && shown.length < 2000; j++) {
+        var im = imgs[j];
+        if (!im.complete || !(im.naturalWidth > 0)) continue;
+        var cands = [im.currentSrc, im.src];
+        for (var c = 0; c < cands.length; c++) {
+          var src = cands[c];
+          if (!src || src.indexOf('http') !== 0 || seen[src]) continue;
+          seen[src] = true;
+          shown.push(src);
+        }
+      }
+    } catch (e) {}
+    // URLs the buffer dropped (see the bootstrap): listed so the app can
+    // still show them and look up their size itself.
+    var droppedNames = [];
+    var dl = window.__vsv_dropped || [];
+    for (var k = 0; k < dl.length; k++) {
+      var x = dl[k];
+      if (!x || typeof x.n !== 'string' || skip(x.n)) continue;
+      droppedNames.push({n: x.n,
+          it: typeof x.it === 'string' ? x.it : '',
+          fo: typeof x.fo === 'string' ? x.fo : ''});
+    }
     return {
       bootstrap: bootstrap,
       observer: observer,
+      shown: shown,
       patch: (window.__vsv_patch || []).slice(0),
       dropped: window.__vsv_obsDropped || 0,
-      patchDropped: window.__vsv_patchDropped || 0
+      patchDropped: window.__vsv_patchDropped || 0,
+      droppedNames: droppedNames
     };
   });
 
@@ -232,5 +397,38 @@ window.__vsv_collect = function() {
 
   try { return JSON.stringify(out); }
   catch (e) { return JSON.stringify({v: 1, fatal: describe(e)}); }
+};
+''';
+
+/// `window.__vsv_scrollThrough(backToTop)`: scrolls the page to the bottom in
+/// viewport-sized steps (and back to the top when asked), so lazy content —
+/// native `loading="lazy"` and IntersectionObserver-based lazyloaders — is
+/// actually fetched and then measured by the resource observer. Fire-and-
+/// forget: poll the resource signature (or the app's collects) to see when
+/// the new requests are done.
+const String vsvScrollThroughJs = r'''
+window.__vsv_scrollThrough = function(backToTop) {
+  try {
+    var doc = document.scrollingElement || document.documentElement;
+    var vh = window.innerHeight || 800;
+    function height() {
+      return Math.max(doc ? doc.scrollHeight : 0,
+          document.body ? document.body.scrollHeight : 0, vh);
+    }
+    var steps = 0;
+    function step() {
+      steps++;
+      var y = Math.min(steps * vh, height());
+      try { window.scrollTo(0, y); } catch (e) {}
+      try { if (doc) doc.scrollTop = y; } catch (e) {}
+      // Recompute the height each step: infinite scroll grows the page.
+      if (steps < 60 && y < height() - 1) { setTimeout(step, 250); return; }
+      if (backToTop) {
+        try { window.scrollTo(0, 0); } catch (e) {}
+        try { if (doc) doc.scrollTop = 0; } catch (e) {}
+      }
+    }
+    setTimeout(step, 250);
+  } catch (e) {}
 };
 ''';
