@@ -113,7 +113,7 @@ class AboutScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'View Source Vibe is an easy-to-use web page explorer. Read the source, walk the DOM, and see what a page is built with, which trackers and services it uses, and where it is hosted. Built with Flutter, it offers a desktop-class experience on your phone, tablet and desktop.',
+                        "Viewing the source of a webpage is sooooo early 2026!! Just use View Source Vibe to easily see what's in the page, without looking at the source. Of course we included a source code viewer and a DOM Tree, but you probably don't need them for most quick glances, because of our easy to use exploring tools",
                         style: TextStyle(fontSize: 16),
                       ),
                       const SizedBox(height: 12),
@@ -141,21 +141,26 @@ class AboutScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildFeatureItem(
-                          '📱 Source viewer with syntax highlighting'),
+                          '🌐 Built-in Browser with "Surf & View Source"'),
+                      _buildFeatureItem(
+                          '📱 Source viewer: HTML, CSS, JS, XML, JSON with syntax highlighting, search, word wrap and beautify'),
                       _buildFeatureItem('🌳 DOM Tree explorer'),
+                      _buildFeatureItem('📖 Reader Mode and RSS/Atom feeds'),
                       _buildFeatureItem(
-                          '🛠️ Services: CMS, frameworks and third parties'),
+                          'ℹ️ Metadata: meta tags and OpenGraph/Twitter share previews'),
                       _buildFeatureItem(
-                          '🛡️ Privacy: which trackers see your visit'),
-                      _buildFeatureItem(
-                          '🌍 Sovereignty: where a page is hosted'),
+                          '🛠️ Services: CMS, frameworks and third parties, with the evidence behind each detection'),
                       _buildFeatureItem('🖼️ Media: images, videos and fonts'),
                       _buildFeatureItem(
-                          '📡 Network: timeline, headers, cookies, security'),
+                          '⚖️ Page size: transfer and decoded weight of the page and its resources'),
                       _buildFeatureItem(
-                          '🌐 Built-in Browser with "Surf & View Source"'),
-                      _buildFeatureItem('📖 Reader Mode and RSS/Atom feeds'),
-                      _buildFeatureItem('📦 Bundle management for bookmarks'),
+                          '🛡️ Privacy: which trackers and services see your visit'),
+                      _buildFeatureItem(
+                          '🌍 Sovereignty: where the page and its services are hosted, and under which law'),
+                      _buildFeatureItem(
+                          '📡 Network: request timeline, headers, cookies, probe and security (incl. TLS)'),
+                      _buildFeatureItem(
+                          '📂 Open local files, share URLs/files/text into the app, URL history'),
                     ],
                   ),
                 ),
