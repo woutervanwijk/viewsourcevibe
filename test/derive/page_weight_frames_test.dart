@@ -134,4 +134,30 @@ void main() {
     expect(sized.rows.single.sizeLabel, '≈ 3,072 KB');
     expect(sized.weight.breakdown['images']!.transfer, 3 * 1024 * 1024);
   });
+
+  test('the browser\'s initiator type decides the category before the URL',
+      () {
+    const page = 'https://www.ad.nl/';
+    // DPG image CDN: no extension, the browser says it is an image.
+    final cdn = res(
+        'https://images.ad.nl/ZjE2ZDQ4/dio/280136008/focus-and-fill/0.50/'
+        '0.50/666/499/stille-tocht-schiedam-weverpad',
+        type: 'img',
+        tx: bt(2345 * 1024));
+    expect(resourceCategory(cdn, page), 'image');
+    // A url() in a stylesheet is judged by its URL (image or font).
+    expect(resourceCategory(res('https://a.test/bg.png', type: 'css'), page),
+        'image');
+    expect(resourceCategory(res('https://a.test/x.css', type: 'link'), page),
+        'style');
+    // 'lifestyle' in an image URL no longer makes it a stylesheet.
+    expect(
+        resourceCategory(
+            res('https://img.test/lifestyle/a', type: 'img'), page),
+        'image');
+    final p = inspection(browser: browserSnap(url: page, resources: [cdn]));
+    final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+    expect(m.rows.single.type, 'image');
+    expect(m.weight.breakdown['images']!.transfer, 2345 * 1024);
+  });
 }

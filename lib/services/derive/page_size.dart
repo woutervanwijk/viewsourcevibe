@@ -5,7 +5,6 @@ import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
 import '../../models/inspection/server_snapshot.dart';
 import '../detection/engine.dart';
-import '../probe_service.dart';
 import 'page_weight.dart';
 
 /// "12 KB" style size; the same rounding as the rest of the app.
@@ -305,9 +304,7 @@ Observed<PageSizeModel> _loadModel(Observed<BrowserSnapshot> browser,
             final url = r.url;
             if (url.isEmpty || url.startsWith('data:')) continue;
             final isPage = page.isNotEmpty && _normalizeUrl(url) == page;
-            final type = isPage
-                ? 'document'
-                : ProbeService.categorizeResource(url, pageUrl);
+            final type = isPage ? 'document' : resourceCategory(r, pageUrl);
             final measuredTx = r.transfer is Present<int>
                 ? (r.transfer as Present<int>).value
                 : null;

@@ -9,7 +9,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
-import 'package:view_source_vibe/services/probe_service.dart';
+import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 
 class HostingProvider {
@@ -571,7 +571,7 @@ class SovereigntyService {
       add(
         r.url,
         transfer is Present<int> ? transfer.value : null,
-        ProbeService.categorizeResource(r.url, pageUrl),
+        resourceCategory(r, pageUrl),
       );
     }
     // Static links as fallback when no runtime resource data exists.
