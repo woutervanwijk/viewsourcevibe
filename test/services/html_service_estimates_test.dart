@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/collectors/transfer_size_lookup.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -44,7 +46,7 @@ void main() {
       browserCollect: (url) async => payload(url: url, observer: observer),
       nativeCookies: (u) async => [],
       browserPlatform: BrowserPlatform.ios,
-      browserRefreshDelays: const [],
+      browserPoll: NetworkQuietPolicy.off,
       spaSettleDelay: Duration.zero,
       sizeLookup: lookup,
     );
@@ -92,7 +94,6 @@ void main() {
       'https://cdn.test/b.css',
       'https://cdn.test/c.woff2',
       'https://cdn.test/d.png',
-      'https://cdn.test/e.mp4',
     ]);
     final est = store.current.resourceEstimates;
     expect(est.keys.toSet(), looked.toSet());
@@ -102,10 +103,10 @@ void main() {
     expect(one.provenance, Provenance.estimated);
   });
 
-  test('at most 5 at a time, at most 80 per page', () async {
+  test('at most 8 at a time, at most 400 per page', () async {
     var running = 0, peak = 0, calls = 0;
     service = make([
-      for (var i = 0; i < 100; i++)
+      for (var i = 0; i < 420; i++)
         blockedEntry('https://cdn.test/$i.js', 'script'),
     ], (url) async {
       calls++;
@@ -122,9 +123,21 @@ void main() {
     await service.syncWebViewState('https://a.test/');
     await Future<void>.delayed(const Duration(milliseconds: 400));
 
-    expect(peak, 5);
-    expect(calls, 80);
-    expect(store.current.resourceEstimates, hasLength(80));
+    expect(peak, 8);
+    expect(calls, 400);
+    expect(store.current.resourceEstimates, hasLength(400));
+  });
+
+  test('a file over the download limit stays a lower bound', () async {
+    service = make([
+      blockedEntry('https://cdn.test/huge.js', 'script'),
+    ], (url) async => throw const SizeLimitExceeded(10 * 1024 * 1024));
+    await load('https://a.test/');
+    final est = store.current.resourceEstimates['https://cdn.test/huge.js'];
+    expect(est, isA<Unavailable<int>>());
+    expect((est as Unavailable<int>).reason, UnavailableReason.exceedsLimit);
+    final m = (service.pageSize as Present<PageSizeModel>).value;
+    expect(m.weight.transferLowerBound, isTrue);
   });
 
   test('a failing or empty lookup is recorded as not Present', () async {

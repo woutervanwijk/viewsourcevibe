@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -75,7 +76,7 @@ void main() {
         browserPlatform: BrowserPlatform.macos,
         browserCollect: (url) async => raw,
         nativeCookies: (url) async => [],
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
       );
       addTearDown(htmlService.dispose);
       await htmlService.loadUrl('https://example.com/', skipWebViewLoad: true);
@@ -122,7 +123,7 @@ void main() {
         browserPlatform: BrowserPlatform.macos,
         browserCollect: (url) async => raw,
         nativeCookies: (url) async => [],
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
       );
       addTearDown(htmlService.dispose);
       await htmlService.loadUrl('https://example.com/', skipWebViewLoad: true);
@@ -149,7 +150,7 @@ void main() {
         browserPlatform: BrowserPlatform.macos,
         browserCollect: (url) async => 'password=hunter2 {broken',
         nativeCookies: (url) async => [],
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
       );
       addTearDown(htmlService.dispose);
       await htmlService.loadUrl('https://example.com/', skipWebViewLoad: true);

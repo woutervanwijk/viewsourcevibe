@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -123,7 +124,7 @@ void main() {
         browserCollect: (u) async => collected,
         nativeCookies: (u) async => throw UnsupportedError('none'),
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (u) => lookupGate?.future ?? Future.value(null),
       );

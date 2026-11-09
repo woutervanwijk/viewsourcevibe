@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
@@ -31,7 +32,7 @@ void main() {
       browserCollect: (url) async => payload(url: url),
       nativeCookies: (url) async => throw UnsupportedError('no cookies'),
       browserPlatform: BrowserPlatform.macos,
-      browserRefreshDelays: const [],
+      browserPoll: NetworkQuietPolicy.off,
       spaSettleDelay: Duration.zero,
     );
     service.setAppSettings(AppSettings()..useBrowserByDefault = true);

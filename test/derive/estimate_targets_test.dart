@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 
@@ -15,9 +16,6 @@ void main() {
         'font',
         'img',
         'image',
-        'video',
-        'audio',
-        'media',
         'IMG',
       ]) {
         expect(isEstimableResourceType(t, 'https://a.test/x.bin'), isTrue,
@@ -34,6 +32,10 @@ void main() {
         'ping',
         'iframe',
         'frame',
+        // Streamed partly by the browser: a full download would overcount.
+        'video',
+        'audio',
+        'media',
         'navigation',
         'other',
         '',
@@ -106,8 +108,31 @@ void main() {
       expect(estimateTargets(p), [
         'https://a.test/f.woff2',
         'https://a.test/g.png',
-        'https://a.test/h.mp4',
       ]);
+    });
+
+    test('iframe content (ads, embeds) is looked up like the page\'s own', () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        ResourceEntry(
+            url: 'https://ads.test/ad.js',
+            type: 'script',
+            source: ResourceSource.observer,
+            startTime: const Pending(),
+            duration: const Pending(),
+            transfer: const Unavailable(UnavailableReason.blockedByPlatform),
+            decoded: const Unavailable(UnavailableReason.blockedByPlatform),
+            frameOrigin: 'https://ads.test'),
+      ]));
+      expect(estimateTargets(p), ['https://ads.test/ad.js']);
+    });
+
+    test('up to 400 lookups by default', () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        for (var i = 0; i < 450; i++) res('https://a.test/$i.js'),
+      ]));
+      expect(estimateTargets(p), hasLength(400));
     });
 
     test('limit caps the list; nothing without Present resources', () {

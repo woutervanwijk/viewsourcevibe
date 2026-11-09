@@ -1,0 +1,12 @@
+{"_synthetic":true,"_note":"Models the top frame after an ad iframe posted its resources (fr: 1, fo: frame origin); the cross-origin creative reports zeros.",
+"v":1,"url":"https://example.com/","contentType":"text/html",
+"timing":{"ok":true,"now":3000.0,"timeOrigin":1760000000000},
+"dom":{"ok":true,"value":"<html><body></body></html>","iframes":1,"shadowRoots":0},
+"resources":{"ok":true,"bootstrap":true,"dropped":0,"observer":[
+{"n":"https://example.com/app.js","it":"script","st":10.0,"du":2.0,"tx":3000,"enc":2800,"dec":9000},
+{"n":"https://ads.example.net/frame.html","it":"iframe","st":20.0,"du":30.0,"tx":0,"enc":0,"dec":0},
+{"n":"https://ads.example.net/creative.jpg","it":"img","st":60.0,"du":40.0,"tx":0,"enc":0,"dec":0,"fr":1,"fo":"https://ads.example.net"},
+{"n":"https://ads.example.net/ad.js","it":"script","st":55.0,"du":5.0,"tx":5000,"enc":4800,"dec":12000,"fr":1,"fo":"https://ads.example.net"}],
+"patch":[]},
+"navigation":{"ok":true,"responseStart":120.5,"domInteractive":400.2,"domContentLoaded":420.0,"loadEnd":900.1,"protocol":"h2"},"storage":{"local":{"ok":true,"count":0,"items":[],"truncated":false},"session":{"ok":true,"count":0,"items":[],"truncated":false}},
+"cookies":{"ok":true,"raw":""}}

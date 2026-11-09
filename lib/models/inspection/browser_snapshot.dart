@@ -60,6 +60,13 @@ class ResourceEntry {
   /// headers), so cache hits are counted like everything else.
   final bool fromCache;
 
+  /// Origin of the iframe that loaded it (ads, embeds), as the iframe
+  /// reported it; '' when it could not tell. Null: the page itself.
+  final String? frameOrigin;
+
+  /// Loaded inside an iframe, not by the page itself.
+  bool get inFrame => frameOrigin != null;
+
   const ResourceEntry({
     required this.url,
     required this.type,
@@ -69,6 +76,7 @@ class ResourceEntry {
     required this.transfer,
     required this.decoded,
     this.fromCache = false,
+    this.frameOrigin,
   });
 }
 

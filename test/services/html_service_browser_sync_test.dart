@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
@@ -77,6 +78,12 @@ Map<String, Object?> obs(String url,
       'dec': dec,
     };
 
+/// One later pass after [ms] milliseconds.
+NetworkQuietPolicy once(int ms) => NetworkQuietPolicy(
+    interval: Duration(milliseconds: ms),
+    quiet: const Duration(hours: 1),
+    max: Duration(milliseconds: ms));
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -88,7 +95,7 @@ void main() {
   late Future<Object?> Function(String url) collect;
   late Future<List<Map>> Function(String url) native;
 
-  HtmlService make({List<Duration>? refreshDelays}) {
+  HtmlService make({NetworkQuietPolicy? poll}) {
     final s = HtmlService(
       store: store,
       serverFetcher: fetcher,
@@ -100,7 +107,7 @@ void main() {
       },
       nativeCookies: (url) => native(url),
       browserPlatform: BrowserPlatform.macos,
-      browserRefreshDelays: refreshDelays ?? const [],
+      browserPoll: poll ?? NetworkQuietPolicy.off,
       spaSettleDelay: Duration.zero,
     );
     s.setAppSettings(AppSettings()..useBrowserByDefault = true);
@@ -288,7 +295,7 @@ void main() {
         'a refresh merges: startTime/duration of the first sync survive '
         '(B12)', () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 20)]);
+      service = make(poll: once(20));
       var n = 0;
       collect = (url) async {
         n++;
@@ -321,7 +328,7 @@ void main() {
     test('a refresh whose collect completes after navigation is dropped',
         () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 20)]);
+      service = make(poll: once(20));
       final slow = Completer<Object?>();
       var n = 0;
       collect = (url) {
@@ -342,9 +349,45 @@ void main() {
       expect(service.resourceTimelineData, isEmpty);
     });
 
+    test('polls until nothing new arrives, then marks the load settled',
+        () async {
+      service.dispose();
+      service = make(
+          poll: const NetworkQuietPolicy(
+              interval: Duration(milliseconds: 10),
+              quiet: Duration(milliseconds: 25),
+              max: Duration(seconds: 5)));
+      var n = 0;
+      collect = (url) async {
+        n++;
+        // Resources keep arriving for the first three collects.
+        return payload(url: url, observer: [
+          for (var i = 0; i < (n < 3 ? n : 3); i++) obs('https://a.test/$i.js')
+        ]);
+      };
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(store.current.browserSettled, isFalse);
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await pumpEventQueue();
+
+      expect(store.current.browserSettled, isTrue);
+      final calls = collectCalls.length;
+      expect(calls, greaterThanOrEqualTo(4));
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(collectCalls, hasLength(calls), reason: 'polling stopped');
+    });
+
+    test('without polling the load is settled at once', () async {
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(store.current.browserSettled, isTrue);
+    });
+
     test('pending refreshes are cancelled by a navigation', () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 50)]);
+      service = make(poll: once(50));
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
       expect(collectCalls, hasLength(1));
@@ -357,7 +400,7 @@ void main() {
 
     test('pending refreshes are cancelled by dispose', () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 50)]);
+      service = make(poll: once(50));
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
       service.dispose();
@@ -369,7 +412,7 @@ void main() {
 
     test('a partial sync schedules no refreshes', () async {
       service.dispose();
-      service = make(refreshDelays: const [Duration(milliseconds: 20)]);
+      service = make(poll: once(20));
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/', isPartial: true);
       await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -488,7 +531,7 @@ void main() {
         ]),
         nativeCookies: (u) async => [],
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (url) async => 777,
       );
@@ -577,7 +620,7 @@ void main() {
         ]),
         nativeCookies: (u) async => [],
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (url) async => null,
       );
@@ -621,7 +664,7 @@ void main() {
         ]),
         nativeCookies: (u) async => [],
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (url) async {
           looked.add(url);
@@ -660,7 +703,7 @@ void main() {
         browserCollect: (url) async => payload(url: url),
         nativeCookies: (u) async => [],
         browserPlatform: BrowserPlatform.macos,
-        browserRefreshDelays: const [],
+        browserPoll: NetworkQuietPolicy.off,
         spaSettleDelay: Duration.zero,
         sizeLookup: (url) => gate.future,
       );

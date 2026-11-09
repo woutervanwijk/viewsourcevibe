@@ -3,6 +3,10 @@ import 'file_snapshot.dart';
 import 'observed.dart';
 import 'server_snapshot.dart';
 
+/// [PageInspection.freshLoad] before the user asked for one.
+const kFreshLoadNotMeasured = Unavailable<BrowserSnapshot>(
+    UnavailableReason.notApplicable, 'not measured');
+
 /// What is being inspected.
 sealed class InspectionTarget {
   const InspectionTarget();
@@ -43,6 +47,17 @@ class PageInspection {
   /// The user's choice for the Source tab; null = default rule.
   final DataSource? primaryDocumentPreference;
 
+  /// The live load stopped requesting: no new resources for a while (or the
+  /// time limit). Until then later resources may still be added.
+  final bool browserSettled;
+
+  /// A separate load like Lighthouse's (empty cache, private session, phone
+  /// screen, wait for a quiet network), only when the user asks for it.
+  final Observed<BrowserSnapshot> freshLoad;
+
+  /// The app's own size lookups for [freshLoad] (see [resourceEstimates]).
+  final Map<String, Observed<int>> freshEstimates;
+
   const PageInspection({
     required this.generation,
     required this.target,
@@ -52,6 +67,9 @@ class PageInspection {
     this.robots = const Pending(),
     this.resourceEstimates = const {},
     this.primaryDocumentPreference,
+    this.browserSettled = false,
+    this.freshLoad = kFreshLoadNotMeasured,
+    this.freshEstimates = const {},
   });
 
   const PageInspection.empty()
@@ -66,7 +84,10 @@ class PageInspection {
         robots = const Unavailable(
             UnavailableReason.notApplicable, 'nothing loaded'),
         resourceEstimates = const {},
-        primaryDocumentPreference = null;
+        primaryDocumentPreference = null,
+        browserSettled = false,
+        freshLoad = kFreshLoadNotMeasured,
+        freshEstimates = const {};
 
   PageInspection copyWith({
     Observed<ServerSnapshot>? server,
@@ -75,6 +96,9 @@ class PageInspection {
     Observed<RobotsInfo>? robots,
     Map<String, Observed<int>>? resourceEstimates,
     Object? primaryDocumentPreference = _keep,
+    bool? browserSettled,
+    Observed<BrowserSnapshot>? freshLoad,
+    Map<String, Observed<int>>? freshEstimates,
   }) =>
       PageInspection(
         generation: generation,
@@ -87,6 +111,9 @@ class PageInspection {
         primaryDocumentPreference: identical(primaryDocumentPreference, _keep)
             ? this.primaryDocumentPreference
             : primaryDocumentPreference as DataSource?,
+        browserSettled: browserSettled ?? this.browserSettled,
+        freshLoad: freshLoad ?? this.freshLoad,
+        freshEstimates: freshEstimates ?? this.freshEstimates,
       );
 
   bool _has(DataSource s) => switch (s) {

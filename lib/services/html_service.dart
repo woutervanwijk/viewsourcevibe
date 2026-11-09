@@ -4,7 +4,6 @@ import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
-import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:convert';
 import 'package:view_source_vibe/utils/code_beautifier.dart';
@@ -36,7 +35,9 @@ import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/request_timeline.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart';
+import 'package:view_source_vibe/services/collectors/transfer_size_lookup.dart';
 import 'package:view_source_vibe/services/derive/media.dart';
+import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/estimate_targets.dart';
@@ -95,7 +96,7 @@ class HtmlService extends ChangeNotifier {
   final NativeCookieReader _nativeCookies;
   final ResourceSizeLookup _sizeLookup;
   final BrowserPlatform _platform;
-  final List<Duration> _refreshDelays;
+  final NetworkQuietPolicy _browserPoll;
   final Duration _spaSettleDelay;
   final List<Timer> _refreshTimers = [];
   bool _disposed = false;
@@ -1360,10 +1361,7 @@ class HtmlService extends ChangeNotifier {
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
     BrowserPlatform? browserPlatform,
-    List<Duration> browserRefreshDelays = const [
-      Duration(seconds: 4),
-      Duration(seconds: 14),
-    ],
+    NetworkQuietPolicy browserPoll = NetworkQuietPolicy.live,
     Duration spaSettleDelay = const Duration(milliseconds: 400),
   })  : _sovereigntyDebounce = sovereigntyDebounce,
         _sovereigntyAnalyzer =
@@ -1377,7 +1375,7 @@ class HtmlService extends ChangeNotifier {
         _sizeLookup = sizeLookup ?? _lookupResourceSize,
         _platform =
             browserPlatform ?? browserPlatformFor(defaultTargetPlatform),
-        _refreshDelays = browserRefreshDelays,
+        _browserPoll = browserPoll,
         _spaSettleDelay = spaSettleDelay,
         store = store ?? InspectionStore(),
         _ownsStore = store == null,
@@ -4517,8 +4515,8 @@ Technical details: $message''';
     _fetchResourceEstimatesAsync().ignore();
   }
 
-  static const int _maxEstimateLookups = 80;
-  static const int _estimateConcurrency = 5;
+  static const int _maxEstimateLookups = 400;
+  static const int _estimateConcurrency = 8;
   bool _estimating = false;
   bool _estimateRerun = false;
   int? _estimateGen;
@@ -4562,6 +4560,8 @@ Technical details: $message''';
                   : Present(size,
                       source: DataSource.server,
                       provenance: Provenance.estimated);
+            } on SizeLimitExceeded catch (e) {
+              result = Unavailable(UnavailableReason.exceedsLimit, '$e');
             } catch (e) {
               result = Failed('Size lookup failed: $e');
             }
@@ -4590,57 +4590,10 @@ Technical details: $message''';
     return [for (final c in cookies) c.toMap()];
   }
 
-  /// Ranged GET (then HEAD) for a resource's size. A size is only reported
-  /// when the server states one; 0 and failures are "unknown" (null).
-  static Future<int?> _lookupResourceSize(String url) async {
-    final client = http.Client();
-    try {
-      final uri = Uri.parse(url);
-      final headers = {'User-Agent': kServerUserAgent};
-
-      // A ranged GET runs the same pipeline as the browser's GET, so query
-      // transforms on image CDNs are applied; HEAD can report the origin
-      // object's size instead.
-      try {
-        final request = http.Request('GET', uri);
-        request.headers.addAll(headers);
-        request.headers['Range'] = 'bytes=0-0';
-        final response =
-            await client.send(request).timeout(const Duration(seconds: 5));
-        final contentLength = response.headers['content-length'];
-        final contentRange = response.headers['content-range'];
-        response.stream.listen((_) {}).cancel();
-        if (response.statusCode >= 200 && response.statusCode < 400) {
-          final parts = contentRange?.split('/');
-          if (parts != null && parts.length == 2) {
-            final size = int.tryParse(parts[1]);
-            if (size != null && size > 0) return size;
-          }
-          final size = int.tryParse(contentLength ?? '');
-          if (size != null && size > 0) return size;
-        }
-      } catch (_) {
-        // Fall back to HEAD.
-      }
-
-      try {
-        final head = await client
-            .head(uri, headers: headers)
-            .timeout(const Duration(seconds: 5));
-        if (head.statusCode >= 200 && head.statusCode < 400) {
-          final size = int.tryParse(head.headers['content-length'] ?? '');
-          if (size != null && size > 0) return size;
-        }
-      } catch (_) {
-        // unknown
-      }
-    } catch (e) {
-      debugPrint('Error getting resource size for $url: $e');
-    } finally {
-      client.close();
-    }
-    return null;
-  }
+  /// Our own download of a resource, measured like the browser's transfer
+  /// size (compressed bytes plus headers); see [lookupTransferSize].
+  static Future<int?> _lookupResourceSize(String url) =>
+      lookupTransferSize(url, userAgent: kServerUserAgent);
 
   /// The browser reported a URL change (history API / SPA route, redirect).
   /// The same document as the current navigation (R20) is nothing new; any
@@ -4737,19 +4690,48 @@ Technical details: $message''';
   }
 
   /// Later passes catch resources that load after onLoadStop (lazy images,
-  /// analytics, slow hydration). Each is another collect; the store merges it
-  /// into what it has.
+  /// ads, analytics, slow hydration): collect every interval until nothing
+  /// new arrived for a while or the time limit passed, then mark the load
+  /// settled. Each pass is another collect; the store merges it.
   void _scheduleBrowserRefreshes(int gen, String url, Uri uri) {
     _cancelBrowserRefreshes();
-    for (final delay in _refreshDelays) {
-      _refreshTimers.add(Timer(delay, () async {
-        if (_disposed || gen != store.current.generation) return;
-        if (!_browserReachable) return;
+    final policy = _browserPoll;
+    if (!policy.enabled) {
+      store.markBrowserSettled(gen);
+      return;
+    }
+    bool stale() => _disposed || gen != store.current.generation;
+    final clock = Stopwatch()..start();
+    var lastChange = Duration.zero;
+    var signature = _browserSignature();
+    void next() {
+      _refreshTimers.add(Timer(policy.interval, () async {
+        if (stale() || !_browserReachable) return;
         await _collectAndApply(gen, url, uri);
-        if (_disposed || gen != store.current.generation) return;
+        if (stale()) return;
         _applyBrowserDerivedToMetadata();
+        final now = clock.elapsed;
+        final sig = _browserSignature();
+        if (sig != signature) {
+          signature = sig;
+          lastChange = now;
+        }
+        if (policy.done(elapsed: now, sinceLastChange: now - lastChange)) {
+          store.markBrowserSettled(gen);
+        } else {
+          next();
+        }
       }));
     }
+
+    next();
+  }
+
+  int _browserSignature() {
+    final b = store.current.browser;
+    return b is Present<BrowserSnapshot>
+        ? resourceSignature(b.value.resources)
+        : -1;
   }
 
   void _cancelBrowserRefreshes() {

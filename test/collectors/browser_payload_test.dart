@@ -30,7 +30,7 @@ void main() {
   test('every fixture is marked synthetic with a note', () {
     final dir = Directory('test/fixtures/browser');
     final files = dir.listSync().whereType<File>().toList();
-    expect(files.length, 7);
+    expect(files.length, 8);
     for (final f in files) {
       final j = jsonDecode(f.readAsStringSync()) as Map;
       expect(j['_synthetic'], true, reason: f.path);
@@ -103,6 +103,40 @@ void main() {
     final img = byUrl(s, 'https://example.com/photo.jpg');
     expect(present(img.decoded), 39800);
     expect(present(s.cookies), isEmpty);
+  });
+
+  test('iframe entries keep the frame origin; the page\'s own do not', () {
+    final s = parse('iframe_resources.json', BrowserPlatform.android,
+        'https://example.com/');
+    final own = byUrl(s, 'https://example.com/app.js');
+    expect(own.inFrame, isFalse);
+    // The iframe document itself is loaded by the page.
+    expect(byUrl(s, 'https://ads.example.net/frame.html').inFrame, isFalse);
+    final ad = byUrl(s, 'https://ads.example.net/ad.js');
+    expect(ad.frameOrigin, 'https://ads.example.net');
+    expect(present(ad.transfer), 5000);
+    final img = byUrl(s, 'https://ads.example.net/creative.jpg');
+    expect(img.inFrame, isTrue);
+    // Zeros from a cross-origin creative stay unknown, never 0.
+    expect(img.transfer, isA<Unavailable<int>>());
+    // A later report keeps where it was first seen.
+    final merged = mergeResources([ad], [
+      ResourceEntry(
+          url: ad.url,
+          type: 'script',
+          source: ResourceSource.observer,
+          startTime: ad.startTime,
+          duration: ad.duration,
+          transfer: ad.transfer,
+          decoded: ad.decoded)
+    ]).single;
+    expect(merged.frameOrigin, 'https://ads.example.net');
+  });
+
+  test('the bootstrap runs in iframes and posts to the top frame', () {
+    expect(vsvResourceBootstrapJs, contains('__vsv_frame'));
+    expect(vsvResourceBootstrapJs, contains('ev.source === window'));
+    expect(vsvCollectJs, contains('item.fr = 1'));
   });
 
   test('macOS: patch-only entry carries content-length as transfer', () {
