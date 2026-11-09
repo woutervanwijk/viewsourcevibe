@@ -4,6 +4,7 @@ import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/reader_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
 
 void main() {
@@ -17,6 +18,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => htmlService),
+            ChangeNotifierProvider(create: (_) => ReaderService(htmlService)),
             ChangeNotifierProvider(create: (_) => settings),
           ],
           child: MaterialApp(
@@ -55,6 +57,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => htmlService),
+            ChangeNotifierProvider(create: (_) => ReaderService(htmlService)),
             ChangeNotifierProvider(create: (_) => settings),
           ],
           child: MaterialApp(
