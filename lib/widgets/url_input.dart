@@ -391,16 +391,17 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
 
     return Align(
       alignment: Alignment.topLeft,
+      // The background color lives on the Material itself: a colored
+      // DecoratedBox/ColoredBox between the ListTiles and the Material would
+      // hide their background and ink splashes (framework error).
       child: Material(
         elevation: 4.0,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(6),
+        clipBehavior: Clip.antiAlias,
         child: Container(
           width: MediaQuery.of(context).size.width - 16,
           constraints: BoxConstraints(maxHeight: widget.maxOptionsHeight),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            color: Theme.of(context).cardColor,
-          ),
           child: ListView.separated(
             padding: EdgeInsets.zero,
             shrinkWrap: true,
@@ -419,28 +420,28 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
                 displayName = 'File: ${fileNameOfPath(option)}';
               }
 
-              return Container(
-                color: isHighlighted
+              // tileColor paints on the Material above, so the highlight
+              // and the ink splash stay visible.
+              return ListTile(
+                tileColor: isHighlighted
                     ? Theme.of(
                         context,
                       ).colorScheme.primaryContainer.withAlpha(77)
                     : null,
-                child: ListTile(
-                  title: Text(
-                    displayName,
-                    style: const TextStyle(fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () {
-                    widget.onSelected(option);
-                    widget.onOptionTap();
-                  },
-                  dense: true,
-                  leading: Icon(
-                    isUrl ? Icons.history : Icons.insert_drive_file_outlined,
-                    size: 16,
-                  ),
+                title: Text(
+                  displayName,
+                  style: const TextStyle(fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  widget.onSelected(option);
+                  widget.onOptionTap();
+                },
+                dense: true,
+                leading: Icon(
+                  isUrl ? Icons.history : Icons.insert_drive_file_outlined,
+                  size: 16,
                 ),
               );
             },
