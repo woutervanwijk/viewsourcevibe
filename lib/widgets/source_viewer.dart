@@ -417,14 +417,21 @@ class _SourceViewerState extends State<SourceViewer> {
                               ),
                             ),
                             const SizedBox(width: 2),
-                            // Beautify Toggle button
-                            Consumer<HtmlService>(
-                                builder: (context, htmlService, child) {
+                            // Beautify Toggle button. Selector on
+                            // isBeautifyEnabled only: a Consumer here rebuilt
+                            // this header on every service notification
+                            // (progress ticks, per-URL estimates, polls).
+                            Selector<HtmlService, bool>(
+                                selector: (context, htmlService) =>
+                                    htmlService.isBeautifyEnabled,
+                                builder: (context, isBeautifyEnabled, child) {
+                              final htmlService =
+                                  Provider.of<HtmlService>(context, listen: false);
                               return Row(
                                 children: [
                                   Container(
                                     decoration: BoxDecoration(
-                                      color: htmlService.isBeautifyEnabled
+                                      color: isBeautifyEnabled
                                           ? Theme.of(context)
                                               .colorScheme
                                               .primary
@@ -434,12 +441,12 @@ class _SourceViewerState extends State<SourceViewer> {
                                     ),
                                     child: IconButton(
                                       icon: Icon(
-                                        htmlService.isBeautifyEnabled
+                                        isBeautifyEnabled
                                             ? Icons.format_indent_increase
                                             : Icons
                                                 .format_indent_increase_outlined,
                                         size: 20,
-                                        color: htmlService.isBeautifyEnabled
+                                        color: isBeautifyEnabled
                                             ? Theme.of(context)
                                                 .colorScheme
                                                 .primary
@@ -451,7 +458,7 @@ class _SourceViewerState extends State<SourceViewer> {
                                       onPressed: () {
                                         htmlService.toggleIsBeautifyEnabled();
                                       },
-                                      tooltip: htmlService.isBeautifyEnabled
+                                      tooltip: isBeautifyEnabled
                                           ? 'Show Raw'
                                           : 'Beautify Code',
                                     ),

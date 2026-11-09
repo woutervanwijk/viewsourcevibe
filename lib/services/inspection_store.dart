@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -175,6 +176,61 @@ class InspectionStore extends ChangeNotifier {
     final merged = _mergeEstimates(_current.freshEstimates, estimates);
     if (merged == null) return;
     _set(_current.copyWith(freshEstimates: merged));
+  }
+
+  // Up to hundreds of per-URL size lookups finish per page; applying each
+  // with its own notifyListeners() re-runs every selector that many times.
+  // Queued results are merged and notified once per event-loop turn.
+  final Map<String, Observed<int>> _pendingEstimates = {};
+  final Map<String, Observed<int>> _pendingFreshEstimates = {};
+  int? _pendingEstimatesGen;
+  bool _estimateFlushScheduled = false;
+  bool _disposed = false;
+
+  /// Queues one own size lookup; everything queued in the same turn is
+  /// applied as one notification.
+  void queueEstimate(int gen, String url, Observed<int> result) {
+    if (!_accepts(gen)) return;
+    _queueEstimate(gen, _pendingEstimates, url, result);
+  }
+
+  /// Same as [queueEstimate] for the fresh (Lighthouse-like) load.
+  void queueFreshEstimate(int gen, String url, Observed<int> result) {
+    if (!_accepts(gen)) return;
+    _queueEstimate(gen, _pendingFreshEstimates, url, result);
+  }
+
+  void _queueEstimate(
+      int gen, Map<String, Observed<int>> into, String url, Observed<int> r) {
+    if (_pendingEstimatesGen != gen) {
+      // A newer navigation started: drop everything queued for the old one.
+      _pendingEstimatesGen = gen;
+      _pendingEstimates.clear();
+      _pendingFreshEstimates.clear();
+    }
+    into[url] = r;
+    if (_estimateFlushScheduled) return;
+    _estimateFlushScheduled = true;
+    scheduleMicrotask(_flushEstimates);
+  }
+
+  void _flushEstimates() {
+    _estimateFlushScheduled = false;
+    if (_disposed) return;
+    final gen = _pendingEstimatesGen;
+    final estimates = Map.of(_pendingEstimates);
+    final fresh = Map.of(_pendingFreshEstimates);
+    _pendingEstimates.clear();
+    _pendingFreshEstimates.clear();
+    if (gen == null) return;
+    if (estimates.isNotEmpty) applyEstimates(gen, estimates);
+    if (fresh.isNotEmpty) applyFreshEstimates(gen, fresh);
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   void setPrimaryDocument(DataSource? s) {

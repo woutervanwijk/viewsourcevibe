@@ -44,8 +44,6 @@ import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
-import 'package:view_source_vibe/services/derive/page_weight.dart'
-    show isSameImageVariant;
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
@@ -76,6 +74,12 @@ class HtmlService extends ChangeNotifier {
   final int _detectionIsolateThreshold;
   final DomTreeBuilder? _domTreeBuilder;
   final int _domTreeIsolateThreshold;
+
+  /// Documents up to this size are scanned/parsed synchronously (in a
+  /// getter, during build); larger ones go to an isolate. 32 KiB keeps the
+  /// synchronous pass well inside a frame; the old 256 KiB blocked the UI
+  /// for tens of ms on mid-size pages.
+  static const int defaultIsolateThreshold = 32 * 1024;
 
   /// Test hook: awaited right after a server file was built.
   @visibleForTesting
@@ -323,8 +327,12 @@ class HtmlService extends ChangeNotifier {
   Map<String, dynamic>? _lastPageWeight;
   bool _isExtractingMetadata = false;
 
-  double _webViewLoadingProgress = 0.0;
-  double get webViewLoadingProgress => _webViewLoadingProgress;
+  /// WebView load progress (0..1) on a notifier of its own, like
+  /// [webViewScrollNotifier]: progress events arrive many times per second
+  /// and must not notifyListeners() (which rebuilds the app) per tick.
+  final ValueNotifier<double> webViewLoadingProgressNotifier =
+      ValueNotifier(0.0);
+  double get webViewLoadingProgress => webViewLoadingProgressNotifier.value;
 
   // WebView extraction state
   bool _isWebViewLoading = false;
@@ -1381,9 +1389,10 @@ class HtmlService extends ChangeNotifier {
   }
 
   void updateWebViewLoadingProgress(double progress) {
-    if (_webViewLoadingProgress != progress) {
-      _webViewLoadingProgress = progress;
-      notifyListeners();
+    final notifier = webViewLoadingProgressNotifier;
+    if (notifier.value != progress) {
+      // Only the progress notifier fires; no notifyListeners() here.
+      notifier.value = progress;
     }
   }
 
@@ -1393,9 +1402,9 @@ class HtmlService extends ChangeNotifier {
     BrowserLoader? browserLoader,
     MetadataExtractor? metadataExtractor,
     DetectionScanner? detectionScanner,
-    int detectionIsolateThreshold = 256 * 1024,
+    int detectionIsolateThreshold = defaultIsolateThreshold,
     DomTreeBuilder? domTreeBuilder,
-    int domTreeIsolateThreshold = 256 * 1024,
+    int domTreeIsolateThreshold = defaultIsolateThreshold,
     SovereigntyAnalyzer? sovereigntyAnalyzer,
     Duration sovereigntyDebounce = const Duration(milliseconds: 500),
     BrowserCollect? browserCollect,
@@ -1487,7 +1496,7 @@ class HtmlService extends ChangeNotifier {
   void _resetLoadState({String? newUrl, bool notify = true}) {
     _clearBrowserDerivedData();
     _resetMetadata();
-    _webViewLoadingProgress = 0.0;
+    webViewLoadingProgressNotifier.value = 0.0;
     _beautifiedCache.clear();
     _isBeautifyEnabled = false;
 
@@ -2114,7 +2123,7 @@ Technical details: $message''';
     _webViewLoadingUrl = null;
     _isWebViewLoading = false;
     _isLoading = false;
-    _webViewLoadingProgress = 0.0; // Reset progress bar
+    webViewLoadingProgressNotifier.value = 0.0; // Reset progress bar
     notifyListeners();
   }
 
@@ -2131,6 +2140,7 @@ Technical details: $message''';
     _disposed = true;
     _cancelBrowserRefreshes();
     _sovereigntyTimer?.cancel();
+    webViewLoadingProgressNotifier.dispose();
     store.removeListener(notifyListeners);
     if (_ownsStore) store.dispose();
     _autoSaveTimer?.cancel();
@@ -4208,8 +4218,44 @@ Technical details: $message''';
   void _enrichMetadataWithSizes(String baseUrl) {
     if (_pageMetadata == null) return;
 
-    // Helper to find size using a 4-tier lookup strategy
     final timeline = resourceTimelineData;
+
+    // Index the timeline once per call, first entry wins (as firstWhere did).
+    // Each lookup below used to be a full scan with Uri.parse per candidate,
+    // and metadata lists hold dozens of links against hundreds of resources.
+    final byExact = <String, Map<String, dynamic>>{};
+    final byNormalized = <String, Map<String, dynamic>>{};
+    final byResourceKey = <String, Map<String, dynamic>>{};
+    final byFileQuery = <String, Map<String, dynamic>>{};
+    final byImageVariant = <String, Map<String, dynamic>>{};
+    for (final r in timeline) {
+      final name = r['name']?.toString();
+      if (name == null || name.isEmpty) continue;
+      byExact.putIfAbsent(name, () => r);
+      final u = Uri.tryParse(name);
+      if (u == null) continue;
+      final host = u.host.toLowerCase();
+      var normPath = u.path;
+      if (normPath.endsWith('/') && normPath.length > 1) {
+        normPath = normPath.substring(0, normPath.length - 1);
+      }
+      // areUrlsEqual: host (case-insensitive), path w/o trailing slash, query.
+      byNormalized.putIfAbsent('$host|$normPath|${u.query}', () => r);
+      // sameResourceModuloCacheBusters: host, raw path, query w/o cache-busters.
+      byResourceKey.putIfAbsent(
+          '$host|${u.path}|${queryWithoutCacheBusters(u)}', () => r);
+      // Filename suffix + query modulo cache-busters.
+      byFileQuery.putIfAbsent(
+          '${u.path.split('/').last}|${queryWithoutCacheBusters(u)}', () => r);
+      // Same image modulo srcset variant; only entries with a measured size.
+      final parts = u.path.split('/').where((p) => p.isNotEmpty).toList();
+      final last = parts.isEmpty ? '' : parts.last.toLowerCase();
+      if (last.isNotEmpty && r['transfer'] is int) {
+        byImageVariant.putIfAbsent('$host|$last', () => r);
+      }
+    }
+
+    // Helper to find size using the indexed tiers, same order as before.
     Map<String, dynamic>? findSize(String? src) {
       if (src == null || src.isEmpty) return null;
 
@@ -4222,83 +4268,47 @@ Technical details: $message''';
       if (timeline.isEmpty) return null;
 
       // Tier 1: Exact string match
-      var match = timeline.firstWhere(
-        (r) => r['name'] == src,
-        orElse: () => {},
-      );
-      if (match.isNotEmpty) {
-        return _sizeOf(match);
-      }
+      final exact = byExact[src];
+      if (exact != null) return _sizeOf(exact);
+
+      final u = Uri.tryParse(src);
+      if (u == null) return null;
+      final host = u.host.toLowerCase();
 
       // Tier 2: URL-normalised match (handles trailing slashes, case)
-      try {
-        match = timeline.firstWhere(
-          (r) => areUrlsEqual(r['name'].toString(), src),
-          orElse: () => {},
-        );
-        if (match.isNotEmpty) {
-          return _sizeOf(match);
-        }
-      } catch (_) {}
+      var normPath = u.path;
+      if (normPath.endsWith('/') && normPath.length > 1) {
+        normPath = normPath.substring(0, normPath.length - 1);
+      }
+      final normalized = byNormalized['$host|$normPath|${u.query}'];
+      if (normalized != null) return _sizeOf(normalized);
 
       // Tier 3: Same host+path, query equal modulo cache-busters (CDN
       // versioning like ?v=2 still matches). Content-changing params such as
       // image resize options (?width=112 vs ?width=264 or none) must NOT
       // match: they serve different bytes (e.g. thumbnail vs full original).
-      try {
-        final srcPath = Uri.parse(src).path;
-        if (srcPath.length > 3) {
-          match = timeline.firstWhere(
-            (r) => sameResourceModuloCacheBusters(src, r['name'].toString()),
-            orElse: () => {},
-          );
-          if (match.isNotEmpty) {
-            return _sizeOf(match);
-          }
-        }
-      } catch (_) {}
+      if (u.path.length > 3) {
+        final byCb = byResourceKey['$host|${u.path}|${queryWithoutCacheBusters(u)}'];
+        if (byCb != null) return _sizeOf(byCb);
+      }
 
       // Tier 4: Strict filename suffix match, same query modulo cache-busters.
       // Requires the filename to be preceded by '/' so "chunk.js"
       // does NOT match "vendor-chunk.js"
-      try {
-        final srcFileName = Uri.parse(src).path.split('/').last;
-        final srcQuery = queryWithoutCacheBusters(Uri.parse(src));
-        if (srcFileName.length > 4) {
-          match = timeline.firstWhere((r) {
-            final rName = r['name'].toString();
-            if (!(rName.endsWith('/$srcFileName') || rName == srcFileName)) {
-              return false;
-            }
-            try {
-              return queryWithoutCacheBusters(Uri.parse(rName)) == srcQuery;
-            } catch (_) {
-              return false;
-            }
-          }, orElse: () => {});
-          if (match.isNotEmpty) {
-            return _sizeOf(match);
-          }
-        }
-      } catch (_) {}
+      final fileName = u.path.split('/').last;
+      if (fileName.length > 4) {
+        final byFq = byFileQuery['$fileName|${queryWithoutCacheBusters(u)}'];
+        if (byFq != null) return _sizeOf(byFq);
+      }
 
-      // Tier 5: same image, different srcset variant. Image CDNs put the
-      // size in the path or query (images.ad.nl/<id>/0.50/.../slug), so the
-      // browser may have fetched a different variant than the markup's src:
-      // same host + same last path segment = the same image. Only when the
-      // browser actually measured that variant (a Present size); a
-      // cross-origin entry with 0/0/0 still has no real size.
-      try {
-        match = timeline.firstWhere(
-          (r) =>
-              isSameImageVariant(src, r['name'].toString()) &&
-              r['transfer'] is int,
-          orElse: () => {},
-        );
-        if (match.isNotEmpty) {
-          return _sizeOf(match);
-        }
-      } catch (_) {}
+      // Tier 5: same image, different srcset variant (same host + same last
+      // path segment), only when the browser measured that variant.
+      final parts = u.path.split('/').where((p) => p.isNotEmpty).toList();
+      final last = parts.isEmpty ? '' : parts.last.toLowerCase();
+      if (last.isNotEmpty) {
+        final img = byImageVariant['$host|$last'];
+        if (img != null) return _sizeOf(img);
+      }
 
       return null;
     }
@@ -4615,7 +4625,9 @@ Technical details: $message''';
     _lastRawPayload = (gen: gen, raw: raw is String ? raw : '$raw');
     BrowserSnapshot snapshot;
     try {
-      snapshot = parseBrowserPayload(raw, _platform, pageUrl: uri);
+      // Off-thread: the payload carries the whole rendered DOM as one JSON
+      // string, and decoding it here blocks the UI on every load poll.
+      snapshot = await parseBrowserPayloadAsync(raw, _platform, pageUrl: uri);
     } catch (e) {
       store.applyBrowserFailure(gen, Failed('Payload could not be read: $e'));
       return;
@@ -4704,7 +4716,8 @@ Technical details: $message''';
     if (stale()) return;
     BrowserSnapshot snapshot;
     try {
-      snapshot = parseBrowserPayload(raw.payload, _platform, pageUrl: url);
+      snapshot =
+          await parseBrowserPayloadAsync(raw.payload, _platform, pageUrl: url);
     } catch (e) {
       store.applyFreshLoad(gen, Failed('Fresh load could not be read: $e'));
       return;
@@ -4732,7 +4745,7 @@ Technical details: $message''';
       while (next < urls.length && !stale()) {
         final u = urls[next++];
         final result = await _estimateOf(gen, u);
-        if (!stale()) store.applyFreshEstimates(gen, {u: result});
+        if (!stale()) store.queueFreshEstimate(gen, u, result);
       }
     }
 
@@ -4782,7 +4795,7 @@ Technical details: $message''';
           while (next < urls.length && !stale()) {
             final url = urls[next++];
             final result = await _estimateOf(gen, url);
-            if (!stale()) store.applyEstimates(gen, {url: result});
+            if (!stale()) store.queueEstimate(gen, url, result);
           }
         }
 
