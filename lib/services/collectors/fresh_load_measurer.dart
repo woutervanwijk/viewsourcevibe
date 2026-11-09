@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart' show Size;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -10,16 +11,29 @@ import 'vsv_collect_js.dart';
 
 /// Loads a page once more, apart from the live browser, the way Lighthouse
 /// does: empty cache, phone-sized screen, waiting until the network is
-/// quiet. Returns the collector's raw payload (see `parseBrowserPayload`).
+/// quiet. Returns the collector's raw payload (see `parseBrowserPayload`)
+/// and a small screenshot of what it showed.
 abstract interface class FreshLoadMeasurer {
-  Future<Object?> measure(Uri url, NetworkQuietPolicy policy);
+  Future<FreshLoadRaw> measure(Uri url, NetworkQuietPolicy policy);
 }
+
+class FreshLoadRaw {
+  final Object? payload;
+
+  /// Small JPEG; null when the platform gave none.
+  final Uint8List? screenshot;
+  const FreshLoadRaw(this.payload, {this.screenshot});
+}
+
+/// Thumbnail settings for screenshots of a load (small JPEG).
+final kThumbnailScreenshot = ScreenshotConfiguration(
+    compressFormat: CompressFormat.JPEG, quality: 60, snapshotWidth: 240);
 
 /// Where no off-screen browser exists (Windows, Linux).
 class NoFreshLoad implements FreshLoadMeasurer {
   const NoFreshLoad();
   @override
-  Future<Object?> measure(Uri url, NetworkQuietPolicy policy) =>
+  Future<FreshLoadRaw> measure(Uri url, NetworkQuietPolicy policy) =>
       Future.error(UnsupportedError('not available on this platform'));
 }
 
@@ -51,7 +65,7 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
       Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
 
   @override
-  Future<Object?> measure(Uri url, NetworkQuietPolicy policy) async {
+  Future<FreshLoadRaw> measure(Uri url, NetworkQuietPolicy policy) async {
     final loaded = Completer<void>();
     final clock = Stopwatch()..start();
     final view = HeadlessInAppWebView(
@@ -99,8 +113,16 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
           lastChange = clock.elapsed;
         }
       }
-      return await controller.evaluateJavascript(
+      final payload = await controller.evaluateJavascript(
           source: 'window.__vsv_collect()');
+      Uint8List? shot;
+      try {
+        shot = await controller.takeScreenshot(
+            screenshotConfiguration: kThumbnailScreenshot);
+      } catch (_) {
+        // No screenshot is fine: the sizes are what was measured.
+      }
+      return FreshLoadRaw(payload, screenshot: shot);
     } finally {
       await view.dispose();
     }

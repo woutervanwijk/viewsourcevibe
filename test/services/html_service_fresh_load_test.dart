@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -16,12 +17,12 @@ import 'html_service_lifecycle_test.dart'
     show FakeServerFetcher, FakeBrowserLoader, okSnapshot;
 
 class FakeMeasurer implements FreshLoadMeasurer {
-  final Future<Object?> Function(Uri url) answer;
+  final Future<FreshLoadRaw> Function(Uri url) answer;
   final calls = <Uri>[];
   NetworkQuietPolicy? policy;
   FakeMeasurer(this.answer);
   @override
-  Future<Object?> measure(Uri url, NetworkQuietPolicy policy) {
+  Future<FreshLoadRaw> measure(Uri url, NetworkQuietPolicy policy) {
     calls.add(url);
     this.policy = policy;
     return answer(url);
@@ -36,7 +37,8 @@ void main() {
   late HtmlService service;
 
   HtmlService make(FreshLoadMeasurer? measurer,
-      {Future<int?> Function(String url)? lookup}) {
+      {Future<int?> Function(String url)? lookup,
+      Future<Uint8List?> Function()? screenshot}) {
     final s = HtmlService(
       store: store,
       serverFetcher: fetcher,
@@ -50,6 +52,7 @@ void main() {
       spaSettleDelay: Duration.zero,
       sizeLookup: lookup ?? (u) async => 40000,
       freshLoadMeasurer: measurer,
+      browserScreenshot: screenshot ?? () async => null,
     );
     s.setAppSettings(AppSettings()..useBrowserByDefault = true);
     return s;
@@ -71,11 +74,13 @@ void main() {
 
   test('not measured until asked; then the fresh load with its lookups',
       () async {
-    final m = FakeMeasurer((url) async => payload(url: '$url', observer: [
+    final m = FakeMeasurer((url) async => FreshLoadRaw(
+        payload(url: '$url', observer: [
           obs('https://a.test/app.js', tx: 1000),
           obs('https://a.test/late.js', tx: 9000),
           blockedEntry('https://ads.test/ad.jpg', 'img'),
-        ]));
+        ]),
+        screenshot: Uint8List.fromList([1, 2, 3])));
     service = make(m);
     await load('https://a.test/');
     expect(store.current.freshLoad, isA<Unavailable<BrowserSnapshot>>());
@@ -94,10 +99,30 @@ void main() {
     expect(page.lighthouseNote, startsWith('Lighthouse (fresh load)'));
     // The live load is untouched.
     expect(page.weight.breakdown['scripts']!.transfer, 1000);
+    // Its screenshot comes along; the live one is separate.
+    expect((page.freshScreenshot as Present<Uint8List>).value, [1, 2, 3]);
+    // 1 KB live vs ~50 KB fresh: the difference is explained.
+    expect(page.differenceNote, contains('cookie or consent wall'));
+  });
+
+  test('the live browser screenshot is taken once the page loaded',
+      () async {
+    service = make(const NoFreshLoad(),
+        screenshot: () async => Uint8List.fromList([9]));
+    await load('https://a.test/');
+    await pumpEventQueue();
+    expect((store.current.liveScreenshot as Present<Uint8List>).value, [9]);
+  });
+
+  test('no screenshot is said, never an empty image', () async {
+    service = make(const NoFreshLoad(), screenshot: () async => null);
+    await load('https://a.test/');
+    await pumpEventQueue();
+    expect(store.current.liveScreenshot, isA<Unavailable<Uint8List>>());
   });
 
   test('pending while it runs; a failure is shown, not a size', () async {
-    final gate = Completer<Object?>();
+    final gate = Completer<FreshLoadRaw>();
     service = make(FakeMeasurer((_) => gate.future));
     await load('https://a.test/');
     final run = service.measureFreshLoad();
@@ -111,14 +136,14 @@ void main() {
   });
 
   test('a navigation during the measurement drops its result', () async {
-    final gate = Completer<Object?>();
+    final gate = Completer<FreshLoadRaw>();
     service = make(FakeMeasurer((_) => gate.future));
     await load('https://a.test/');
     final run = service.measureFreshLoad();
     await pumpEventQueue();
     await load('https://b.test/');
-    gate.complete(payload(
-        url: 'https://a.test/', observer: [obs('https://a.test/x.js')]));
+    gate.complete(FreshLoadRaw(payload(
+        url: 'https://a.test/', observer: [obs('https://a.test/x.js')])));
     await run;
     expect(store.current.freshLoad, isA<Unavailable<BrowserSnapshot>>());
   });

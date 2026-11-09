@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
@@ -143,6 +145,14 @@ class PageSizeModel {
   /// The live load may still add resources (the network is not quiet yet).
   final bool stillCollecting;
 
+  /// Set when this load and the fresh load differ a lot (2× or more): says
+  /// what usually causes that. Null otherwise.
+  final String? differenceNote;
+
+  /// Thumbnails of what this load and the fresh load showed.
+  final Observed<Uint8List> liveScreenshot;
+  final Observed<Uint8List> freshScreenshot;
+
   /// The fresh (Lighthouse-like) load: not measured, Pending, Failed or its
   /// own model (whose [fresh] is not measured).
   final Observed<PageSizeModel> fresh;
@@ -158,12 +168,18 @@ class PageSizeModel {
     this.cacheNote,
     this.stillCollecting = false,
     this.fresh = kFreshNotMeasured,
+    this.differenceNote,
+    this.liveScreenshot = kNoScreenshot,
+    this.freshScreenshot = kNoScreenshot,
   });
 
   PageSizeModel _with(
           {required Observed<PageSizeModel> fresh,
           required bool stillCollecting,
-          required String? lighthouseNote}) =>
+          required String? lighthouseNote,
+          required String? differenceNote,
+          required Observed<Uint8List> liveScreenshot,
+          required Observed<Uint8List> freshScreenshot}) =>
       PageSizeModel(
         weight: weight,
         rows: rows,
@@ -175,6 +191,9 @@ class PageSizeModel {
         cacheNote: cacheNote,
         stillCollecting: stillCollecting,
         fresh: fresh,
+        differenceNote: differenceNote,
+        liveScreenshot: liveScreenshot,
+        freshScreenshot: freshScreenshot,
       );
 
   /// Sum of the known row sizes (the share bars are relative to it).
@@ -209,6 +228,22 @@ String sizeReasonWord(Observed<int> o) => switch (o) {
       _ => 'not reported',
     };
 
+/// Ratio from which the two loads count as very different.
+const kLoadDifferenceRatio = 2.0;
+
+/// A sentence on why [live] and [fresh] differ, when one is at least
+/// [kLoadDifferenceRatio] times the other; null otherwise or when a total
+/// is unknown.
+String? loadDifferenceNote(PageWeight live, PageWeight fresh) {
+  final a = live.transfer, b = fresh.transfer;
+  if (a == null || b == null || a == 0 || b == 0) return null;
+  final ratio = a > b ? a / b : b / a;
+  if (ratio < kLoadDifferenceRatio) return null;
+  return 'The two loads differ a lot (${_kb(a)} vs ${_kb(b)}). That can be '
+      'a cookie or consent wall, a paywall or a login page (the fresh load '
+      'starts without your cookies), or ads and content that vary per load';
+}
+
 /// [PageSizeModel.fresh] before the user asked for a fresh load.
 const kFreshNotMeasured =
     Unavailable<PageSizeModel>(UnavailableReason.notApplicable, 'not measured');
@@ -225,7 +260,14 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
       : lighthouseVerdict(live.value.weight, basis: 'this load');
   return Present(
     live.value._with(
-        fresh: fresh, stillCollecting: !p.browserSettled, lighthouseNote: note),
+        fresh: fresh,
+        stillCollecting: !p.browserSettled,
+        lighthouseNote: note,
+        differenceNote: fresh is Present<PageSizeModel>
+            ? loadDifferenceNote(live.value.weight, fresh.value.weight)
+            : null,
+        liveScreenshot: p.liveScreenshot,
+        freshScreenshot: p.freshScreenshot),
     source: live.source,
     provenance: live.provenance,
   );

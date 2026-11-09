@@ -65,6 +65,26 @@ void main() {
     // The verdict uses the fresh load and says so.
     expect(m.lighthouseNote, startsWith('Lighthouse (fresh load): good'));
     expect(m.stillCollecting, isFalse);
+    // 1 KB vs 10 KB: very different, with the usual causes named.
+    expect(m.differenceNote, contains('differ a lot'));
+    expect(m.differenceNote, contains('cookie or consent wall'));
+    expect(m.differenceNote, contains('paywall'));
+  });
+
+  test('loadDifferenceNote: only from 2x, never on an unknown total', () {
+    PageWeight w(int? t) => PageWeight(
+        breakdown: const {},
+        transfer: t,
+        decoded: null,
+        transferLowerBound: false,
+        transferEstimated: false,
+        decodedLowerBound: false,
+        documentSource: null,
+        snapshotTimeMs: null);
+    expect(loadDifferenceNote(w(1000), w(1900)), isNull);
+    expect(loadDifferenceNote(w(2000), w(1000)), isNotNull);
+    expect(loadDifferenceNote(w(1000), w(2000)), isNotNull);
+    expect(loadDifferenceNote(w(null), w(2000)), isNull);
   });
 
   test('without a fresh load the verdict is on this load; not measured', () {

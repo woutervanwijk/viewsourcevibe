@@ -138,10 +138,26 @@ class InspectionStore extends ChangeNotifier {
   }
 
   /// The fresh (Lighthouse-like) load: Pending while it runs, then its
-  /// result. A new result drops the size lookups of the previous one.
-  void applyFreshLoad(int gen, Observed<BrowserSnapshot> result) {
+  /// result and screenshot. A new result drops the lookups and screenshot of
+  /// the previous one.
+  void applyFreshLoad(int gen, Observed<BrowserSnapshot> result,
+      {Observed<Uint8List> screenshot = kNoScreenshot}) {
     if (!_accepts(gen)) return;
-    _set(_current.copyWith(freshLoad: result, freshEstimates: const {}));
+    _set(_current.copyWith(
+        freshLoad: result,
+        freshEstimates: const {},
+        freshScreenshot: screenshot));
+  }
+
+  /// A screenshot of the live browser; a missing one never replaces a
+  /// screenshot already there.
+  void applyLiveScreenshot(int gen, Observed<Uint8List> shot) {
+    if (!_accepts(gen)) return;
+    if (shot is! Present<Uint8List> &&
+        _current.liveScreenshot is Present<Uint8List>) {
+      return;
+    }
+    _set(_current.copyWith(liveScreenshot: shot));
   }
 
   /// Own size lookups for the fresh load, merged like [applyEstimates].

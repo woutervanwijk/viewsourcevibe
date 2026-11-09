@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
@@ -252,6 +254,59 @@ class _PageSizeViewState extends State<PageSizeView>
     );
   }
 
+  /// A small phone-shaped screenshot of a load; tap to see it larger.
+  Widget _thumbnail(
+      BuildContext context, String label, Observed<Uint8List> shot) {
+    final scheme = Theme.of(context).colorScheme;
+    final bytes = shot is Present<Uint8List> ? shot.value : null;
+    return Tooltip(
+      message: bytes == null ? '$label: no screenshot' : label,
+      child: InkWell(
+        onTap: bytes == null
+            ? null
+            : () => showDialog<void>(
+                  context: context,
+                  builder: (_) => Dialog(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(label),
+                        ),
+                        Flexible(child: Image.memory(bytes)),
+                      ],
+                    ),
+                  ),
+                ),
+        child: Column(
+          children: [
+            Container(
+              width: 52,
+              height: 92,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                border: Border.all(color: scheme.outlineVariant),
+                borderRadius: BorderRadius.circular(6),
+                color: scheme.surfaceContainerHighest,
+              ),
+              child: bytes == null
+                  ? Icon(Icons.image_not_supported_outlined,
+                      size: 18, color: scheme.onSurfaceVariant)
+                  : Image.memory(bytes,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      gaplessPlayback: true),
+            ),
+            const SizedBox(height: 2),
+            Text(label,
+                style: TextStyle(fontSize: 9, color: scheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _sizeText(String text) => Text(
         text,
         style: const TextStyle(
@@ -334,15 +389,45 @@ class _PageSizeViewState extends State<PageSizeView>
             selected: !identical(active, model),
             onTap: hasFresh ? () => setState(() => _showFresh = true) : null,
           ),
-          _note(
-              context,
-              'This load: what your browser fetched now (cache and ads vary'
-              '${model.stillCollecting ? '; still collecting' : ''}). '
-              'Fresh load: empty cache, phone screen, waits until the network '
-              'is quiet, like Lighthouse. Both are download sizes.',
-              italic: false),
-          if (model.lighthouseNote != null)
-            _note(context, '${model.lighthouseNote!}.', italic: false),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _note(
+                        context,
+                        'This load: what your browser fetched now (cache and '
+                        'ads vary${model.stillCollecting ? '; still collecting' : ''}). '
+                        'Fresh load: empty cache, phone screen, waits until '
+                        'the network is quiet, like Lighthouse. Both are '
+                        'download sizes.',
+                        italic: false),
+                    if (model.lighthouseNote != null)
+                      _note(context, '${model.lighthouseNote!}.',
+                          italic: false),
+                    if (model.differenceNote != null)
+                      _note(context, '${model.differenceNote!}.',
+                          italic: false),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 16, bottom: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _thumbnail(context, 'This load', model.liveScreenshot),
+                    if (fresh is! Unavailable<PageSizeModel>) ...[
+                      const SizedBox(width: 8),
+                      _thumbnail(context, 'Fresh load', model.freshScreenshot),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
           if (hasFresh)
             _note(
                 context,

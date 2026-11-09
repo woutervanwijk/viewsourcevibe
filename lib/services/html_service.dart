@@ -97,6 +97,7 @@ class HtmlService extends ChangeNotifier {
   final NativeCookieReader _nativeCookies;
   final ResourceSizeLookup _sizeLookup;
   final FreshLoadMeasurer _freshMeasurer;
+  final BrowserScreenshot? _browserScreenshotOverride;
   final BrowserPlatform _platform;
   final NetworkQuietPolicy _browserPoll;
   final Duration _spaSettleDelay;
@@ -1363,6 +1364,7 @@ class HtmlService extends ChangeNotifier {
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
     FreshLoadMeasurer? freshLoadMeasurer,
+    BrowserScreenshot? browserScreenshot,
     BrowserPlatform? browserPlatform,
     NetworkQuietPolicy browserPoll = NetworkQuietPolicy.live,
     Duration spaSettleDelay = const Duration(milliseconds: 400),
@@ -1376,6 +1378,7 @@ class HtmlService extends ChangeNotifier {
         _browserCollectOverride = browserCollect,
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
         _sizeLookup = sizeLookup ?? _lookupResourceSize,
+        _browserScreenshotOverride = browserScreenshot,
         _freshMeasurer = freshLoadMeasurer ??
             (HeadlessFreshLoadMeasurer.supported
                 ? const HeadlessFreshLoadMeasurer()
@@ -4535,6 +4538,28 @@ Technical details: $message''';
   /// [_maxEstimateLookups] per page, [_estimateConcurrency] at a time; each
   /// result goes to the store (which drops it when the navigation moved on).
   /// A call while a run is active makes that run look again when it is done.
+  static Observed<Uint8List> _screenshotOf(Uint8List? bytes) =>
+      bytes == null || bytes.isEmpty
+          ? const Unavailable(UnavailableReason.notReportedByPlatform,
+              'the browser gave no screenshot')
+          : Present(bytes, source: DataSource.browser);
+
+  /// A thumbnail of what the live browser shows now (for the Page size tab).
+  Future<void> _captureLiveScreenshot(int gen) async {
+    Uint8List? bytes;
+    try {
+      final override = _browserScreenshotOverride;
+      bytes = override != null
+          ? await override()
+          : await activeWebViewController?.takeScreenshot(
+              screenshotConfiguration: kThumbnailScreenshot);
+    } catch (e) {
+      debugPrint('Screenshot unavailable: $e');
+    }
+    if (_disposed || gen != store.current.generation) return;
+    store.applyLiveScreenshot(gen, _screenshotOf(bytes));
+  }
+
   /// Loads the page once more like Lighthouse (empty cache, phone screen,
   /// quiet network) in an off-screen browser, then sizes what it could not
   /// see with the app's own lookups. Only on the user's request: it is a
@@ -4548,7 +4573,7 @@ Technical details: $message''';
     final url =
         browser is Present<BrowserSnapshot> ? browser.value.url : target.url;
     store.applyFreshLoad(gen, const Pending());
-    Object? raw;
+    FreshLoadRaw raw;
     try {
       raw = await _freshMeasurer.measure(url, NetworkQuietPolicy.fresh);
     } on UnsupportedError catch (e) {
@@ -4564,7 +4589,7 @@ Technical details: $message''';
     if (stale()) return;
     BrowserSnapshot snapshot;
     try {
-      snapshot = parseBrowserPayload(raw, _platform, pageUrl: url);
+      snapshot = parseBrowserPayload(raw.payload, _platform, pageUrl: url);
     } catch (e) {
       store.applyFreshLoad(gen, Failed('Fresh load could not be read: $e'));
       return;
@@ -4580,7 +4605,8 @@ Technical details: $message''';
           });
       return;
     }
-    store.applyFreshLoad(gen, Present(snapshot, source: DataSource.browser));
+    store.applyFreshLoad(gen, Present(snapshot, source: DataSource.browser),
+        screenshot: _screenshotOf(raw.screenshot));
 
     // Hidden sizes, like the live load (shared lookup cache per page).
     final urls = estimateTargetsOf(store.current.freshLoad, const {},
@@ -4771,6 +4797,7 @@ Technical details: $message''';
   void _scheduleBrowserRefreshes(int gen, String url, Uri uri) {
     _cancelBrowserRefreshes();
     final policy = _browserPoll;
+    _captureLiveScreenshot(gen).ignore();
     if (!policy.enabled) {
       store.markBrowserSettled(gen);
       return;
@@ -4793,6 +4820,7 @@ Technical details: $message''';
         }
         if (policy.done(elapsed: now, sinceLastChange: now - lastChange)) {
           store.markBrowserSettled(gen);
+          _captureLiveScreenshot(gen).ignore();
         } else {
           next();
         }

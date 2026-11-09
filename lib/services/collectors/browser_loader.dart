@@ -21,6 +21,9 @@ typedef NativeCookieReader = Future<List<Map>> Function(String url);
 /// cannot be determined.
 typedef ResourceSizeLookup = Future<int?> Function(String url);
 
+/// A small screenshot of the live browser; null when there is none.
+typedef BrowserScreenshot = Future<Uint8List?> Function();
+
 BrowserPlatform browserPlatformFor(TargetPlatform p) => switch (p) {
       TargetPlatform.iOS => BrowserPlatform.ios,
       TargetPlatform.macOS => BrowserPlatform.macos,
