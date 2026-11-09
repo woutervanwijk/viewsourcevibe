@@ -23,6 +23,9 @@ import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 import 'package:view_source_vibe/widgets/browser_view.dart';
 import 'package:view_source_vibe/widgets/divergence_banner.dart';
 
+/// Key of the [HomeScreen]; the Cmd/Ctrl+arrow shortcuts switch its tabs.
+final GlobalKey<HomeScreenState> homeScreenKey = GlobalKey<HomeScreenState>();
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -32,11 +35,12 @@ class HomeScreen extends StatefulWidget {
   static int structureBuilds = 0;
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
+  final _tabScrollController = TabBarScrollController();
   bool _lastIsHtmlOrXml = false;
   bool _lastShowMetadataTabs = false;
   bool _lastShowServerTabs = false;
@@ -136,7 +140,47 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _tabController.dispose();
+    _tabScrollController.dispose();
     super.dispose();
+  }
+
+  /// Switch one tab left/right, wrapping around (Cmd/Ctrl+ArrowLeft/Right).
+  void switchTab(int delta) {
+    final count = _tabController.length;
+    if (count < 2) return;
+    var index = (_tabController.index + delta) % count;
+    if (index < 0) index += count;
+    _tabController.animateTo(index);
+  }
+
+  /// Current tab index; tests check keyboard tab switching with it.
+  @visibleForTesting
+  int get currentTabIndex => _tabController.index;
+
+  /// Horizontal offset of the tab strip; tests check wheel scrolling with it.
+  @visibleForTesting
+  double get tabStripOffset => _tabScrollController.hasClients
+      ? _tabScrollController.position.pixels
+      : 0;
+
+  /// A mouse wheel over the tab strip scrolls it horizontally. The strip is
+  /// a horizontal scrollable, which by default only follows dx (trackpad),
+  /// not the wheel's dy — so on macOS/Windows the wheel did nothing here.
+  void _onTabStripPointerSignal(PointerSignalEvent signal) {
+    if (signal is! PointerScrollEvent) return;
+    final dy = signal.scrollDelta.dy;
+    if (dy == 0 || signal.scrollDelta.dx != 0) return;
+    // With an axis-flip modifier (e.g. shift) the built-in handling already
+    // maps the wheel onto the horizontal axis.
+    final modifiers = ScrollConfiguration.of(context).pointerAxisModifiers;
+    if (HardwareKeyboard.instance.logicalKeysPressed.any(modifiers.contains)) {
+      return;
+    }
+    GestureBinding.instance.pointerSignalResolver.register(signal, (_) {
+      if (_tabScrollController.hasClients) {
+        _tabScrollController.position.pointerScroll(dy);
+      }
+    });
   }
 
   Future<void> _handleRefresh() async {
@@ -511,21 +555,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               },
               child: Column(
                 children: [
-                  const UrlInput(),
+                  UrlInput(key: urlInputKey),
                   const DivergenceBanner(),
                   // The Toolbar with Navigation Tabs
-                  Container(
-                    color: Theme.of(context).colorScheme.surface,
-                    child: TabBar(
-                      controller: _tabController,
-                      isScrollable: true,
-                      tabAlignment: TabAlignment.start,
-                      labelColor: Theme.of(context).colorScheme.primary,
-                      unselectedLabelColor:
-                          Theme.of(context).colorScheme.onSurfaceVariant,
-                      indicatorColor: Theme.of(context).colorScheme.primary,
-                      indicatorSize: TabBarIndicatorSize.label,
-                      tabs: _getTabs(htmlService),
+                  Listener(
+                    onPointerSignal: _onTabStripPointerSignal,
+                    child: Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      child: TabBar(
+                        controller: _tabController,
+                        scrollController: _tabScrollController,
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        labelColor: Theme.of(context).colorScheme.primary,
+                        unselectedLabelColor:
+                            Theme.of(context).colorScheme.onSurfaceVariant,
+                        indicatorColor: Theme.of(context).colorScheme.primary,
+                        indicatorSize: TabBarIndicatorSize.label,
+                        tabs: _getTabs(htmlService),
+                      ),
                     ),
                   ),
                   const Divider(height: 1),

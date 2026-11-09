@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
@@ -10,6 +11,7 @@ import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/file_system_service.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/widgets/shared_content_wrapper.dart';
+import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:app_links/app_links.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:universal_io/io.dart';
@@ -487,11 +489,55 @@ class _ThemeState {
   int get hashCode => themeMode.hashCode ^ darkMode.hashCode;
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => MyAppState();
+}
+
+class MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Browser-style shortcuts, handled before any focused field (the
+    // location bar, the find panel, the editor) can consume the keys.
+    FocusManager.instance.addEarlyKeyEventHandler(_handleShortcut);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeEarlyKeyEventHandler(_handleShortcut);
+    super.dispose();
+  }
+
+  /// Cmd+L (macOS) / Ctrl+L (Windows, Linux) focuses the location bar;
+  /// Cmd/Ctrl+ArrowLeft/ArrowRight move through the tabs.
+  KeyEventResult _handleShortcut(KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final cmdOrCtrl = pressed.contains(LogicalKeyboardKey.metaLeft) ||
+        pressed.contains(LogicalKeyboardKey.metaRight) ||
+        pressed.contains(LogicalKeyboardKey.controlLeft) ||
+        pressed.contains(LogicalKeyboardKey.controlRight);
+    if (!cmdOrCtrl) return KeyEventResult.ignored;
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.keyL:
+        urlInputKey.currentState?.focusLocationBar();
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowLeft:
+        homeScreenKey.currentState?.switchTab(-1);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowRight:
+        homeScreenKey.currentState?.switchTab(1);
+        return KeyEventResult.handled;
+      default:
+        return KeyEventResult.ignored;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -508,7 +554,7 @@ class MyApp extends StatelessWidget {
             : themeState.themeMode == ThemeModeOption.dark;
 
         return MaterialApp(
-          navigatorKey: navigatorKey,
+          navigatorKey: MyApp.navigatorKey,
           title: 'View Source Vibe',
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
@@ -543,7 +589,7 @@ class MyApp extends StatelessWidget {
         );
       },
       // This child is created once and reused even when MaterialApp rebuilds
-      child: const SharedContentWrapper(child: HomeScreen()),
+      child: SharedContentWrapper(child: HomeScreen(key: homeScreenKey)),
     );
   }
 }

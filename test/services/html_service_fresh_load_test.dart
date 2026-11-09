@@ -96,7 +96,7 @@ void main() {
     // 1000 + 9000 measured + 40000 own lookup (+ the server document).
     expect(fresh.weight.estimatedTransfer, 40000);
     expect(fresh.weight.measuredTransfer, greaterThanOrEqualTo(10000));
-    expect(page.lighthouseNote, startsWith('Lighthouse (fresh load)'));
+    expect(page.lighthouseNote, startsWith('Verdict (fresh load)'));
     // The live load is untouched.
     expect(page.weight.breakdown['scripts']!.transfer, 1000);
     // Its screenshot comes along; the live one is separate.

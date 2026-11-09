@@ -96,7 +96,11 @@ void main() {
   late Future<List<Map>> Function(String url) native;
 
   HtmlService make(
-      {NetworkQuietPolicy? poll, Duration? late, bool scrollToLoadLazy = false}) {
+      {NetworkQuietPolicy? poll,
+      Duration? late,
+      bool scrollToLoadLazy = false,
+      bool cleanCookies = false,
+      Future<void> Function()? deleteAllCookies}) {
     final s = HtmlService(
       store: store,
       serverFetcher: fetcher,
@@ -107,6 +111,7 @@ void main() {
         return collect(url);
       },
       nativeCookies: (url) => native(url),
+      deleteAllCookies: deleteAllCookies,
       browserPlatform: BrowserPlatform.macos,
       browserPoll: poll ?? NetworkQuietPolicy.off,
       lateCollectDelay: late ?? const Duration(milliseconds: 10),
@@ -114,7 +119,8 @@ void main() {
     );
     s.setAppSettings(AppSettings()
       ..useBrowserByDefault = true
-      ..scrollToLoadLazy = scrollToLoadLazy);
+      ..scrollToLoadLazy = scrollToLoadLazy
+      ..cleanCookies = cleanCookies);
     return s;
   }
 
@@ -139,6 +145,36 @@ void main() {
 
   BrowserSnapshot browserOf(HtmlService s) =>
       (s.store.current.browser as Present<BrowserSnapshot>).value;
+
+  group('cleanCookies setting', () {
+    test('cookies are deleted before every URL load when enabled', () async {
+      var deletions = 0;
+      service.dispose();
+      service = make(
+          cleanCookies: true, deleteAllCookies: () async => deletions++);
+      await service.loadUrl('https://a.test/');
+      fetcher.pending.last
+          .complete(okSnapshot('https://a.test/', '<html>S</html>'));
+      await pumpEventQueue();
+      expect(deletions, 1);
+      await service.loadUrl('https://b.test/');
+      fetcher.pending.last
+          .complete(okSnapshot('https://b.test/', '<html>B</html>'));
+      await pumpEventQueue();
+      expect(deletions, 2);
+      // the loads still happened
+      expect(loader.calls.map((u) => u.toString()),
+          ['https://a.test/', 'https://b.test/']);
+    });
+
+    test('by default cookies are kept', () async {
+      var deletions = 0;
+      service.dispose();
+      service = make(deleteAllCookies: () async => deletions++);
+      await loadAndAnswer('https://a.test/');
+      expect(deletions, 0);
+    });
+  });
 
   group('syncWebViewState through the collector', () {
     test('the payload reaches the store; DOM becomes the file content',

@@ -29,6 +29,8 @@ class AppSettings with ChangeNotifier {
   static const String _prefsWrapText = 'wrapText';
   static const String _prefsUseBrowserByDefault = 'useBrowserByDefault';
   static const String _prefsScrollToLoadLazy = 'scrollToLoadLazy';
+  static const String _prefsDisableBrowserCache = 'disableBrowserCache';
+  static const String _prefsCleanCookies = 'cleanCookies';
   static const String _prefsHomeJurisdiction = 'homeJurisdiction';
   static const String _prefsSiteJurisdictions = 'siteJurisdictions';
   static const int _maxSiteJurisdictions = 255;
@@ -49,6 +51,8 @@ class AppSettings with ChangeNotifier {
   bool _wrapText = false;
   bool _useBrowserByDefault = true;
   bool _scrollToLoadLazy = true;
+  bool _disableBrowserCache = false;
+  bool _cleanCookies = false;
   String? _homeJurisdiction; // null = from device locale
   Map<String, String> _siteJurisdictions = {}; // domain -> jurisdiction
 
@@ -64,6 +68,12 @@ class AppSettings with ChangeNotifier {
   /// Scroll the page once after it settles, so lazy content (loading=lazy,
   /// IntersectionObserver) is fetched and measured for real.
   bool get scrollToLoadLazy => _scrollToLoadLazy;
+
+  /// Never use the in-app browser's cache: every load is a fresh download.
+  bool get disableBrowserCache => _disableBrowserCache;
+
+  /// Clear all cookies before every page load: each visit starts cookieless.
+  bool get cleanCookies => _cleanCookies;
 
   /// Fallback jurisdiction for sites whose legal home isn't detected;
   /// null = from the device locale.
@@ -288,6 +298,22 @@ class AppSettings with ChangeNotifier {
     }
   }
 
+  set disableBrowserCache(bool value) {
+    if (_disableBrowserCache != value) {
+      _disableBrowserCache = value;
+      _saveSetting(_prefsDisableBrowserCache, value);
+      notifyListeners();
+    }
+  }
+
+  set cleanCookies(bool value) {
+    if (_cleanCookies != value) {
+      _cleanCookies = value;
+      _saveSetting(_prefsCleanCookies, value);
+      notifyListeners();
+    }
+  }
+
   /// Manually chosen legal home for a site (by registrable domain).
   String? siteJurisdiction(String domain) => _siteJurisdictions[domain];
 
@@ -337,6 +363,8 @@ class AppSettings with ChangeNotifier {
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
     _useBrowserByDefault = _prefs!.getBool(_prefsUseBrowserByDefault) ?? true;
     _scrollToLoadLazy = _prefs!.getBool(_prefsScrollToLoadLazy) ?? true;
+    _disableBrowserCache = _prefs!.getBool(_prefsDisableBrowserCache) ?? false;
+    _cleanCookies = _prefs!.getBool(_prefsCleanCookies) ?? false;
     final home = _prefs!.getString(_prefsHomeJurisdiction);
     _homeJurisdiction = (home == null || home.isEmpty) ? null : home;
     try {
@@ -374,6 +402,8 @@ class AppSettings with ChangeNotifier {
     _wrapText = false;
     _useBrowserByDefault = true;
     _scrollToLoadLazy = true;
+    _disableBrowserCache = false;
+    _cleanCookies = false;
 
     // Save the default values
     _saveAllSettings();
@@ -392,6 +422,8 @@ class AppSettings with ChangeNotifier {
     await _saveSetting(_prefsWrapText, _wrapText);
     await _saveSetting(_prefsUseBrowserByDefault, _useBrowserByDefault);
     await _saveSetting(_prefsScrollToLoadLazy, _scrollToLoadLazy);
+    await _saveSetting(_prefsDisableBrowserCache, _disableBrowserCache);
+    await _saveSetting(_prefsCleanCookies, _cleanCookies);
   }
 
   // Theme categories and metadata
