@@ -84,7 +84,7 @@ void main() {
                   tx: bt(50 * 1024), frameOrigin: 'https://ads.test'),
             ]),
             source: DataSource.browser));
-    expect(find.textContaining('Lighthouse (fresh load)'), findsOneWidget);
+    expect(find.textContaining('Verdict (fresh load)'), findsOneWidget);
     expect(find.text('Third-party iframes (ads, embeds) (1)'), findsOneWidget);
     expect(find.textContaining('third-party iframe'), findsWidgets);
     expect(find.textContaining('Files below: fresh load'), findsOneWidget);
