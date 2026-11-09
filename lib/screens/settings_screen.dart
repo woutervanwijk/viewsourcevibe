@@ -147,6 +147,28 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 _settingsTile(
                   context: context,
+                  icon: Icons.no_flash_outlined,
+                  title: 'Disable browser cache',
+                  description:
+                      'The in-app browser never uses its cache: every page and resource is downloaded fresh (like the Fresh load measurement)',
+                  control: Switch(
+                    value: settings.disableBrowserCache,
+                    onChanged: (value) => settings.disableBrowserCache = value,
+                  ),
+                ),
+                _settingsTile(
+                  context: context,
+                  icon: Icons.cookie_outlined,
+                  title: 'Always clean cookies',
+                  description:
+                      'Clear all cookies before every page load, so each visit starts without cookies (consent walls and paywalls may reappear)',
+                  control: Switch(
+                    value: settings.cleanCookies,
+                    onChanged: (value) => settings.cleanCookies = value,
+                  ),
+                ),
+                _settingsTile(
+                  context: context,
                   icon: Icons.gavel_outlined,
                   title: 'Default site jurisdiction',
                   description:
