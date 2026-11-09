@@ -102,6 +102,16 @@ const String vsvResourceBootstrapJs = r'''
           to: performance.timeOrigin || null, e: out}, '*');
     } catch (e) {}
   }
+  // Top frame: an image served from the memory cache creates no timing
+  // entry, but it still fires 'load'; that is a reason to collect again too.
+  if (isTop) {
+    try {
+      document.addEventListener('load', function(ev) {
+        var t = ev.target;
+        if (t && t.tagName === 'IMG') notifyApp();
+      }, true);
+    } catch (e) {}
+  }
   // Top frame: take what the iframes post. Only messages of this shape from
   // another window; the entries are page-provided data, like the timings.
   if (isTop) {
@@ -271,9 +281,24 @@ window.__vsv_collect = function() {
           tx: num(e.transferSize), enc: num(e.encodedBodySize), dec: num(e.decodedBodySize)});
       }
     }
+    // Images actually shown (loaded, with pixels), as the page uses them.
+    // A lazy placeholder that has not loaded yet is not one.
+    var shown = [];
+    try {
+      var imgs = document.images, seen = {};
+      for (var j = 0; j < imgs.length && shown.length < 2000; j++) {
+        var im = imgs[j];
+        if (!im.complete || !(im.naturalWidth > 0)) continue;
+        var src = im.currentSrc || im.src;
+        if (!src || src.indexOf('http') !== 0 || seen[src]) continue;
+        seen[src] = true;
+        shown.push(src);
+      }
+    } catch (e) {}
     return {
       bootstrap: bootstrap,
       observer: observer,
+      shown: shown,
       patch: (window.__vsv_patch || []).slice(0),
       dropped: window.__vsv_obsDropped || 0,
       patchDropped: window.__vsv_patchDropped || 0

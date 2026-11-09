@@ -218,6 +218,9 @@ String sizeReasonWord(Observed<int> o) => switch (o) {
           UnavailableReason.blockedBySite ||
           UnavailableReason.notExposedToPage when d.contains('cross-origin') =>
             'cross-origin',
+          UnavailableReason.notReportedByPlatform
+              when d.contains('memory cache') =>
+            'shown, but served from the memory cache',
           UnavailableReason.blockedByPlatform => 'blocked by the platform',
           UnavailableReason.blockedBySite => 'blocked by the site',
           UnavailableReason.notExposedToPage => 'not exposed to the page',

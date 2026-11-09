@@ -30,7 +30,7 @@ void main() {
   test('every fixture is marked synthetic with a note', () {
     final dir = Directory('test/fixtures/browser');
     final files = dir.listSync().whereType<File>().toList();
-    expect(files.length, 8);
+    expect(files.length, 9);
     for (final f in files) {
       final j = jsonDecode(f.readAsStringSync()) as Map;
       expect(j['_synthetic'], true, reason: f.path);
@@ -139,9 +139,52 @@ void main() {
     expect(vsvCollectJs, contains('item.fr = 1'));
   });
 
+  test('images on screen without a timing entry are added, unmeasured', () {
+    final s = parse('shown_images.json', BrowserPlatform.ios,
+        'https://example.com/');
+    // The timed one keeps its measured entry.
+    final logo = byUrl(s, 'https://example.com/logo.png');
+    expect(logo.source, ResourceSource.observer);
+    expect(present(logo.transfer), 3000);
+    for (final u in [
+      'https://cdn.example.net/big1.gif',
+      'https://example.com/rel/big2.gif',
+    ]) {
+      final e = byUrl(s, u);
+      expect(e.source, ResourceSource.shownImage);
+      expect(e.type, 'img');
+      // Never 0: the size is unknown until the app's own lookup.
+      expect(unavailable(e.transfer), UnavailableReason.notReportedByPlatform);
+      expect((e.transfer as Unavailable).detail, contains('memory cache'));
+    }
+    // A later timing entry replaces the shown one; a shown one never
+    // replaces a timing entry.
+    final shown = byUrl(s, 'https://cdn.example.net/big1.gif');
+    final timed = ResourceEntry(
+        url: shown.url,
+        type: 'img',
+        source: ResourceSource.observer,
+        startTime: logo.startTime,
+        duration: logo.duration,
+        transfer: logo.transfer,
+        decoded: logo.decoded);
+    expect(mergeResources([shown], [timed]).single.source,
+        ResourceSource.observer);
+    expect(mergeResources([timed], [shown]).single.source,
+        ResourceSource.observer);
+  });
+
+  test('the collector lists loaded images with pixels only', () {
+    expect(vsvCollectJs, contains('im.complete'));
+    expect(vsvCollectJs, contains('naturalWidth > 0'));
+    expect(vsvCollectJs, contains('currentSrc'));
+  });
+
   test('the top frame tells the app about late resources, batched', () {
     expect(vsvResourceBootstrapJs, contains("callHandler('vsvResources'"));
     expect(vsvResourceBootstrapJs, contains('notifyTimer'));
+    // Memory-cache images have no timing entry but fire 'load'.
+    expect(vsvResourceBootstrapJs, contains("addEventListener('load'"));
   });
 
   test('macOS: patch-only entry carries content-length as transfer', () {

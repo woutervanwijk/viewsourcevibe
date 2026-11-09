@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/page_weight.dart';
 
@@ -108,5 +109,29 @@ void main() {
         isA<Pending<PageSizeModel>>());
     expect(freshOf(p.copyWith(freshLoad: const Failed('timeout'))),
         isA<Failed<PageSizeModel>>());
+  });
+
+  test('a shown image without timing is looked up and explained', () {
+    const detail = 'shown on the page, but the browser reported no timing '
+        'for it (likely served from its memory cache)';
+    final p = inspection(
+        browser: browserSnap(resources: [
+      res('https://a.test/big.gif',
+          type: 'img',
+          tx: const Unavailable(UnavailableReason.notReportedByPlatform, detail),
+          dec:
+              const Unavailable(UnavailableReason.notReportedByPlatform, detail)),
+    ]));
+    expect(estimateTargets(p), ['https://a.test/big.gif']);
+    final m = (derivePageSize(p) as Present<PageSizeModel>).value;
+    expect(m.rows.single.sizeLabel,
+        'size unknown (shown, but served from the memory cache)');
+    final sized = (derivePageSize(p.copyWith(resourceEstimates: {
+      'https://a.test/big.gif': Present(3 * 1024 * 1024,
+          source: DataSource.server, provenance: Provenance.estimated),
+    })) as Present<PageSizeModel>)
+        .value;
+    expect(sized.rows.single.sizeLabel, '≈ 3,072 KB');
+    expect(sized.weight.breakdown['images']!.transfer, 3 * 1024 * 1024);
   });
 }

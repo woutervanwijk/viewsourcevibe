@@ -9,7 +9,10 @@ extension BrowserPlatformX on BrowserPlatform {
 }
 
 /// Where a resource entry came from. The observer wins over the patch (B13).
-enum ResourceSource { observer, patch }
+/// Where an entry came from: the resource-timing observer, the fetch/XHR
+/// patch, or an image shown on the page that neither reported (WebKit gives
+/// no timing entry for an image served from its memory cache).
+enum ResourceSource { observer, patch, shownImage }
 
 /// The serialized DOM as the browser currently holds it.
 class RenderedDom {
