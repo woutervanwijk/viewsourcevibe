@@ -99,6 +99,10 @@ class HtmlService extends ChangeNotifier {
   final MetadataExtractor _metadataExtractor;
   final BrowserCollect? _browserCollectOverride;
   final NativeCookieReader _nativeCookies;
+
+  /// Deletes every cookie (the "Always clean cookies" setting); a seam for
+  /// tests.
+  final Future<void> Function() _deleteAllCookies;
   final ResourceSizeLookup _sizeLookup;
   final FreshLoadMeasurer _freshMeasurer;
   final BrowserScreenshot? _browserScreenshotOverride;
@@ -1397,6 +1401,7 @@ class HtmlService extends ChangeNotifier {
     BrowserCollect? browserCollect,
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
+    Future<void> Function()? deleteAllCookies,
     FreshLoadMeasurer? freshLoadMeasurer,
     BrowserScreenshot? browserScreenshot,
     BrowserPlatform? browserPlatform,
@@ -1412,6 +1417,8 @@ class HtmlService extends ChangeNotifier {
         _domTreeIsolateThreshold = domTreeIsolateThreshold,
         _browserCollectOverride = browserCollect,
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
+        _deleteAllCookies = deleteAllCookies ??
+            (() => CookieManager.instance().deleteAllCookies()),
         _sizeLookup = sizeLookup ?? _lookupResourceSize,
         _browserScreenshotOverride = browserScreenshot,
         _freshMeasurer = freshLoadMeasurer ??
@@ -1539,6 +1546,13 @@ class HtmlService extends ChangeNotifier {
     }
 
     _pushPreviousPageToNavigationStack(url);
+
+    // "Always clean cookies": every navigation starts without cookies.
+    if (_appSettings?.cleanCookies ?? false) {
+      try {
+        await _deleteAllCookies();
+      } catch (_) {}
+    }
 
     // 1. Clean state and update main URL
     // We don't notify yet because we want to set the correct loading path first
@@ -4538,12 +4552,30 @@ Technical details: $message''';
       await Future.wait(batch.map((item) async {
         final url = (item['src'] ?? item['href']) as String;
         int? size;
+        var failed = false;
         try {
           size = await _cachedSizeLookup(gen, url);
-        } catch (e) {
-          debugPrint('Size lookup failed for $url: $e');
+        } catch (_) {
+          // A refused or dropped connection is an expected outcome for
+          // consent/tracker hosts; the size is marked unknown below instead
+          // of logging a scary error.
+          failed = true;
         }
-        if (size == null || stale() || !_sizeUnknown(item)) return;
+        if (stale() || !_sizeUnknown(item)) return;
+        if (size == null) {
+          if (!failed) return;
+          // Keep any more specific reason the browser/platform already gave.
+          final existing = item['size'];
+          if (existing is Map && existing['unknownReason'] is String) return;
+          item['size'] = {
+            'transfer': null,
+            'decoded': null,
+            'estimated': true,
+            'unknownReason': 'own lookup failed',
+          };
+          changed = true;
+          return;
+        }
         // Content-Length is the wire size; the decoded size stays unknown.
         item['size'] = {'transfer': size, 'decoded': null, 'estimated': true};
         changed = true;

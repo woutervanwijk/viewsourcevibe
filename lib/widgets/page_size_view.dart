@@ -401,7 +401,7 @@ class _PageSizeViewState extends State<PageSizeView>
                         'This load: what your browser fetched now (cache and '
                         'ads vary${model.stillCollecting ? '; still collecting' : ''}). '
                         'Fresh load: empty cache, phone screen, waits until '
-                        'the network is quiet, like Lighthouse. Both are '
+                        'the network is quiet. Both are '
                         'download sizes.',
                         italic: false),
                     if (model.lighthouseNote != null)
@@ -439,7 +439,10 @@ class _PageSizeViewState extends State<PageSizeView>
           if (active.estimateNote != null)
             _note(context, '${active.estimateNote!}.'),
           if (active.declaredNote != null)
-            _note(context, '${active.declaredNote!}.',),
+            _note(
+              context,
+              '${active.declaredNote!}.',
+            ),
           if (weight.documentSource != null)
             _note(context,
                 'The page document is counted from the server response.',

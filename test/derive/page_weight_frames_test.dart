@@ -64,7 +64,7 @@ void main() {
     expect(f.weight.transfer, 10000);
     expect(f.rows.first.url, 'https://a.test/late.js');
     // The verdict uses the fresh load and says so.
-    expect(m.lighthouseNote, startsWith('Lighthouse (fresh load): good'));
+    expect(m.lighthouseNote, startsWith('Verdict (fresh load): good'));
     expect(m.stillCollecting, isFalse);
     // 1 KB vs 10 KB: very different, with the usual causes named.
     expect(m.differenceNote, contains('differ a lot'));
@@ -92,7 +92,7 @@ void main() {
     final p = inspection(browser: page);
     final m = (derivePageSize(p) as Present<PageSizeModel>).value;
     expect(m.fresh, isA<Unavailable<PageSizeModel>>());
-    expect(m.lighthouseNote, startsWith('Lighthouse (this load)'));
+    expect(m.lighthouseNote, startsWith('Verdict (this load)'));
     expect(m.stillCollecting, isTrue);
     expect(m.rows.where((r) => r.thirdPartyFrame).map((r) => r.url).toSet(), {
       'https://ads.test/frame.html',

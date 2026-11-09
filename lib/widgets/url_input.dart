@@ -6,14 +6,17 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/utils/path_name.dart';
 
+/// Key of the home screen's [UrlInput]; the Cmd/Ctrl+L shortcut focuses it.
+final GlobalKey<UrlInputState> urlInputKey = GlobalKey<UrlInputState>();
+
 class UrlInput extends StatefulWidget {
   const UrlInput({super.key});
 
   @override
-  State<UrlInput> createState() => _UrlInputState();
+  State<UrlInput> createState() => UrlInputState();
 }
 
-class _UrlInputState extends State<UrlInput> {
+class UrlInputState extends State<UrlInput> {
   final _urlController = TextEditingController();
   final _focusNode = FocusNode();
   String _errorMessage = '';
@@ -46,6 +49,13 @@ class _UrlInputState extends State<UrlInput> {
 
     // If it's already just a filename, return as-is
     return path;
+  }
+
+  /// Focus the field and select its text, like Cmd/Ctrl+L in a browser.
+  void focusLocationBar() {
+    _focusNode.requestFocus();
+    _urlController.selection =
+        TextSelection(baseOffset: 0, extentOffset: _urlController.text.length);
   }
 
   void _onUrlChanged() {
@@ -197,9 +207,8 @@ class _UrlInputState extends State<UrlInput> {
                           // For local files, use just the filename in the URL bar
                           final isUrl = selection.startsWith('http://') ||
                               selection.startsWith('https://');
-                          _urlController.text = isUrl
-                              ? selection
-                              : fileNameOfPath(selection);
+                          _urlController.text =
+                              isUrl ? selection : fileNameOfPath(selection);
                           // Hide keyboard on mobile after selection
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) {
@@ -391,16 +400,17 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
 
     return Align(
       alignment: Alignment.topLeft,
+      // The background color lives on the Material itself: a colored
+      // DecoratedBox/ColoredBox between the ListTiles and the Material would
+      // hide their background and ink splashes (framework error).
       child: Material(
         elevation: 4.0,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(6),
+        clipBehavior: Clip.antiAlias,
         child: Container(
           width: MediaQuery.of(context).size.width - 16,
           constraints: BoxConstraints(maxHeight: widget.maxOptionsHeight),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            color: Theme.of(context).cardColor,
-          ),
           child: ListView.separated(
             padding: EdgeInsets.zero,
             shrinkWrap: true,
@@ -419,28 +429,28 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
                 displayName = 'File: ${fileNameOfPath(option)}';
               }
 
-              return Container(
-                color: isHighlighted
+              // tileColor paints on the Material above, so the highlight
+              // and the ink splash stay visible.
+              return ListTile(
+                tileColor: isHighlighted
                     ? Theme.of(
                         context,
                       ).colorScheme.primaryContainer.withAlpha(77)
                     : null,
-                child: ListTile(
-                  title: Text(
-                    displayName,
-                    style: const TextStyle(fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () {
-                    widget.onSelected(option);
-                    widget.onOptionTap();
-                  },
-                  dense: true,
-                  leading: Icon(
-                    isUrl ? Icons.history : Icons.insert_drive_file_outlined,
-                    size: 16,
-                  ),
+                title: Text(
+                  displayName,
+                  style: const TextStyle(fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  widget.onSelected(option);
+                  widget.onOptionTap();
+                },
+                dense: true,
+                leading: Icon(
+                  isUrl ? Icons.history : Icons.insert_drive_file_outlined,
+                  size: 16,
                 ),
               );
             },
