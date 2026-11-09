@@ -50,7 +50,7 @@ class AppSettings with ChangeNotifier {
   // Behavior settings
   bool _wrapText = false;
   bool _useBrowserByDefault = true;
-  bool _scrollToLoadLazy = true;
+  bool _scrollToLoadLazy = false;
   bool _disableBrowserCache = false;
   bool _cleanCookies = false;
   String? _homeJurisdiction; // null = from device locale
@@ -362,7 +362,7 @@ class AppSettings with ChangeNotifier {
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
     _useBrowserByDefault = _prefs!.getBool(_prefsUseBrowserByDefault) ?? true;
-    _scrollToLoadLazy = _prefs!.getBool(_prefsScrollToLoadLazy) ?? true;
+    _scrollToLoadLazy = _prefs!.getBool(_prefsScrollToLoadLazy) ?? false;
     _disableBrowserCache = _prefs!.getBool(_prefsDisableBrowserCache) ?? false;
     _cleanCookies = _prefs!.getBool(_prefsCleanCookies) ?? false;
     final home = _prefs!.getString(_prefsHomeJurisdiction);
@@ -401,7 +401,7 @@ class AppSettings with ChangeNotifier {
     _showLineNumbers = true;
     _wrapText = false;
     _useBrowserByDefault = true;
-    _scrollToLoadLazy = true;
+    _scrollToLoadLazy = false;
     _disableBrowserCache = false;
     _cleanCookies = false;
 

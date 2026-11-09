@@ -426,6 +426,14 @@ window.__vsv_scrollThrough = function(backToTop) {
       if (backToTop) {
         try { window.scrollTo(0, 0); } catch (e) {}
         try { if (doc) doc.scrollTop = 0; } catch (e) {}
+        // Tell the app the scroll-through is done (back at the top).
+        try {
+          var b = window.flutter_inappwebview;
+          if (b && typeof b.callHandler === 'function') {
+            var r = b.callHandler('vsvScrollThroughDone');
+            if (r && typeof r.catch === 'function') r.catch(function() {});
+          }
+        } catch (e) {}
       }
     }
     setTimeout(step, 250);

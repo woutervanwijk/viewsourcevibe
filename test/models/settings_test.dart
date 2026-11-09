@@ -3,11 +3,12 @@ import 'package:view_source_vibe/models/settings.dart';
 
 void main() {
   group('AppSettings browser behavior options', () {
-    test('cache disabled and cookie cleaning are off by default', () {
+    test('cache disabled, cookie cleaning and lazy scroll are off by default',
+        () {
       final s = AppSettings();
       expect(s.disableBrowserCache, isFalse);
       expect(s.cleanCookies, isFalse);
-      expect(s.scrollToLoadLazy, isTrue);
+      expect(s.scrollToLoadLazy, isFalse);
     });
 
     test('setters toggle and notify', () {
@@ -25,6 +26,7 @@ void main() {
       s.resetToDefaults();
       expect(s.disableBrowserCache, isFalse);
       expect(s.cleanCookies, isFalse);
+      expect(s.scrollToLoadLazy, isFalse);
     });
   });
 }

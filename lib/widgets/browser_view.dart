@@ -10,6 +10,7 @@ import 'package:view_source_vibe/services/collectors/vsv_collect_js.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/navigation_policy.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
+import 'package:view_source_vibe/widgets/scroll_through_banner.dart';
 import 'dart:io';
 import 'dart:collection';
 
@@ -201,7 +202,7 @@ class _BrowserViewState extends State<BrowserView> {
   @override
   Widget build(BuildContext context) {
     final disableCache = context.watch<AppSettings>().disableBrowserCache;
-    return InAppWebView(
+    final webView = InAppWebView(
       gestureRecognizers: widget.gestureRecognizers,
       onWebContentProcessDidTerminate: (controller) {
         final htmlService = Provider.of<HtmlService>(context, listen: false);
@@ -241,6 +242,10 @@ class _BrowserViewState extends State<BrowserView> {
         controller.addJavaScriptHandler(
             handlerName: 'vsvResources',
             callback: (_) => htmlService.onBrowserResourcesChanged());
+        // The automatic scroll-through finished (page is back at the top).
+        controller.addJavaScriptHandler(
+            handlerName: 'vsvScrollThroughDone',
+            callback: (_) => htmlService.onScrollThroughDone());
 
         // Fix macOS background color crash
         if (!Platform.isMacOS) {
@@ -346,6 +351,12 @@ class _BrowserViewState extends State<BrowserView> {
             return NavigationActionPolicy.ALLOW;
         }
       },
+    );
+    return Column(
+      children: [
+        const ScrollThroughBanner(),
+        Expanded(child: webView),
+      ],
     );
   }
 

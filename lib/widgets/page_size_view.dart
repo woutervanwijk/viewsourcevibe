@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -115,6 +116,10 @@ class _PageSizeViewState extends State<PageSizeView>
 
   Widget _buildModel(BuildContext context, PageSizeModel model) {
     final htmlService = context.read<HtmlService>();
+    final isFile = context
+        .select<HtmlService, bool>((s) => s.store.current.target is FileTarget);
+    final loadLazy =
+        context.select<AppSettings, bool>((s) => s.scrollToLoadLazy);
     final fresh = model.fresh;
     // The fresh load's files once there is one, unless the user picked this
     // load.
@@ -133,6 +138,10 @@ class _PageSizeViewState extends State<PageSizeView>
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         children: [
           _buildTotalsCard(context, model, active),
+          if (!isFile && !loadLazy) ...[
+            const SizedBox(height: 12),
+            _lazyContentNote(context),
+          ],
           const SizedBox(height: 24),
           _buildSectionTitle(
               context, 'Loaded Files & Assets (${resources.length})'),
@@ -210,6 +219,36 @@ class _PageSizeViewState extends State<PageSizeView>
         borderRadius: BorderRadius.circular(12),
       ),
       child: child,
+    );
+  }
+
+  /// Shown while "Load lazy content" is off: the page was never scrolled,
+  /// so lazy resources were not fetched and the totals can be too low.
+  Widget _lazyContentNote(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return _outlinedCard(
+      context,
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.vertical_align_bottom, size: 16, color: scheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Sizes may be underestimated: lazy content (loading="lazy" '
+                'images, IntersectionObserver embeds) is only fetched when '
+                'scrolled into view, and this page was not scrolled. Turn on '
+                'Settings → Behavior → "Load lazy content" to scroll each '
+                'page once after it loads, so those resources load and are '
+                'measured for real.',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

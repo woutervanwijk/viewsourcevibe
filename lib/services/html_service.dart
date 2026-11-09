@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:view_source_vibe/main.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
@@ -4952,17 +4951,18 @@ Technical details: $message''';
           // Use the browser's own lazy loading once: scroll through the
           // page so loading=lazy / IntersectionObserver content is fetched
           // and measured, then keep collecting until it is quiet again.
-          if (!scrolled && (_appSettings?.scrollToLoadLazy ?? true)) {
+          if (!scrolled && (_appSettings?.scrollToLoadLazy ?? false)) {
             scrolled = true;
             await _scrollThroughPage();
             if (stale()) return;
+            _scrollThroughGen = gen;
+            _scrollThroughDismissedGen = -1;
+            notifyListeners();
             signature = _browserSignature();
             lastChange = clock.elapsed;
             next();
             return;
           }
-          // The scroll-through ran and its lazy loads were collected.
-          if (scrolled) _showScrollThroughToast();
           store.markBrowserSettled(gen);
           _captureLiveScreenshot(gen).ignore();
         } else {
@@ -4987,20 +4987,37 @@ Technical details: $message''';
     } catch (_) {}
   }
 
-  /// Toast text for when the automatic scroll-through finished.
-  @visibleForTesting
-  static const String scrollThroughToast =
-      'Scrolled the page once so lazy images and embeds loaded and could be '
+  /// Banner text shown above the browser view when the page was scrolled
+  /// automatically once.
+  static const String scrollThroughBannerText =
+      'Scrolling the page once so lazy images and embeds loaded and could be '
       'measured in the Page size tab. Turn off in Settings → Behavior → '
       '"Load lazy content".';
 
-  /// Tells the user the page was scrolled automatically, and how to disable it.
-  void _showScrollThroughToast() {
-    final context = MyApp.navigatorKey.currentContext;
-    if (context == null || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text(scrollThroughToast)),
-    );
+  /// Generation whose page was scrolled through automatically (-1 = none).
+  int _scrollThroughGen = -1;
+  int _scrollThroughDismissedGen = -1;
+
+  /// Whether the scroll-through banner shows above the browser view for the
+  /// current page. Dismissing hides it until the next page load.
+  bool get showScrollThroughBanner =>
+      _scrollThroughGen == store.current.generation &&
+      _scrollThroughDismissedGen != _scrollThroughGen;
+
+  /// Hides the scroll-through banner until the next page load.
+  void dismissScrollThroughBanner() {
+    _scrollThroughDismissedGen = _scrollThroughGen;
+    notifyListeners();
+  }
+
+  /// The page finished the automatic scroll-through and is back at the top:
+  /// hide the banner.
+  void onScrollThroughDone() {
+    if (_disposed) return;
+    if (_scrollThroughGen == store.current.generation) {
+      _scrollThroughGen = -1;
+      notifyListeners();
+    }
   }
 
   /// The page reported new resources (the bootstrap calls this at most once

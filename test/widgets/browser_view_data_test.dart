@@ -1,8 +1,12 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/widgets/browser_view.dart';
+import 'package:view_source_vibe/widgets/scroll_through_banner.dart';
 
 import '../fixtures/inspection/builders.dart';
 import '../fixtures/inspection/full_page.dart';
@@ -55,5 +59,18 @@ void main() {
     expect(service.serverContentType, isNull);
     seedStore(store, localFile());
     expect(service.serverContentType, isNull);
+  });
+
+  testWidgets('the scroll-through banner is hidden until the page was '
+      'scrolled through', (tester) async {
+    final service = makeService(seedStore(InspectionStore(), fullPage()));
+    addTearDown(service.dispose);
+    await tester.pumpWidget(MultiProvider(
+      providers: [ChangeNotifierProvider<HtmlService>.value(value: service)],
+      child: const MaterialApp(home: Scaffold(body: ScrollThroughBanner())),
+    ));
+    expect(find.byType(ScrollThroughBanner), findsOneWidget);
+    expect(find.textContaining('Scrolling the page once'), findsNothing);
+    expect(service.showScrollThroughBanner, isFalse);
   });
 }

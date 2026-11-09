@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -16,6 +18,14 @@ import '../fixtures/inspection/local_file.dart';
 import '../fixtures/inspection/pump.dart';
 
 void main() {
+  setUp(() {
+    // Tall viewport: the lazy ListView must build all rows even with the
+    // lazy-content note card on top.
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
+    view.physicalSize = const Size(900, 6000);
+    view.devicePixelRatio = 1.0;
+  });
   group('derivePageSize reasons and media flag', () {
     PageSizeModel model(List<ResourceEntry> r) =>
         (derivePageSize(inspection(browser: browserSnap(resources: r)))
@@ -289,6 +299,29 @@ void main() {
       expect(find.text('app.js'), findsNothing);
       expect(
           find.textContaining('not available for local files'), findsOneWidget);
+    });
+
+    testWidgets('(d) the lazy-content note shows for URLs only while the '
+        'setting is off', (tester) async {
+      // Default: "Load lazy content" is off, so the note explains the
+      // totals may be underestimated.
+      await show(tester, fullPage());
+      expect(find.textContaining('Load lazy content'), findsOneWidget);
+      expect(find.textContaining('may be underestimated'), findsOneWidget);
+
+      // Setting on: no note.
+      service = makeService(seedStore(InspectionStore(), fullPage()));
+      addTearDown(service.dispose);
+      await pumpWithProviders(tester,
+          service: service,
+          settings: AppSettings()..scrollToLoadLazy = true,
+          child: const PageSizeView());
+      await tester.pump();
+      expect(find.textContaining('Load lazy content'), findsNothing);
+
+      // Local file: measured differently, no note either.
+      await show(tester, localFile());
+      expect(find.textContaining('Load lazy content'), findsNothing);
     });
 
     testWidgets('(d) a loading-progress tick does not rebuild', (tester) async {

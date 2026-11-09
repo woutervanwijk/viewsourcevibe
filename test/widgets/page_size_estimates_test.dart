@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -8,6 +9,14 @@ import '../fixtures/inspection/ios_partial.dart';
 import '../fixtures/inspection/pump.dart';
 
 void main() {
+  setUp(() {
+    // Tall viewport: the lazy ListView must build all rows even with the
+    // lazy-content note card on top.
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
+    view.physicalSize = const Size(900, 6000);
+    view.devicePixelRatio = 1.0;
+  });
   testWidgets('iOS partial with estimates: ≈ rows, ≈ total, never 0 KB',
       (tester) async {
     final store = seedStore(InspectionStore(), iosPartial());

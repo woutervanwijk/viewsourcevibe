@@ -398,9 +398,23 @@ void main() {
       final names =
           service.resourceTimelineData.map((r) => r['name']).toSet();
       expect(names, contains('https://a.test/lazy.gif'));
-      // The toast explains the scroll and how to disable it.
-      expect(HtmlService.scrollThroughToast, contains('Settings'));
-      expect(HtmlService.scrollThroughToast, contains('Load lazy content'));
+      // The banner explains the scroll and how to disable it.
+      expect(HtmlService.scrollThroughBannerText, contains('Settings'));
+      expect(HtmlService.scrollThroughBannerText, contains('Load lazy content'));
+      // The scroll-through raised the banner for the current page.
+      expect(service.showScrollThroughBanner, isTrue);
+      // Back at the top, the page reports it: the banner goes away.
+      service.onScrollThroughDone();
+      expect(service.showScrollThroughBanner, isFalse);
+      // A new page scrolls through again: the banner returns, and
+      // dismissing hides it until the next page.
+      await loadAndAnswer('https://b.test/', body: '<html>B</html>');
+      await service.syncWebViewState('https://b.test/');
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await pumpEventQueue();
+      expect(service.showScrollThroughBanner, isTrue);
+      service.dismissScrollThroughBanner();
+      expect(service.showScrollThroughBanner, isFalse);
     });
 
     test('a refresh whose collect completes after navigation is dropped',
