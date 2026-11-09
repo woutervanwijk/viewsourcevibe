@@ -42,7 +42,8 @@ class WeightBucket {
 /// The page weight derived from the browser's resources (plus the server's
 /// document). The totals are the sum of the [breakdown] by construction.
 class PageWeight {
-  /// Keys: scripts, css, images, html, other.
+  /// Keys: scripts, css, images, html, other, thirdPartyFrames (everything
+  /// a cross-origin iframe loaded: ads, embeds, players).
   final Map<String, WeightBucket> breakdown;
 
   /// Sum of the breakdown; null when nothing reported a size.
@@ -103,15 +104,51 @@ class PageWeight {
   String get decodedPrefix => decodedLowerBound ? '≥ ' : '';
 }
 
-/// Page weight from [p]; null unless the browser's resources are Present.
+/// Page weight of the live load in [p]; null unless the browser's resources
+/// are Present.
+PageWeight? derivePageWeight(PageInspection p) {
+  final browser = p.browser;
+  if (browser is! Present<BrowserSnapshot>) return null;
+  return derivePageWeightOf(browser.value,
+      server: p.server, estimates: p.resourceEstimates);
+}
+
+/// Page weight of the fresh (Lighthouse-like) load in [p], if there is one.
+PageWeight? deriveFreshPageWeight(PageInspection p) {
+  final fresh = p.freshLoad;
+  if (fresh is! Present<BrowserSnapshot>) return null;
+  return derivePageWeightOf(fresh.value,
+      server: p.server, estimates: p.freshEstimates);
+}
+
+/// A cross-origin iframe (ads, embeds) or something it loaded. Same-origin
+/// frames count as the page's own.
+bool isThirdPartyFrame(ResourceEntry r, Uri page) {
+  String host(String h) => h.startsWith('www.') ? h.substring(4) : h;
+  final pageHost = host(page.host.toLowerCase());
+  if (r.inFrame) {
+    final origin = Uri.tryParse(r.frameOrigin!);
+    // Origin not told: still loaded by an iframe, not by the page.
+    return origin == null || origin.host.isEmpty
+        ? true
+        : host(origin.host.toLowerCase()) != pageHost;
+  }
+  if (r.type == 'iframe' || r.type == 'frame') {
+    final u = Uri.tryParse(r.url);
+    return u != null && host(u.host.toLowerCase()) != pageHost;
+  }
+  return false;
+}
+
+/// Page weight from the resources of one load ([b]) plus the server's
+/// document; [estimates] are the app's own lookups for that load.
 ///
 /// Images are judged by their transfer size: WebKit (iOS/macOS) reports the
 /// decoded pixel buffer for them, so their decoded size is never added there
 /// and its absence is not a gap.
-PageWeight? derivePageWeight(PageInspection p) {
-  final browser = p.browser;
-  if (browser is! Present<BrowserSnapshot>) return null;
-  final b = browser.value;
+PageWeight? derivePageWeightOf(BrowserSnapshot b,
+    {Observed<ServerSnapshot> server = const Pending(),
+    Map<String, Observed<int>> estimates = const {}}) {
   final res = b.resources;
   if (res is! Present<List<ResourceEntry>>) return null;
 
@@ -122,6 +159,7 @@ PageWeight? derivePageWeight(PageInspection p) {
     'images': WeightBucket(),
     'html': WeightBucket(),
     'other': WeightBucket(),
+    'thirdPartyFrames': WeightBucket(),
   };
   var transferGap = b.resourcesTruncated;
   var decodedGap = b.resourcesTruncated;
@@ -131,13 +169,15 @@ PageWeight? derivePageWeight(PageInspection p) {
   for (final r in res.value) {
     final category = ProbeService.categorizeResource(r.url, pageUrl);
     final isImage = category == 'image' || r.type == 'img' || r.type == 'image';
-    final bucket = buckets[switch (category) {
-      'script' => 'scripts',
-      'style' => 'css',
-      'image' => 'images',
-      'document' => 'html',
-      _ => 'other',
-    }]!;
+    final bucket = buckets[isThirdPartyFrame(r, b.url)
+        ? 'thirdPartyFrames'
+        : switch (category) {
+            'script' => 'scripts',
+            'style' => 'css',
+            'image' => 'images',
+            'document' => 'html',
+            _ => 'other',
+          }]!;
     bucket.count++;
 
     final tx = r.transfer;
@@ -145,7 +185,7 @@ PageWeight? derivePageWeight(PageInspection p) {
       bucket.addTransfer(tx.value);
       measured = (measured ?? 0) + tx.value;
     } else {
-      final est = p.resourceEstimates[r.url];
+      final est = estimates[r.url];
       if (est is Present<int>) {
         bucket.addEstimate(est.value);
       } else {
@@ -166,7 +206,6 @@ PageWeight? derivePageWeight(PageInspection p) {
   }
 
   DataSource? documentSource;
-  final server = p.server;
   if (server is Present<ServerSnapshot>) {
     final body = server.value.body;
     if (body is Present<ServerBody>) {

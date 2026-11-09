@@ -35,6 +35,7 @@ import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/request_timeline.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart';
+import 'package:view_source_vibe/services/collectors/fresh_load_measurer.dart';
 import 'package:view_source_vibe/services/collectors/transfer_size_lookup.dart';
 import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
@@ -95,6 +96,7 @@ class HtmlService extends ChangeNotifier {
   final BrowserCollect? _browserCollectOverride;
   final NativeCookieReader _nativeCookies;
   final ResourceSizeLookup _sizeLookup;
+  final FreshLoadMeasurer _freshMeasurer;
   final BrowserPlatform _platform;
   final NetworkQuietPolicy _browserPoll;
   final Duration _spaSettleDelay;
@@ -1360,6 +1362,7 @@ class HtmlService extends ChangeNotifier {
     BrowserCollect? browserCollect,
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
+    FreshLoadMeasurer? freshLoadMeasurer,
     BrowserPlatform? browserPlatform,
     NetworkQuietPolicy browserPoll = NetworkQuietPolicy.live,
     Duration spaSettleDelay = const Duration(milliseconds: 400),
@@ -1373,6 +1376,10 @@ class HtmlService extends ChangeNotifier {
         _browserCollectOverride = browserCollect,
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
         _sizeLookup = sizeLookup ?? _lookupResourceSize,
+        _freshMeasurer = freshLoadMeasurer ??
+            (HeadlessFreshLoadMeasurer.supported
+                ? const HeadlessFreshLoadMeasurer()
+                : const NoFreshLoad()),
         _platform =
             browserPlatform ?? browserPlatformFor(defaultTargetPlatform),
         _browserPoll = browserPoll,
@@ -4528,6 +4535,87 @@ Technical details: $message''';
   /// [_maxEstimateLookups] per page, [_estimateConcurrency] at a time; each
   /// result goes to the store (which drops it when the navigation moved on).
   /// A call while a run is active makes that run look again when it is done.
+  /// Loads the page once more like Lighthouse (empty cache, phone screen,
+  /// quiet network) in an off-screen browser, then sizes what it could not
+  /// see with the app's own lookups. Only on the user's request: it is a
+  /// second page load. Dropped when the user navigates meanwhile.
+  Future<void> measureFreshLoad() async {
+    final target = store.current.target;
+    if (target is! UrlTarget || store.current.freshLoad is Pending) return;
+    final gen = store.current.generation;
+    bool stale() => _disposed || gen != store.current.generation;
+    final browser = store.current.browser;
+    final url =
+        browser is Present<BrowserSnapshot> ? browser.value.url : target.url;
+    store.applyFreshLoad(gen, const Pending());
+    Object? raw;
+    try {
+      raw = await _freshMeasurer.measure(url, NetworkQuietPolicy.fresh);
+    } on UnsupportedError catch (e) {
+      if (!stale()) {
+        store.applyFreshLoad(gen,
+            Unavailable(UnavailableReason.unsupportedPlatform, '${e.message}'));
+      }
+      return;
+    } catch (e) {
+      if (!stale()) store.applyFreshLoad(gen, Failed('Fresh load failed: $e'));
+      return;
+    }
+    if (stale()) return;
+    BrowserSnapshot snapshot;
+    try {
+      snapshot = parseBrowserPayload(raw, _platform, pageUrl: url);
+    } catch (e) {
+      store.applyFreshLoad(gen, Failed('Fresh load could not be read: $e'));
+      return;
+    }
+    final res = snapshot.resources;
+    if (res is! Present<List<ResourceEntry>>) {
+      store.applyFreshLoad(
+          gen,
+          switch (res) {
+            Unavailable(reason: final r, detail: final d) => Unavailable(r, d),
+            Failed(error: final e) => Failed(e),
+            _ => const Failed('The fresh load reported no resources'),
+          });
+      return;
+    }
+    store.applyFreshLoad(gen, Present(snapshot, source: DataSource.browser));
+
+    // Hidden sizes, like the live load (shared lookup cache per page).
+    final urls = estimateTargetsOf(store.current.freshLoad, const {},
+        limit: _maxEstimateLookups);
+    var next = 0;
+    Future<void> worker() async {
+      while (next < urls.length && !stale()) {
+        final u = urls[next++];
+        final result = await _estimateOf(gen, u);
+        if (!stale()) store.applyFreshEstimates(gen, {u: result});
+      }
+    }
+
+    await Future.wait([
+      for (var i = 0; i < _estimateConcurrency && i < urls.length; i++)
+        worker(),
+    ]);
+  }
+
+  /// One own size lookup as an estimate: Present, or why there is none.
+  Future<Observed<int>> _estimateOf(int gen, String url) async {
+    try {
+      final size = await _cachedSizeLookup(gen, url);
+      return size == null
+          ? const Unavailable(UnavailableReason.notReportedByServer,
+              'the size lookup returned no size')
+          : Present(size,
+              source: DataSource.server, provenance: Provenance.estimated);
+    } on SizeLimitExceeded catch (e) {
+      return Unavailable(UnavailableReason.exceedsLimit, '$e');
+    } catch (e) {
+      return Failed('Size lookup failed: $e');
+    }
+  }
+
   Future<void> _fetchResourceEstimatesAsync() async {
     if (_estimating) {
       _estimateRerun = true;
@@ -4551,20 +4639,7 @@ Technical details: $message''';
         Future<void> worker() async {
           while (next < urls.length && !stale()) {
             final url = urls[next++];
-            Observed<int> result;
-            try {
-              final size = await _cachedSizeLookup(gen, url);
-              result = size == null
-                  ? const Unavailable(UnavailableReason.notReportedByServer,
-                      'the size lookup returned no size')
-                  : Present(size,
-                      source: DataSource.server,
-                      provenance: Provenance.estimated);
-            } on SizeLimitExceeded catch (e) {
-              result = Unavailable(UnavailableReason.exceedsLimit, '$e');
-            } catch (e) {
-              result = Failed('Size lookup failed: $e');
-            }
+            final result = await _estimateOf(gen, url);
             if (!stale()) store.applyEstimates(gen, {url: result});
           }
         }
