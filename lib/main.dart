@@ -6,6 +6,7 @@ import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/reader_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/file_system_service.dart';
@@ -241,6 +242,8 @@ void main() async {
 
   final inspectionStore = InspectionStore();
   final htmlService = HtmlService(store: inspectionStore);
+  final readerService = ReaderService(htmlService);
+  htmlService.setReaderService(readerService);
   final appSettings = AppSettings();
   final fileSystemService = FileSystemService();
   final appStateService = await AppStateService.create();
@@ -298,6 +301,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: inspectionStore),
         ChangeNotifierProvider.value(value: htmlService),
+        ChangeNotifierProvider.value(value: readerService),
         ChangeNotifierProvider.value(value: appSettings),
         ChangeNotifierProvider.value(value: appStateService),
         ChangeNotifierProvider.value(value: urlHistoryService),
