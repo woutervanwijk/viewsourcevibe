@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -106,6 +107,31 @@ void main() {
       await show(tester, fullPage().copyWith(server: const Pending()));
       expect(find.textContaining('App request: unknown'), findsOneWidget);
       noPlaceholders();
+    });
+
+    testWidgets(
+        '(f) a request starting in the last 1% of the timeline '
+        'does not crash the waterfall', (tester) async {
+      ResourceEntry timed(String url, double start, double dur) =>
+          ResourceEntry(
+            url: url,
+            type: 'script',
+            source: ResourceSource.observer,
+            startTime: b(start),
+            duration: b(dur),
+            transfer: b(10),
+            decoded: b(20),
+          );
+      await show(
+          tester,
+          inspection(
+              browser: browserSnap(resources: [
+            timed('https://a.test/early.js', 0, 1000),
+            timed('https://a.test/late.js', 995, 5),
+          ])));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('late.js'), findsWidgets);
     });
   });
 }

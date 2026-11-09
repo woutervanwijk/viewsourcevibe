@@ -347,8 +347,13 @@ class RequestTimelineView extends StatelessWidget {
               final duration = resource.duration;
               final hasBar = resource.hasBar;
               final left = hasBar ? (start! / maxEnd).clamp(0.0, 1.0) : 0.0;
-              final width =
-                  hasBar ? (duration! / maxEnd).clamp(0.01, 1.0 - left) : 0.0;
+              // A bar starting in the last 1% of the timeline has less than
+              // the minimum width left; clamp() throws when lower > upper.
+              final remaining = (1.0 - left).clamp(0.0, 1.0);
+              final minWidth = remaining < 0.01 ? remaining : 0.01;
+              final width = hasBar
+                  ? (duration! / maxEnd).clamp(minWidth, remaining)
+                  : 0.0;
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
