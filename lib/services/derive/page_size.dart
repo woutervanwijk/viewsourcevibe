@@ -50,7 +50,7 @@ String? formatDownloadSize(int? transfer, {String prefix = ''}) =>
 const kLighthouseGoodKib = 2667;
 const kLighthousePoorKib = 4000;
 
-/// The Lighthouse verdict on the download total, or null when it is unknown.
+/// The verdict on the download total, or null when it is unknown.
 /// A lower bound that is still under a threshold only says "at least".
 String? lighthouseVerdict(PageWeight w, {String? basis}) {
   final t = w.transfer;
@@ -66,7 +66,7 @@ String? lighthouseVerdict(PageWeight w, {String? basis}) {
       'the real total may be higher',
     if (w.transferEstimated) 'includes estimates',
   ];
-  return 'Lighthouse${basis == null ? '' : ' ($basis)'}: $verdict'
+  return 'Verdict${basis == null ? '' : ' ($basis)'}: $verdict'
       '${caveats.isEmpty ? '' : '; ${caveats.join(', ')}'}';
 }
 
@@ -143,7 +143,7 @@ class PageSizeModel {
   /// null when none.
   final String? declaredNote;
 
-  /// Lighthouse's verdict on the download total; null when it is unknown.
+  /// The verdict on the download total; null when it is unknown.
   final String? lighthouseNote;
 
   /// Says how cache hits are counted; null when there are none.
@@ -292,9 +292,8 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
   );
 }
 
-Observed<PageSizeModel> _loadModel(
-    Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server,
-    Map<String, Observed<int>> estimates,
+Observed<PageSizeModel> _loadModel(Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server, Map<String, Observed<int>> estimates,
     {List<String> declaredMedia = const []}) {
   switch (browser) {
     case Pending<BrowserSnapshot>():
