@@ -2,14 +2,24 @@
 
 All notable, user-facing changes to View Source Vibe are documented here.
 
-## Unreleased
+## 1.3.0
 
 ### New
 - **Reader** tab (HTML pages): renders the page as a clean article using Readability.js, extracted from the live browser view when available. Links in the article open in the Browser tab.
+- **Size** tab: "Fresh load" measurement — reloads the page with an empty cache on a phone-sized viewport and shows both loads side by side, each with its own verdict. Third-party iframes are labelled.
+- Settings → Behavior: **Load lazy content** (off by default) scrolls the page once after it loads — and back to the top — so lazy images and embeds are actually fetched and measured; a banner above the Browser tab shows while this happens. Plus **Disable browser cache** and **Always clean cookies**.
 
-## 1.2.1
-- Central data point
-- Small bugfixes
+### Improved
+- Central data point: one reactive store per page load holding the browser, server and file results (with a generation, so stale results are dropped).
+- **Size** tab: download size first (Lighthouse-style total byte weight), cache hits counted, and resources that load late (lazy content, ads after scrolling) included. While "Load lazy content" is off, a note explains that totals may be underestimated because lazy resources were never fetched.
+- Keyboard shortcuts (Cmd/Ctrl+L focuses the location bar, Cmd/Ctrl+arrow keys switch tabs) and mouse-wheel tab switching on desktop.
+- About screen: the Key Features list matches the app.
+
+### Fixed
+- Request Timeline no longer crashes ("Invalid argument(s)") on pages whose last requests start at the very end of the timeline.
+- UI jank while loading and rendering pages.
+- Startup: ink-splash errors in the URL history list.
+- SVG icons missing their viewport.
 
 ## 1.2.0
 
