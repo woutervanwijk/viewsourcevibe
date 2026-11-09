@@ -246,6 +246,8 @@ class InspectionExportData {
             'duration': observedPlain(r.duration, source: DataSource.browser),
             'transfer': observedPlain(r.transfer, source: DataSource.browser),
             'decoded': observedPlain(r.decoded, source: DataSource.browser),
+            if (r.fromCache) 'fromCache': true,
+            if (r.frameOrigin != null) 'frameOrigin': r.frameOrigin,
             // The app's own size lookup, when the browser gave no transfer.
             if (p.resourceEstimates[r.url] case final e?)
               'estimatedTransfer': observedPlain(e, source: DataSource.server),
@@ -303,6 +305,40 @@ class InspectionExportData {
               'missingCount': e.value.missingCount,
               'decoded': e.value.decoded,
             },
+        },
+        'browserSettled': p.browserSettled,
+        // The separate Lighthouse-like load, when the user measured one.
+        'freshLoad': switch (p.freshLoad) {
+          Present() => () {
+              final f = deriveFreshPageWeight(p)!;
+              return {
+                'status': 'present',
+                'transfer': f.transfer,
+                'measuredTransfer': f.measuredTransfer,
+                'estimatedTransfer': f.estimatedTransfer,
+                'missingCount': f.missingCount,
+                'transferLowerBound': f.transferLowerBound,
+                'transferEstimated': f.transferEstimated,
+                'breakdown': {
+                  for (final e in f.breakdown.entries)
+                    e.key: {
+                      'count': e.value.count,
+                      'transfer': e.value.transfer,
+                      'missingCount': e.value.missingCount,
+                    },
+                },
+              };
+            }(),
+          final other => observedJson<Object>(
+              switch (other) {
+                Pending() => const Pending<Object>(),
+                Failed(:final error) => Failed<Object>(error),
+                Unavailable(:final reason, :final detail) =>
+                  Unavailable<Object>(reason, detail),
+                Present() => const Pending<Object>(),
+              },
+              (v) => v,
+              source: DataSource.browser),
         },
       },
     };
