@@ -155,7 +155,7 @@ void main() {
 
     testWidgets('(a) values equal the fixture', (tester) async {
       await show(tester, fullPage());
-      expect(find.text('This load'), findsOneWidget);
+      expect(find.text('This load'), findsWidgets);
       expect(find.text('Fresh load'), findsOneWidget);
       expect(find.text('Measure'), findsOneWidget);
       expect(find.textContaining('like Lighthouse'), findsOneWidget);

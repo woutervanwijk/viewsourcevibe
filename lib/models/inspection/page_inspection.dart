@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'browser_snapshot.dart';
 import 'file_snapshot.dart';
 import 'observed.dart';
@@ -6,6 +8,10 @@ import 'server_snapshot.dart';
 /// [PageInspection.freshLoad] before the user asked for one.
 const kFreshLoadNotMeasured = Unavailable<BrowserSnapshot>(
     UnavailableReason.notApplicable, 'not measured');
+
+/// No screenshot (yet) of a load.
+const kNoScreenshot =
+    Unavailable<Uint8List>(UnavailableReason.notApplicable, 'no screenshot');
 
 /// What is being inspected.
 sealed class InspectionTarget {
@@ -58,6 +64,11 @@ class PageInspection {
   /// The app's own size lookups for [freshLoad] (see [resourceEstimates]).
   final Map<String, Observed<int>> freshEstimates;
 
+  /// Small JPEG screenshots of what each load showed (the live browser once
+  /// it settled; the off-screen fresh load before it closed).
+  final Observed<Uint8List> liveScreenshot;
+  final Observed<Uint8List> freshScreenshot;
+
   const PageInspection({
     required this.generation,
     required this.target,
@@ -70,6 +81,8 @@ class PageInspection {
     this.browserSettled = false,
     this.freshLoad = kFreshLoadNotMeasured,
     this.freshEstimates = const {},
+    this.liveScreenshot = kNoScreenshot,
+    this.freshScreenshot = kNoScreenshot,
   });
 
   const PageInspection.empty()
@@ -87,7 +100,9 @@ class PageInspection {
         primaryDocumentPreference = null,
         browserSettled = false,
         freshLoad = kFreshLoadNotMeasured,
-        freshEstimates = const {};
+        freshEstimates = const {},
+        liveScreenshot = kNoScreenshot,
+        freshScreenshot = kNoScreenshot;
 
   PageInspection copyWith({
     Observed<ServerSnapshot>? server,
@@ -99,6 +114,8 @@ class PageInspection {
     bool? browserSettled,
     Observed<BrowserSnapshot>? freshLoad,
     Map<String, Observed<int>>? freshEstimates,
+    Observed<Uint8List>? liveScreenshot,
+    Observed<Uint8List>? freshScreenshot,
   }) =>
       PageInspection(
         generation: generation,
@@ -114,6 +131,8 @@ class PageInspection {
         browserSettled: browserSettled ?? this.browserSettled,
         freshLoad: freshLoad ?? this.freshLoad,
         freshEstimates: freshEstimates ?? this.freshEstimates,
+        liveScreenshot: liveScreenshot ?? this.liveScreenshot,
+        freshScreenshot: freshScreenshot ?? this.freshScreenshot,
       );
 
   bool _has(DataSource s) => switch (s) {

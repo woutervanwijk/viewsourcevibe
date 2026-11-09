@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:flutter/widgets.dart' show Image;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
@@ -22,6 +25,30 @@ void main() {
     await tester.pump();
     return store;
   }
+
+  testWidgets('thumbnails: this load always, fresh once asked for',
+      (tester) async {
+    final png = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    final store = seedStore(InspectionStore(), fullPage());
+    final service = makeService(store);
+    addTearDown(service.dispose);
+    await pumpWithProviders(tester,
+        service: service, child: const PageSizeView());
+    await tester.pump();
+    // Not measured yet: only this load's thumbnail, without a screenshot.
+    expect(find.text('This load'), findsNWidgets(2));
+    expect(find.byTooltip('This load: no screenshot'), findsOneWidget);
+    expect(find.byTooltip('Fresh load: no screenshot'), findsNothing);
+
+    store.applyLiveScreenshot(
+        store.current.generation, Present(png, source: DataSource.browser));
+    store.applyFreshLoad(store.current.generation, const Pending());
+    await tester.pump();
+    expect(find.byTooltip('This load'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byTooltip('Fresh load: no screenshot'), findsOneWidget);
+  });
 
   testWidgets('pending: says it is measuring', (tester) async {
     await show(tester, const Pending());
@@ -57,13 +84,12 @@ void main() {
                   tx: bt(50 * 1024), frameOrigin: 'https://ads.test'),
             ]),
             source: DataSource.browser));
-    expect(find.text('This load'), findsOneWidget);
     expect(find.textContaining('Lighthouse (fresh load)'), findsOneWidget);
     expect(find.text('Third-party iframes (ads, embeds) (1)'), findsOneWidget);
     expect(find.textContaining('third-party iframe'), findsWidgets);
     expect(find.textContaining('Files below: fresh load'), findsOneWidget);
 
-    await tester.tap(find.text('This load'));
+    await tester.tap(find.text('This load').first);
     await tester.pump();
     expect(find.textContaining('Files below: this load'), findsOneWidget);
     expect(find.text('Third-party iframes (ads, embeds) (1)'), findsNothing);
