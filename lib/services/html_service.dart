@@ -77,6 +77,12 @@ class HtmlService extends ChangeNotifier {
   final DomTreeBuilder? _domTreeBuilder;
   final int _domTreeIsolateThreshold;
 
+  /// Documents up to this size are scanned/parsed synchronously (in a
+  /// getter, during build); larger ones go to an isolate. 32 KiB keeps the
+  /// synchronous pass well inside a frame; the old 256 KiB blocked the UI
+  /// for tens of ms on mid-size pages.
+  static const int defaultIsolateThreshold = 32 * 1024;
+
   /// Test hook: awaited right after a server file was built.
   @visibleForTesting
   Future<void> Function()? debugAfterServerFileBuilt;
@@ -1398,9 +1404,9 @@ class HtmlService extends ChangeNotifier {
     BrowserLoader? browserLoader,
     MetadataExtractor? metadataExtractor,
     DetectionScanner? detectionScanner,
-    int detectionIsolateThreshold = 256 * 1024,
+    int detectionIsolateThreshold = defaultIsolateThreshold,
     DomTreeBuilder? domTreeBuilder,
-    int domTreeIsolateThreshold = 256 * 1024,
+    int domTreeIsolateThreshold = defaultIsolateThreshold,
     SovereigntyAnalyzer? sovereigntyAnalyzer,
     Duration sovereigntyDebounce = const Duration(milliseconds: 500),
     BrowserCollect? browserCollect,
