@@ -102,6 +102,10 @@ class HtmlService extends ChangeNotifier {
   final NetworkQuietPolicy _browserPoll;
   final Duration _spaSettleDelay;
   final List<Timer> _refreshTimers = [];
+  final Duration _lateCollectDelay;
+  Timer? _lateCollectTimer;
+  bool _lateCollecting = false;
+  bool _lateCollectAgain = false;
   bool _disposed = false;
 
   /// The raw payload of the last collect and the generation it belongs to
@@ -1367,6 +1371,7 @@ class HtmlService extends ChangeNotifier {
     BrowserScreenshot? browserScreenshot,
     BrowserPlatform? browserPlatform,
     NetworkQuietPolicy browserPoll = NetworkQuietPolicy.live,
+    Duration lateCollectDelay = const Duration(seconds: 2),
     Duration spaSettleDelay = const Duration(milliseconds: 400),
   })  : _sovereigntyDebounce = sovereigntyDebounce,
         _sovereigntyAnalyzer =
@@ -1386,6 +1391,7 @@ class HtmlService extends ChangeNotifier {
         _platform =
             browserPlatform ?? browserPlatformFor(defaultTargetPlatform),
         _browserPoll = browserPoll,
+        _lateCollectDelay = lateCollectDelay,
         _spaSettleDelay = spaSettleDelay,
         store = store ?? InspectionStore(),
         _ownsStore = store == null,
@@ -4830,6 +4836,41 @@ Technical details: $message''';
     next();
   }
 
+  /// The page reported new resources (the bootstrap calls this at most once
+  /// a second). Before the load settled the polling picks them up; after
+  /// it, collect again (lazy images and ads load when the user scrolls), at
+  /// most once per [_lateCollectDelay] and never two at a time.
+  void onBrowserResourcesChanged() {
+    if (_disposed || !store.current.browserSettled) return;
+    if (_lateCollecting) {
+      _lateCollectAgain = true;
+      return;
+    }
+    _lateCollectTimer ??= Timer(_lateCollectDelay, _collectLate);
+  }
+
+  Future<void> _collectLate() async {
+    _lateCollectTimer = null;
+    final b = store.current.browser;
+    if (_disposed || !_browserReachable || b is! Present<BrowserSnapshot>) {
+      return;
+    }
+    final gen = store.current.generation;
+    _lateCollecting = true;
+    try {
+      await _collectAndApply(gen, b.value.url.toString(), b.value.url);
+      if (!_disposed && gen == store.current.generation) {
+        _applyBrowserDerivedToMetadata();
+      }
+    } finally {
+      _lateCollecting = false;
+    }
+    if (_lateCollectAgain) {
+      _lateCollectAgain = false;
+      onBrowserResourcesChanged();
+    }
+  }
+
   int _browserSignature() {
     final b = store.current.browser;
     return b is Present<BrowserSnapshot>
@@ -4842,6 +4883,9 @@ Technical details: $message''';
       t.cancel();
     }
     _refreshTimers.clear();
+    _lateCollectTimer?.cancel();
+    _lateCollectTimer = null;
+    _lateCollectAgain = false;
   }
 
   /// New browser numbers: update the weight in the metadata and re-match the

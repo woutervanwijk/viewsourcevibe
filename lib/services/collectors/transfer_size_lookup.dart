@@ -20,7 +20,9 @@ class SizeLimitExceeded implements Exception {
 Future<int?> lookupTransferSize(
   String url, {
   required String userAgent,
-  int limit = 10 * 1024 * 1024,
+  // Big animated GIFs and hero images can be tens of MB; audio/video are
+  // never looked up (see estimate_targets.dart).
+  int limit = 50 * 1024 * 1024,
   Duration timeout = const Duration(seconds: 15),
   HttpClient Function()? client,
 }) async {

@@ -53,14 +53,31 @@ const String vsvResourceBootstrapJs = r'''
     if (prev) {
       if (sum(cur) > sum(prev)) {
         prev.tx = cur.tx; prev.enc = cur.enc; prev.dec = cur.dec;
-        if (!isTop) markDirty(name);
+        if (!isTop) markDirty(name); else notifyApp();
       }
       return;
     }
     if (window.__vsv_obsCount >= MAX) { window.__vsv_obsDropped++; return; }
     window.__vsv_obs[name] = cur;
     window.__vsv_obsCount++;
-    if (!isTop) markDirty(name);
+    if (!isTop) markDirty(name); else notifyApp();
+  }
+  // Top frame: tell the app that resources arrived (lazy images, ads after
+  // scrolling), at most once a second. The app collects again when it
+  // wants; nothing is sent here but the count.
+  var notifyTimer = null;
+  function notifyApp() {
+    if (notifyTimer !== null) return;
+    notifyTimer = setTimeout(function() {
+      notifyTimer = null;
+      try {
+        var b = window.flutter_inappwebview;
+        if (b && typeof b.callHandler === 'function') {
+          var r = b.callHandler('vsvResources', window.__vsv_obsCount);
+          if (r && typeof r.catch === 'function') r.catch(function() {});
+        }
+      } catch (e) {}
+    }, 1000);
   }
   // Iframe: post new/grown entries to the top frame, batched.
   var dirty = {}, flushTimer = null;

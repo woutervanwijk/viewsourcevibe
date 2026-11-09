@@ -208,6 +208,11 @@ class _BrowserViewState extends State<BrowserView> {
         _controller = controller;
         final htmlService = Provider.of<HtmlService>(context, listen: false);
         htmlService.activeWebViewController = controller;
+        // The page reports resources that arrive later (lazy images, ads
+        // after scrolling); the service collects them again.
+        controller.addJavaScriptHandler(
+            handlerName: 'vsvResources',
+            callback: (_) => htmlService.onBrowserResourcesChanged());
 
         // Fix macOS background color crash
         if (!Platform.isMacOS) {
