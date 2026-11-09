@@ -4741,7 +4741,7 @@ Technical details: $message''';
       while (next < urls.length && !stale()) {
         final u = urls[next++];
         final result = await _estimateOf(gen, u);
-        if (!stale()) store.applyFreshEstimates(gen, {u: result});
+        if (!stale()) store.queueFreshEstimate(gen, u, result);
       }
     }
 
@@ -4791,7 +4791,7 @@ Technical details: $message''';
           while (next < urls.length && !stale()) {
             final url = urls[next++];
             final result = await _estimateOf(gen, url);
-            if (!stale()) store.applyEstimates(gen, {url: result});
+            if (!stale()) store.queueEstimate(gen, url, result);
           }
         }
 

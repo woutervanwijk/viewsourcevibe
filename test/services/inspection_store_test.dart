@@ -393,6 +393,31 @@ void main() {
       store.beginUrl(Uri.parse('https://b.test/'));
       expect(store.current.resourceEstimates, isEmpty);
     });
+
+    test('queued estimates coalesce into one notify per event-loop turn',
+        () async {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      notifies = 0;
+      for (var i = 0; i < 50; i++) {
+        store.queueEstimate(g, 'https://a.test/$i.js', est(i));
+      }
+      // Nothing applied synchronously yet.
+      expect(notifies, 0);
+      await Future<void>.delayed(Duration.zero);
+      expect(notifies, 1);
+      expect(store.current.resourceEstimates.length, 50);
+    });
+
+    test('queued estimates of a stale generation are dropped at flush',
+        () async {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      store.queueEstimate(g, 'https://a.test/a.js', est(10));
+      store.beginUrl(Uri.parse('https://b.test/')); // g is now stale
+      notifies = 0;
+      await Future<void>.delayed(Duration.zero);
+      expect(notifies, 0);
+      expect(store.current.resourceEstimates, isEmpty);
+    });
   });
 
   group('applyDeclaredMedia', () {
