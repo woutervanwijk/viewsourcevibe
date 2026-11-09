@@ -112,16 +112,44 @@ class InspectionStore extends ChangeNotifier {
   /// Nothing new = no change, no notify.
   void applyEstimates(int gen, Map<String, Observed<int>> estimates) {
     if (!_accepts(gen)) return;
-    final merged = {..._current.resourceEstimates};
+    final merged = _mergeEstimates(_current.resourceEstimates, estimates);
+    if (merged == null) return;
+    _set(_current.copyWith(resourceEstimates: merged));
+  }
+
+  /// Null when nothing changes.
+  static Map<String, Observed<int>>? _mergeEstimates(
+      Map<String, Observed<int>> current, Map<String, Observed<int>> fresh) {
+    final merged = {...current};
     var changed = false;
-    for (final e in estimates.entries) {
+    for (final e in fresh.entries) {
       final old = merged[e.key];
       if (old is Present<int> && e.value is! Present<int>) continue;
       merged[e.key] = e.value;
       changed = true;
     }
-    if (!changed) return;
-    _set(_current.copyWith(resourceEstimates: merged));
+    return changed ? merged : null;
+  }
+
+  /// The live load stopped requesting (see [PageInspection.browserSettled]).
+  void markBrowserSettled(int gen) {
+    if (!_accepts(gen) || _current.browserSettled) return;
+    _set(_current.copyWith(browserSettled: true));
+  }
+
+  /// The fresh (Lighthouse-like) load: Pending while it runs, then its
+  /// result. A new result drops the size lookups of the previous one.
+  void applyFreshLoad(int gen, Observed<BrowserSnapshot> result) {
+    if (!_accepts(gen)) return;
+    _set(_current.copyWith(freshLoad: result, freshEstimates: const {}));
+  }
+
+  /// Own size lookups for the fresh load, merged like [applyEstimates].
+  void applyFreshEstimates(int gen, Map<String, Observed<int>> estimates) {
+    if (!_accepts(gen)) return;
+    final merged = _mergeEstimates(_current.freshEstimates, estimates);
+    if (merged == null) return;
+    _set(_current.copyWith(freshEstimates: merged));
   }
 
   void setPrimaryDocument(DataSource? s) {

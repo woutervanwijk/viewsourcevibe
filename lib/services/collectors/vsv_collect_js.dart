@@ -6,10 +6,17 @@
 /// Must run at document start (UserScriptInjectionTime.AT_DOCUMENT_START).
 /// Buffers resource-timing entries (survives clearResourceTimings) in
 /// `window.__vsv_obs` and fetch/XHR content-lengths in `window.__vsv_patch`.
+///
+/// Injected into every frame. An iframe (ads, embeds) only observes its own
+/// resources and posts them to the top frame (`{__vsv_frame: 1, ...}`), which
+/// records them with `fr: 1` and the frame's origin in `fo`. Start times are
+/// moved to the top frame's time origin.
 const String vsvResourceBootstrapJs = r'''
 (function() {
   if (window.__vsv_boot) return;
   window.__vsv_boot = true;
+  var isTop = true;
+  try { isTop = window === window.top; } catch (e) { isTop = false; }
   var MAX = 2000;
   window.__vsv_obs = {};
   window.__vsv_obsCount = 0;
@@ -38,17 +45,70 @@ const String vsvResourceBootstrapJs = r'''
       enc: num(e.encodedBodySize),
       dec: num(e.decodedBodySize)
     };
-    var prev = window.__vsv_obs[e.name];
+    // Keep the first start/duration; take the sizes when they are larger.
+    store(e.name, cur);
+  }
+  function store(name, cur) {
+    var prev = window.__vsv_obs[name];
     if (prev) {
-      // Keep the first start/duration; take the sizes when they are larger.
       if (sum(cur) > sum(prev)) {
         prev.tx = cur.tx; prev.enc = cur.enc; prev.dec = cur.dec;
+        if (!isTop) markDirty(name);
       }
       return;
     }
     if (window.__vsv_obsCount >= MAX) { window.__vsv_obsDropped++; return; }
-    window.__vsv_obs[e.name] = cur;
+    window.__vsv_obs[name] = cur;
     window.__vsv_obsCount++;
+    if (!isTop) markDirty(name);
+  }
+  // Iframe: post new/grown entries to the top frame, batched.
+  var dirty = {}, flushTimer = null;
+  function markDirty(name) {
+    dirty[name] = true;
+    if (flushTimer === null) flushTimer = setTimeout(flush, 500);
+  }
+  function flush() {
+    flushTimer = null;
+    var out = [];
+    for (var n in dirty) {
+      if (!Object.prototype.hasOwnProperty.call(dirty, n)) continue;
+      var o = window.__vsv_obs[n];
+      if (o) out.push({n: n, it: o.it, st: o.st, du: o.du, tx: o.tx, enc: o.enc, dec: o.dec});
+    }
+    dirty = {};
+    if (!out.length) return;
+    try {
+      var origin = '';
+      try { origin = location.origin; } catch (e) {}
+      window.top.postMessage({__vsv_frame: 1, fo: origin,
+          to: performance.timeOrigin || null, e: out}, '*');
+    } catch (e) {}
+  }
+  // Top frame: take what the iframes post. Only messages of this shape from
+  // another window; the entries are page-provided data, like the timings.
+  if (isTop) {
+    try {
+      window.addEventListener('message', function(ev) {
+        try {
+          var d = ev.data;
+          if (!d || d.__vsv_frame !== 1 || ev.source === window) return;
+          if (!d.e || typeof d.e.length !== 'number') return;
+          var shift = (typeof d.to === 'number' && performance.timeOrigin)
+              ? d.to - performance.timeOrigin : null;
+          var fo = typeof d.fo === 'string' ? d.fo.slice(0, 200) : '';
+          for (var i = 0; i < d.e.length && i < MAX; i++) {
+            var x = d.e[i];
+            if (!x || typeof x.n !== 'string' || skip(x.n)) continue;
+            var st = num(x.st);
+            store(x.n, {it: typeof x.it === 'string' ? x.it : '',
+                st: st === null ? null : (shift === null ? null : st + shift),
+                du: num(x.du), tx: num(x.tx), enc: num(x.enc), dec: num(x.dec),
+                fr: 1, fo: fo});
+          }
+        } catch (e) {}
+      });
+    } catch (e) {}
   }
   try {
     var obs = new PerformanceObserver(function(list) {
@@ -68,7 +128,7 @@ const String vsvResourceBootstrapJs = r'''
   }
   try {
     var origFetch = window.fetch;
-    if (typeof origFetch === 'function') {
+    if (isTop && typeof origFetch === 'function') {
       window.fetch = function(input, init) {
         var url = typeof input === 'string' ? input :
             (input && input.url) ? input.url : String(input);
@@ -83,7 +143,7 @@ const String vsvResourceBootstrapJs = r'''
       };
     }
   } catch (e) {}
-  try {
+  if (isTop) try {
     var xhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(m, u) {
       this.__vsvUrl = u;
@@ -181,7 +241,9 @@ window.__vsv_collect = function() {
       for (var name in window.__vsv_obs) {
         if (!Object.prototype.hasOwnProperty.call(window.__vsv_obs, name)) continue;
         var o = window.__vsv_obs[name];
-        observer.push({n: name, it: o.it, st: o.st, du: o.du, tx: o.tx, enc: o.enc, dec: o.dec});
+        var item = {n: name, it: o.it, st: o.st, du: o.du, tx: o.tx, enc: o.enc, dec: o.dec};
+        if (o.fr === 1) { item.fr = 1; item.fo = o.fo; }
+        observer.push(item);
       }
     } else {
       var es = performance.getEntriesByType('resource');

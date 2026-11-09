@@ -199,6 +199,9 @@ class _BrowserViewState extends State<BrowserView> {
         UserScript(
           source: '$vsvResourceBootstrapJs\n$vsvCollectJs',
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          // Also in iframes: they post their resources (ads, embeds) to the
+          // top frame, so the page size counts them.
+          forMainFrameOnly: false,
         ),
       ]),
       onWebViewCreated: (controller) {

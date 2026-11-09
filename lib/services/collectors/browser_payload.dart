@@ -273,6 +273,7 @@ ResourceEntry _observerEntry(
     transfer: transfer,
     decoded: decoded,
     fromCache: fromCache,
+    frameOrigin: e['fr'] == 1 ? '${e['fo'] ?? ''}' : null,
   );
 }
 
@@ -308,6 +309,8 @@ List<ResourceEntry> mergeResources(
         fromCache: f.transfer is Present<int> || o.transfer is! Present<int>
             ? f.fromCache
             : o.fromCache,
+        // The first report of where it was loaded stays.
+        frameOrigin: o.frameOrigin ?? f.frameOrigin,
       );
     }
   }
