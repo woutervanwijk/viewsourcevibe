@@ -121,6 +121,19 @@ PageWeight? deriveFreshPageWeight(PageInspection p) {
       server: p.server, estimates: p.freshEstimates);
 }
 
+/// script, style, image, document or other. What the browser says it loaded
+/// (its initiator type) comes first: image CDNs often serve URLs without an
+/// extension (images.ad.nl/…/slug). The URL is only a fallback, e.g. for
+/// `link` (stylesheet or preload) and `css` (a url() in a stylesheet: an
+/// image or a font).
+String resourceCategory(ResourceEntry r, String pageUrl) =>
+    switch (r.type.toLowerCase()) {
+      'img' || 'image' || 'video' || 'audio' || 'media' => 'image',
+      'script' => 'script',
+      'iframe' || 'frame' => 'document',
+      _ => ProbeService.categorizeResource(r.url, pageUrl),
+    };
+
 /// A cross-origin iframe (ads, embeds) or something it loaded. Same-origin
 /// frames count as the page's own.
 bool isThirdPartyFrame(ResourceEntry r, Uri page) {
@@ -167,8 +180,8 @@ PageWeight? derivePageWeightOf(BrowserSnapshot b,
   var missing = 0;
 
   for (final r in res.value) {
-    final category = ProbeService.categorizeResource(r.url, pageUrl);
-    final isImage = category == 'image' || r.type == 'img' || r.type == 'image';
+    final category = resourceCategory(r, pageUrl);
+    final isImage = category == 'image';
     final bucket = buckets[isThirdPartyFrame(r, b.url)
         ? 'thirdPartyFrames'
         : switch (category) {
