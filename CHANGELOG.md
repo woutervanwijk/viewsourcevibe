@@ -2,6 +2,11 @@
 
 All notable, user-facing changes to View Source Vibe are documented here.
 
+## Unreleased
+
+### New
+- **Reader** tab (HTML pages): renders the page as a clean article using Readability.js, extracted from the live browser view when available. Links in the article open in the Browser tab.
+
 ## 1.2.1
 - Central data point
 - Small bugfixes
