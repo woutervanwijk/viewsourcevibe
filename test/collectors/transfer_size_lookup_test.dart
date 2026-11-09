@@ -38,8 +38,9 @@ void main() {
   });
   tearDown(() => server.close(force: true));
 
-  Future<int?> look(String path, {int limit = 10 * 1024 * 1024}) =>
-      lookupTransferSize('$base$path', userAgent: 'test', limit: limit);
+  Future<int?> look(String path, {int? limit}) => limit == null
+      ? lookupTransferSize('$base$path', userAgent: 'test')
+      : lookupTransferSize('$base$path', userAgent: 'test', limit: limit);
 
   test('counts the compressed bytes on the wire plus headers', () async {
     final gz = gzip.encode(List.filled(100 * 1024, 65)).length;
@@ -58,6 +59,11 @@ void main() {
 
   test('past the limit it reports a lower bound, not a size', () async {
     expect(look('/big', limit: 1024), throwsA(isA<SizeLimitExceeded>()));
+  });
+
+  test('the default limit allows big GIFs (50 MB)', () {
+    expect(const SizeLimitExceeded(50 * 1024 * 1024).toString(),
+        'larger than 50 MB');
   });
 
   test('error status and empty body give no size (never 0)', () async {

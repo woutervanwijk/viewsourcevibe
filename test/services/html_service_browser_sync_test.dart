@@ -95,7 +95,7 @@ void main() {
   late Future<Object?> Function(String url) collect;
   late Future<List<Map>> Function(String url) native;
 
-  HtmlService make({NetworkQuietPolicy? poll}) {
+  HtmlService make({NetworkQuietPolicy? poll, Duration? late}) {
     final s = HtmlService(
       store: store,
       serverFetcher: fetcher,
@@ -108,6 +108,7 @@ void main() {
       nativeCookies: (url) => native(url),
       browserPlatform: BrowserPlatform.macos,
       browserPoll: poll ?? NetworkQuietPolicy.off,
+      lateCollectDelay: late ?? const Duration(milliseconds: 10),
       spaSettleDelay: Duration.zero,
     );
     s.setAppSettings(AppSettings()..useBrowserByDefault = true);
@@ -377,6 +378,59 @@ void main() {
       expect(calls, greaterThanOrEqualTo(4));
       await Future<void>.delayed(const Duration(milliseconds: 60));
       expect(collectCalls, hasLength(calls), reason: 'polling stopped');
+    });
+
+    test('after settling, late resources (lazy images) are collected again',
+        () async {
+      var n = 0;
+      collect = (url) async {
+        n++;
+        return payload(url: url, observer: [
+          obs('https://a.test/app.js', tx: 1000),
+          if (n > 1) obs('https://a.test/lazy.gif', tx: 3000000),
+        ]);
+      };
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(collectCalls, hasLength(1));
+
+      // The page reports new resources several times: one collect.
+      service.onBrowserResourcesChanged();
+      service.onBrowserResourcesChanged();
+      service.onBrowserResourcesChanged();
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await pumpEventQueue();
+
+      expect(collectCalls, hasLength(2));
+      final b = store.current.browser as Present<BrowserSnapshot>;
+      final res = (b.value.resources as Present<List<ResourceEntry>>).value;
+      expect(res.map((r) => r.url), contains('https://a.test/lazy.gif'));
+    });
+
+    test('before settling the polling covers late resources', () async {
+      service.dispose();
+      service = make(
+          poll: const NetworkQuietPolicy(
+              interval: Duration(hours: 1),
+              quiet: Duration(hours: 1),
+              max: Duration(hours: 1)));
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      expect(store.current.browserSettled, isFalse);
+      service.onBrowserResourcesChanged();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(collectCalls, hasLength(1));
+    });
+
+    test('a navigation cancels a waiting late collect', () async {
+      service.dispose();
+      service = make(late: const Duration(milliseconds: 40));
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      service.onBrowserResourcesChanged();
+      await service.loadUrl('https://b.test/');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(collectCalls, hasLength(1));
     });
 
     test('without polling the load is settled at once', () async {

@@ -139,6 +139,11 @@ void main() {
     expect(vsvCollectJs, contains('item.fr = 1'));
   });
 
+  test('the top frame tells the app about late resources, batched', () {
+    expect(vsvResourceBootstrapJs, contains("callHandler('vsvResources'"));
+    expect(vsvResourceBootstrapJs, contains('notifyTimer'));
+  });
+
   test('macOS: patch-only entry carries content-length as transfer', () {
     final s = parse('macos_basic.json', BrowserPlatform.macos,
         'https://example.com/index.html');
