@@ -323,8 +323,12 @@ class HtmlService extends ChangeNotifier {
   Map<String, dynamic>? _lastPageWeight;
   bool _isExtractingMetadata = false;
 
-  double _webViewLoadingProgress = 0.0;
-  double get webViewLoadingProgress => _webViewLoadingProgress;
+  /// WebView load progress (0..1) on a notifier of its own, like
+  /// [webViewScrollNotifier]: progress events arrive many times per second
+  /// and must not notifyListeners() (which rebuilds the app) per tick.
+  final ValueNotifier<double> webViewLoadingProgressNotifier =
+      ValueNotifier(0.0);
+  double get webViewLoadingProgress => webViewLoadingProgressNotifier.value;
 
   // WebView extraction state
   bool _isWebViewLoading = false;
@@ -1381,9 +1385,10 @@ class HtmlService extends ChangeNotifier {
   }
 
   void updateWebViewLoadingProgress(double progress) {
-    if (_webViewLoadingProgress != progress) {
-      _webViewLoadingProgress = progress;
-      notifyListeners();
+    final notifier = webViewLoadingProgressNotifier;
+    if (notifier.value != progress) {
+      // Only the progress notifier fires; no notifyListeners() here.
+      notifier.value = progress;
     }
   }
 
@@ -1487,7 +1492,7 @@ class HtmlService extends ChangeNotifier {
   void _resetLoadState({String? newUrl, bool notify = true}) {
     _clearBrowserDerivedData();
     _resetMetadata();
-    _webViewLoadingProgress = 0.0;
+    webViewLoadingProgressNotifier.value = 0.0;
     _beautifiedCache.clear();
     _isBeautifyEnabled = false;
 
@@ -2114,7 +2119,7 @@ Technical details: $message''';
     _webViewLoadingUrl = null;
     _isWebViewLoading = false;
     _isLoading = false;
-    _webViewLoadingProgress = 0.0; // Reset progress bar
+    webViewLoadingProgressNotifier.value = 0.0; // Reset progress bar
     notifyListeners();
   }
 
@@ -2131,6 +2136,7 @@ Technical details: $message''';
     _disposed = true;
     _cancelBrowserRefreshes();
     _sovereigntyTimer?.cancel();
+    webViewLoadingProgressNotifier.dispose();
     store.removeListener(notifyListeners);
     if (_ownsStore) store.dispose();
     _autoSaveTimer?.cancel();

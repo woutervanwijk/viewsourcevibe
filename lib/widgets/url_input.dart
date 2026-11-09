@@ -473,49 +473,51 @@ class _UrlInputProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<HtmlService, _UrlInputProgressData>(
-      selector: (context, service) => _UrlInputProgressData(
-        isLoading: service.isLoading,
-        webViewLoadingProgress: service.webViewLoadingProgress,
-      ),
-      builder: (context, data, child) {
-        final bool showProgress = data.isLoading ||
-            (data.webViewLoadingProgress > 0 &&
-                data.webViewLoadingProgress < 1.0);
+    // isLoading comes from the service; the progress value from its own
+    // notifier, so WebView progress ticks (many per second) rebuild only
+    // this indicator, never the whole app.
+    return Selector<HtmlService, bool>(
+      selector: (context, service) => service.isLoading,
+      builder: (context, isLoading, child) {
+        return ValueListenableBuilder<double>(
+          valueListenable: htmlService.webViewLoadingProgressNotifier,
+          builder: (context, progress, _) {
+            final bool showProgress =
+                isLoading || (progress > 0 && progress < 1.0);
 
-        if (showProgress) {
-          return GestureDetector(
-            onTap: () => htmlService.cancelWebViewLoad(),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(
-                  value: data.webViewLoadingProgress > 0
-                      ? data.webViewLoadingProgress
-                      : null,
-                  strokeWidth: 1,
+            if (showProgress) {
+              return GestureDetector(
+                onTap: () => htmlService.cancelWebViewLoad(),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      value: progress > 0 ? progress : null,
+                      strokeWidth: 1,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          );
-        }
-
-        // Use ListenableBuilder for the controller text to avoid rebuilding the whole UrlInput
-        return ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) {
-            if (controller.text.isNotEmpty) {
-              return IconButton(
-                icon: const Icon(Icons.clear, size: 20),
-                onPressed: () {
-                  controller.clear();
-                  htmlService.cancelWebViewLoad();
-                },
               );
             }
-            return const SizedBox.shrink();
+
+            // Use ListenableBuilder for the controller text to avoid rebuilding the whole UrlInput
+            return ListenableBuilder(
+              listenable: controller,
+              builder: (context, _) {
+                if (controller.text.isNotEmpty) {
+                  return IconButton(
+                    icon: const Icon(Icons.clear, size: 20),
+                    onPressed: () {
+                      controller.clear();
+                      htmlService.cancelWebViewLoad();
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            );
           },
         );
       },
@@ -560,24 +562,3 @@ class _UrlInputStructure {
       fileNotice.hashCode;
 }
 
-@immutable
-class _UrlInputProgressData {
-  final bool isLoading;
-  final double webViewLoadingProgress;
-
-  const _UrlInputProgressData({
-    required this.isLoading,
-    required this.webViewLoadingProgress,
-  });
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is _UrlInputProgressData &&
-          runtimeType == other.runtimeType &&
-          isLoading == other.isLoading &&
-          webViewLoadingProgress == other.webViewLoadingProgress;
-
-  @override
-  int get hashCode => isLoading.hashCode ^ webViewLoadingProgress.hashCode;
-}
