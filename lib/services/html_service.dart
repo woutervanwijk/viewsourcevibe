@@ -51,6 +51,7 @@ import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
+import 'package:view_source_vibe/services/reader_service.dart';
 import 'package:view_source_vibe/utils/path_name.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_payload.dart';
@@ -166,6 +167,10 @@ class HtmlService extends ChangeNotifier {
   String?
       selectedContentType; // Track the selected content type for syntax highlighting
   AppSettings? _appSettings;
+
+  /// Reader tab state/extraction, wired up in main (created after this
+  /// service, which it reads). Null in tests that don't set one.
+  ReaderService? _readerService;
   UrlHistoryService? _urlHistoryService;
   AppStateService? _appStateService;
   GlobalKey? _codeEditorKey;
@@ -387,6 +392,7 @@ class HtmlService extends ChangeNotifier {
   int get browserTabIndex {
     if (_useBrowserByDefault) return 0;
     int idx = 1; // Source
+    if (isHtml) idx += 1; // Reader
     if (isHtmlOrXml) idx += 1; // DOM Tree
     if (showMetadataTabs) {
       idx += 5; // Metadata + Media + Size + Services + Privacy
@@ -408,6 +414,17 @@ class HtmlService extends ChangeNotifier {
         _ => index,
       };
 
+  /// Reader sits right before DOM Tree, which sits right of the metadata
+  /// tabs. Only present for HTML pages.
+  int get readerTabIndex {
+    int idx = _useBrowserByDefault ? 1 : 0; // Browser first
+    if (showMetadataTabs) {
+      idx += 5; // Metadata + Media + Size + Services + Privacy
+      if (showServerTabs) idx += 1; // Sovereignty
+    }
+    return idx;
+  }
+
   /// Source sits right of DOM Tree, which sits right of the metadata tabs.
   int get sourceTabIndex {
     int idx = _useBrowserByDefault ? 1 : 0; // Browser first
@@ -415,6 +432,7 @@ class HtmlService extends ChangeNotifier {
       idx += 5; // Metadata + Media + Size + Services + Privacy
       if (showServerTabs) idx += 1; // Sovereignty
     }
+    if (isHtml) idx += 1; // Reader
     if (isHtmlOrXml) idx += 1; // DOM Tree
     return idx;
   }
@@ -1312,6 +1330,11 @@ class HtmlService extends ChangeNotifier {
       if (index == sourceTabIndex) {
         _adoptServerBodyIfEmpty(store.current.generation).ignore();
       }
+
+      // Reader tab: extract the article lazily, once per page generation.
+      if (isHtml && index == readerTabIndex) {
+        _readerService?.extractIfStale().ignore();
+      }
     }
   }
 
@@ -1473,6 +1496,9 @@ class HtmlService extends ChangeNotifier {
     _isLoading = true;
     _isWebViewLoading = false;
     _webViewLoadingUrl = null;
+
+    // The Reader tab's article belongs to the page that just went away.
+    _readerService?.markStale();
 
     if (notify) notifyListeners();
   }
@@ -2164,6 +2190,10 @@ Technical details: $message''';
 
   void setAppStateService(AppStateService service) {
     _appStateService = service;
+  }
+
+  void setReaderService(ReaderService readerService) {
+    _readerService = readerService;
   }
 
   void setAppSettings(AppSettings settings) {

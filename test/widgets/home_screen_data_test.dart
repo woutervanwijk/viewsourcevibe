@@ -8,6 +8,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/reader_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/widgets/divergence_banner.dart';
 import 'package:view_source_vibe/widgets/source_viewer.dart';
@@ -50,6 +51,8 @@ Future<void> pumpHome(WidgetTester tester, HtmlService service) async {
   await tester.pumpWidget(MultiProvider(
     providers: [
       ChangeNotifierProvider<HtmlService>.value(value: service),
+      ChangeNotifierProvider<ReaderService>.value(
+          value: ReaderService(service)),
       ChangeNotifierProvider<AppSettings>.value(value: settings),
     ],
     child: const MaterialApp(home: HomeScreen()),
@@ -162,6 +165,27 @@ void main() {
       }
       expect(HomeScreen.structureBuilds, before);
       expect(find.byType(SourceViewer), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('Reader tab appears for HTML pages, before DOM Tree',
+        (tester) async {
+      final service = makeService(seedStore(InspectionStore(), fullPage()));
+      addTearDown(service.dispose);
+      await pumpHome(tester, service);
+
+      expect(find.text('Reader'), findsOneWidget);
+      expect(find.text('DOM Tree'), findsOneWidget);
+      final readerX = tester.getTopLeft(find.text('Reader')).dx;
+      final domX = tester.getTopLeft(find.text('DOM Tree')).dx;
+      expect(readerX, lessThan(domX));
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('no Reader tab for non-HTML content', (tester) async {
+      await localHome(tester);
+      expect(find.text('Reader'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     });
 

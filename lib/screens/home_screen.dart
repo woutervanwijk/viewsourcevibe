@@ -21,6 +21,8 @@ import 'package:view_source_vibe/widgets/sovereignty_view.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 import 'package:view_source_vibe/widgets/browser_view.dart';
+import 'package:view_source_vibe/widgets/reader_view.dart';
+import 'package:view_source_vibe/services/reader_service.dart';
 import 'package:view_source_vibe/widgets/divergence_banner.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -37,6 +39,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
+  bool _lastIsHtml = false;
   bool _lastIsHtmlOrXml = false;
   bool _lastShowMetadataTabs = false;
   bool _lastShowServerTabs = false;
@@ -82,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _updateTabs(HtmlService htmlService, {bool force = false}) {
+    final isHtml = htmlService.isHtml;
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
     final showServerTabs = htmlService.showServerTabs;
@@ -89,7 +93,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final shouldShowBrowser = htmlService.shouldShowBrowserTab;
     final browserTabIndex = htmlService.browserTabIndex;
 
-    if (isHtmlOrXml == _lastIsHtmlOrXml &&
+    if (isHtml == _lastIsHtml &&
+        isHtmlOrXml == _lastIsHtmlOrXml &&
         showMetadataTabs == _lastShowMetadataTabs &&
         showServerTabs == _lastShowServerTabs &&
         isBrowserSupported == _lastIsBrowserSupported &&
@@ -115,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
       _tabController.addListener(_handleTabSelection);
       _tabLabels = labels;
+      _lastIsHtml = isHtml;
       _lastIsHtmlOrXml = isHtmlOrXml;
       _lastShowMetadataTabs = showMetadataTabs;
       _lastShowServerTabs = showServerTabs;
@@ -152,9 +158,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: child,
       ),
     );
-    // Analysis tabs get the disclaimer; browser, source and DOM tree show
-    // the page itself.
-    if (const {'browser-content', 'source', 'dom-tree'}.contains(tag)) {
+    // Analysis tabs get the disclaimer; browser, reader, source and DOM tree
+    // show the page itself.
+    if (const {'browser-content', 'reader', 'source', 'dom-tree'}.contains(tag)) {
       return page;
     }
     return Column(
@@ -192,6 +198,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   /// Tabs in display order. Kept in sync with [_getTabViews].
   List<(IconData, String)> _tabSpecs(HtmlService htmlService) {
+    final isHtml = htmlService.isHtml;
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
     final showServerTabs = htmlService.showServerTabs;
@@ -211,6 +218,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         (Icons.privacy_tip_outlined, 'Privacy'),
         if (showServerTabs) (Icons.public, 'Sovereignty'),
       ],
+      if (isHtml) (Icons.chrome_reader_mode, 'Reader'),
       if (isHtmlOrXml) (Icons.account_tree_outlined, 'DOM Tree'),
       (Icons.code, 'Source'),
       if (showServerTabs) ...[
@@ -232,6 +240,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ];
 
   List<Widget> _getTabViews(HtmlService htmlService, HtmlFile? currentFile) {
+    final isHtml = htmlService.isHtml;
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
     final showServerTabs = htmlService.showServerTabs;
@@ -287,6 +296,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
 
+    final readerView = KeepAliveWrapper(
+      key: const ValueKey('tab_reader'),
+      child: _buildRefreshable(
+        ReaderView(
+          gestureRecognizers: {
+            Factory<VerticalDragGestureRecognizer>(
+              () => VerticalDragGestureRecognizer(),
+            ),
+          },
+        ),
+        'reader',
+      ),
+    );
+
     if (!isBrowserSupported) {
       return [
         if (showMetadataTabs) ...[
@@ -305,6 +328,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child:
                     _buildRefreshable(const SovereigntyView(), 'sovereignty')),
         ],
+        if (isHtml) readerView,
         if (isHtmlOrXml)
           KeepAliveWrapper(
               child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
@@ -354,7 +378,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
       ],
 
-      // DOM Tree and Source sit right of the metadata tabs
+      // Reader, DOM Tree and Source sit right of the metadata tabs
+      if (isHtml) readerView,
       if (isHtmlOrXml)
         KeepAliveWrapper(
             key: const ValueKey('tab_dom_tree'),
@@ -402,6 +427,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return Selector<HtmlService, _HomeScreenStructure>(
       selector: (context, service) => _HomeScreenStructure(
+        isHtml: service.isHtml,
         isHtmlOrXml: service.isHtmlOrXml,
         showMetadataTabs: service.showMetadataTabs,
         showServerTabs: service.showServerTabs,
@@ -416,7 +442,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         HomeScreen.structureBuilds++;
         // Update TabController synchronously if content type changed
         // This MUST happen before building the TabBar to avoid length mismatch
-        if (structure.isHtmlOrXml != _lastIsHtmlOrXml ||
+        if (structure.isHtml != _lastIsHtml ||
+            structure.isHtmlOrXml != _lastIsHtmlOrXml ||
             structure.showMetadataTabs != _lastShowMetadataTabs ||
             structure.showServerTabs != _lastShowServerTabs ||
             structure.isBrowserSupported != _lastIsBrowserSupported ||
@@ -579,6 +606,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 /// Helper class to track structure-defining state for HomeScreen
 @immutable
 class _HomeScreenStructure {
+  final bool isHtml;
   final bool isHtmlOrXml;
   final bool showMetadataTabs;
   final bool showServerTabs;
@@ -590,6 +618,7 @@ class _HomeScreenStructure {
   final int? requestedTabIndex;
 
   const _HomeScreenStructure({
+    required this.isHtml,
     required this.isHtmlOrXml,
     required this.showMetadataTabs,
     required this.showServerTabs,
@@ -606,6 +635,7 @@ class _HomeScreenStructure {
       identical(this, other) ||
       other is _HomeScreenStructure &&
           runtimeType == other.runtimeType &&
+          isHtml == other.isHtml &&
           isHtmlOrXml == other.isHtmlOrXml &&
           showMetadataTabs == other.showMetadataTabs &&
           showServerTabs == other.showServerTabs &&
@@ -618,6 +648,7 @@ class _HomeScreenStructure {
 
   @override
   int get hashCode =>
+      isHtml.hashCode ^
       isHtmlOrXml.hashCode ^
       showMetadataTabs.hashCode ^
       showServerTabs.hashCode ^
@@ -687,6 +718,9 @@ class _TabPageWrapperState extends State<TabPageWrapper> {
       // WebView scroll to top (internal content)
       htmlService.activeWebViewController?.scrollTo(x: 0, y: 0);
     }
+
+    // 2b. Reader tab's own WebView
+    Provider.of<ReaderService>(context, listen: false).scrollToTop().ignore();
 
     // 3. Fallback: also try PrimaryScrollController if it's different
     final primary = PrimaryScrollController.of(context);
