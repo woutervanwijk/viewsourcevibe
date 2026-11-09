@@ -211,8 +211,31 @@ List<ResourceEntry> _parseResources(
     byUrl[url] =
         existing == null ? entry : mergeResources([existing], [entry]).single;
   }
+  // Images on screen that no timing entry covers: loaded, but unmeasured.
+  if (_isWebPage(pageUrl)) {
+    for (final e in (m['shown'] as List? ?? const [])) {
+      final url = _absoluteUrl(e, pageUrl);
+      if (url == null || byUrl.containsKey(url)) continue;
+      byUrl[url] = ResourceEntry(
+        url: url,
+        type: 'img',
+        source: ResourceSource.shownImage,
+        startTime: const Unavailable(UnavailableReason.notReportedByPlatform,
+            _shownImageDetail),
+        duration: const Unavailable(UnavailableReason.notReportedByPlatform,
+            _shownImageDetail),
+        transfer: const Unavailable(UnavailableReason.notReportedByPlatform,
+            _shownImageDetail),
+        decoded: const Unavailable(UnavailableReason.notReportedByPlatform,
+            _shownImageDetail),
+      );
+    }
+  }
   return byUrl.values.toList();
 }
+
+const _shownImageDetail = 'shown on the page, but the browser reported no '
+    'timing for it (likely served from its memory cache)';
 
 ResourceEntry _observerEntry(
     Map e, String url, BrowserPlatform platform, Uri pageUrl) {
@@ -293,8 +316,11 @@ List<ResourceEntry> mergeResources(
     final o = byUrl[f.url];
     if (o == null) {
       byUrl[f.url] = f;
-    } else if (o.source == ResourceSource.observer &&
-        f.source == ResourceSource.patch) {
+    } else if ((o.source == ResourceSource.observer &&
+            f.source == ResourceSource.patch) ||
+        // A shown image never replaces a measured entry.
+        (f.source == ResourceSource.shownImage &&
+            o.source != ResourceSource.shownImage)) {
       continue;
     } else {
       byUrl[f.url] = ResourceEntry(

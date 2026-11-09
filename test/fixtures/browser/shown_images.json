@@ -1,0 +1,10 @@
+{"_synthetic":true,"_note":"Models WebKit serving two lazy GIFs from its memory cache: they are on screen (shown) but have no resource-timing entry; one shown image is also in the timing.",
+"v":1,"url":"https://example.com/","contentType":"text/html",
+"timing":{"ok":true,"now":3000.0,"timeOrigin":1760000000000},
+"dom":{"ok":true,"value":"<html><body></body></html>","iframes":0,"shadowRoots":0},
+"resources":{"ok":true,"bootstrap":true,"dropped":0,"observer":[
+{"n":"https://example.com/logo.png","it":"img","st":10.0,"du":2.0,"tx":3000,"enc":2800,"dec":2800}],
+"shown":["https://example.com/logo.png","https://cdn.example.net/big1.gif","/rel/big2.gif"],
+"patch":[]},
+"navigation":{"ok":true,"responseStart":120.5,"domInteractive":400.2,"domContentLoaded":420.0,"loadEnd":900.1,"protocol":"h2"},"storage":{"local":{"ok":true,"count":0,"items":[],"truncated":false},"session":{"ok":true,"count":0,"items":[],"truncated":false}},
+"cookies":{"ok":true,"raw":""}}
