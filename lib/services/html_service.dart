@@ -99,6 +99,10 @@ class HtmlService extends ChangeNotifier {
   final MetadataExtractor _metadataExtractor;
   final BrowserCollect? _browserCollectOverride;
   final NativeCookieReader _nativeCookies;
+
+  /// Deletes every cookie (the "Always clean cookies" setting); a seam for
+  /// tests.
+  final Future<void> Function() _deleteAllCookies;
   final ResourceSizeLookup _sizeLookup;
   final FreshLoadMeasurer _freshMeasurer;
   final BrowserScreenshot? _browserScreenshotOverride;
@@ -1397,6 +1401,7 @@ class HtmlService extends ChangeNotifier {
     BrowserCollect? browserCollect,
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
+    Future<void> Function()? deleteAllCookies,
     FreshLoadMeasurer? freshLoadMeasurer,
     BrowserScreenshot? browserScreenshot,
     BrowserPlatform? browserPlatform,
@@ -1412,6 +1417,8 @@ class HtmlService extends ChangeNotifier {
         _domTreeIsolateThreshold = domTreeIsolateThreshold,
         _browserCollectOverride = browserCollect,
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
+        _deleteAllCookies = deleteAllCookies ??
+            (() => CookieManager.instance().deleteAllCookies()),
         _sizeLookup = sizeLookup ?? _lookupResourceSize,
         _browserScreenshotOverride = browserScreenshot,
         _freshMeasurer = freshLoadMeasurer ??
@@ -1539,6 +1546,13 @@ class HtmlService extends ChangeNotifier {
     }
 
     _pushPreviousPageToNavigationStack(url);
+
+    // "Always clean cookies": every navigation starts without cookies.
+    if (_appSettings?.cleanCookies ?? false) {
+      try {
+        await _deleteAllCookies();
+      } catch (_) {}
+    }
 
     // 1. Clean state and update main URL
     // We don't notify yet because we want to set the correct loading path first
