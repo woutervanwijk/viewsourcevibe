@@ -4615,7 +4615,9 @@ Technical details: $message''';
     _lastRawPayload = (gen: gen, raw: raw is String ? raw : '$raw');
     BrowserSnapshot snapshot;
     try {
-      snapshot = parseBrowserPayload(raw, _platform, pageUrl: uri);
+      // Off-thread: the payload carries the whole rendered DOM as one JSON
+      // string, and decoding it here blocks the UI on every load poll.
+      snapshot = await parseBrowserPayloadAsync(raw, _platform, pageUrl: uri);
     } catch (e) {
       store.applyBrowserFailure(gen, Failed('Payload could not be read: $e'));
       return;
@@ -4704,7 +4706,8 @@ Technical details: $message''';
     if (stale()) return;
     BrowserSnapshot snapshot;
     try {
-      snapshot = parseBrowserPayload(raw.payload, _platform, pageUrl: url);
+      snapshot =
+          await parseBrowserPayloadAsync(raw.payload, _platform, pageUrl: url);
     } catch (e) {
       store.applyFreshLoad(gen, Failed('Fresh load could not be read: $e'));
       return;

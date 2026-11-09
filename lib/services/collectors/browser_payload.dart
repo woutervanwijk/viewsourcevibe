@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';
 
@@ -15,6 +17,24 @@ Present<T> _measured<T>(T v) => Present<T>(v, source: DataSource.browser);
 /// A non-String result (some Windows/Linux WebViews) gives sections that are
 /// [Unavailable] (unsupportedPlatform); an unparsable string gives [Failed].
 /// Never empty lists that look like "nothing found".
+BrowserSnapshot _parsePayloadInIsolate(
+    (String, BrowserPlatform, Uri) args) {
+  return parseBrowserPayload(args.$1, args.$2, pageUrl: args.$3);
+}
+
+/// Parses the collector payload off the UI thread: the payload carries the
+/// whole rendered DOM as one JSON string, so decoding it on the main isolate
+/// blocks rendering while a page loads. Non-String answers are small and
+/// parse directly.
+Future<BrowserSnapshot> parseBrowserPayloadAsync(Object? raw,
+    BrowserPlatform platform,
+    {required Uri pageUrl}) async {
+  if (raw is! String) {
+    return parseBrowserPayload(raw, platform, pageUrl: pageUrl);
+  }
+  return compute(_parsePayloadInIsolate, (raw, platform, pageUrl));
+}
+
 BrowserSnapshot parseBrowserPayload(Object? raw, BrowserPlatform platform,
     {required Uri pageUrl}) {
   if (raw is! String) {
