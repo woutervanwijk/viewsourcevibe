@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:view_source_vibe/main.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:re_highlight/re_highlight.dart';
@@ -43,6 +44,8 @@ import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
+import 'package:view_source_vibe/services/derive/page_weight.dart'
+    show isSameImageVariant;
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
@@ -202,6 +205,10 @@ class HtmlService extends ChangeNotifier {
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
+
+  /// The document text the current [_pageMetadata] was extracted from, so a
+  /// changed rendered DOM (lazy srcs swapped in) triggers re-extraction.
+  String? _metadataDomText;
   Map<String, dynamic>? get pageMetadata => _pageMetadata;
 
   // What the last extraction produced besides the map; reset with it.
@@ -4090,8 +4097,12 @@ Technical details: $message''';
         _metadataChecks = checks;
         _metadataUnresolved = derived?.unresolvedLinks ?? const [];
         _metadataDocSource = input.source;
+        _metadataDomText = html;
         _metadataRevision++;
         if (metadata != null) {
+          // The media the page declares in its DOM, so the Page size tab can
+          // list (and size) lazy images this browser never fetched.
+          store.applyDeclaredMedia(gen, _declaredMediaUrls(metadata));
           final weight = _pageWeight;
           if (weight != null) metadata['pageWeight'] = weight;
           // Correlate resource sizes with metadata
@@ -4104,6 +4115,24 @@ Technical details: $message''';
       _isExtractingMetadata = false;
       if (!_disposed) notifyListeners();
     }
+  }
+
+  /// Absolute http(s) image URLs the page declares in its DOM (the media the
+  /// Media tab lists), deduplicated. Lazy images the browser never fetched
+  /// have no resource entry; the Page size tab lists them anyway, sized by
+  /// the app's own lookup when possible.
+  static List<String> _declaredMediaUrls(Map<String, dynamic> metadata) {
+    final media = metadata['media'];
+    if (media is! Map || media['images'] is! List) return const [];
+    final out = <String>{};
+    for (final item in media['images']) {
+      if (item is! Map) continue;
+      final src = item['src'];
+      if (src is! String || src.isEmpty) continue;
+      if (!src.startsWith('http://') && !src.startsWith('https://')) continue;
+      out.add(src);
+    }
+    return out.toList();
   }
 
   /// The size of a timeline entry for the metadata lists; null when the
@@ -4206,6 +4235,24 @@ Technical details: $message''';
           if (match.isNotEmpty) {
             return _sizeOf(match);
           }
+        }
+      } catch (_) {}
+
+      // Tier 5: same image, different srcset variant. Image CDNs put the
+      // size in the path or query (images.ad.nl/<id>/0.50/.../slug), so the
+      // browser may have fetched a different variant than the markup's src:
+      // same host + same last path segment = the same image. Only when the
+      // browser actually measured that variant (a Present size); a
+      // cross-origin entry with 0/0/0 still has no real size.
+      try {
+        match = timeline.firstWhere(
+          (r) =>
+              isSameImageVariant(src, r['name'].toString()) &&
+              r['transfer'] is int,
+          orElse: () => {},
+        );
+        if (match.isNotEmpty) {
+          return _sizeOf(match);
         }
       } catch (_) {}
 
@@ -4616,7 +4663,8 @@ Technical details: $message''';
 
     // Hidden sizes, like the live load (shared lookup cache per page).
     final urls = estimateTargetsOf(store.current.freshLoad, const {},
-        limit: _maxEstimateLookups);
+        limit: _maxEstimateLookups,
+        declaredMedia: store.current.declaredMedia);
     var next = 0;
     Future<void> worker() async {
       while (next < urls.length && !stale()) {
@@ -4812,6 +4860,7 @@ Technical details: $message''';
     final clock = Stopwatch()..start();
     var lastChange = Duration.zero;
     var signature = _browserSignature();
+    var scrolled = false;
     void next() {
       _refreshTimers.add(Timer(policy.interval, () async {
         if (stale() || !_browserReachable) return;
@@ -4825,6 +4874,20 @@ Technical details: $message''';
           lastChange = now;
         }
         if (policy.done(elapsed: now, sinceLastChange: now - lastChange)) {
+          // Use the browser's own lazy loading once: scroll through the
+          // page so loading=lazy / IntersectionObserver content is fetched
+          // and measured, then keep collecting until it is quiet again.
+          if (!scrolled && (_appSettings?.scrollToLoadLazy ?? true)) {
+            scrolled = true;
+            await _scrollThroughPage();
+            if (stale()) return;
+            signature = _browserSignature();
+            lastChange = clock.elapsed;
+            next();
+            return;
+          }
+          // The scroll-through ran and its lazy loads were collected.
+          if (scrolled) _showScrollThroughToast();
           store.markBrowserSettled(gen);
           _captureLiveScreenshot(gen).ignore();
         } else {
@@ -4834,6 +4897,35 @@ Technical details: $message''';
     }
 
     next();
+  }
+
+  /// Scrolls the live page to the bottom and back to the top once, so lazy
+  /// content loads and the resource observer measures it. The polling loop
+  /// picks the new resources up; the scroll itself needs no awaiting here.
+  Future<void> _scrollThroughPage() async {
+    final c = activeWebViewController;
+    if (c == null) return;
+    try {
+      await c.evaluateJavascript(
+          source:
+              'window.__vsv_scrollThrough && window.__vsv_scrollThrough(true)');
+    } catch (_) {}
+  }
+
+  /// Toast text for when the automatic scroll-through finished.
+  @visibleForTesting
+  static const String scrollThroughToast =
+      'Scrolled the page once so lazy images and embeds loaded and could be '
+      'measured in the Page size tab. Turn off in Settings → Behavior → '
+      '"Load lazy content".';
+
+  /// Tells the user the page was scrolled automatically, and how to disable it.
+  void _showScrollThroughToast() {
+    final context = MyApp.navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text(scrollThroughToast)),
+    );
   }
 
   /// The page reported new resources (the bootstrap calls this at most once
@@ -4889,8 +4981,15 @@ Technical details: $message''';
   }
 
   /// New browser numbers: update the weight in the metadata and re-match the
-  /// sizes of its links.
+  /// sizes of its links. When the rendered DOM itself changed since the
+  /// metadata was extracted (lazy loading swapped srcs in after the
+  /// scroll-through), re-extract instead.
   void _applyBrowserDerivedToMetadata() {
+    final domText = primaryDocumentInput(store.current)?.text;
+    if (domText != null && domText != _metadataDomText) {
+      _extractMetadata().ignore();
+      return;
+    }
     final metadata = _pageMetadata;
     if (metadata != null) {
       final weight = _pageWeight;

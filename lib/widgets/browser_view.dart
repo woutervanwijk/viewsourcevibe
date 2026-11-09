@@ -197,7 +197,7 @@ class _BrowserViewState extends State<BrowserView> {
         // Resource observer + fetch/XHR patch, and the one-shot collector
         // (window.__vsv_collect) that HtmlService calls on every sync.
         UserScript(
-          source: '$vsvResourceBootstrapJs\n$vsvCollectJs',
+          source: '$vsvResourceBootstrapJs\n$vsvCollectJs\n$vsvScrollThroughJs',
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
           // Also in iframes: they post their resources (ads, embeds) to the
           // top frame, so the page size counts them.

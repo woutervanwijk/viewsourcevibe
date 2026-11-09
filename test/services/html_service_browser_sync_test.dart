@@ -95,7 +95,8 @@ void main() {
   late Future<Object?> Function(String url) collect;
   late Future<List<Map>> Function(String url) native;
 
-  HtmlService make({NetworkQuietPolicy? poll, Duration? late}) {
+  HtmlService make(
+      {NetworkQuietPolicy? poll, Duration? late, bool scrollToLoadLazy = false}) {
     final s = HtmlService(
       store: store,
       serverFetcher: fetcher,
@@ -111,7 +112,9 @@ void main() {
       lateCollectDelay: late ?? const Duration(milliseconds: 10),
       spaSettleDelay: Duration.zero,
     );
-    s.setAppSettings(AppSettings()..useBrowserByDefault = true);
+    s.setAppSettings(AppSettings()
+      ..useBrowserByDefault = true
+      ..scrollToLoadLazy = scrollToLoadLazy);
     return s;
   }
 
@@ -324,6 +327,44 @@ void main() {
           containsAll(['https://a.test/a.js', 'https://a.test/late.js']));
       expect(t['https://a.test/a.js']!['startTime'], 5.0);
       expect(t['https://a.test/a.js']!['duration'], 20.0);
+    });
+
+    test(
+        'scrollToLoadLazy: when the load is quiet, the page is scrolled once '
+        'and polling continues until the lazy loads are in', () async {
+      service.dispose();
+      service = make(poll: once(20), scrollToLoadLazy: true);
+      var n = 0;
+      collect = (url) async {
+        n++;
+        // After the scroll, a lazy image arrives.
+        return payload(url: url, observer: [
+          obs('https://a.test/a.js', st: 5.0, du: 20.0, tx: 100),
+          if (n >= 3)
+            {
+              'n': 'https://a.test/lazy.gif',
+              'it': 'img',
+              'st': 9000.0,
+              'du': 30.0,
+              'tx': 2400,
+              'enc': 2400,
+              'dec': 0
+            },
+        ]);
+      };
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await pumpEventQueue();
+      // initial sync + first poll + post-scroll poll, then settled
+      expect(collectCalls.length, greaterThanOrEqualTo(3));
+      expect(store.current.browserSettled, isTrue);
+      final names =
+          service.resourceTimelineData.map((r) => r['name']).toSet();
+      expect(names, contains('https://a.test/lazy.gif'));
+      // The toast explains the scroll and how to disable it.
+      expect(HtmlService.scrollThroughToast, contains('Settings'));
+      expect(HtmlService.scrollThroughToast, contains('Load lazy content'));
     });
 
     test('a refresh whose collect completes after navigation is dropped',

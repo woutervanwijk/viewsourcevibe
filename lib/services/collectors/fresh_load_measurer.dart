@@ -38,13 +38,18 @@ class NoFreshLoad implements FreshLoadMeasurer {
 }
 
 /// Resource count and transferred bytes so far: changes while the page is
-/// still loading.
+/// still loading. The dropped count is part of it: once the collector buffer
+/// is full, resources still arrive but only the drop count moves, and the
+/// network is not quiet yet.
 const _signatureJs = '''
 (function() {
   var n = 0, t = 0, o = window.__vsv_obs || {};
   for (var k in o) { if (o.hasOwnProperty(k)) { n++; t += o[k].tx || 0; } }
-  return n + ':' + t;
+  return n + ':' + t + ':' + (window.__vsv_obsDropped || 0);
 })()''';
+
+/// Extra time after the scroll-through for the lazy requests to finish.
+const Duration _scrollSettleBudget = Duration(seconds: 20);
 
 /// A recent iPhone Safari, for the desktop app: Lighthouse measures a phone.
 const _phoneUserAgent =
@@ -82,7 +87,7 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
       ),
       initialUserScripts: UnmodifiableListView<UserScript>([
         UserScript(
-          source: '$vsvResourceBootstrapJs\n$vsvCollectJs',
+          source: '$vsvResourceBootstrapJs\n$vsvCollectJs\n$vsvScrollThroughJs',
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
           forMainFrameOnly: false,
         ),
@@ -100,19 +105,35 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
     try {
       await loaded.future.timeout(policy.max);
       final controller = view.webViewController!;
-      var signature =
-          await controller.evaluateJavascript(source: _signatureJs);
-      var lastChange = clock.elapsed;
-      while (!policy.done(
-          elapsed: clock.elapsed,
-          sinceLastChange: clock.elapsed - lastChange)) {
-        await Future<void>.delayed(policy.interval);
-        final s = await controller.evaluateJavascript(source: _signatureJs);
-        if (s != signature) {
-          signature = s;
-          lastChange = clock.elapsed;
+
+      /// Waits until the resource signature is quiet (or [budget] is spent).
+      Future<void> waitQuiet(Duration budget) async {
+        var signature =
+            await controller.evaluateJavascript(source: _signatureJs);
+        var lastChange = clock.elapsed;
+        while (clock.elapsed < budget &&
+            clock.elapsed - lastChange < policy.quiet) {
+          await Future<void>.delayed(policy.interval);
+          final s = await controller.evaluateJavascript(source: _signatureJs);
+          if (s != signature) {
+            signature = s;
+            lastChange = clock.elapsed;
+          }
         }
       }
+
+      await waitQuiet(policy.max);
+      // Use the browser's own lazy loading: scroll through the page so
+      // loading=lazy / IntersectionObserver content is actually fetched,
+      // then wait for those requests, so the collect below measures them
+      // for real instead of leaving them to estimates.
+      try {
+        await controller.evaluateJavascript(
+            source:
+                'window.__vsv_scrollThrough && window.__vsv_scrollThrough(false)');
+      } catch (_) {}
+      await waitQuiet(clock.elapsed + _scrollSettleBudget);
+
       final payload = await controller.evaluateJavascript(
           source: 'window.__vsv_collect()');
       Uint8List? shot;

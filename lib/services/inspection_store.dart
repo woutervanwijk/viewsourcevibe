@@ -131,6 +131,15 @@ class InspectionStore extends ChangeNotifier {
     return changed ? merged : null;
   }
 
+  /// The media the page declares in its DOM (see
+  /// [PageInspection.declaredMedia]): lazy images the browser may never
+  /// fetch still belong in the Page size tab.
+  void applyDeclaredMedia(int gen, List<String> urls) {
+    if (!_accepts(gen)) return;
+    if (listEquals(_current.declaredMedia, urls)) return;
+    _set(_current.copyWith(declaredMedia: urls));
+  }
+
   /// The live load stopped requesting (see [PageInspection.browserSettled]).
   void markBrowserSettled(int gen) {
     if (!_accepts(gen) || _current.browserSettled) return;

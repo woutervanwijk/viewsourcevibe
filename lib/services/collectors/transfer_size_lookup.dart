@@ -15,6 +15,9 @@ class SizeLimitExceeded implements Exception {
 /// bytes. Compressed like a browser asks for it (gzip, deflate, br; never
 /// decoded here), images in modern formats where offered.
 ///
+/// A HEAD is tried first: its content-length is the same wire size without
+/// downloading the body, so a big GIF is only sized, never re-downloaded.
+///
 /// Null when the server gave no usable response (error status, empty body).
 /// Throws [SizeLimitExceeded] past [limit] bytes, and on network errors.
 Future<int?> lookupTransferSize(
@@ -30,6 +33,27 @@ Future<int?> lookupTransferSize(
     ..autoUncompress = false
     ..connectionTimeout = timeout;
   try {
+    // HEAD first: content-length plus the HEAD response's own headers.
+    try {
+      final head = await http.headUrl(Uri.parse(url)).timeout(timeout);
+      head.headers
+        ..set(HttpHeaders.userAgentHeader, userAgent)
+        ..set(HttpHeaders.acceptHeader,
+            'image/avif,image/webp,image/apng,*/*;q=0.8')
+        ..set(HttpHeaders.acceptEncodingHeader, 'gzip, deflate, br');
+      final res = await head.close().timeout(timeout);
+      final cl = res.contentLength;
+      if (res.statusCode >= 200 && res.statusCode < 400 && cl > 0) {
+        if (cl > limit) throw SizeLimitExceeded(limit);
+        return cl + _headerBytes(res);
+      }
+      // Refused or no usable content-length (405, chunked, ...): the GET
+      // below decides, including the error statuses.
+    } on SizeLimitExceeded {
+      rethrow;
+    } catch (_) {
+      // HEAD unsupported or the request failed: measure with a GET below.
+    }
     final request = await http.getUrl(Uri.parse(url)).timeout(timeout);
     request.headers
       ..set(HttpHeaders.userAgentHeader, userAgent)

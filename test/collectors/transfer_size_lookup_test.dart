@@ -7,6 +7,7 @@ void main() {
   late HttpServer server;
   late String base;
   final seenHeaders = <String, String?>{};
+  final methods = <String, List<String>>{};
 
   setUp(() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -14,6 +15,7 @@ void main() {
     server.listen((req) async {
       seenHeaders['accept-encoding'] =
           req.headers.value(HttpHeaders.acceptEncodingHeader);
+      methods.putIfAbsent(req.uri.path, () => []).add(req.method);
       final res = req.response;
       switch (req.uri.path) {
         case '/gz':
@@ -27,6 +29,12 @@ void main() {
           res.add(List.filled(2000, 1));
         case '/big':
           res.add(List.filled(4096, 1));
+        case '/head-405':
+          if (req.method == 'HEAD') {
+            res.statusCode = 405;
+          } else {
+            res.add(List.filled(3000, 1));
+          }
         case '/404':
           res.statusCode = 404;
           res.write('nope');
@@ -49,6 +57,22 @@ void main() {
     expect(size, lessThan(gz + 500), reason: 'headers are a few hundred B');
     expect(size, lessThan(100 * 1024), reason: 'never the decoded size');
     expect(seenHeaders['accept-encoding'], contains('br'));
+  });
+
+  test('a HEAD sizes the resource first; the body is not re-downloaded',
+      () async {
+    final gz = gzip.encode(List.filled(100 * 1024, 65)).length;
+    final size = (await look('/gz'))!;
+    expect(methods['/gz']!.first, 'HEAD');
+    // Content-length was on the HEAD response: no GET was needed.
+    expect(methods['/gz'], isNot(contains('GET')));
+    expect(size, greaterThan(gz));
+  });
+
+  test('when HEAD is refused, a GET measures the body', () async {
+    final size = (await look('/head-405'))!;
+    expect(methods['/head-405'], ['HEAD', 'GET']);
+    expect(size, greaterThanOrEqualTo(3000));
   });
 
   test('without content-length the received bytes still count', () async {

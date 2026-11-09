@@ -214,7 +214,7 @@ Observed<TimelineModel> deriveTimeline(PageInspection p) {
       if (snapshot != null && snapshot.resourcesTruncated)
         '${snapshot.resourcesDropped} resource'
             '${snapshot.resourcesDropped == 1 ? '' : 's'} not collected '
-            '(the browser buffer was full)',
+            '(the collector buffer was full)',
     ];
     note = notes.isEmpty ? null : notes.join('; ');
     rows = Present([...timed, ...untimed], source: DataSource.browser);

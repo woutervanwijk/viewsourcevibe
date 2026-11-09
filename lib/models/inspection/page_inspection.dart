@@ -50,6 +50,12 @@ class PageInspection {
   /// from the browser's); Unavailable/Failed = the lookup gave no size.
   final Map<String, Observed<int>> resourceEstimates;
 
+  /// Image URLs declared in the page's DOM (the media the Media tab lists).
+  /// Lazy images the browser never fetched (no scroll in the embedded view)
+  /// have no resource entry; the Page size tab lists them anyway, sized by
+  /// the app's own lookup in [resourceEstimates] when possible.
+  final List<String> declaredMedia;
+
   /// The user's choice for the Source tab; null = default rule.
   final DataSource? primaryDocumentPreference;
 
@@ -77,6 +83,7 @@ class PageInspection {
     required this.file,
     this.robots = const Pending(),
     this.resourceEstimates = const {},
+    this.declaredMedia = const [],
     this.primaryDocumentPreference,
     this.browserSettled = false,
     this.freshLoad = kFreshLoadNotMeasured,
@@ -97,6 +104,7 @@ class PageInspection {
         robots = const Unavailable(
             UnavailableReason.notApplicable, 'nothing loaded'),
         resourceEstimates = const {},
+        declaredMedia = const [],
         primaryDocumentPreference = null,
         browserSettled = false,
         freshLoad = kFreshLoadNotMeasured,
@@ -110,6 +118,7 @@ class PageInspection {
     Observed<FileSnapshot>? file,
     Observed<RobotsInfo>? robots,
     Map<String, Observed<int>>? resourceEstimates,
+    List<String>? declaredMedia,
     Object? primaryDocumentPreference = _keep,
     bool? browserSettled,
     Observed<BrowserSnapshot>? freshLoad,
@@ -125,6 +134,7 @@ class PageInspection {
         file: file ?? this.file,
         robots: robots ?? this.robots,
         resourceEstimates: resourceEstimates ?? this.resourceEstimates,
+        declaredMedia: declaredMedia ?? this.declaredMedia,
         primaryDocumentPreference: identical(primaryDocumentPreference, _keep)
             ? this.primaryDocumentPreference
             : primaryDocumentPreference as DataSource?,

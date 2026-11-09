@@ -111,6 +111,23 @@ void main() {
       ]);
     });
 
+    test('a dropped (buffer-full) image is looked up like any unsized one', () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        ResourceEntry(
+            url: 'https://images.a.test/big-lazy.gif',
+            type: 'img',
+            source: ResourceSource.dropped,
+            startTime: const Pending(),
+            duration: const Pending(),
+            transfer: const Unavailable(
+                UnavailableReason.notReportedByPlatform, 'buffer full'),
+            decoded: const Unavailable(
+                UnavailableReason.notReportedByPlatform, 'buffer full')),
+      ]));
+      expect(estimateTargets(p), ['https://images.a.test/big-lazy.gif']);
+    });
+
     test('iframe content (ads, embeds) is looked up like the page\'s own', () {
       final p = inspection(
           browser: browserSnap(resources: [
@@ -125,6 +142,20 @@ void main() {
             frameOrigin: 'https://ads.test'),
       ]));
       expect(estimateTargets(p), ['https://ads.test/ad.js']);
+    });
+
+    test('declared but never fetched images are looked up; fetched ones are not',
+        () {
+      final p = inspection(
+          browser: browserSnap(resources: [
+        res('https://a.test/app.js', tx: b(10)),
+        res('https://images.a.test/aaa/666/pic.gif', type: 'img', tx: b(5)),
+      ])).copyWith(declaredMedia: const [
+        'https://images.a.test/lazy.gif', // never fetched: look it up
+        'https://a.test/app.js', // fetched and measured: skip
+        'https://images.a.test/bbb/999/pic.gif', // srcset variant of a fetched one: skip
+      ]);
+      expect(estimateTargets(p), ['https://images.a.test/lazy.gif']);
     });
 
     test('up to 400 lookups by default', () {
