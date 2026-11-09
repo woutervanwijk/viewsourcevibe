@@ -178,6 +178,39 @@ void main() {
       expect(imgLabel(s), '3 KB');
     });
 
+    test('a srcset variant the browser measured sizes the DOM src (no ≈)',
+        () async {
+      fetcher = FakeServerFetcher();
+      store = InspectionStore();
+      const variantHtml = '<html><head><title>S</title></head><body>'
+          '<img src="https://images.ad.nl/aaa/0.50/0.50/666/499/some-slug" alt="P">'
+          '</body></html>';
+      collected = payload(url: url, dom: variantHtml);
+      final s = make();
+      addTearDown(s.dispose);
+      await s.loadUrl(url);
+      fetcher.pending.last.complete(okSnapshot(url, variantHtml));
+      await pumpEventQueue();
+      await s.syncWebViewState(url);
+      await pumpEventQueue();
+      // The markup src was never fetched; a measured variant was.
+      expect(imgLabel(s), startsWith('size unknown'));
+
+      collected = payload(url: url, domOk: false, observer: [
+        {
+          ...obs('https://images.ad.nl/bbb/0.75/0.75/999/749/some-slug',
+              tx: 2400 * 1024, dec: 0),
+          'it': 'img',
+        },
+      ]);
+      await s.syncWebViewState(url);
+      await pumpEventQueue();
+
+      // Same host + same last path segment = the same image: the measured
+      // size shows, not an estimate.
+      expect(imgLabel(s), '2,400 KB');
+    });
+
     test('an own size lookup updates both tabs, marked as an estimate',
         () async {
       lookupGate = Completer<int?>();

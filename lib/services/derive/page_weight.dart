@@ -104,13 +104,43 @@ class PageWeight {
   String get decodedPrefix => decodedLowerBound ? '≥ ' : '';
 }
 
+/// True when [declared] and [url] are the same image modulo the size variant:
+/// image CDNs put the variant in the path (e.g. `images.ad.nl/<id>/.../slug`),
+/// so same host + same last path segment means one image, however the srcset
+/// candidate the browser picked.
+bool isSameImageVariant(String declared, String url) {
+  final a = Uri.tryParse(declared), b = Uri.tryParse(url);
+  if (a == null || b == null) return false;
+  if (a.host.toLowerCase() != b.host.toLowerCase()) return false;
+  String lastSegment(String path) {
+    final parts = path.split('/').where((p) => p.isNotEmpty).toList();
+    return parts.isEmpty ? '' : parts.last.toLowerCase();
+  }
+  final la = lastSegment(a.path), lb = lastSegment(b.path);
+  return la.isNotEmpty && la == lb;
+}
+
+/// The declared media URLs the browser did not fetch at all: no resource with
+/// the exact URL, and no same-host same-filename variant.
+List<String> unfetchedDeclaredMedia(
+    Iterable<String> resourceUrls, List<String> declaredMedia) {
+  final urls = resourceUrls.toSet();
+  return [
+    for (final d in declaredMedia)
+      if (!urls.contains(d) &&
+          !urls.any((u) => isSameImageVariant(d, u)))
+        d
+  ];
+}
+
 /// Page weight of the live load in [p]; null unless the browser's resources
 /// are Present.
 PageWeight? derivePageWeight(PageInspection p) {
   final browser = p.browser;
   if (browser is! Present<BrowserSnapshot>) return null;
   return derivePageWeightOf(browser.value,
-      server: p.server, estimates: p.resourceEstimates);
+      server: p.server, estimates: p.resourceEstimates,
+      declaredMedia: p.declaredMedia);
 }
 
 /// Page weight of the fresh (Lighthouse-like) load in [p], if there is one.
@@ -118,7 +148,8 @@ PageWeight? deriveFreshPageWeight(PageInspection p) {
   final fresh = p.freshLoad;
   if (fresh is! Present<BrowserSnapshot>) return null;
   return derivePageWeightOf(fresh.value,
-      server: p.server, estimates: p.freshEstimates);
+      server: p.server, estimates: p.freshEstimates,
+      declaredMedia: p.declaredMedia);
 }
 
 /// script, style, image, document or other. What the browser says it loaded
@@ -161,7 +192,8 @@ bool isThirdPartyFrame(ResourceEntry r, Uri page) {
 /// and its absence is not a gap.
 PageWeight? derivePageWeightOf(BrowserSnapshot b,
     {Observed<ServerSnapshot> server = const Pending(),
-    Map<String, Observed<int>> estimates = const {}}) {
+    Map<String, Observed<int>> estimates = const {},
+    List<String> declaredMedia = const []}) {
   final res = b.resources;
   if (res is! Present<List<ResourceEntry>>) return null;
 
@@ -179,7 +211,9 @@ PageWeight? derivePageWeightOf(BrowserSnapshot b,
   int? measured;
   var missing = 0;
 
+  final resourceUrls = <String>{};
   for (final r in res.value) {
+    resourceUrls.add(r.url);
     final category = resourceCategory(r, pageUrl);
     final isImage = category == 'image';
     final bucket = buckets[isThirdPartyFrame(r, b.url)
@@ -215,6 +249,22 @@ PageWeight? derivePageWeightOf(BrowserSnapshot b,
       // Decoded is never estimated: an estimated resource still lacks it.
       bucket.decodedMissingCount++;
       decodedGap = true;
+    }
+  }
+
+  // Images declared in the page's DOM that this load never fetched (lazy
+  // images, no scroll in the embedded view): they are part of what the page
+  // costs, so they count at the app's own estimated size, or as missing.
+  for (final u in unfetchedDeclaredMedia(resourceUrls, declaredMedia)) {
+    final bucket = buckets['images']!;
+    bucket.count++;
+    final est = estimates[u];
+    if (est is Present<int>) {
+      bucket.addEstimate(est.value);
+    } else {
+      bucket.missingCount++;
+      missing++;
+      transferGap = true;
     }
   }
 

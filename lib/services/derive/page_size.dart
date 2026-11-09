@@ -135,6 +135,14 @@ class PageSizeModel {
   /// Says that and how many sizes are estimates; null when none.
   final String? estimateNote;
 
+  /// Images declared in the page's DOM that this load never fetched (lazy
+  /// images, no scroll in the embedded view), now listed as rows.
+  final int declaredCount;
+
+  /// Says how many declared images were not loaded and how they are counted;
+  /// null when none.
+  final String? declaredNote;
+
   /// Lighthouse's verdict on the download total; null when it is unknown.
   final String? lighthouseNote;
 
@@ -163,6 +171,8 @@ class PageSizeModel {
     required this.missingNote,
     this.estimatedCount = 0,
     this.estimateNote,
+    this.declaredCount = 0,
+    this.declaredNote,
     this.lighthouseNote,
     this.cacheNote,
     this.stillCollecting = false,
@@ -186,6 +196,8 @@ class PageSizeModel {
         missingNote: missingNote,
         estimatedCount: estimatedCount,
         estimateNote: estimateNote,
+        declaredCount: declaredCount,
+        declaredNote: declaredNote,
         lighthouseNote: lighthouseNote,
         cacheNote: cacheNote,
         stillCollecting: stillCollecting,
@@ -217,6 +229,9 @@ String sizeReasonWord(Observed<int> o) => switch (o) {
           UnavailableReason.blockedBySite ||
           UnavailableReason.notExposedToPage when d.contains('cross-origin') =>
             'cross-origin',
+          UnavailableReason.notReportedByPlatform
+              when d.contains('collector buffer was full') =>
+            'not collected (the collector buffer was full)',
           UnavailableReason.notReportedByPlatform
               when d.contains('memory cache') =>
             'shown, but served from the memory cache',
@@ -254,9 +269,11 @@ const kFreshNotMeasured =
 /// load when one was measured. Not Present when the browser has not (yet)
 /// reported resources: the state says why (never an empty page).
 Observed<PageSizeModel> derivePageSize(PageInspection p) {
-  final live = _loadModel(p.browser, p.server, p.resourceEstimates);
+  final live = _loadModel(p.browser, p.server, p.resourceEstimates,
+      declaredMedia: p.declaredMedia);
   if (live is! Present<PageSizeModel>) return live;
-  final fresh = _loadModel(p.freshLoad, p.server, p.freshEstimates);
+  final fresh = _loadModel(p.freshLoad, p.server, p.freshEstimates,
+      declaredMedia: p.declaredMedia);
   final note = fresh is Present<PageSizeModel>
       ? lighthouseVerdict(fresh.value.weight, basis: 'fresh load')
       : lighthouseVerdict(live.value.weight, basis: 'this load');
@@ -275,8 +292,10 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
   );
 }
 
-Observed<PageSizeModel> _loadModel(Observed<BrowserSnapshot> browser,
-    Observed<ServerSnapshot> server, Map<String, Observed<int>> estimates) {
+Observed<PageSizeModel> _loadModel(
+    Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server,
+    Map<String, Observed<int>> estimates,
+    {List<String> declaredMedia = const []}) {
   switch (browser) {
     case Pending<BrowserSnapshot>():
       return const Pending();
@@ -294,8 +313,10 @@ Observed<PageSizeModel> _loadModel(Observed<BrowserSnapshot> browser,
         case Unavailable<List<ResourceEntry>>(:final reason, :final detail):
           return Unavailable(reason, detail);
         case Present<List<ResourceEntry>>(value: final entries):
-          final weight =
-              derivePageWeightOf(b, server: server, estimates: estimates)!;
+          final weight = derivePageWeightOf(b,
+              server: server,
+              estimates: estimates,
+              declaredMedia: declaredMedia)!;
           final pageUrl = b.url.toString();
           final page = _normalizeUrl(pageUrl);
           final byUrl = <String, PageSizeRow>{};
@@ -341,6 +362,31 @@ Observed<PageSizeModel> _loadModel(Observed<BrowserSnapshot> browser,
               byUrl[url] = row;
             }
           }
+          // Images declared in the DOM that this load never fetched (lazy
+          // images; the embedded browser does not scroll): listed anyway, at
+          // the app's own estimated size when the lookup succeeded.
+          var declared = 0;
+          for (final u in unfetchedDeclaredMedia(byUrl.keys, declaredMedia)) {
+            final estimate = estimates[u];
+            final estimatedTx =
+                estimate is Present<int> ? estimate.value : null;
+            byUrl[u] = PageSizeRow(
+              url: u,
+              type: 'image',
+              isPage: false,
+              isAudioVideo: _audioVideoPath
+                  .hasMatch(Uri.tryParse(u)?.path.toLowerCase() ?? ''),
+              services: externalServicesForUrl(u, pageUrl),
+              size: estimatedTx,
+              sizeNote: estimatedTx != null
+                  ? null
+                  : estimate is Failed<int>
+                      ? 'size lookup failed'
+                      : 'declared in the page, not loaded by this browser',
+              estimated: estimatedTx != null,
+            );
+            declared++;
+          }
           final rows = byUrl.values.toList()
             ..sort((a, b) {
               final bySize = (b.size ?? -1).compareTo(a.size ?? -1);
@@ -362,7 +408,7 @@ Observed<PageSizeModel> _loadModel(Observed<BrowserSnapshot> browser,
           if (b.resourcesTruncated) {
             parts.add('${b.resourcesDropped} resource'
                 '${b.resourcesDropped == 1 ? '' : 's'} not collected '
-                '(the browser buffer was full)');
+                '(the collector buffer was full)');
           }
           if (parts.isEmpty && weight.transferLowerBound) {
             parts.add('some resources report only part of their size');
@@ -374,6 +420,13 @@ Observed<PageSizeModel> _loadModel(Observed<BrowserSnapshot> browser,
               rowsWithoutSize: without,
               missingNote: parts.isEmpty ? null : parts.join('; '),
               estimatedCount: estimatedCount,
+              declaredCount: declared,
+              declaredNote: declared == 0
+                  ? null
+                  : '$declared image${declared == 1 ? '' : 's'} declared '
+                      'in the page were not loaded by this browser (lazy '
+                      'loading); counted at the app\'s estimated size where '
+                      'known',
               estimateNote: estimatedCount == 0
                   ? null
                   : '$estimatedCount size${estimatedCount == 1 ? ' is an '

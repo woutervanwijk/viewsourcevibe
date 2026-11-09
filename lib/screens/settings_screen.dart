@@ -136,6 +136,17 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 _settingsTile(
                   context: context,
+                  icon: Icons.vertical_align_bottom,
+                  title: 'Load lazy content',
+                  description:
+                      'Scroll the page once after it loads (and back to the top), so lazy images and embeds are actually fetched and measured in the Page size tab instead of estimated',
+                  control: Switch(
+                    value: settings.scrollToLoadLazy,
+                    onChanged: (value) => settings.scrollToLoadLazy = value,
+                  ),
+                ),
+                _settingsTile(
+                  context: context,
                   icon: Icons.gavel_outlined,
                   title: 'Default site jurisdiction',
                   description:

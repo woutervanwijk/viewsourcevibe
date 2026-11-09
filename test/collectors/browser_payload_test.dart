@@ -180,6 +180,125 @@ void main() {
     expect(vsvCollectJs, contains('currentSrc'));
   });
 
+  group('dropped resources (collector buffer full)', () {
+    test('droppedNames become entries without sizes; known URLs are skipped',
+        () {
+      final s = parseBrowserPayload(
+          jsonEncode({
+            'v': 1,
+            'url': 'https://ad.test/',
+            'contentType': 'text/html',
+            'timing': {'ok': true, 'now': 5000.0},
+            'dom': {'ok': true, 'value': '<html></html>'},
+            'resources': {
+              'ok': true,
+              'bootstrap': true,
+              'dropped': 2,
+              'observer': [
+                {
+                  'n': 'https://ad.test/app.js',
+                  'it': 'script',
+                  'st': 1.0,
+                  'du': 2.0,
+                  'tx': 100,
+                  'enc': 90,
+                  'dec': 200
+                }
+              ],
+              'patch': [],
+              'shown': [],
+              'droppedNames': [
+                {
+                  'n': 'https://ad.test/app.js',
+                  'it': 'script'
+                }, // already measured: ignored
+                {
+                  'n': 'https://images.ad.test/big-lazy.gif',
+                  'it': 'img',
+                  'fo': ''
+                },
+                {
+                  'n': 'https://ads.other.net/pixel.gif?x=1',
+                  'it': 'img',
+                  'fo': 'https://ads.other.net'
+                },
+              ],
+            },
+            'navigation': {'ok': false, 'error': 'x'},
+            'storage': {
+              'local': {'ok': false, 'error': 'x'},
+              'session': {'ok': false, 'error': 'x'},
+            },
+            'cookies': {'ok': true, 'raw': ''},
+          }),
+          BrowserPlatform.android,
+          pageUrl: Uri.parse('https://ad.test/'));
+      expect(s.resourcesTruncated, true);
+      expect(s.resourcesDropped, 2);
+      // The measured entry is untouched.
+      expect(byUrl(s, 'https://ad.test/app.js').source,
+          ResourceSource.observer);
+      final gif = byUrl(s, 'https://images.ad.test/big-lazy.gif');
+      expect(gif.source, ResourceSource.dropped);
+      expect(gif.type, 'img');
+      expect(gif.inFrame, isFalse);
+      expect(unavailable(gif.transfer), UnavailableReason.notReportedByPlatform);
+      expect((gif.transfer as Unavailable).detail,
+          contains('collector buffer was full'));
+      final px = byUrl(s, 'https://ads.other.net/pixel.gif?x=1');
+      expect(px.source, ResourceSource.dropped);
+      expect(px.frameOrigin, 'https://ads.other.net');
+      expect(px.inFrame, isTrue);
+    });
+
+    test('a real entry always beats a dropped placeholder, never the reverse',
+        () {
+      ResourceEntry entry(String url, ResourceSource src, Observed<int> tx) =>
+          ResourceEntry(
+            url: url,
+            type: 'img',
+            source: src,
+            startTime: const Unavailable(UnavailableReason.notReportedByPlatform),
+            duration: const Unavailable(UnavailableReason.notReportedByPlatform),
+            transfer: tx,
+            decoded: const Unavailable(UnavailableReason.notReportedByPlatform),
+          );
+      final dropped = entry('https://x.test/a.gif', ResourceSource.dropped,
+          const Unavailable(UnavailableReason.notReportedByPlatform, 'full'));
+      final measured = entry('https://x.test/a.gif', ResourceSource.observer,
+          Present(1234, source: DataSource.browser));
+      expect(mergeResources([dropped], [measured]).single.source,
+          ResourceSource.observer);
+      expect(mergeResources([measured], [dropped]).single.source,
+          ResourceSource.observer);
+      expect(present(
+              mergeResources([dropped], [measured]).single.transfer),
+          1234);
+      // dropped vs dropped: still one entry.
+      expect(
+          mergeResources([dropped], [dropped]).single.source, ResourceSource.dropped);
+    });
+
+    test('the bootstrap records dropped URLs and still notifies the app', () {
+      expect(vsvResourceBootstrapJs, contains('__vsv_dropped'));
+      expect(vsvResourceBootstrapJs, contains('function noteDropped'));
+      // The drop path no longer returns before notifyApp().
+      expect(vsvResourceBootstrapJs,
+          contains('noteDropped(name, cur.it, cur.fo); return;'));
+      // The app-side buffer matches the browser buffer it sets.
+      expect(vsvResourceBootstrapJs, contains('var MAX = 10000;'));
+      expect(vsvResourceBootstrapJs,
+          contains('performance.setResourceTimingBufferSize(10000)'));
+      // Iframes forward their dropped URLs to the top frame.
+      expect(vsvResourceBootstrapJs, contains('markDropped'));
+      expect(vsvResourceBootstrapJs, contains('d: dout'));
+      // The collector reports them.
+      expect(vsvCollectJs, contains('droppedNames'));
+      // The shown fallback reports currentSrc and src (srcset differs).
+      expect(vsvCollectJs, contains('[im.currentSrc, im.src]'));
+    });
+  });
+
   test('the top frame tells the app about late resources, batched', () {
     expect(vsvResourceBootstrapJs, contains("callHandler('vsvResources'"));
     expect(vsvResourceBootstrapJs, contains('notifyTimer'));
@@ -610,6 +729,7 @@ void main() {
     for (final entry in {
       'collector': vsvCollectJs,
       'bootstrap': vsvResourceBootstrapJs,
+      'scrollThrough': vsvScrollThroughJs,
     }.entries) {
       test('${entry.key} has balanced braces and parens', () {
         expect(count(entry.value, '{'), count(entry.value, '}'));
@@ -623,6 +743,17 @@ void main() {
       expect(vsvCollectJs, isNot(contains('=>')));
       expect(vsvResourceBootstrapJs, isNot(contains('?.')));
       expect(vsvResourceBootstrapJs, isNot(contains('=>')));
+      expect(vsvScrollThroughJs, isNot(contains('?.')));
+      expect(vsvScrollThroughJs, isNot(contains('=>')));
+    });
+    test('the scroll-through drives the browser\'s lazy loading', () {
+      expect(vsvScrollThroughJs, contains('window.__vsv_scrollThrough'));
+      expect(vsvScrollThroughJs, contains('window.scrollTo'));
+      expect(vsvScrollThroughJs, contains('scrollingElement'));
+      // viewport-sized steps, capped, optional return to the top
+      expect(vsvScrollThroughJs, contains('window.innerHeight'));
+      expect(vsvScrollThroughJs, contains('steps < 60'));
+      expect(vsvScrollThroughJs, contains('backToTop'));
     });
   });
 }

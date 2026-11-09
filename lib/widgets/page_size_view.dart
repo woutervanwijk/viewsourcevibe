@@ -438,6 +438,8 @@ class _PageSizeViewState extends State<PageSizeView>
           if (active.cacheNote != null) _note(context, '${active.cacheNote!}.'),
           if (active.estimateNote != null)
             _note(context, '${active.estimateNote!}.'),
+          if (active.declaredNote != null)
+            _note(context, '${active.declaredNote!}.',),
           if (weight.documentSource != null)
             _note(context,
                 'The page document is counted from the server response.',
