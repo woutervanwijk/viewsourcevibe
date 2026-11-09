@@ -4552,12 +4552,30 @@ Technical details: $message''';
       await Future.wait(batch.map((item) async {
         final url = (item['src'] ?? item['href']) as String;
         int? size;
+        var failed = false;
         try {
           size = await _cachedSizeLookup(gen, url);
-        } catch (e) {
-          debugPrint('Size lookup failed for $url: $e');
+        } catch (_) {
+          // A refused or dropped connection is an expected outcome for
+          // consent/tracker hosts; the size is marked unknown below instead
+          // of logging a scary error.
+          failed = true;
         }
-        if (size == null || stale() || !_sizeUnknown(item)) return;
+        if (stale() || !_sizeUnknown(item)) return;
+        if (size == null) {
+          if (!failed) return;
+          // Keep any more specific reason the browser/platform already gave.
+          final existing = item['size'];
+          if (existing is Map && existing['unknownReason'] is String) return;
+          item['size'] = {
+            'transfer': null,
+            'decoded': null,
+            'estimated': true,
+            'unknownReason': 'own lookup failed',
+          };
+          changed = true;
+          return;
+        }
         // Content-Length is the wire size; the decoded size stays unknown.
         item['size'] = {'transfer': size, 'decoded': null, 'estimated': true};
         changed = true;
