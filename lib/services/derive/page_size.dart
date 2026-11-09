@@ -1,6 +1,7 @@
 import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
+import '../../models/inspection/server_snapshot.dart';
 import '../detection/engine.dart';
 import '../probe_service.dart';
 import 'page_weight.dart';
@@ -50,7 +51,7 @@ const kLighthousePoorKib = 4000;
 
 /// The Lighthouse verdict on the download total, or null when it is unknown.
 /// A lower bound that is still under a threshold only says "at least".
-String? lighthouseVerdict(PageWeight w) {
+String? lighthouseVerdict(PageWeight w, {String? basis}) {
   final t = w.transfer;
   if (t == null) return null;
   final kib = t / 1024;
@@ -64,7 +65,7 @@ String? lighthouseVerdict(PageWeight w) {
       'the real total may be higher',
     if (w.transferEstimated) 'includes estimates',
   ];
-  return 'Lighthouse: $verdict'
+  return 'Lighthouse${basis == null ? '' : ' ($basis)'}: $verdict'
       '${caveats.isEmpty ? '' : '; ${caveats.join(', ')}'}';
 }
 
@@ -93,6 +94,9 @@ class PageSizeRow {
   /// load (the encoded body).
   final bool fromCache;
 
+  /// Loaded by or inside a cross-origin iframe (ads, embeds).
+  final bool thirdPartyFrame;
+
   const PageSizeRow({
     required this.url,
     required this.type,
@@ -103,6 +107,7 @@ class PageSizeRow {
     required this.sizeNote,
     this.estimated = false,
     this.fromCache = false,
+    this.thirdPartyFrame = false,
   });
 
   /// "4 KB", "≈ 4 KB" (own estimate) or "size unknown (reason)".
@@ -135,6 +140,13 @@ class PageSizeModel {
   /// Says how cache hits are counted; null when there are none.
   final String? cacheNote;
 
+  /// The live load may still add resources (the network is not quiet yet).
+  final bool stillCollecting;
+
+  /// The fresh (Lighthouse-like) load: not measured, Pending, Failed or its
+  /// own model (whose [fresh] is not measured).
+  final Observed<PageSizeModel> fresh;
+
   const PageSizeModel({
     required this.weight,
     required this.rows,
@@ -144,7 +156,26 @@ class PageSizeModel {
     this.estimateNote,
     this.lighthouseNote,
     this.cacheNote,
+    this.stillCollecting = false,
+    this.fresh = kFreshNotMeasured,
   });
+
+  PageSizeModel _with(
+          {required Observed<PageSizeModel> fresh,
+          required bool stillCollecting,
+          required String? lighthouseNote}) =>
+      PageSizeModel(
+        weight: weight,
+        rows: rows,
+        rowsWithoutSize: rowsWithoutSize,
+        missingNote: missingNote,
+        estimatedCount: estimatedCount,
+        estimateNote: estimateNote,
+        lighthouseNote: lighthouseNote,
+        cacheNote: cacheNote,
+        stillCollecting: stillCollecting,
+        fresh: fresh,
+      );
 
   /// Sum of the known row sizes (the share bars are relative to it).
   int get knownRowTotal => rows.fold<int>(0, (a, r) => a + (r.size ?? 0));
@@ -178,10 +209,30 @@ String sizeReasonWord(Observed<int> o) => switch (o) {
       _ => 'not reported',
     };
 
-/// The Page size tab's data. Not Present when the browser has not (yet)
+/// [PageSizeModel.fresh] before the user asked for a fresh load.
+const kFreshNotMeasured =
+    Unavailable<PageSizeModel>(UnavailableReason.notApplicable, 'not measured');
+
+/// The Page size tab's data: the live load, plus the fresh (Lighthouse-like)
+/// load when one was measured. Not Present when the browser has not (yet)
 /// reported resources: the state says why (never an empty page).
 Observed<PageSizeModel> derivePageSize(PageInspection p) {
-  final browser = p.browser;
+  final live = _loadModel(p.browser, p.server, p.resourceEstimates);
+  if (live is! Present<PageSizeModel>) return live;
+  final fresh = _loadModel(p.freshLoad, p.server, p.freshEstimates);
+  final note = fresh is Present<PageSizeModel>
+      ? lighthouseVerdict(fresh.value.weight, basis: 'fresh load')
+      : lighthouseVerdict(live.value.weight, basis: 'this load');
+  return Present(
+    live.value._with(
+        fresh: fresh, stillCollecting: !p.browserSettled, lighthouseNote: note),
+    source: live.source,
+    provenance: live.provenance,
+  );
+}
+
+Observed<PageSizeModel> _loadModel(Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server, Map<String, Observed<int>> estimates) {
   switch (browser) {
     case Pending<BrowserSnapshot>():
       return const Pending();
@@ -199,7 +250,8 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
         case Unavailable<List<ResourceEntry>>(:final reason, :final detail):
           return Unavailable(reason, detail);
         case Present<List<ResourceEntry>>(value: final entries):
-          final weight = derivePageWeight(p)!;
+          final weight =
+              derivePageWeightOf(b, server: server, estimates: estimates)!;
           final pageUrl = b.url.toString();
           final page = _normalizeUrl(pageUrl);
           final byUrl = <String, PageSizeRow>{};
@@ -215,8 +267,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                 ? (r.transfer as Present<int>).value
                 : null;
             final cached = r.fromCache;
-            final estimate =
-                measuredTx != null ? null : p.resourceEstimates[url];
+            final estimate = measuredTx != null ? null : estimates[url];
             final estimatedTx =
                 estimate is Present<int> ? estimate.value : null;
             // The download size only (Lighthouse); decoded is not shown.
@@ -241,6 +292,7 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
               sizeNote: note,
               estimated: estimatedTx != null,
               fromCache: cached,
+              thirdPartyFrame: isThirdPartyFrame(r, b.url),
             );
             final old = byUrl[url];
             if (old == null || (row.size ?? -1) > (old.size ?? -1)) {
@@ -286,7 +338,6 @@ Observed<PageSizeModel> derivePageSize(PageInspection p) {
                           'estimate' : 's are estimates'} from the app\'s own '
                       'request (the browser did not report them; may differ '
                       'from what the browser loaded)',
-              lighthouseNote: lighthouseVerdict(weight),
               cacheNote: cacheHits == 0
                   ? null
                   : '$cacheHits served from the browser cache, counted at '

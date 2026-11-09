@@ -64,7 +64,7 @@ void main() {
       // Download size first (Lighthouse), decoded next to it.
       expect(m.rows.first.size, 4096);
       expect(m.rows.first.sizeLabel, '4 KB');
-      expect(m.lighthouseNote, 'Lighthouse: good (≤ 2,667 KB)');
+      expect(m.lighthouseNote, 'Lighthouse (this load): good (≤ 2,667 KB)');
       expect(m.missingNote, isNull);
     });
 
@@ -89,7 +89,7 @@ void main() {
       expect(own.size, 2048);
       // A lower bound under the threshold only says "at least".
       expect(m.lighthouseNote,
-          'Lighthouse: good (≤ 2,667 KB); the real total may be higher');
+          'Lighthouse (this load): good (≤ 2,667 KB); the real total may be higher');
     });
 
     test('sizeless rows sort last', () {
