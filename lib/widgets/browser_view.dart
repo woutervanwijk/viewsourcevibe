@@ -5,6 +5,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/collectors/vsv_collect_js.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/navigation_policy.dart';
@@ -37,6 +38,7 @@ class _BrowserViewState extends State<BrowserView> {
   InAppWebViewController? _controller;
   String? _currentRssUrl;
   HtmlService? _htmlService; // cached to use safely in dispose()
+  AppSettings? _appSettings;
   String? _lastSyncedUrl; // track last early-synced URL to avoid duplicates
 
   @override
@@ -44,6 +46,13 @@ class _BrowserViewState extends State<BrowserView> {
     super.didChangeDependencies();
     // Cache the reference now while the element is still active.
     _htmlService = Provider.of<HtmlService>(context, listen: false);
+    final s = Provider.of<AppSettings>(context, listen: false);
+    if (!identical(_appSettings, s)) {
+      _appSettings?.removeListener(_applyCacheSetting);
+      _appSettings = s;
+      _appSettings?.addListener(_applyCacheSetting);
+    }
+    _applyCacheSetting();
   }
 
   @override
@@ -55,8 +64,24 @@ class _BrowserViewState extends State<BrowserView> {
   void dispose() {
     // Use the cached reference — Provider.of is NOT safe here
     // because the widget's element is already deactivated.
+    _appSettings?.removeListener(_applyCacheSetting);
     _htmlService?.clearWebViewController();
     super.dispose();
+  }
+
+  /// Applies the "Disable browser cache" setting to the live WebView.
+  void _applyCacheSetting() {
+    final s = _appSettings;
+    final c = _controller;
+    if (s == null || c == null) return;
+    c
+        .setSettings(settings: InAppWebViewSettings(
+      cacheEnabled: !s.disableBrowserCache,
+      cacheMode: s.disableBrowserCache
+          ? CacheMode.LOAD_NO_CACHE
+          : CacheMode.LOAD_DEFAULT,
+    ))
+        .ignore();
   }
 
   @override
@@ -175,6 +200,7 @@ class _BrowserViewState extends State<BrowserView> {
 
   @override
   Widget build(BuildContext context) {
+    final disableCache = context.watch<AppSettings>().disableBrowserCache;
     return InAppWebView(
       gestureRecognizers: widget.gestureRecognizers,
       onWebContentProcessDidTerminate: (controller) {
@@ -192,6 +218,8 @@ class _BrowserViewState extends State<BrowserView> {
         allowsInlineMediaPlayback: true,
         iframeAllowFullscreen: false,
         useHybridComposition: _shouldUseHybridComposition(),
+        cacheEnabled: !disableCache,
+        cacheMode: disableCache ? CacheMode.LOAD_NO_CACHE : CacheMode.LOAD_DEFAULT,
       ),
       initialUserScripts: UnmodifiableListView<UserScript>([
         // Resource observer + fetch/XHR patch, and the one-shot collector
