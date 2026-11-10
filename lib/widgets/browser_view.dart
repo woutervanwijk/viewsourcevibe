@@ -141,6 +141,13 @@ class _BrowserViewState extends State<BrowserView> {
 
     if (htmlService.webViewLoadingUrl != null) {
       targetUrl = htmlService.webViewLoadingUrl!;
+      // The service already issued this load to the WebView controller; a
+      // rebuild (file placeholder, tab switch) must not restart it, or the
+      // page and its redirect chain are loaded again.
+      final issued = htmlService.browserLoadIssuedUrl;
+      if (issued != null && htmlService.areUrlsEqual(issued, targetUrl)) {
+        return;
+      }
     } else if (_currentRssUrl != null &&
         targetUrl == _currentRssUrl &&
         targetUrl.isNotEmpty) {

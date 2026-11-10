@@ -339,6 +339,13 @@ class HtmlService extends ChangeNotifier {
   String? _webViewLoadingUrl;
   String? get webViewLoadingUrl => _webViewLoadingUrl;
 
+  /// The URL of the load actually issued to the current WebView controller
+  /// (null when the controller was missing, so the load is still pending).
+  /// BrowserView checks this before issuing a load itself, so a file change
+  /// or tab switch during an in-flight load does not restart it.
+  String? _browserLoadIssuedUrl;
+  String? get browserLoadIssuedUrl => _browserLoadIssuedUrl;
+
   // URL added to history when a browser load started; replaced by the final
   // URL if the load redirects.
   String? _historyPendingUrl;
@@ -380,11 +387,14 @@ class HtmlService extends ChangeNotifier {
   set activeWebViewController(InAppWebViewController? controller) {
     _activeWebViewController = controller;
     _webViewControllerDisposed = false;
+    // A new controller has not been given any load yet.
+    _browserLoadIssuedUrl = null;
   }
 
   void clearWebViewController() {
     _webViewControllerDisposed = true;
     _activeWebViewController = null;
+    _browserLoadIssuedUrl = null;
   }
 
   Timer? _autoSaveTimer;
@@ -1359,9 +1369,16 @@ class HtmlService extends ChangeNotifier {
     try {
       final currentBrowserUrl = await controller.getUrl();
       if (file.isUrl) {
+        // Already loading (or loaded) this URL on this controller: do not
+        // restart the load, its redirect chain would be walked again.
+        if (_browserLoadIssuedUrl != null &&
+            areUrlsEqual(_browserLoadIssuedUrl!, file.path)) {
+          return;
+        }
         if (currentBrowserUrl.toString() != file.path) {
           debugPrint('Triggering browser reload for: ${file.path}');
           _webViewLoadingUrl = file.path;
+          _browserLoadIssuedUrl = file.path;
           await controller.loadUrl(
             urlRequest: URLRequest(url: WebUri(file.path)),
           );
@@ -1511,6 +1528,7 @@ class HtmlService extends ChangeNotifier {
     _isLoading = true;
     _isWebViewLoading = false;
     _webViewLoadingUrl = null;
+    _browserLoadIssuedUrl = null;
 
     // The Reader tab's article belongs to the page that just went away.
     _readerService?.markStale();
@@ -2128,6 +2146,7 @@ Technical details: $message''';
     // activeWebViewController?.loadRequest(Uri.parse('about:blank'));
     // 3. Reset internal state immediately
     _webViewLoadingUrl = null;
+    _browserLoadIssuedUrl = null;
     _isWebViewLoading = false;
     _isLoading = false;
     webViewLoadingProgressNotifier.value = 0.0; // Reset progress bar
@@ -3156,6 +3175,7 @@ Technical details: $message''';
         newUrl != null && (newUrl.startsWith('http') || newUrl.contains('://'));
     if (!isUrlNavigation) {
       _webViewLoadingUrl = null;
+      _browserLoadIssuedUrl = null;
       _isWebViewLoading = false;
       _clearBrowserDerivedData();
     } else {
@@ -4932,6 +4952,7 @@ Technical details: $message''';
         if (!isPartial) _isLoading = false;
         _isWebViewLoading = false;
         _webViewLoadingUrl = null;
+        _browserLoadIssuedUrl = null;
         notifyListeners();
       }
     }
@@ -5152,8 +5173,11 @@ class _ControllerBrowserLoader implements BrowserLoader {
 
   @override
   void loadUrl(Uri url) {
-    _service.activeWebViewController
-        ?.loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())))
+    final controller = _service.activeWebViewController;
+    if (controller == null) return; // still pending; the view loads it on create
+    _service._browserLoadIssuedUrl = url.toString();
+    controller
+        .loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())))
         .ignore();
   }
 }
