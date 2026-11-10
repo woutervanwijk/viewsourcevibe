@@ -50,12 +50,22 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _lastShouldShowBrowser = true;
   int _lastBrowserTabIndex = -1;
   List<String> _tabLabels = const [];
+  List<String> _tabTags = const [];
 
   /// Label of the tab the user is on. Tabs come and go while a page loads,
   /// so the selection follows the tab itself, not its index.
   String? _selectedTabLabel;
+  String? _selectedTabTag;
+
+  /// One focus node per tab tag, attached inside each [TabPageWrapper]. When
+  /// a tab is selected its node gets keyboard focus, so PageUp/PageDown (and
+  /// on web, the arrow keys) scroll the page without tapping it first.
+  final Map<String, FocusNode> _tabFocusNodes = {};
 
   bool _tabRequestScheduled = false;
+
+  FocusNode _tabFocusNode(String tag) => _tabFocusNodes.putIfAbsent(
+      tag, () => FocusNode(debugLabel: 'tab-page-$tag'));
 
   @override
   void initState() {
@@ -76,6 +86,10 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (_tabController.indexIsChanging) return;
     if (_tabController.index < _tabLabels.length) {
       _selectedTabLabel = _tabLabels[_tabController.index];
+      _selectedTabTag =
+          _tabTags.isNotEmpty && _tabController.index < _tabTags.length
+              ? _tabTags[_tabController.index]
+              : null;
     }
 
     final htmlService = Provider.of<HtmlService>(context, listen: false);
@@ -85,6 +99,60 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (_tabController.index == htmlService.browserTabIndex) {
       htmlService.triggerBrowserReload().ignore();
     }
+
+    _focusSelectedTabPage();
+  }
+
+  /// Focus the page of the tab that was just selected (tap or keyboard), so
+  /// the keyboard scrolls it right away. Runs a frame later: tapping the tab
+  /// strip also triggers the body tap handler, which unfocuses — the page
+  /// focus has to win over that. The selected page may be built a frame after
+  /// the tab settles, so the focus attempt retries a few frames.
+  void _focusSelectedTabPage() {
+    final tag = _selectedTabTag;
+    final index = _tabController.index;
+    if (tag == null) return;
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+
+    void attempt(int triesLeft) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _tabController.index != index) return;
+        // Browser and Reader tabs render a WebView: hand keyboard focus to the
+        // web page itself, so arrows/space scroll it natively.
+        if (index == htmlService.browserTabIndex) {
+          final controller = htmlService.activeWebViewController;
+          if (controller != null) {
+            controller.requestFocus().ignore();
+            return;
+          }
+        }
+        if (htmlService.isHtml && index == htmlService.readerTabIndex) {
+          final controller = htmlService.readerService?.viewController;
+          if (controller != null) {
+            controller.requestFocus().ignore();
+            return;
+          }
+        }
+        final node = _tabFocusNodes[tag];
+        if (node == null) return;
+        if (node.context != null) {
+          node.requestFocus();
+        } else if (triesLeft > 0) {
+          attempt(triesLeft - 1);
+        }
+      });
+    }
+
+    attempt(10);
+  }
+
+  /// Focus node of the currently selected tab page; tests check keyboard
+  /// focus lands on it after a tab switch.
+  @visibleForTesting
+  FocusNode? get activeTabFocusNode {
+    final index = _tabController.index;
+    if (index < 0 || index >= _tabTags.length) return null;
+    return _tabFocusNodes[_tabTags[index]];
   }
 
   void _updateTabs(HtmlService htmlService, {bool force = false}) {
@@ -106,7 +174,9 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     final oldIndex = _tabController.index;
-    final labels = [for (final (_, label) in _tabSpecs(htmlService)) label];
+    final specs = _tabSpecs(htmlService);
+    final labels = [for (final (_, label, _) in specs) label];
+    final tags = [for (final (_, _, tag) in specs) tag];
 
     if (!_listEquals(labels, _tabLabels) || force) {
       final newLength = labels.length;
@@ -121,6 +191,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
       _tabController.addListener(_handleTabSelection);
       _tabLabels = labels;
+      _tabTags = tags;
       _lastIsHtmlOrXml = isHtmlOrXml;
       _lastShowMetadataTabs = showMetadataTabs;
       _lastShowServerTabs = showServerTabs;
@@ -143,6 +214,10 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _tabController.dispose();
     _tabScrollController.dispose();
+    for (final node in _tabFocusNodes.values) {
+      node.dispose();
+    }
+    _tabFocusNodes.clear();
     super.dispose();
   }
 
@@ -193,6 +268,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildRefreshable(Widget child, String tag) {
     final page = TabPageWrapper(
       tag: tag,
+      focusNode: _tabFocusNode(tag),
       child: RefreshIndicator(
         onRefresh: _handleRefresh,
         child: child,
@@ -212,6 +288,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       {bool hasScrollBody = true, bool useSliverToBoxAdapter = false}) {
     return TabPageWrapper(
       tag: tag,
+      focusNode: _tabFocusNode(tag),
       child: RefreshIndicator(
         onRefresh: _handleRefresh,
         child: CustomScrollView(
@@ -236,8 +313,9 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// Tabs in display order. Kept in sync with [_getTabViews].
-  List<(IconData, String)> _tabSpecs(HtmlService htmlService) {
+  /// Tabs in display order as (icon, label, page tag). The tags match the
+  /// [TabPageWrapper] tags in [_getTabViews]; both lists are kept in sync.
+  List<(IconData, String, String)> _tabSpecs(HtmlService htmlService) {
     final isHtml = htmlService.isHtml;
     final isHtmlOrXml = htmlService.isHtmlOrXml;
     final showMetadataTabs = htmlService.showMetadataTabs;
@@ -246,28 +324,28 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final useBrowserByDefault = htmlService.browserTabIndex == 0;
     final shouldShowBrowser =
         isBrowserSupported && htmlService.shouldShowBrowserTab;
-    const browserTab = (Icons.language, 'Browser');
+    const browserTab = (Icons.language, 'Browser', 'browser');
 
     return [
       if (shouldShowBrowser && useBrowserByDefault) browserTab,
       if (showMetadataTabs) ...[
-        (Icons.info_outline, 'Metadata'),
-        (Icons.perm_media_outlined, 'Media'),
-        (Icons.scale_outlined, 'Size'),
-        (Icons.layers_outlined, 'Services'),
-        (Icons.privacy_tip_outlined, 'Privacy'),
-        if (showServerTabs) (Icons.public, 'Sovereignty'),
+        (Icons.info_outline, 'Metadata', 'metadata'),
+        (Icons.perm_media_outlined, 'Media', 'media'),
+        (Icons.scale_outlined, 'Size', 'page-size'),
+        (Icons.layers_outlined, 'Services', 'services'),
+        (Icons.privacy_tip_outlined, 'Privacy', 'privacy'),
+        if (showServerTabs) (Icons.public, 'Sovereignty', 'sovereignty'),
       ],
-      if (isHtml) (Icons.chrome_reader_mode, 'Reader'),
-      if (isHtmlOrXml) (Icons.account_tree_outlined, 'DOM Tree'),
-      (Icons.code, 'Source'),
+      if (isHtml) (Icons.chrome_reader_mode, 'Reader', 'reader'),
+      if (isHtmlOrXml) (Icons.account_tree_outlined, 'DOM Tree', 'dom-tree'),
+      (Icons.code, 'Source', 'source'),
       if (showServerTabs) ...[
-        (Icons.cookie_outlined, 'Cookies'),
-        (Icons.timeline, 'Timeline'),
-        (Icons.network_check, 'Probe'),
-        (Icons.list_alt, 'Headers'),
-        (Icons.security, 'Security'),
-        if (!showMetadataTabs) (Icons.public, 'Sovereignty'),
+        (Icons.cookie_outlined, 'Cookies', 'cookies'),
+        (Icons.timeline, 'Timeline', 'request-timeline'),
+        (Icons.network_check, 'Probe', 'probe'),
+        (Icons.list_alt, 'Headers', 'headers'),
+        (Icons.security, 'Security', 'security'),
+        if (!showMetadataTabs) (Icons.public, 'Sovereignty', 'sovereignty'),
       ],
       // When 'Always use browser' is off, Browser tab goes last
       if (shouldShowBrowser && !useBrowserByDefault) browserTab,
@@ -275,7 +353,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   List<Widget> _getTabs(HtmlService htmlService) => [
-        for (final (icon, label) in _tabSpecs(htmlService))
+        for (final (icon, label, _) in _tabSpecs(htmlService))
           _buildTab(icon, label),
       ];
 
@@ -311,6 +389,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final browserView = TabPageWrapper(
       key: const ValueKey('tab_browser'),
       tag: 'browser',
+      focusNode: _tabFocusNode('browser'),
       isBrowserTab: true,
       child: KeepAliveWrapper(
         child: _buildRefreshable(
@@ -707,11 +786,17 @@ class TabPageWrapper extends StatefulWidget {
   final Widget child;
   final bool isBrowserTab;
   final String tag;
+  /// Focus node for the page; HomeScreen requests focus on it when this tab
+  /// is selected, so the page scrolls with the keyboard. Placed inside the
+  /// [PrimaryScrollController] so scroll key events reach the page's
+  /// scrollable via the primary controller.
+  final FocusNode? focusNode;
   const TabPageWrapper({
     super.key,
     required this.child,
     required this.tag,
     this.isBrowserTab = false,
+    this.focusNode,
   });
 
   @override
@@ -777,52 +862,55 @@ class _TabPageWrapperState extends State<TabPageWrapper> {
   Widget build(BuildContext context) {
     return PrimaryScrollController(
       controller: _controller,
-      child: Stack(
-        children: [
-          widget.child,
-          if (widget.isBrowserTab)
-            // For Browser Tab, listen to the ValueNotifier from HtmlService
-            // This prevents the entire HomeScreen from rebuilding on every scroll pixel
-            ValueListenableBuilder<double>(
-              valueListenable: Provider.of<HtmlService>(context, listen: false)
-                  .webViewScrollNotifier,
-              builder: (context, scrollY, _) {
-                if (scrollY > 200) {
-                  return Positioned(
-                    right: 16,
-                    bottom: 16,
-                    child: FloatingActionButton(
-                      heroTag: 'scroll-to-top-${widget.tag}',
-                      mini: true,
-                      onPressed: _scrollToTop,
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primaryContainer,
-                      foregroundColor:
-                          Theme.of(context).colorScheme.onPrimaryContainer,
-                      child: const Icon(Icons.arrow_upward),
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            )
-          else
-          // For other tabs, use local state
-          if (_showFab)
-            Positioned(
-              right: 16,
-              bottom: 16,
-              child: FloatingActionButton(
-                heroTag: 'scroll-to-top-${widget.tag}',
-                mini: true,
-                onPressed: _scrollToTop,
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                foregroundColor:
-                    Theme.of(context).colorScheme.onPrimaryContainer,
-                child: const Icon(Icons.arrow_upward),
-              ),
-            ),
-        ],
+      child: Focus(
+        focusNode: widget.focusNode,
+        child: Stack(
+          children: [
+            widget.child,
+            if (widget.isBrowserTab)
+              // For Browser Tab, listen to the ValueNotifier from HtmlService
+              // This prevents the entire HomeScreen from rebuilding on every scroll pixel
+              ValueListenableBuilder<double>(
+                valueListenable: Provider.of<HtmlService>(context, listen: false)
+                    .webViewScrollNotifier,
+                builder: (context, scrollY, _) {
+                  if (scrollY > 200) {
+                    return Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: FloatingActionButton(
+                        heroTag: 'scroll-to-top-${widget.tag}',
+                        mini: true,
+                        onPressed: _scrollToTop,
+                        backgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                        child: const Icon(Icons.arrow_upward),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              )
+            else
+              // For other tabs, use local state
+              if (_showFab)
+                Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: FloatingActionButton(
+                    heroTag: 'scroll-to-top-${widget.tag}',
+                    mini: true,
+                    onPressed: _scrollToTop,
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor:
+                        Theme.of(context).colorScheme.onPrimaryContainer,
+                    child: const Icon(Icons.arrow_upward),
+                  ),
+                ),
+          ],
+        ),
       ),
     );
   }

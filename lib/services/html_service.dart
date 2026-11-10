@@ -2219,6 +2219,9 @@ Technical details: $message''';
     _readerService = readerService;
   }
 
+  /// The reader service, or null in tests that don't set one.
+  ReaderService? get readerService => _readerService;
+
   void setAppSettings(AppSettings settings) {
     _appSettings = settings;
     // Listen to settings changes to update tab indices dynamically
