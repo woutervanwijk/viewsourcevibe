@@ -503,7 +503,12 @@ class HtmlService extends ChangeNotifier {
   }
 
   List<Detection>? _detections;
-  PageInspection? _detectionsFor;
+  // The detections are cached on their inputs, not on the PageInspection
+  // identity: a load poll merges a new snapshot object every pass, and
+  // re-running deriveDetections per poll janks (Services/Privacy tabs).
+  DetectionTexts? _detectionsTextsFor;
+  int _detectionsResSig = -1;
+  int _detectionsCookieCount = -1;
 
   // The source scan is cached on the identity of the scanned texts, so
   // resource/cookie updates only redo the cheap request/cookie part.
@@ -539,8 +544,19 @@ class HtmlService extends ChangeNotifier {
         _startDetectionScan(texts);
       }
     }
-    if (_detections == null || !identical(current, _detectionsFor)) {
-      _detectionsFor = current;
+    final browser = current.browser;
+    final cookies =
+        browser is Present<BrowserSnapshot> ? browser.value.cookies : null;
+    final cookieCount =
+        cookies is Present<List<BrowserCookie>> ? cookies.value.length : -1;
+    final resSig = _browserSignature();
+    if (_detections == null ||
+        !sameDetectionTexts(texts, _detectionsTextsFor) ||
+        _detectionsResSig != resSig ||
+        _detectionsCookieCount != cookieCount) {
+      _detectionsTextsFor = texts;
+      _detectionsResSig = resSig;
+      _detectionsCookieCount = cookieCount;
       _detections = deriveDetections(current, scanned: _scanned ?? const []);
     }
     return _detections!;
