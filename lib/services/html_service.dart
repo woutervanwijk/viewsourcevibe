@@ -156,8 +156,13 @@ class HtmlService extends ChangeNotifier {
   bool get _browserReachable =>
       _browserCollectOverride != null || activeWebViewController != null;
 
-  Future<Object?> _collect(String url) =>
-      (_browserCollectOverride ?? _collectViaController)(url);
+  /// [dom] false skips the DOM serialization in the collector (the big cost
+  /// on large pages) — used by the load polls. Test seams ignore the flag.
+  Future<Object?> _collect(String url, [bool dom = true]) {
+    final override = _browserCollectOverride;
+    if (override != null) return override(url);
+    return _collectViaController(url, dom);
+  }
 
   /// The server fetch of the current navigation (null when none runs).
   Future<void>? _serverFetch;
@@ -4630,12 +4635,13 @@ Technical details: $message''';
 
   /// A fresh collect for [gen], merged into the store by the store itself.
   /// Everything that comes back after the navigation moved on is dropped.
-  Future<void> _collectAndApply(int gen, String url, Uri uri) async {
+  Future<void> _collectAndApply(int gen, String url, Uri uri,
+      [bool dom = true]) async {
     bool stale() => _disposed || gen != store.current.generation;
 
     Object? raw;
     try {
-      raw = await _collect(url);
+      raw = await _collect(url, dom);
     } catch (e) {
       if (!stale()) {
         store.applyBrowserFailure(gen, Failed('Browser collection failed: $e'));
@@ -4839,10 +4845,13 @@ Technical details: $message''';
     }
   }
 
-  Future<Object?> _collectViaController(String url) {
+  Future<Object?> _collectViaController(String url, [bool dom = true]) {
     final controller = activeWebViewController;
     if (controller == null) throw StateError('no browser view');
-    return controller.evaluateJavascript(source: 'window.__vsv_collect()');
+    return controller.evaluateJavascript(
+        source: dom
+            ? 'window.__vsv_collect()'
+            : 'window.__vsv_collect({dom: false})');
   }
 
   static Future<List<Map>> _nativeCookiesFromManager(String url) async {
@@ -4975,10 +4984,15 @@ Technical details: $message''';
     var lastChange = Duration.zero;
     var signature = _browserSignature();
     var scrolled = false;
+    // Poll passes skip the DOM serialization (the big cost of a collect on
+    // large pages); the pass right after the scroll-through collects the
+    // full DOM once, because lazy loading swaps srcs in.
+    var collectDom = false;
     void next() {
       _refreshTimers.add(Timer(policy.interval, () async {
         if (stale() || !_browserReachable) return;
-        await _collectAndApply(gen, url, uri);
+        await _collectAndApply(gen, url, uri, collectDom);
+        collectDom = false;
         if (stale()) return;
         _applyBrowserDerivedToMetadata();
         final now = clock.elapsed;
@@ -4995,6 +5009,7 @@ Technical details: $message''';
             scrolled = true;
             await _scrollThroughPage();
             if (stale()) return;
+            collectDom = true;
             _scrollThroughGen = gen;
             _scrollThroughDismissedGen = -1;
             notifyListeners();
@@ -5082,7 +5097,9 @@ Technical details: $message''';
     final gen = store.current.generation;
     _lateCollecting = true;
     try {
-      await _collectAndApply(gen, b.value.url.toString(), b.value.url);
+      // Late pass (lazy resources after settle): resources only, the DOM of
+      // the settled page does not change.
+      await _collectAndApply(gen, b.value.url.toString(), b.value.url, false);
       if (!_disposed && gen == store.current.generation) {
         _applyBrowserDerivedToMetadata();
       }

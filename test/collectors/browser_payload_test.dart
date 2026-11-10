@@ -356,6 +356,17 @@ void main() {
     expect(present(s.cookies).length, 1);
   });
 
+  test('a dom-skipped poll ({dom:false}) keeps the section Unavailable but '
+      'the snapshot still counts as data', () {
+    final j = jsonDecode(fixture('macos_basic.json')) as Map<String, dynamic>;
+    j['dom'] = {'ok': true, 'skipped': true};
+    final s = parseBrowserPayload(jsonEncode(j), BrowserPlatform.macos,
+        pageUrl: Uri.parse('https://example.com/index.html'));
+    expect(s.renderedDom, isA<Unavailable<RenderedDom>>());
+    expect(s.hasPresentSection, isTrue); // resources are still there
+    expect(present(s.resources).length, 2);
+  });
+
   group('unusable payloads', () {
     test('non-String result is unsupportedPlatform in every section', () {
       final obj =

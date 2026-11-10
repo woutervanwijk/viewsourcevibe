@@ -129,6 +129,24 @@ void main() {
     expect(notifies, 0);
   });
 
+  test('a dom-skipped poll keeps the last full DOM, merges resources', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    store.applyBrowser(g, _browser('https://a.test/',
+        dom: '<p>full</p>', resources: [_res('https://a.test/a.js')]));
+    // Poll pass: __vsv_collect({dom: false}) reports the dom as skipped.
+    store.applyBrowser(g, _browser('https://a.test/',
+        dom: null, resources: [_res('https://a.test/b.js')]));
+    final b = store.current.browser as Present<BrowserSnapshot>;
+    expect(b.value.renderedDom, isA<Present<RenderedDom>>());
+    expect((b.value.renderedDom as Present<RenderedDom>).value.text,
+        '<p>full</p>');
+    expect(
+        (b.value.resources as Present<List<ResourceEntry>>)
+            .value
+            .map((r) => r.url),
+        containsAll(['https://a.test/a.js', 'https://a.test/b.js']));
+  });
+
   test('stale robots and failure are ignored', () {
     final genA = store.beginUrl(Uri.parse('https://a.test/'));
     store.beginUrl(Uri.parse('https://b.test/'));

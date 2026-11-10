@@ -90,7 +90,12 @@ BrowserSnapshot parseBrowserPayload(Object? raw, BrowserPlatform platform,
     url: pageUrl,
     platform: platform,
     contentType: contentType,
-    renderedDom: _section(p['dom'], (m) => _parseDom(m, ctString)),
+    // A collect with {dom: false} reports the section as skipped: the DOM of
+    // the last full collect stays (the merge keeps a Present over this).
+    renderedDom: p['dom'] is Map && p['dom']['skipped'] == true
+        ? const Unavailable<RenderedDom>(
+            UnavailableReason.notReportedByPlatform, 'dom skipped in this collect')
+        : _section(p['dom'], (m) => _parseDom(m, ctString)),
     resources: _section(
         p['resources'], (m) => _parseResources(m, platform, effectiveUrl)),
     resourcesTruncated: dropped > 0,
