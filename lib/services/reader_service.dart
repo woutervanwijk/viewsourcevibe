@@ -130,6 +130,9 @@ class ReaderService extends ChangeNotifier {
     _viewController = controller;
   }
 
+  /// The Reader tab's WebView controller, for handing it keyboard focus.
+  InAppWebViewController? get viewController => _viewController;
+
   Future<void> scrollToTop() async {
     try {
       await _viewController?.scrollTo(x: 0, y: 0);

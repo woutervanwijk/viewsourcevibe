@@ -23,6 +23,10 @@ Future<void> pumpApp(WidgetTester tester, HtmlService service) async {
     child: const MyApp(),
   ));
   await tester.pump(const Duration(milliseconds: 300));
+  // Load after the first frame so the tab structure (and TabController in
+  // the widget tree) settles.
+  await tester.runAsync(() => service.loadFile(htmlFileFor(fullPage())));
+  await tester.pump(const Duration(milliseconds: 500));
 }
 
 Future<void> pressKey(
@@ -37,7 +41,11 @@ Future<void> pressKey(
   await tester.sendKeyUpEvent(key);
   if (meta) await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
   if (control) await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-  await tester.pump(const Duration(milliseconds: 400));
+  // Let the tab animation settle and the page-focus callback run (the new
+  // page can take a few frames to build, so pump repeatedly).
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 void main() {
@@ -91,12 +99,16 @@ void main() {
 
     // Cmd+arrows (macOS) work the same, and win over the focused location
     // bar: after Ctrl+L the field has focus, Cmd+Right still switches tabs.
+    // The newly selected tab's page then takes keyboard focus (so the page
+    // scrolls with the keyboard), so the location bar loses it.
     await pressKey(tester, LogicalKeyboardKey.keyL, control: true);
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.focusNode!.hasFocus, isTrue);
     await pressKey(tester, LogicalKeyboardKey.arrowRight, meta: true);
+    await tester.pump();
     expect(state.currentTabIndex, isNot(initial));
-    expect(field.focusNode!.hasFocus, isTrue);
+    expect(field.focusNode!.hasFocus, isFalse);
+    expect(state.activeTabFocusNode?.hasFocus, isTrue);
   });
 
   testWidgets('the mouse wheel scrolls the tab strip horizontally',
