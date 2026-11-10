@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -48,6 +49,12 @@ void main() {
     fetcher.calls.clear();
     loader.calls.clear();
 
+    // Idle after the load settled: full deferred handling.
+    await service.syncWebViewState('https://www.ad.nl/');
+    await pumpEventQueue();
+    fetcher.calls.clear();
+    loader.calls.clear();
+
     service.beginBrowserNavigation(callback);
     await pumpEventQueue();
 
@@ -57,6 +64,54 @@ void main() {
     expect(server, isA<Pending<ServerSnapshot>>());
     expect((server as Pending).detail,
         'waiting for the browser to finish loading');
+  });
+
+  test('redirect hops of an in-flight load do not flip the URL or refetch',
+      () async {
+    await service.loadUrl('https://www.ad.nl/economie/');
+    final gen = service.store.current.generation;
+    fetcher.calls.clear();
+    loader.calls.clear();
+
+    // The server chain ad.nl -> consent -> myprivacy.dpgmedia.nl: each hop
+    // reaches shouldOverrideUrlLoading while the load is in flight.
+    service.beginBrowserNavigation(
+        'https://www.ad.nl/privacy-gate/accept-tcf2?redirectUri=%2Feconomie');
+    service.beginBrowserNavigation('https://myprivacy.dpgmedia.nl/economie/');
+    await pumpEventQueue();
+
+    // No new generation, no URL flip, no extra fetch or browser load.
+    expect(service.store.current.generation, gen);
+    expect(service.currentInputText, 'https://www.ad.nl/economie/');
+    expect(loader.calls, isEmpty);
+    expect(fetcher.calls, isEmpty);
+
+    // The final URL is fetched exactly once, at the non-partial sync.
+    await service.syncWebViewState('https://myprivacy.dpgmedia.nl/economie/');
+    await pumpEventQueue();
+    expect(fetcher.calls.map((u) => u.toString()),
+        ['https://myprivacy.dpgmedia.nl/economie/']);
+    expect(service.currentInputText, 'https://myprivacy.dpgmedia.nl/economie/');
+  });
+
+  test('a mid-load navigation the finished chain does not cover is synced once',
+      () async {
+    await service.loadUrl('https://www.ad.nl/');
+    fetcher.pending.last.complete(okSnapshot('https://www.ad.nl/', '<html/>'));
+    await pumpEventQueue();
+    fetcher.calls.clear();
+
+    // Click aborted the in-flight load; the noted URL is outside the chain.
+    service.beginBrowserNavigation(callback);
+    await pumpEventQueue();
+    expect(fetcher.calls, isEmpty);
+
+    await service.syncWebViewState(callback);
+    await pumpEventQueue();
+    expect(fetcher.calls.map((u) => u.toString()), [callback]);
+    expect(service.store.current.target, isA<UrlTarget>());
+    expect((service.store.current.target as UrlTarget).url.toString(),
+        callback);
   });
 
   test('after the browser settled, only its final URL is fetched', () async {

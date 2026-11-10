@@ -1679,6 +1679,16 @@ class HtmlService extends ChangeNotifier {
       _noteBrowserUrl(uri);
       return;
     }
+    // While a load is still in flight, this navigation is a hop of its
+    // redirect chain (or a click that aborted it), not a new page: starting a
+    // generation per hop would flip the URL bar through every intermediate
+    // address and re-fetch each hop. The final URL is picked up once, at the
+    // non-partial sync (see _runDeferredServerFetch and the noted-URL check
+    // in _fetchServer).
+    if (_isWebViewLoading) {
+      _noteBrowserUrl(uri);
+      return;
+    }
     _fileNotice = null;
     _pushPreviousPageToNavigationStack(url);
     _resetLoadState(newUrl: url, notify: false);
@@ -1993,9 +2003,7 @@ Technical details: $message''';
       _browserUrlDuringFetch = (store.current.generation, uri);
 
   void _noteBrowserUrl(Uri uri) {
-    if (store.current.server is Pending<ServerSnapshot>) {
-      _browserUrlDuringFetch = (store.current.generation, uri);
-    }
+    _browserUrlDuringFetch = (store.current.generation, uri);
   }
 
   /// Strict URL identity for data decisions: scheme, host, port, path
@@ -4879,7 +4887,15 @@ Technical details: $message''';
     // Server side of the page the browser is on (headers, redirects, robots).
     // A page the current navigation covers is not fetched again; any other
     // starts a new generation, synchronously, before the gen is read below.
-    if (!isPartial) _runDeferredServerFetch(uri);
+    if (!isPartial) {
+      _runDeferredServerFetch(uri);
+      // The browser ended up on a page this navigation does not cover (a
+      // redirect hop reported while the load was in flight, or a click that
+      // aborted it): that page is a navigation of its own.
+      if (!_storeCovers(uri)) {
+        _startInspection(uri, adoptBody: true);
+      }
+    }
     probeUrl(url).ignore();
     final gen = store.current.generation;
     bool stale() => _disposed || gen != store.current.generation;
