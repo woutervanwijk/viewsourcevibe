@@ -23,7 +23,6 @@ import 'package:view_source_vibe/widgets/keep_alive_wrapper.dart';
 import 'package:view_source_vibe/widgets/browser_view.dart';
 import 'package:view_source_vibe/widgets/reader_view.dart';
 import 'package:view_source_vibe/services/reader_service.dart';
-import 'package:view_source_vibe/widgets/divergence_banner.dart';
 
 /// Key of the [HomeScreen]; the Cmd/Ctrl+arrow shortcuts switch its tabs.
 final GlobalKey<HomeScreenState> homeScreenKey = GlobalKey<HomeScreenState>();
@@ -657,7 +656,6 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   UrlInput(key: urlInputKey),
-                  const DivergenceBanner(),
                   // The Toolbar with Navigation Tabs
                   Listener(
                     onPointerSignal: _onTabStripPointerSignal,
