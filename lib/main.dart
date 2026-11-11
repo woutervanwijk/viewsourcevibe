@@ -34,7 +34,7 @@ Future<void> setupUrlHandling(
       final initialUri = await appLinks.getInitialLink();
       debugPrint('setupUrlHandling: Initial URI result: $initialUri');
       if (initialUri != null) {
-        await _handleDeepLink(initialUri, htmlService);
+        await handleDeepLink(initialUri, htmlService);
       } else {
         debugPrint('setupUrlHandling: No initial URI found');
       }
@@ -44,7 +44,7 @@ Future<void> setupUrlHandling(
     appLinks.uriLinkStream.listen((Uri? uri) {
       debugPrint('setupUrlHandling: Received URI from stream: $uri');
       if (uri != null) {
-        _handleDeepLink(uri, htmlService);
+        handleDeepLink(uri, htmlService);
       }
     }, onError: (err) {
       debugPrint('Error in URI stream: $err');
@@ -57,7 +57,8 @@ Future<void> setupUrlHandling(
 }
 
 /// Handles deep links from URL schemes
-Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
+@visibleForTesting
+Future<void> handleDeepLink(Uri uri, HtmlService htmlService) async {
   // Don't handle deep links while a share dialog is showing — prevents double loading
   if (UnifiedSharingService.isShowingShareDialog) {
     debugPrint('Skipping deep link while share dialog is visible: $uri');
@@ -81,6 +82,19 @@ Future<void> _handleDeepLink(Uri uri, HtmlService htmlService) async {
   else if (uri.scheme == 'viewsourcevibe' && uri.host == 'text') {
     final content = uri.queryParameters['content'];
     if (content != null && content.isNotEmpty) {
+      // Text that is entirely one URL is a shared link, not content: open
+      // it as a URL. The iOS share extension routes link-only shares (e.g.
+      // from apps that provide the URL as plain text) through this scheme.
+      final url = UnifiedSharingService.urlFromSharedText(content);
+      if (url != null) {
+        debugPrint('Opening URL from deep-linked text: $url');
+        try {
+          await htmlService.loadFromUrl(url);
+        } catch (e) {
+          debugPrint('Error loading URL from deep link: $e');
+        }
+        return;
+      }
       debugPrint('Opening text content from deep link: $content');
       try {
         final htmlFile =
@@ -345,7 +359,7 @@ Future<void> _performDelayedInitialization(
 
   // Restore session if no deep link
   if (initialUri != null) {
-    await _handleDeepLink(initialUri, htmlService);
+    await handleDeepLink(initialUri, htmlService);
     // After deep link, also setup the stream for future links
     setupUrlHandling(htmlService, handleInitialLink: false);
   } else {

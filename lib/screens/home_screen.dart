@@ -229,6 +229,97 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _tabController.animateTo(index);
   }
 
+  /// Dots button at the right of the tab strip: shows every tab at once in a
+  /// two-column dialog; tapping one switches to it.
+  void _showTabOverview() {
+    final htmlService = Provider.of<HtmlService>(context, listen: false);
+    final specs = _tabSpecs(htmlService);
+    final current = _tabController.index;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        // Smaller outer margin than the 40px default, so the dialog keeps
+        // more room on narrow screens.
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        title: const Text('Tabs'),
+        contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        content: SizedBox(
+          width: 364,
+          child: GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            mainAxisSpacing: 6,
+            crossAxisSpacing: 6,
+            childAspectRatio: 3.4,
+            children: [
+              for (var i = 0; i < specs.length; i++)
+                Builder(
+                  builder: (itemContext) {
+                    final (icon, label, _) = specs[i];
+                    final isCurrent = i == current;
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        Navigator.of(dialogContext).pop();
+                        _tabController.animateTo(i);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: isCurrent
+                              ? Theme.of(itemContext)
+                                  .colorScheme
+                                  .primaryContainer
+                              : null,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icon,
+                                size: 20,
+                                color: isCurrent
+                                    ? Theme.of(itemContext)
+                                        .colorScheme
+                                        .onPrimaryContainer
+                                    : Theme.of(itemContext)
+                                        .colorScheme
+                                        .onSurfaceVariant),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                label,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isCurrent
+                                      ? Theme.of(itemContext)
+                                          .colorScheme
+                                          .onPrimaryContainer
+                                      : Theme.of(itemContext)
+                                          .colorScheme
+                                          .onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Current tab index; tests check keyboard tab switching with it.
   @visibleForTesting
   int get currentTabIndex => _tabController.index;
@@ -661,17 +752,31 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     onPointerSignal: _onTabStripPointerSignal,
                     child: Container(
                       color: Theme.of(context).colorScheme.surface,
-                      child: TabBar(
-                        controller: _tabController,
-                        scrollController: _tabScrollController,
-                        isScrollable: true,
-                        tabAlignment: TabAlignment.start,
-                        labelColor: Theme.of(context).colorScheme.primary,
-                        unselectedLabelColor:
-                            Theme.of(context).colorScheme.onSurfaceVariant,
-                        indicatorColor: Theme.of(context).colorScheme.primary,
-                        indicatorSize: TabBarIndicatorSize.label,
-                        tabs: _getTabs(htmlService),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TabBar(
+                              controller: _tabController,
+                              scrollController: _tabScrollController,
+                              isScrollable: true,
+                              tabAlignment: TabAlignment.start,
+                              labelColor:
+                                  Theme.of(context).colorScheme.primary,
+                              unselectedLabelColor: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              indicatorColor:
+                                  Theme.of(context).colorScheme.primary,
+                              indicatorSize: TabBarIndicatorSize.label,
+                              tabs: _getTabs(htmlService),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'All tabs',
+                            icon: const Icon(Icons.more_vert),
+                            onPressed: _showTabOverview,
+                          ),
+                        ],
                       ),
                     ),
                   ),

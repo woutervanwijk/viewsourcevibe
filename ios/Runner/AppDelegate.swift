@@ -292,24 +292,23 @@ func handleURLScheme(url: URL) {
 
     var sharedData: [String: Any] = [:]
 
+    // queryItems values are already percent-decoded by URLComponents —
+    // decoding again here would corrupt payloads containing '%XX' sequences.
     switch host {
     case "open":
       if let urlItem = queryItems.first(where: { $0.name == "url" }),
-         let urlValue = urlItem.value,
-         let decodedUrl = urlValue.removingPercentEncoding {
-        sharedData = ["type": "url", "content": decodedUrl]
+         let urlValue = urlItem.value {
+        sharedData = ["type": "url", "content": urlValue]
       }
     case "text":
       if let contentItem = queryItems.first(where: { $0.name == "content" }),
-         let contentValue = contentItem.value,
-         let decodedContent = contentValue.removingPercentEncoding {
-        sharedData = ["type": "text", "content": decodedContent]
+         let contentValue = contentItem.value {
+        sharedData = ["type": "text", "content": contentValue]
       }
     case "file":
       if let pathItem = queryItems.first(where: { $0.name == "path" }),
-         let pathValue = pathItem.value,
-         let decodedPath = pathValue.removingPercentEncoding {
-        var filePath = decodedPath
+         let pathValue = pathItem.value {
+        var filePath = pathValue
         if filePath.hasPrefix("file:///") {
             filePath = String(filePath.dropFirst(7))
         } else if filePath.hasPrefix("file://") {
