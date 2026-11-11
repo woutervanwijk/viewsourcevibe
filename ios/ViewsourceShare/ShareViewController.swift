@@ -204,6 +204,10 @@ class ShareViewController: SLComposeServiceViewController {
             if let url = item as? URL {
                 print("Received URL: \(url.absoluteString)")
                 completion(.success(url.absoluteString))
+            } else if let urlString = item as? String {
+                // Some providers register the URL as a plain string under public.url
+                print("Received URL as string: \(urlString)")
+                completion(.success(urlString))
             } else {
                 completion(.failure(NSError(domain: "ViewsourceShare", code: 3, userInfo: [NSLocalizedDescriptionKey: "Invalid URL format"])))
             }
@@ -353,33 +357,37 @@ Alternatively:
         }
     }
 
+    /// Builds a viewsourcevibe:// deep link with the value strictly
+    /// percent-encoded (only alphanumerics pass through). This encodes
+    /// '&', '=', '?', '%', '+' etc., so URLs with query strings survive
+    /// query parsing on the receiving side, which decodes exactly once.
+    func deepLinkURL(host: String, param: String, value: String) -> URL? {
+        let encoded = value.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        return URL(string: "viewsourcevibe://\(host)?\(param)=\(encoded)")
+    }
+
+    private func openInMainApp(_ appURL: URL) {
+        var responder = self as UIResponder?
+        while responder != nil {
+            if let application = responder as? UIApplication {
+                application.open(appURL, options: [:], completionHandler: nil)
+                break
+            }
+            responder = responder?.next
+        }
+    }
+
     func openURLInMainApp(url: String) {
         // Use URL scheme to open the main app with the URL
-        let encodedURL = url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        if let appURL = URL(string: "viewsourcevibe://open?url=\(encodedURL)") {
-            var responder = self as UIResponder?
-            while responder != nil {
-                if let application = responder as? UIApplication {
-                    application.open(appURL, options: [:], completionHandler: nil)
-                    break
-                }
-                responder = responder?.next
-            }
+        if let appURL = deepLinkURL(host: "open", param: "url", value: url) {
+            openInMainApp(appURL)
         }
     }
 
     func openTextInMainApp(text: String) {
         // Use URL scheme to open the main app with text content
-        let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        if let appURL = URL(string: "viewsourcevibe://text?content=\(encodedText)") {
-            var responder = self as UIResponder?
-            while responder != nil {
-                if let application = responder as? UIApplication {
-                    application.open(appURL, options: [:], completionHandler: nil)
-                    break
-                }
-                responder = responder?.next
-            }
+        if let appURL = deepLinkURL(host: "text", param: "content", value: text) {
+            openInMainApp(appURL)
         }
     }
 
@@ -387,29 +395,13 @@ Alternatively:
         // Check if the content looks like actual file content (not a URL)
         if filePath.hasPrefix("file://") || filePath.contains("/Users/") || filePath.contains("/Library/") {
             // This is a file path, use the original URL scheme
-            let encodedFilePath = filePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            if let appURL = URL(string: "viewsourcevibe://file?path=\(encodedFilePath)") {
-                var responder = self as UIResponder?
-                while responder != nil {
-                    if let application = responder as? UIApplication {
-                        application.open(appURL, options: [:], completionHandler: nil)
-                        break
-                    }
-                    responder = responder?.next
-                }
+            if let appURL = deepLinkURL(host: "file", param: "path", value: filePath) {
+                openInMainApp(appURL)
             }
         } else {
             // This looks like actual file content, pass it as text
-            let encodedContent = filePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            if let appURL = URL(string: "viewsourcevibe://text?content=\(encodedContent)") {
-                var responder = self as UIResponder?
-                while responder != nil {
-                    if let application = responder as? UIApplication {
-                        application.open(appURL, options: [:], completionHandler: nil)
-                        break
-                    }
-                    responder = responder?.next
-                }
+            if let appURL = deepLinkURL(host: "text", param: "content", value: filePath) {
+                openInMainApp(appURL)
             }
         }
     }
