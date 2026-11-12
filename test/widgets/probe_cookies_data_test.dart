@@ -63,7 +63,7 @@ void main() {
               server: serverSnap(setCookies: ['sid=1; Path=/; HttpOnly']),
               browser: browserSnap(cookies: const [])));
       expect(find.text('Server'), findsOneWidget);
-      expect(find.text('Secure: no · HttpOnly: yes · SameSite: not set'),
+      expect(find.text('Secure: no · HttpOnly: yes · SameSite: not set (Lax by default)'),
           findsOneWidget);
     });
 

@@ -1382,7 +1382,8 @@ class ProbeSecurityView extends StatelessWidget {
     }
     final cert = state.value;
     final validityColor = _certColor(cert.validityTone);
-    final hostColor = cert.hostMatches ? Colors.green : Colors.orange;
+    // Only the CN is checked (SAN is not collected): a mismatch is not alarming.
+    final hostColor = cert.hostMatches ? Colors.green : Colors.grey;
 
     return _card(context, [
       Row(

@@ -92,7 +92,7 @@ void main() {
       final c = cookies(p).rows.single;
       expect(c.secure, 'no');
       expect(c.httpOnly, 'yes');
-      expect(c.sameSite, 'not set');
+      expect(c.sameSite, 'not set (Lax by default)');
       expect(c.domain, 'a.test (host-only)');
       expect(c.path, '/');
       expect(c.expires, 'session');
@@ -145,6 +145,83 @@ void main() {
           server: serverSnap(setCookies: ['zzz=1', '_ga=1', 'aaa=1']),
           browser: browserSnap(cookies: const []));
       expect(cookies(p).rows.map((r) => r.name), ['_ga', 'aaa', 'zzz']);
+    });
+  });
+
+  group('audit fixes', () {
+    CookiesModel one(String line,
+            {String url = 'https://a.test/page', bool complete = true}) =>
+        cookies(inspection(
+            server: serverSnap(setCookies: [line], url: url),
+            browser:
+                browserSnap(url: url, cookies: complete ? const [] : null)));
+
+    test('tracking cookies are not also counted as third-party (K1)', () {
+      expect(one('_fbp=1; Secure; SameSite=Lax').score, 88);
+      expect(one('_ga=1; Secure; SameSite=Lax').score, 93);
+      expect(one('IDE=1; Secure; SameSite=Lax').rows.single.thirdPartyish,
+          isFalse);
+    });
+
+    test('leading-dot Domain of the own site is first party (K2)', () {
+      final r = one('m=1; Domain=.a.test; Secure; SameSite=Lax',
+              url: 'https://a.test/')
+          .rows
+          .single;
+      expect(r.thirdPartyish, isFalse);
+      final sub = one('m=1; Domain=a.test; Secure; SameSite=Lax',
+              url: 'https://www.a.test/')
+          .rows
+          .single;
+      expect(sub.thirdPartyish, isFalse);
+      final other = one('m=1; Domain=.other.test; Secure; SameSite=Lax',
+              url: 'https://a.test/')
+          .rows
+          .single;
+      expect(other.thirdPartyish, isTrue);
+      final lookalike = one('m=1; Domain=evila.test; Secure; SameSite=Lax',
+              url: 'https://a.test/')
+          .rows
+          .single;
+      expect(lookalike.thirdPartyish, isTrue);
+    });
+
+    test('missing SameSite is not weak, SameSite=None is (K3)', () {
+      final none = one('a=1; Secure; HttpOnly');
+      expect(none.rows.single.weakSameSite, isFalse);
+      expect(none.rows.single.sameSite, 'not set (Lax by default)');
+      final sn = one('a=1; Secure; HttpOnly; SameSite=None');
+      expect(sn.rows.single.weakSameSite, isTrue);
+      expect(
+          sn.notes.map((n) => n.text).join(' '),
+          contains(
+              '1 cookie use SameSite=None (sent on cross-site requests).'));
+      expect(sn.chips.map((c) => c.label), contains('1 SameSite=None'));
+    });
+
+    test('missing Secure only counts on https pages (K4)', () {
+      final http = one('a=1; SameSite=Lax', url: 'http://a.test/page');
+      expect(http.rows.single.missingSecure, isFalse);
+      expect(http.notes.map((n) => n.text).join(' '),
+          isNot(contains('not marked Secure')));
+      final https = one('a=1; SameSite=Lax');
+      expect(https.rows.single.missingSecure, isTrue);
+    });
+
+    test('incomplete sources: verdict says partial (K5)', () {
+      final m = one('IDE=1', complete: false);
+      expect(m.complete, isFalse);
+      expect(m.score, isNotNull);
+      expect(m.verdict,
+          endsWith('(partial: not all cookie sources could be read)'));
+      expect(one('IDE=1').verdict, isNot(contains('partial')));
+    });
+
+    test('expired cookies are shown as expired (K9)', () {
+      expect(one('a=1; Max-Age=0').rows.single.expires, 'expired (deleted)');
+      expect(
+          one('a=1; Expires=Thu, 01 Jan 1970 00:00:00 GMT').rows.single.expires,
+          contains('expired'));
     });
   });
 }

@@ -13,9 +13,12 @@ const euCountries = {
 /// Countries with an EU adequacy decision (equivalent data protection).
 /// The US decision (Data Privacy Framework) only covers certified companies,
 /// which can't be verified automatically, so the US is not listed.
+/// CA covers commercial organisations under PIPEDA only. GB decisions were
+/// renewed in Dec 2025 until 27 Dec 2031. BR: mutual decisions adopted Jan 2026.
 const euAdequateCountries = {
   'AD',
   'AR',
+  'BR',
   'CA',
   'FO',
   'GG',
@@ -37,6 +40,10 @@ const extraterritorialLaws = {
   'RU': 'SORM / Yarovaya law',
 };
 
+/// Adequate countries that formally recognise the EU/EEA as adequate too.
+/// (CA, NZ, KR, BR have no reciprocal decision.)
+const _recognisesEu = {'GB', 'CH', 'JP', 'AR', 'UY', 'IL', 'AD'};
+
 enum Relation { own, adequate, foreign, unknown }
 
 /// Jurisdiction a country belongs to: [eu] for EU/EEA members, else itself.
@@ -51,10 +58,13 @@ Relation relationTo(String? country, String home) {
   final j = jurisdictionOf(country);
   if (j == null) return Relation.unknown;
   if (j == home) return Relation.own;
-  // Adequacy is mutual in practice: the UK, Switzerland etc. also
-  // recognise the EU as adequate.
+  // Adequacy is one-way unless the other side recognises the EU too
+  // (GB, CH, JP, AR, UY, IL, AD do); GB and CH also recognise each other.
   if (home == eu && euAdequateCountries.contains(j)) return Relation.adequate;
-  if (j == eu && euAdequateCountries.contains(home)) return Relation.adequate;
+  if (j == eu && _recognisesEu.contains(home)) return Relation.adequate;
+  if ({home, j}.containsAll({'GB', 'CH'})) {
+    return Relation.adequate;
+  }
   return Relation.foreign;
 }
 
@@ -205,7 +215,6 @@ const _genericCcTlds = {
   'nu',
   'ac',
   'gl',
-  'is',
   'am',
   'im',
   'xyz',

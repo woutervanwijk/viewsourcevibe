@@ -32,7 +32,7 @@ void main() {
     test('some outside', () {
       final s = summarizeSovereignty(
           report([host('a', country: 'NL'), host('b', country: 'US')]));
-      expect(s.headline, startsWith('50% of requests go to companies outside'));
+      expect(s.headline, startsWith('50% of requests go to companies based outside'));
     });
 
     test('everything unknown is not "all requests stay"', () {
@@ -79,6 +79,46 @@ void main() {
           s.pillars.singleWhere((p) => p.pillar == Pillar.residency);
       expect(residency.label, '13/25');
       expect(residency.fraction, closeTo(0.5, 0.01));
+    });
+  });
+
+  group('percent formatting', () {
+    test('tiny non-zero share is <1%, near-total is >99%', () {
+      final tiny = summarizeSovereignty(report([
+        host('a', country: 'NL', requests: 1000),
+        host('b', country: 'US'),
+      ]));
+      expect(tiny.headline, startsWith('<1% of requests'));
+      final almost = summarizeSovereignty(report([
+        host('a', country: 'NL'),
+        host('b', requests: 1000),
+      ]));
+      expect(almost.headline, contains('>99% of requests could not'));
+    });
+  });
+
+  group('coverage', () {
+    test('share of the 100 points resting on verified checks', () {
+      final s = summarizeSovereignty(report([], checks: const [
+        SovereigntyCheck(Pillar.infrastructure, 'a', CheckStatus.unknown, '',
+            weight: 3),
+        SovereigntyCheck(Pillar.residency, 'b', CheckStatus.unknown, '',
+            weight: 3),
+        SovereigntyCheck(Pillar.security, 'c', CheckStatus.pass, ''),
+        SovereigntyCheck(Pillar.privacy, 'd', CheckStatus.pass, ''),
+      ]));
+      expect(s.coverage, closeTo(0.35, 0.001));
+      expect(s.lowCoverage, isTrue);
+    });
+    test('half-verified pillar counts proportionally', () {
+      final s = summarizeSovereignty(report([], checks: const [
+        SovereigntyCheck(Pillar.infrastructure, 'a', CheckStatus.pass, ''),
+        SovereigntyCheck(Pillar.infrastructure, 'b', CheckStatus.unknown, ''),
+      ]));
+      expect(s.coverage, closeTo(0.2, 0.001));
+    });
+    test('no checks: zero coverage', () {
+      expect(summarizeSovereignty(report([])).coverage, 0);
     });
   });
 }

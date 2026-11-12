@@ -10,6 +10,8 @@ import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/derive/page_weight.dart';
+import 'package:view_source_vibe/services/derive/security_audit.dart'
+    show hstsMaxAge, hstsMinSeconds;
 import 'package:view_source_vibe/services/detection/engine.dart';
 
 class HostingProvider {
@@ -23,130 +25,137 @@ class HostingProvider {
       {this.edge = false});
 }
 
+/// Whole-word pattern: [alternatives] must not be glued to other letters or
+/// digits on the left, nor to letters on the right (`aws` is not `lawsociety`
+/// or `awsome`). List real compounds (`awsdns`, `amazonaws`) explicitly.
+RegExp _word(String alternatives) => RegExp(
+      '(?<![a-z0-9])(?:$alternatives)(?![a-z])',
+      caseSensitive: false,
+    );
+
 final List<HostingProvider> providers = [
   HostingProvider(
     'Cloudflare',
     'US',
-    RegExp(r'cloudflare|cdnjs|jsdelivr|unpkg|cf-ns\.', caseSensitive: false),
+    _word(
+        r'cloudflare|cloudflarenet|cloudflareinsights|cdnjs|jsdelivr|unpkg|cf-ns'),
     edge: true,
   ),
   HostingProvider(
     'Amazon (AWS)',
     'US',
-    RegExp(r'amazon|aws|cloudfront|awsdns|route53', caseSensitive: false),
+    _word(r'amazon|amazonaws|aws|cloudfront|awsdns|route53'),
   ),
   HostingProvider(
     'Google',
     'US',
-    RegExp(
-      r'google|gstatic|googleapis|googlehosted|googledomains|gcp|youtube|ytimg|doubleclick',
-      caseSensitive: false,
+    _word(
+      r'google|googleusercontent|googlemail|gstatic|googleapis|googlehosted|googledomains|googletagmanager|googlesyndication|googleadservices|googlevideo|gcp|youtube|ytimg|doubleclick',
     ),
   ),
   HostingProvider(
     'Microsoft',
     'US',
-    RegExp(
-      r'microsoft|azure|msecnd|msft|outlook\.com|office365|bing\.',
-      caseSensitive: false,
+    _word(
+      r'microsoft|microsoftonline|azure|azureedge|azurewebsites|msecnd|msft|outlook\.com|office365|bing',
     ),
   ),
   HostingProvider(
     'Meta',
     'US',
-    RegExp(r'facebook|fbcdn|instagram|meta platforms', caseSensitive: false),
+    _word(r'facebook|fbcdn|instagram|cdninstagram|meta platforms'),
   ),
   HostingProvider(
     'Fastly',
     'US',
-    RegExp(r'fastly|fastlylb', caseSensitive: false),
+    _word(r'fastly|fastlylb'),
     edge: true,
   ),
   HostingProvider(
     'Akamai',
     'US',
-    RegExp(r'akamai|edgekey|edgesuite', caseSensitive: false),
+    _word(
+        r'akamai|akamaiedge|akamaihd|akamaitechnologies|akamaized|edgekey|edgesuite'),
     edge: true,
   ),
   HostingProvider(
     'Imperva',
-    'US',
-    RegExp(r'imperva|incapsula', caseSensitive: false),
+    'FR', // Thales, acquisition completed Dec 2023
+    _word(r'imperva|incapsula'),
     edge: true,
   ),
-  HostingProvider('Vercel', 'US', RegExp(r'vercel', caseSensitive: false)),
-  HostingProvider('Netlify', 'US', RegExp(r'netlify', caseSensitive: false)),
-  HostingProvider('GitHub', 'US', RegExp(r'github', caseSensitive: false)),
+  HostingProvider('Vercel', 'US', _word(r'vercel')),
+  HostingProvider('Netlify', 'US', _word(r'netlify')),
+  HostingProvider('GitHub', 'US', _word(r'github|githubusercontent')),
   HostingProvider(
     'DigitalOcean',
     'US',
-    RegExp(r'digitalocean', caseSensitive: false),
+    _word(r'digitalocean'),
   ),
   HostingProvider(
     'GoDaddy',
     'US',
-    RegExp(r'godaddy|domaincontrol', caseSensitive: false),
+    _word(r'godaddy|domaincontrol'),
   ),
   HostingProvider(
     'Oracle',
     'US',
-    RegExp(r'oracle|dyn\.com', caseSensitive: false),
+    _word(r'oracle|oraclecloud|dyn\.com'),
   ),
-  HostingProvider('Hetzner', 'DE', RegExp(r'hetzner', caseSensitive: false)),
+  HostingProvider('Hetzner', 'DE', _word(r'hetzner')),
   HostingProvider(
     'IONOS',
     'DE',
-    RegExp(r'ionos|1und1|1&1|kundenserver', caseSensitive: false),
+    _word(r'ionos|1und1|1&1|kundenserver'),
   ),
-  HostingProvider('OVHcloud', 'FR', RegExp(r'ovh', caseSensitive: false)),
+  HostingProvider('OVHcloud', 'FR', _word(r'ovh|ovhcloud')),
   HostingProvider(
     'Scaleway',
     'FR',
-    RegExp(r'scaleway|online\.net', caseSensitive: false),
+    _word(r'scaleway|online\.net'),
   ),
-  HostingProvider('TransIP', 'NL', RegExp(r'transip', caseSensitive: false)),
-  HostingProvider('Leaseweb', 'NL', RegExp(r'leaseweb', caseSensitive: false)),
-  HostingProvider('Gcore', 'LU', RegExp(r'gcore', caseSensitive: false),
+  HostingProvider('TransIP', 'NL', _word(r'transip')),
+  HostingProvider('Leaseweb', 'NL', _word(r'leaseweb')),
+  HostingProvider('Gcore', 'LU', _word(r'gcore|gcorelabs'), edge: true),
+  HostingProvider('Bunny.net', 'SI', _word(r'bunny|bunnycdn|b-cdn'),
       edge: true),
-  HostingProvider('Bunny.net', 'SI', RegExp(r'bunny', caseSensitive: false),
-      edge: true),
-  HostingProvider('Proton', 'CH', RegExp(r'proton', caseSensitive: false)),
+  HostingProvider('Proton', 'CH', _word(r'proton|protonmail')),
   HostingProvider(
     'Infomaniak',
     'CH',
-    RegExp(r'infomaniak', caseSensitive: false),
+    _word(r'infomaniak'),
   ),
   HostingProvider(
     'Let\'s Encrypt',
     'US',
-    RegExp(r"let's encrypt|isrg", caseSensitive: false),
+    _word(r"let's encrypt|isrg"),
   ),
   HostingProvider(
     'DigiCert',
     'US',
-    RegExp(r'digicert|identrust', caseSensitive: false),
+    _word(r'digicert|identrust'),
   ),
   HostingProvider(
     'Sectigo',
-    'GB',
-    RegExp(r'sectigo|comodo', caseSensitive: false),
+    'US', // HQ Scottsdale, AZ
+    _word(r'sectigo|comodo|comodoca'),
   ),
   HostingProvider(
     'GlobalSign',
-    'BE',
-    RegExp(r'globalsign', caseSensitive: false),
+    'JP', // owned by GMO Internet Group
+    _word(r'globalsign'),
   ),
-  HostingProvider('Harica', 'GR', RegExp(r'harica', caseSensitive: false)),
-  HostingProvider('Yandex', 'RU', RegExp(r'yandex', caseSensitive: false)),
+  HostingProvider('Harica', 'GR', _word(r'harica')),
+  HostingProvider('Yandex', 'RU', _word(r'yandex')),
   HostingProvider(
     'Alibaba Cloud',
     'CN',
-    RegExp(r'alibaba|aliyun|alicdn', caseSensitive: false),
+    _word(r'alibaba|alibabacloud|aliyun|alicdn'),
   ),
   HostingProvider(
     'Tencent',
     'CN',
-    RegExp(r'tencent|qcloud|myqcloud', caseSensitive: false),
+    _word(r'tencent|tencentcloud|qcloud|myqcloud'),
   ),
 ];
 
@@ -167,10 +176,8 @@ HostingProvider? detectCdnFromHeaders(Map<String, String> headers) {
   if (h.containsKey('cf-ray') || (h['server'] ?? '').contains('cloudflare')) {
     return byName('Cloudflare');
   }
-  if (h.containsKey('x-amz-cf-id') ||
-      h.containsKey('x-amz-request-id') ||
-      (h['via'] ?? '').contains('cloudfront') ||
-      (h['server'] ?? '').contains('amazons3')) {
+  // x-amz-request-id / AmazonS3 are S3 origin storage, not a CDN.
+  if (h.containsKey('x-amz-cf-id') || (h['via'] ?? '').contains('cloudfront')) {
     return byName('Amazon (AWS)');
   }
   if (h.containsKey('x-azure-ref') || h.containsKey('x-msedge-ref')) {
@@ -178,17 +185,18 @@ HostingProvider? detectCdnFromHeaders(Map<String, String> headers) {
   }
   if (h.containsKey('x-vercel-id')) return byName('Vercel');
   if (h.containsKey('x-nf-request-id')) return byName('Netlify');
-  if (h.containsKey('x-served-by') && h.containsKey('x-cache') ||
-      (h['via'] ?? '').contains('varnish') &&
-          h.containsKey('x-fastly-request-id')) {
+  final servedBy = h['x-served-by'] ?? '';
+  if (h.containsKey('x-fastly-request-id') ||
+      (servedBy.contains('cache-') &&
+          h.containsKey('x-cache') &&
+          ('${h['via']} $servedBy').contains(RegExp('fastly|varnish')))) {
     return byName('Fastly');
   }
   if (h.keys.any((k) => k.startsWith('x-akamai')) ||
       (h['server'] ?? '').contains('akamai')) {
     return byName('Akamai');
   }
-  if ((h['server'] ?? '').contains('gws') ||
-      h.containsKey('x-goog-generation')) {
+  if (h['server'] == 'gws' || h.containsKey('x-goog-generation')) {
     return byName('Google');
   }
   return null;
@@ -281,17 +289,35 @@ const alternativeUrls = {
   'Self-host the font files': 'https://gwfh.mranftl.com/fonts',
 };
 
-/// Classifies an SPF policy from the domain's TXT records.
+/// Classifies an SPF policy (RFC 7208) from the domain's TXT records.
 (CheckStatus, String) classifySpf(List<String> txt) {
-  final spf = txt.where((t) => t.toLowerCase().startsWith('v=spf1'));
+  final spf = txt.map((t) => t.trim()).where((t) {
+    final l = t.toLowerCase();
+    return l == 'v=spf1' || l.startsWith('v=spf1 ');
+  }).toList();
   if (spf.isEmpty) return (CheckStatus.fail, 'No SPF record');
-  final record = spf.first;
-  final lower = record.toLowerCase();
-  if (lower.contains('-all')) return (CheckStatus.pass, record);
-  if (lower.contains('~all') || lower.contains('redirect=')) {
-    return (CheckStatus.warn, record);
+  if (spf.length > 1) {
+    return (CheckStatus.fail, 'Multiple SPF records (permerror)');
   }
-  return (CheckStatus.fail, record);
+  final record = spf.first;
+  final tokens = record.toLowerCase().split(RegExp(r'\s+'));
+  final all = tokens.lastWhere((t) => RegExp(r'^[+\-~?]?all$').hasMatch(t),
+      orElse: () => '');
+  if (all.isNotEmpty) {
+    return switch (all[0]) {
+      '-' => (CheckStatus.pass, record),
+      '~' => (CheckStatus.warn, record),
+      _ => (CheckStatus.fail, record),
+    };
+  }
+  final redirect = tokens.where((t) => t.startsWith('redirect=')).firstOrNull;
+  if (redirect != null) {
+    return (
+      CheckStatus.unknown,
+      'redirect to ${redirect.substring(9)} not followed'
+    );
+  }
+  return (CheckStatus.fail, 'no all mechanism: defaults to neutral');
 }
 
 /// Classifies a DMARC policy from the `_dmarc.` TXT records.
@@ -299,10 +325,14 @@ const alternativeUrls = {
   final dmarc = txt.where((t) => t.toLowerCase().startsWith('v=dmarc1'));
   if (dmarc.isEmpty) return (CheckStatus.fail, 'No DMARC record');
   final record = dmarc.first;
-  final policy = RegExp(r'p=(\w+)', caseSensitive: false)
-      .firstMatch(record)
-      ?.group(1)
-      ?.toLowerCase();
+  String? policy;
+  for (final tag in record.split(';')) {
+    final kv = tag.split('=');
+    if (kv.length >= 2 && kv.first.trim().toLowerCase() == 'p') {
+      policy = kv.sublist(1).join('=').trim().toLowerCase();
+      break;
+    }
+  }
   return switch (policy) {
     'reject' || 'quarantine' => (CheckStatus.pass, record),
     'none' => (CheckStatus.warn, record),
@@ -313,16 +343,19 @@ const alternativeUrls = {
 /// First link to a privacy or cookie statement in [html], or null.
 String? findPrivacyLink(String html) {
   final link = RegExp(
-    r'<a\b[^>]*href\s*=\s*["\x27]([^"\x27]*)["\x27][^>]*>([\s\S]*?)</a>',
+    r'''<a\b[^>]*?href\s*=\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|([^\s"\x27>]+))[^>]*>([\s\S]*?)</a>''',
     caseSensitive: false,
   );
   final topic = RegExp(
-    r'privacy|privacyverklaring|privacybeleid|datenschutz|confidentialit|privacidad|cookie',
+    r'privacy|privacyverklaring|privacybeleid|datenschutz|confidentialit|privacidad|cookie[\s_-]*(?:policy|statement|beleid|verklaring|richtlinie|notice)',
     caseSensitive: false,
   );
+  final notAPage =
+      RegExp(r'^(#|javascript:)|\.(js|css)(\?.*)?$', caseSensitive: false);
   for (final m in link.allMatches(html)) {
-    final href = m.group(1)!;
-    if (topic.hasMatch(href) || topic.hasMatch(m.group(2)!)) return href;
+    final href = (m.group(1) ?? m.group(2) ?? m.group(3))!.trim();
+    if (notAPage.hasMatch(href)) continue;
+    if (topic.hasMatch(href) || topic.hasMatch(m.group(4)!)) return href;
   }
   return null;
 }
@@ -654,8 +687,7 @@ class SovereigntyService {
     ]);
     final securityTxt = mainHost.isEmpty
         ? null
-        : classifySecurityTxt(
-            await _statusOf('https://$mainHost/.well-known/security.txt'));
+        : await _fetchSecurityTxt('https://$mainHost/.well-known/security.txt');
 
     final issuer = switch (server?.certificate) {
       Present<Map<String, dynamic>>(:final value) =>
@@ -681,16 +713,17 @@ class SovereigntyService {
         detections: detections,
         home: home,
       ),
-      ..._residencyChecks(analyzed, cdn, home),
+      ...residencyChecks(analyzed, cdn, home, totalHosts: ordered.length),
       ...securityChecks(
         txt: lookups[2],
         dmarc: lookups[3],
         caa: lookups[4],
         ds: lookups[5],
-        securityTxt: securityTxt,
+        securityTxt: securityTxt?.published,
+        securityTxtInvalid: securityTxt?.servedInvalid ?? false,
         server: server,
       ),
-      ..._privacyChecks(analyzed, detections, html, home),
+      ...privacyChecks(analyzed, detections, html, home),
     ];
 
     return SovereigntyReport(
@@ -752,11 +785,13 @@ class SovereigntyService {
     );
   }
 
-  static List<SovereigntyCheck> _residencyChecks(
+  @visibleForTesting
+  static List<SovereigntyCheck> residencyChecks(
     List<HostInfo> hosts,
     HostingProvider? cdn,
-    String home,
-  ) {
+    String home, {
+    int? totalHosts,
+  }) {
     const p = Pillar.residency;
     final main = hosts.isEmpty ? null : hosts.first;
     final located = hosts.where((h) => h.ipCountry != null).toList();
@@ -771,6 +806,13 @@ class SovereigntyService {
     final foreignControlled =
         hosts.where((h) => h.foreignControlled(home)).toList();
     final homeLabel = jurisdictionLabel(home);
+    final locatedShare = hosts.isEmpty
+        ? 0.0
+        : located.fold<int>(0, (a, h) => a + h.requests) /
+            hosts.fold<int>(0, (a, h) => a + h.requests);
+    final truncated = totalHosts != null && totalHosts > hosts.length
+        ? ' (first ${hosts.length} of $totalHosts hosts analyzed)'
+        : '';
 
     return [
       if (cdn != null)
@@ -798,7 +840,7 @@ class SovereigntyService {
       SovereigntyCheck(
         p,
         'Requests served from the site\'s jurisdiction',
-        total == 0
+        total == 0 || locatedShare < 0.5
             ? CheckStatus.unknown
             : value >= 0.8
                 ? CheckStatus.pass
@@ -806,10 +848,11 @@ class SovereigntyService {
                     ? CheckStatus.warn
                     : CheckStatus.fail,
         total == 0
-            ? 'No server locations known'
+            ? 'No server locations known$truncated'
             : '${(own * 100).round()}% in $homeLabel'
                 '${adequate > 0 ? ', ${(adequate * 100).round()}% in adequate countries' : ''}'
-                ' (of $total located requests)',
+                ' (of $total located requests; ${(locatedShare * 100).round()}% of all requests located)'
+                '$truncated',
         weight: 2,
       ),
       SovereigntyCheck(
@@ -945,8 +988,11 @@ class SovereigntyService {
     }
     checks.add(hosting);
 
-    final cdnStatus =
-        cdn == null ? CheckStatus.pass : statusFor(cdn.country, home);
+    final cdnStatus = cdn != null
+        ? statusFor(cdn.country, home)
+        : headers.isEmpty
+            ? CheckStatus.unknown
+            : CheckStatus.pass;
     checks.add(SovereigntyCheck(
       p,
       cdn == null
@@ -954,7 +1000,9 @@ class SovereigntyService {
           : 'CDN / proxy: ${cdn.name} (${cdn.country})',
       cdnStatus,
       cdn == null
-          ? 'No CDN headers in the response'
+          ? headers.isEmpty
+              ? 'No response headers were observed'
+              : 'No CDN headers in the response'
           : headers.keys.any((k) => _cdnHeaders.contains(k.toLowerCase())) &&
                   detectCdnFromHeaders(headers) != null
               ? 'Response headers: ${headers.keys.where((k) => _cdnHeaders.contains(k.toLowerCase())).join(', ')}'
@@ -1070,6 +1118,7 @@ class SovereigntyService {
     required List<String>? caa,
     required List<String>? ds,
     required bool? securityTxt,
+    bool securityTxtInvalid = false,
     required ServerSnapshot? server,
   }) {
     const p = Pillar.security;
@@ -1092,8 +1141,36 @@ class SovereigntyService {
       return SovereigntyCheck(p, title, status, evidence, weight: weight);
     }
 
-    final hsts = server?.hops.last.headers['strict-transport-security']
-        ?.join(', ');
+    final last = server?.hops.last;
+    final hsts = last?.headers['strict-transport-security']?.join(', ');
+    final hstsAge = hstsMaxAge(hsts);
+    // Same rule as the Security tab (Mozilla Observatory: six months).
+    final (CheckStatus hstsStatus, String hstsEvidence) = switch (last) {
+      null => (
+          CheckStatus.unknown,
+          'No server response to read the headers from'
+        ),
+      _ when last.url.scheme != 'https' => (
+          CheckStatus.fail,
+          'Page is not served over HTTPS'
+        ),
+      _ when hsts == null => (
+          CheckStatus.fail,
+          'No Strict-Transport-Security header'
+        ),
+      _ when (hstsAge ?? 0) >= hstsMinSeconds => (
+          CheckStatus.pass,
+          'Strict-Transport-Security: $hsts'
+        ),
+      _ when (hstsAge ?? 0) > 0 => (
+          CheckStatus.warn,
+          'Strict-Transport-Security: $hsts (max-age under 6 months)'
+        ),
+      _ => (
+          CheckStatus.fail,
+          'Strict-Transport-Security: $hsts (no valid max-age)'
+        ),
+    };
     return [
       dnsCheck('SPF (email sender policy)', txt, classifySpf),
       dnsCheck('DMARC (email authentication)', dmarc, classifyDmarc),
@@ -1107,16 +1184,8 @@ class SovereigntyService {
       SovereigntyCheck(
         p,
         'HSTS enabled',
-        server == null
-            ? CheckStatus.unknown
-            : hsts != null
-                ? CheckStatus.pass
-                : CheckStatus.fail,
-        server == null
-            ? 'No server response to read the headers from'
-            : hsts != null
-                ? 'Strict-Transport-Security: $hsts'
-                : 'No Strict-Transport-Security header',
+        hstsStatus,
+        hstsEvidence,
       ),
       dnsCheck(
         'CAA (allowed certificate authorities)',
@@ -1136,13 +1205,16 @@ class SovereigntyService {
         },
         securityTxt == true
             ? '/.well-known/security.txt found'
-            : 'No /.well-known/security.txt',
+            : securityTxtInvalid
+                ? 'served but not a valid security.txt (HTML/soft-404?)'
+                : 'No /.well-known/security.txt',
         weight: 0.5,
       ),
     ];
   }
 
-  static List<SovereigntyCheck> _privacyChecks(
+  @visibleForTesting
+  static List<SovereigntyCheck> privacyChecks(
     List<HostInfo> hosts,
     List<Detection> detections,
     String? html,
@@ -1157,7 +1229,7 @@ class SovereigntyService {
       DetectionCategory.behavior,
       DetectionCategory.analytics,
       DetectionCategory.marketing,
-    });
+    }).toSet().toList();
     final fonts = {
       ..._detectedServiceNames(detections, {DetectionCategory.fonts}),
       if (hosts.any((h) =>
@@ -1219,28 +1291,47 @@ class SovereigntyService {
         home,
         altKey: 'fonts',
         extraEvidence: home == eu && fonts.contains('Google Fonts')
-            ? ' · LG München (2022) ruled Google Fonts violates the GDPR'
+            ? ' · LG München I (20 Jan 2022, 3 O 17493/20): loading Google Fonts from Google without consent disclosed the IP address to Google (GDPR violation, €100 damages)'
             : '',
       ),
     ];
   }
 
-  /// security.txt: 200 = published, 404 = not published, any other status
-  /// (403, 429, 5xx) or no answer = unknown.
-  static bool? classifySecurityTxt(int? status) => switch (status) {
-        200 => true,
-        404 => false,
-        _ => null,
-      };
+  /// security.txt (RFC 9116): published only for 200 + text/plain + a
+  /// `Contact:` line (a soft-404 HTML page is not one); 404 = not published;
+  /// any other status (403, 429, 5xx) or no answer = unknown.
+  static bool? classifySecurityTxt(int? status,
+      {String? contentType, String? body}) {
+    if (status == 404) return false;
+    if (status != 200) return null;
+    return (contentType ?? '').toLowerCase().startsWith('text/plain') &&
+        RegExp(r'^contact:', multiLine: true, caseSensitive: false)
+            .hasMatch(body ?? '');
+  }
 
-  /// The HTTP status of a GET (HEAD is often refused), null when unreachable.
-  static Future<int?> _statusOf(String url) async {
+  static const _securityTxtMaxBytes = 64 * 1024;
+
+  /// GETs security.txt (body capped at 64 KB); null when unreachable.
+  static Future<({bool? published, bool servedInvalid})?> _fetchSecurityTxt(
+      String url) async {
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
       final req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
       final res = await req.close().timeout(_timeout);
-      await res.drain<void>();
-      return res.statusCode;
+      final bytes = <int>[];
+      await for (final chunk in res.timeout(_timeout)) {
+        bytes.addAll(chunk);
+        if (bytes.length >= _securityTxtMaxBytes) break;
+      }
+      final published = classifySecurityTxt(
+        res.statusCode,
+        contentType: res.headers.value('content-type'),
+        body: utf8.decode(bytes, allowMalformed: true),
+      );
+      return (
+        published: published,
+        servedInvalid: res.statusCode == 200 && published == false,
+      );
     } catch (_) {
       return null;
     } finally {
@@ -1291,7 +1382,8 @@ class SovereigntyService {
     } catch (e) {
       debugPrint('Sovereignty lookup failed for ${info.host}: $e');
     }
-    info.provider = matchProvider([info.host, info.asnHolder]);
+    // The network operator (ASN holder) outranks the hostname.
+    info.provider = matchProvider([info.asnHolder, info.host]);
   }
 
   static Future<Map<String, dynamic>?> _getJson(String url) =>
@@ -1372,10 +1464,11 @@ class SovereigntyService {
     'github.io', 'gitlab.io', 'netlify.app', 'vercel.app', 'pages.dev',
     'herokuapp.com', 'azurewebsites.net', 'cloudfront.net', 'blogspot.com',
     'appspot.com', 'web.app', 'firebaseapp.com',
+    'amazonaws.com', 's3.amazonaws.com', 'elasticbeanstalk.com',
   };
 
   /// Registrable domain: the public suffix (from [_publicSuffixes], else the
-  /// generic `{co,com,org,net,gov,ac,edu}.<ccTLD>` pattern, else the last
+  /// generic `{co,com,org,gov,…}.<ccTLD>` pattern, else the last
   /// label) plus one label. `foo.github.io` stays `foo.github.io`; an IP
   /// address is returned unchanged; the result is lowercase.
   static String registrableDomain(String host) {
@@ -1383,13 +1476,25 @@ class SovereigntyService {
     if (h.contains(':') || RegExp(r'^\d+(\.\d+){3}$').hasMatch(h)) return h;
     final parts = h.split('.');
     if (parts.length <= 2) return h;
-    final twoLabel = parts.sublist(parts.length - 2).join('.');
-    const genericSld = {'co', 'com', 'org', 'net', 'gov', 'ac', 'edu'};
-    final take = _publicSuffixes.contains(twoLabel) ||
-            (genericSld.contains(parts[parts.length - 2]) &&
-                parts.last.length == 2)
-        ? 3
-        : 2;
+    const genericSld = {
+      'co', 'com', 'org', 'net', 'gov', 'ac', 'edu', 'go', 'or', 'ne', 'gob', //
+      'gouv', 'asso', 'nhs', 'me', 'ltd', 'plc', 'sch', 'mil', 'nic', 'gv',
+      'gen',
+    };
+    // Longest listed suffix wins (s3.amazonaws.com before amazonaws.com).
+    var take = 2;
+    for (var n = 3; n >= 2; n--) {
+      if (parts.length > n &&
+          _publicSuffixes.contains(parts.sublist(parts.length - n).join('.'))) {
+        take = n + 1;
+        break;
+      }
+    }
+    if (take == 2 &&
+        genericSld.contains(parts[parts.length - 2]) &&
+        parts.last.length == 2) {
+      take = 3;
+    }
     return parts.sublist(parts.length - take).join('.');
   }
 

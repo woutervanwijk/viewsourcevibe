@@ -3,8 +3,10 @@ import 'package:flutter/material.dart' show IconData, Icons;
 import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
 import '../../models/inspection/server_snapshot.dart';
+import '../sovereignty_service.dart' show detectCdnFromHeaders;
 import 'observed_text.dart';
 import 'probe_general.dart' show probeGate;
+import 'security_audit.dart' show isNosniff;
 
 /// How an insight should look: the widget maps a tone to a colour.
 enum InsightTone { good, warn, bad, neutral, info, brand }
@@ -120,23 +122,44 @@ List<(String, String)> _evidence(Map<String, String> h, List<String> names) => [
     ];
 
 HeaderInsight _cache(Map<String, String> h) {
-  final cacheControl = h['cache-control']?.toLowerCase() ?? '';
   final age = h['age'];
   final ev = _evidence(h, ['cache-control', 'age', 'expires']);
-  if (cacheControl.contains('no-store')) {
+  // RFC 9111 directives: name -> value ('' when it has none).
+  final cc = <String, String>{};
+  for (final part in (h['cache-control'] ?? '').toLowerCase().split(',')) {
+    final kv = part.trim().split('=');
+    if (kv.first.isNotEmpty) {
+      cc[kv.first] = kv.skip(1).join('=').replaceAll('"', '');
+    }
+  }
+  HeaderInsight make(String label, InsightTone tone, String detail) =>
+      HeaderInsight(InsightId.cache, label, Icons.cached, tone, detail, ev);
+  final ageText = age == null ? '' : ', Age is $age';
+  final private =
+      cc.containsKey('private') ? ' (private: browser cache only)' : '';
+  if (cc.containsKey('no-store')) {
     return HeaderInsight(InsightId.cache, 'No-store', Icons.lock_outline,
         InsightTone.warn, 'Response should not be stored by caches.', ev);
   }
-  final maxAge = RegExp(r'max-age=(\d+)').firstMatch(cacheControl);
-  final seconds = int.tryParse(maxAge?.group(1) ?? '');
+  final sMaxAge = int.tryParse(cc['s-maxage'] ?? '');
+  final maxAge = int.tryParse(cc['max-age'] ?? '');
+  final seconds = sMaxAge ?? maxAge;
+  final source = sMaxAge != null ? 's-maxage' : 'max-age';
+  if (cc.containsKey('no-cache') || seconds == 0) {
+    return make('Always revalidate', InsightTone.info,
+        'Caches must revalidate before reuse (${cc.containsKey('no-cache') ? 'no-cache' : '$source=0'})$private$ageText.');
+  }
   if (seconds != null) {
-    return HeaderInsight(
-        InsightId.cache,
-        seconds >= 86400 ? 'Cacheable' : 'Short cache',
-        Icons.cached,
-        seconds >= 86400 ? InsightTone.good : InsightTone.warn,
-        'Cache-Control max-age is ${seconds}s${age == null ? '' : ', Age is $age'}.',
-        ev);
+    final long = seconds >= 86400;
+    return make(
+        long ? 'Cacheable' : 'Short cache',
+        long ? InsightTone.good : InsightTone.info,
+        'Cache-Control $source is ${seconds}s'
+        '${sMaxAge != null ? ' for shared caches' : ''}$private$ageText.');
+  }
+  if (cc.containsKey('private')) {
+    return make('Private cache', InsightTone.info,
+        'Cache-Control private: only the browser may cache this.');
   }
   return HeaderInsight(
       InsightId.cache,
@@ -153,10 +176,10 @@ HeaderInsight _compression(Map<String, String> h) {
   if (encoding == null || encoding.isEmpty) {
     return HeaderInsight(
         InsightId.compression,
-        'No compression',
+        'No gzip/deflate compression',
         Icons.compress,
         InsightTone.warn,
-        'No Content-Encoding header found.',
+        'The server did not compress the response for gzip/deflate (the app does not request br/zstd).',
         ev);
   }
   return HeaderInsight(
@@ -171,14 +194,14 @@ HeaderInsight _compression(Map<String, String> h) {
 HeaderInsight _cdn(Map<String, String> h) {
   final ev =
       _evidence(h, ['server', 'via', 'cf-cache-status', 'cf-ray', 'x-cache']);
-  final server = '${h['server'] ?? ''} ${h['via'] ?? ''} '
-          '${h['cf-cache-status'] ?? ''} ${h['x-cache'] ?? ''}'
-      .toLowerCase();
-  if (server.contains('cloudflare') || h.containsKey('cf-cache-status')) {
-    return HeaderInsight(InsightId.cdn, 'Cloudflare', Icons.cloud_outlined,
-        InsightTone.brand, 'Cloudflare headers detected.', ev);
+  final provider = detectCdnFromHeaders(h);
+  if (provider != null) {
+    return HeaderInsight(InsightId.cdn, provider.name, Icons.cloud_outlined,
+        InsightTone.brand, '${provider.name} headers detected.', ev);
   }
-  if (server.contains('hit')) {
+  final hit = RegExp(r'\bHIT\b', caseSensitive: false);
+  if (hit.hasMatch(h['x-cache'] ?? '') ||
+      hit.hasMatch(h['cf-cache-status'] ?? '')) {
     return HeaderInsight(InsightId.cdn, 'Cache hit', Icons.speed,
         InsightTone.good, 'Proxy/cache header suggests a cache hit.', ev);
   }
@@ -267,7 +290,7 @@ List<HeaderNote> _notes(Map<String, String> h) {
     notes.add(const HeaderNote(Icons.warning_amber_rounded, InsightTone.warn,
         'Missing Content-Type makes content sniffing more likely.'));
   }
-  if ((h['x-content-type-options'] ?? '').toLowerCase() != 'nosniff') {
+  if (!isNosniff(h['x-content-type-options'])) {
     notes.add(const HeaderNote(Icons.security, InsightTone.warn,
         'X-Content-Type-Options: nosniff is not present.'));
   }

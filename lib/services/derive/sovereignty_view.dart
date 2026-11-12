@@ -27,7 +27,14 @@ class SovereigntySummary {
   final double unknownShare;
   final List<PillarLine> pillars;
 
+  /// 0..1: share of the 100 pillar points that rest on verified checks.
+  final double coverage;
+
+  /// Below half coverage the score is only indicative.
+  bool get lowCoverage => coverage < 0.5;
+
   const SovereigntySummary({
+    required this.coverage,
     required this.score,
     required this.grade,
     required this.headline,
@@ -36,7 +43,28 @@ class SovereigntySummary {
   });
 }
 
-String _pct(double share) => '${(share * 100).round()}%';
+String _pct(double share) {
+  final p = (share * 100).round();
+  if (p == 0 && share > 0) return '<1%';
+  if (p == 100 && share < 1) return '>99%';
+  return '$p%';
+}
+
+/// Share of the 100 points whose checks could be verified: each pillar
+/// contributes pillarMax x (verified weight / total weight).
+double _coverage(SovereigntyReport r) {
+  var covered = 0.0;
+  for (final p in Pillar.values) {
+    final all = r.checks.where((c) => c.pillar == p);
+    final total = all.fold<double>(0, (a, c) => a + c.weight);
+    if (total == 0) continue;
+    final known = all
+        .where((c) => c.status != CheckStatus.unknown)
+        .fold<double>(0, (a, c) => a + c.weight);
+    covered += pillarMax[p]! * known / total;
+  }
+  return covered / 100;
+}
 
 /// Score, pillar lines and the headline for a report. Unknown stays unknown:
 /// no score without a verified pillar, and "all requests stay" is only said
@@ -56,18 +84,19 @@ SovereigntySummary summarizeSovereignty(SovereigntyReport r) {
         'The jurisdiction of the companies behind the requests could not be determined.';
   } else if (outside == 0 && unknown == 0) {
     headline =
-        "All requests stay with companies in the site's jurisdiction ($home)";
+        "All requests stay with companies based in the site's jurisdiction ($home)";
   } else if (outside == 0) {
     headline =
-        "No request is known to go outside the site's jurisdiction ($home); "
+        "No request is known to go to a company based outside the site's jurisdiction ($home); "
         '${_pct(unknown)} of requests could not be attributed.';
   } else {
     headline =
-        "${_pct(outside)} of requests go to companies outside the site's jurisdiction ($home)"
+        "${_pct(outside)} of requests go to companies based outside the site's jurisdiction ($home)"
         '${unknown > 0 ? '; ${_pct(unknown)} of requests could not be attributed' : ''}';
   }
 
   return SovereigntySummary(
+    coverage: _coverage(r),
     score: r.score,
     grade: r.grade,
     headline: headline,
