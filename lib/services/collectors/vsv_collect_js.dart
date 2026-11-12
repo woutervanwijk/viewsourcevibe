@@ -236,10 +236,14 @@ const String vsvResourceBootstrapJs = r'''
 })();
 ''';
 
-/// Defines `window.__vsv_collect()`, which returns ONE JSON string. Every
+/// Defines `window.__vsv_collect(opts)`, which returns ONE JSON string. Every
 /// section carries its own `ok` / `error` so one failure drops nothing else.
+/// `__vsv_collect({dom: false})` skips serializing the whole DOM (the big
+/// cost on large pages): the section is reported as `skipped` and the app
+/// keeps the DOM of the last full collect. Used by the load polls.
 const String vsvCollectJs = r'''
-window.__vsv_collect = function() {
+window.__vsv_collect = function(opts) {
+  opts = opts || {};
   var STORAGE_MAX_ITEMS = 500;
   function describe(e) {
     try { return (e && e.name ? e.name + ': ' + e.message : String(e)); }
@@ -257,7 +261,9 @@ window.__vsv_collect = function() {
     return {now: performance.now(), timeOrigin: performance.timeOrigin || null};
   });
 
-  out.dom = section(function() {
+  if (opts.dom === false) {
+    out.dom = {ok: true, skipped: true};
+  } else out.dom = section(function() {
     var ct = document.contentType || '';
     var isXml = /xml|svg/i.test(ct);
     var value = '';

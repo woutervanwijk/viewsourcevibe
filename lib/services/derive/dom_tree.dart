@@ -92,18 +92,31 @@ DomTree deriveDomTree(String text, DomTreeKind kind) {
   return DomTree(root == null ? const [] : [root]);
 }
 
+/// `<label k="v" …>` for the reconstructed [content] (see [_fromHtml]).
+String _openTag(String label, Map<String, String> attributes) {
+  final attrs =
+      attributes.entries.map((e) => '${e.key}="${e.value}"').join(' ');
+  return attrs.isEmpty ? '<$label>' : '<$label $attrs>';
+}
+
 DomTreeNode? _fromXml(xml.XmlNode node) {
   if (node is xml.XmlElement) {
+    final label = node.name.toString();
+    final attributes = {
+      for (final a in node.attributes) a.name.toString(): a.value,
+    };
+    final children = node.children
+        .map(_fromXml)
+        .whereType<DomTreeNode>()
+        .toList(growable: false);
     return DomTreeNode(
-      label: node.name.toString(),
-      content: node.toXmlString(),
-      attributes: {
-        for (final a in node.attributes) a.name.toString(): a.value,
-      },
-      children: node.children
-          .map(_fromXml)
-          .whereType<DomTreeNode>()
-          .toList(growable: false),
+      label: label,
+      // Reconstructed bottom-up instead of node.toXmlString(), which
+      // re-serializes every subtree: O(size x depth) on a large document.
+      content:
+          '${_openTag(label, attributes)}${[for (final c in children) c.content].join()}</$label>',
+      attributes: attributes,
+      children: children,
       isElement: true,
     );
   } else if (node is xml.XmlText) {
@@ -117,14 +130,23 @@ DomTreeNode? _fromXml(xml.XmlNode node) {
 
 DomTreeNode? _fromHtml(dom.Node node) {
   if (node is dom.Element) {
+    final label = node.localName ?? 'unknown';
+    final attributes =
+        node.attributes.map((k, v) => MapEntry(k.toString(), v));
+    final children = node.nodes
+        .map(_fromHtml)
+        .whereType<DomTreeNode>()
+        .toList(growable: false);
     return DomTreeNode(
-      label: node.localName ?? 'unknown',
-      content: node.outerHtml,
-      attributes: node.attributes.map((k, v) => MapEntry(k.toString(), v)),
-      children: node.nodes
-          .map(_fromHtml)
-          .whereType<DomTreeNode>()
-          .toList(growable: false),
+      label: label,
+      // Reconstructed bottom-up instead of node.outerHtml, which
+      // re-serializes every subtree: O(size x depth) time and memory when
+      // building the tree of a large page (ad.nl, telegraaf.nl). Only used
+      // for the long-press copy, so normalized markup is fine.
+      content:
+          '${_openTag(label, attributes)}${[for (final c in children) c.content].join()}</$label>',
+      attributes: attributes,
+      children: children,
       isElement: true,
     );
   } else if (node is dom.Text) {

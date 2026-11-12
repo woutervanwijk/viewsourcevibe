@@ -156,8 +156,13 @@ class HtmlService extends ChangeNotifier {
   bool get _browserReachable =>
       _browserCollectOverride != null || activeWebViewController != null;
 
-  Future<Object?> _collect(String url) =>
-      (_browserCollectOverride ?? _collectViaController)(url);
+  /// [dom] false skips the DOM serialization in the collector (the big cost
+  /// on large pages) — used by the load polls. Test seams ignore the flag.
+  Future<Object?> _collect(String url, [bool dom = true]) {
+    final override = _browserCollectOverride;
+    if (override != null) return override(url);
+    return _collectViaController(url, dom);
+  }
 
   /// The server fetch of the current navigation (null when none runs).
   Future<void>? _serverFetch;
@@ -339,6 +344,13 @@ class HtmlService extends ChangeNotifier {
   String? _webViewLoadingUrl;
   String? get webViewLoadingUrl => _webViewLoadingUrl;
 
+  /// The URL of the load actually issued to the current WebView controller
+  /// (null when the controller was missing, so the load is still pending).
+  /// BrowserView checks this before issuing a load itself, so a file change
+  /// or tab switch during an in-flight load does not restart it.
+  String? _browserLoadIssuedUrl;
+  String? get browserLoadIssuedUrl => _browserLoadIssuedUrl;
+
   // URL added to history when a browser load started; replaced by the final
   // URL if the load redirects.
   String? _historyPendingUrl;
@@ -380,11 +392,14 @@ class HtmlService extends ChangeNotifier {
   set activeWebViewController(InAppWebViewController? controller) {
     _activeWebViewController = controller;
     _webViewControllerDisposed = false;
+    // A new controller has not been given any load yet.
+    _browserLoadIssuedUrl = null;
   }
 
   void clearWebViewController() {
     _webViewControllerDisposed = true;
     _activeWebViewController = null;
+    _browserLoadIssuedUrl = null;
   }
 
   Timer? _autoSaveTimer;
@@ -488,7 +503,12 @@ class HtmlService extends ChangeNotifier {
   }
 
   List<Detection>? _detections;
-  PageInspection? _detectionsFor;
+  // The detections are cached on their inputs, not on the PageInspection
+  // identity: a load poll merges a new snapshot object every pass, and
+  // re-running deriveDetections per poll janks (Services/Privacy tabs).
+  DetectionTexts? _detectionsTextsFor;
+  int _detectionsResSig = -1;
+  int _detectionsCookieCount = -1;
 
   // The source scan is cached on the identity of the scanned texts, so
   // resource/cookie updates only redo the cheap request/cookie part.
@@ -524,8 +544,19 @@ class HtmlService extends ChangeNotifier {
         _startDetectionScan(texts);
       }
     }
-    if (_detections == null || !identical(current, _detectionsFor)) {
-      _detectionsFor = current;
+    final browser = current.browser;
+    final cookies =
+        browser is Present<BrowserSnapshot> ? browser.value.cookies : null;
+    final cookieCount =
+        cookies is Present<List<BrowserCookie>> ? cookies.value.length : -1;
+    final resSig = _browserSignature();
+    if (_detections == null ||
+        !sameDetectionTexts(texts, _detectionsTextsFor) ||
+        _detectionsResSig != resSig ||
+        _detectionsCookieCount != cookieCount) {
+      _detectionsTextsFor = texts;
+      _detectionsResSig = resSig;
+      _detectionsCookieCount = cookieCount;
       _detections = deriveDetections(current, scanned: _scanned ?? const []);
     }
     return _detections!;
@@ -539,29 +570,40 @@ class HtmlService extends ChangeNotifier {
   }
 
   DetectionsView? _detectionsView;
-  List<Detection>? _detectionsViewList;
-  PageInspection? _detectionsViewFor;
+  ({
+    List<Detection> list,
+    Observed<ServerSnapshot> server,
+    Observed<BrowserSnapshot> browser,
+    bool browserReachable
+  })? _detectionsViewKey;
   bool? _detectionsViewScanning;
   String? _detectionsViewError;
 
   /// Findings plus whether they are complete (scanning, failed, which sources
   /// were read). The Services, Privacy and Technology views read this.
+  /// Cached on the detections list and the two snapshots (record == compares
+  /// them by identity), not on the PageInspection object, which changes on
+  /// every store merge.
   DetectionsView get detectionsView {
     final list = detections;
     final current = store.current;
-    final sources =
-        describeCheckedSources(current, browserReachable: _browserReachable);
-    final scanning = _scanPending || sources.waiting;
+    final reachable = _browserReachable;
+    final key = (
+      list: list,
+      server: current.server,
+      browser: current.browser,
+      browserReachable: reachable
+    );
     if (_detectionsView == null ||
-        !identical(list, _detectionsViewList) ||
-        !identical(current, _detectionsViewFor) ||
-        scanning != _detectionsViewScanning ||
-        sources.line != _detectionsView!.sources.line ||
+        _detectionsViewKey != key ||
+        _scanPending != _detectionsViewScanning ||
         _scanError != _detectionsViewError) {
-      _detectionsViewList = list;
-      _detectionsViewFor = current;
-      _detectionsViewScanning = scanning;
+      _detectionsViewKey = key;
       _detectionsViewError = _scanError;
+      final sources =
+          describeCheckedSources(current, browserReachable: reachable);
+      final scanning = _scanPending || sources.waiting;
+      _detectionsViewScanning = scanning;
       _detectionsView = DetectionsView(
           detections: list,
           scanning: scanning,
@@ -591,18 +633,35 @@ class HtmlService extends ChangeNotifier {
   }
 
   SourceView? _sourceView;
-  PageInspection? _sourceViewFor;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server,
+    Observed<FileSnapshot> file,
+    DataSource? primaryDocumentPreference,
+    DataSource? primaryDocument
+  })? _sourceViewFor;
   String? _sourceViewFallback;
 
   /// The document the Source tab and DOM tree show (from the store; the
   /// legacy current file only fills in when the store holds no document).
+  /// Cached on the snapshots it reads (record == compares them by identity),
+  /// not on the PageInspection object, which changes on every store merge.
   SourceView get sourceView {
     final current = store.current;
     final fallback = _currentFile?.content;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      server: current.server,
+      file: current.file,
+      primaryDocumentPreference: current.primaryDocumentPreference,
+      primaryDocument: current.primaryDocument
+    );
     if (_sourceView == null ||
-        !identical(current, _sourceViewFor) ||
+        _sourceViewFor != key ||
         !identical(fallback, _sourceViewFallback)) {
-      _sourceViewFor = current;
+      _sourceViewFor = key;
       _sourceViewFallback = fallback;
       _sourceView = deriveSourceView(current, fallbackText: fallback);
     }
@@ -737,96 +796,151 @@ class HtmlService extends ChangeNotifier {
   }
 
   List<Divergence>? _divergences;
-  PageInspection? _divergencesFor;
+  ({Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server})?
+      _divergencesFor;
 
   /// Where the app's own request and the browser disagree (UI: Task 10).
+  /// Cached on the two snapshots it reads, not on the PageInspection object.
   List<Divergence> get divergences {
     final current = store.current;
-    if (_divergences == null || !identical(current, _divergencesFor)) {
-      _divergencesFor = current;
+    final key = (browser: current.browser, server: current.server);
+    if (_divergences == null || _divergencesFor != key) {
+      _divergencesFor = key;
       _divergences = deriveDivergences(current);
     }
     return _divergences!;
   }
 
   Observed<GeneralModel>? _general;
-  PageInspection? _generalFor;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server,
+    Observed<RobotsInfo> robots
+  })? _generalFor;
 
   /// The General probe tab: server response, content-type check, source
-  /// diff, robots, storage, network and browser cards.
+  /// diff, robots, storage, network and browser cards. Cached on the
+  /// snapshots it reads, not on the PageInspection object.
   Observed<GeneralModel> get generalView {
     final current = store.current;
-    if (_general == null || !identical(current, _generalFor)) {
-      _generalFor = current;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      server: current.server,
+      robots: current.robots
+    );
+    if (_general == null || _generalFor != key) {
+      _generalFor = key;
       _general = deriveGeneral(current, divergences: divergences);
     }
     return _general!;
   }
 
   Observed<HeadersModel>? _headers;
-  PageInspection? _headersFor;
+  ({Observed<ServerSnapshot> server})? _headersFor;
 
   /// The Headers tab: insights from the final response, headers per hop.
+  /// Cached on the server snapshot, not on the PageInspection object.
   Observed<HeadersModel> get headersView {
     final current = store.current;
-    if (_headers == null || !identical(current, _headersFor)) {
-      _headersFor = current;
+    final key = (server: current.server);
+    if (_headers == null || _headersFor != key) {
+      _headersFor = key;
       _headers = deriveHeaders(current);
     }
     return _headers!;
   }
 
   Observed<SecurityModel>? _security;
-  PageInspection? _securityFor;
+  ({Observed<ServerSnapshot> server})? _securityFor;
 
   /// The Security tab: header audit, CSP and certificate of the final
-  /// response; no score while the response is unknown.
+  /// response; no score while the response is unknown. Cached on the
+  /// server snapshot, not on the PageInspection object.
   Observed<SecurityModel> get securityView {
     final current = store.current;
-    if (_security == null || !identical(current, _securityFor)) {
-      _securityFor = current;
+    final key = (server: current.server);
+    if (_security == null || _securityFor != key) {
+      _securityFor = key;
       _security = deriveSecurity(current);
     }
     return _security!;
   }
 
   Observed<CookiesModel>? _cookiesView;
-  PageInspection? _cookiesViewFor;
+  ({Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server})?
+      _cookiesViewFor;
 
   /// The Cookies tab: derived cookies with flags (unknown stays unknown)
-  /// and the privacy lens.
+  /// and the privacy lens. Cached on the snapshots it reads, not on the
+  /// PageInspection object.
   Observed<CookiesModel> get cookiesView {
     final current = store.current;
-    if (_cookiesView == null || !identical(current, _cookiesViewFor)) {
-      _cookiesViewFor = current;
+    final key = (browser: current.browser, server: current.server);
+    if (_cookiesView == null || _cookiesViewFor != key) {
+      _cookiesViewFor = key;
       _cookiesView = deriveCookiesView(current);
     }
     return _cookiesView!;
   }
 
   Observed<TimelineModel>? _timelineModel;
-  PageInspection? _timelineModelFor;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server
+  })? _timelineModelFor;
 
   /// The Request Timeline tab: the browser's requests (timing and size may
   /// be unknown per row), totals and the redirect chain of the server.
+  /// Cached on the snapshots it reads, not on the PageInspection object.
   Observed<TimelineModel> get timelineView {
     final current = store.current;
-    if (_timelineModel == null || !identical(current, _timelineModelFor)) {
-      _timelineModelFor = current;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      server: current.server
+    );
+    if (_timelineModel == null || _timelineModelFor != key) {
+      _timelineModelFor = key;
       _timelineModel = deriveTimeline(current);
     }
     return _timelineModel!;
   }
 
   Observed<PageSizeModel>? _pageSize;
-  PageInspection? _pageSizeFor;
+  ({
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server,
+    Map<String, Observed<int>> resourceEstimates,
+    Map<String, Observed<int>> freshEstimates,
+    List<String> declaredMedia,
+    bool browserSettled,
+    Observed<BrowserSnapshot> freshLoad,
+    Observed<Uint8List> freshScreenshot,
+    Observed<Uint8List> liveScreenshot
+  })? _pageSizeFor;
 
   /// The Page size tab's data: totals, breakdown and per-file sizes from the
   /// browser's resources, or the state that says why there are none.
+  /// Cached on everything derivePageSize reads, not on the PageInspection
+  /// object (which changes on every store merge, e.g. each size estimate).
   Observed<PageSizeModel> get pageSize {
     final current = store.current;
-    if (_pageSize == null || !identical(current, _pageSizeFor)) {
-      _pageSizeFor = current;
+    final key = (
+      browser: current.browser,
+      server: current.server,
+      resourceEstimates: current.resourceEstimates,
+      freshEstimates: current.freshEstimates,
+      declaredMedia: current.declaredMedia,
+      browserSettled: current.browserSettled,
+      freshLoad: current.freshLoad,
+      freshScreenshot: current.freshScreenshot,
+      liveScreenshot: current.liveScreenshot
+    );
+    if (_pageSize == null || _pageSizeFor != key) {
+      _pageSizeFor = key;
       _pageSize = derivePageSize(current);
     }
     return _pageSize!;
@@ -1359,9 +1473,16 @@ class HtmlService extends ChangeNotifier {
     try {
       final currentBrowserUrl = await controller.getUrl();
       if (file.isUrl) {
+        // Already loading (or loaded) this URL on this controller: do not
+        // restart the load, its redirect chain would be walked again.
+        if (_browserLoadIssuedUrl != null &&
+            areUrlsEqual(_browserLoadIssuedUrl!, file.path)) {
+          return;
+        }
         if (currentBrowserUrl.toString() != file.path) {
           debugPrint('Triggering browser reload for: ${file.path}');
           _webViewLoadingUrl = file.path;
+          _browserLoadIssuedUrl = file.path;
           await controller.loadUrl(
             urlRequest: URLRequest(url: WebUri(file.path)),
           );
@@ -1511,6 +1632,7 @@ class HtmlService extends ChangeNotifier {
     _isLoading = true;
     _isWebViewLoading = false;
     _webViewLoadingUrl = null;
+    _browserLoadIssuedUrl = null;
 
     // The Reader tab's article belongs to the page that just went away.
     _readerService?.markStale();
@@ -1676,6 +1798,16 @@ class HtmlService extends ChangeNotifier {
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
     // The same document as the current navigation (R20) is nothing new.
     if (store.current.target is UrlTarget && _storeCovers(uri)) {
+      _noteBrowserUrl(uri);
+      return;
+    }
+    // While a load is still in flight, this navigation is a hop of its
+    // redirect chain (or a click that aborted it), not a new page: starting a
+    // generation per hop would flip the URL bar through every intermediate
+    // address and re-fetch each hop. The final URL is picked up once, at the
+    // non-partial sync (see _runDeferredServerFetch and the noted-URL check
+    // in _fetchServer).
+    if (_isWebViewLoading) {
       _noteBrowserUrl(uri);
       return;
     }
@@ -1993,9 +2125,7 @@ Technical details: $message''';
       _browserUrlDuringFetch = (store.current.generation, uri);
 
   void _noteBrowserUrl(Uri uri) {
-    if (store.current.server is Pending<ServerSnapshot>) {
-      _browserUrlDuringFetch = (store.current.generation, uri);
-    }
+    _browserUrlDuringFetch = (store.current.generation, uri);
   }
 
   /// Strict URL identity for data decisions: scheme, host, port, path
@@ -2120,6 +2250,7 @@ Technical details: $message''';
     // activeWebViewController?.loadRequest(Uri.parse('about:blank'));
     // 3. Reset internal state immediately
     _webViewLoadingUrl = null;
+    _browserLoadIssuedUrl = null;
     _isWebViewLoading = false;
     _isLoading = false;
     webViewLoadingProgressNotifier.value = 0.0; // Reset progress bar
@@ -3148,6 +3279,7 @@ Technical details: $message''';
         newUrl != null && (newUrl.startsWith('http') || newUrl.contains('://'));
     if (!isUrlNavigation) {
       _webViewLoadingUrl = null;
+      _browserLoadIssuedUrl = null;
       _isWebViewLoading = false;
       _clearBrowserDerivedData();
     } else {
@@ -4602,12 +4734,13 @@ Technical details: $message''';
 
   /// A fresh collect for [gen], merged into the store by the store itself.
   /// Everything that comes back after the navigation moved on is dropped.
-  Future<void> _collectAndApply(int gen, String url, Uri uri) async {
+  Future<void> _collectAndApply(int gen, String url, Uri uri,
+      [bool dom = true]) async {
     bool stale() => _disposed || gen != store.current.generation;
 
     Object? raw;
     try {
-      raw = await _collect(url);
+      raw = await _collect(url, dom);
     } catch (e) {
       if (!stale()) {
         store.applyBrowserFailure(gen, Failed('Browser collection failed: $e'));
@@ -4811,10 +4944,13 @@ Technical details: $message''';
     }
   }
 
-  Future<Object?> _collectViaController(String url) {
+  Future<Object?> _collectViaController(String url, [bool dom = true]) {
     final controller = activeWebViewController;
     if (controller == null) throw StateError('no browser view');
-    return controller.evaluateJavascript(source: 'window.__vsv_collect()');
+    return controller.evaluateJavascript(
+        source: dom
+            ? 'window.__vsv_collect()'
+            : 'window.__vsv_collect({dom: false})');
   }
 
   static Future<List<Map>> _nativeCookiesFromManager(String url) async {
@@ -4879,7 +5015,15 @@ Technical details: $message''';
     // Server side of the page the browser is on (headers, redirects, robots).
     // A page the current navigation covers is not fetched again; any other
     // starts a new generation, synchronously, before the gen is read below.
-    if (!isPartial) _runDeferredServerFetch(uri);
+    if (!isPartial) {
+      _runDeferredServerFetch(uri);
+      // The browser ended up on a page this navigation does not cover (a
+      // redirect hop reported while the load was in flight, or a click that
+      // aborted it): that page is a navigation of its own.
+      if (!_storeCovers(uri)) {
+        _startInspection(uri, adoptBody: true);
+      }
+    }
     probeUrl(url).ignore();
     final gen = store.current.generation;
     bool stale() => _disposed || gen != store.current.generation;
@@ -4916,6 +5060,7 @@ Technical details: $message''';
         if (!isPartial) _isLoading = false;
         _isWebViewLoading = false;
         _webViewLoadingUrl = null;
+        _browserLoadIssuedUrl = null;
         notifyListeners();
       }
     }
@@ -4938,10 +5083,15 @@ Technical details: $message''';
     var lastChange = Duration.zero;
     var signature = _browserSignature();
     var scrolled = false;
+    // Poll passes skip the DOM serialization (the big cost of a collect on
+    // large pages); the pass right after the scroll-through collects the
+    // full DOM once, because lazy loading swaps srcs in.
+    var collectDom = false;
     void next() {
       _refreshTimers.add(Timer(policy.interval, () async {
         if (stale() || !_browserReachable) return;
-        await _collectAndApply(gen, url, uri);
+        await _collectAndApply(gen, url, uri, collectDom);
+        collectDom = false;
         if (stale()) return;
         _applyBrowserDerivedToMetadata();
         final now = clock.elapsed;
@@ -4958,6 +5108,7 @@ Technical details: $message''';
             scrolled = true;
             await _scrollThroughPage();
             if (stale()) return;
+            collectDom = true;
             _scrollThroughGen = gen;
             _scrollThroughDismissedGen = -1;
             notifyListeners();
@@ -5045,7 +5196,9 @@ Technical details: $message''';
     final gen = store.current.generation;
     _lateCollecting = true;
     try {
-      await _collectAndApply(gen, b.value.url.toString(), b.value.url);
+      // Late pass (lazy resources after settle): resources only, the DOM of
+      // the settled page does not change.
+      await _collectAndApply(gen, b.value.url.toString(), b.value.url, false);
       if (!_disposed && gen == store.current.generation) {
         _applyBrowserDerivedToMetadata();
       }
@@ -5079,12 +5232,26 @@ Technical details: $message''';
   /// sizes of its links. When the rendered DOM itself changed since the
   /// metadata was extracted (lazy loading swapped srcs in after the
   /// scroll-through), re-extract instead.
+  int _lastAppliedBrowserSig = -2;
+  String? _lastAppliedDomText;
+
   void _applyBrowserDerivedToMetadata() {
-    final domText = primaryDocumentInput(store.current)?.text;
-    if (domText != null && domText != _metadataDomText) {
+    final current = store.current;
+    final domText = primaryDocumentInput(current)?.text;
+    if (domText != null &&
+        !identical(domText, _metadataDomText) &&
+        domText != _metadataDomText) {
       _extractMetadata().ignore();
       return;
     }
+    // A load poll that changed neither the resources nor the document has
+    // nothing to apply: skip the rebuild (the common case while polling).
+    final sig = _browserSignature();
+    if (sig == _lastAppliedBrowserSig && identical(domText, _lastAppliedDomText)) {
+      return;
+    }
+    _lastAppliedBrowserSig = sig;
+    _lastAppliedDomText = domText;
     final metadata = _pageMetadata;
     if (metadata != null) {
       final weight = _pageWeight;
@@ -5136,8 +5303,11 @@ class _ControllerBrowserLoader implements BrowserLoader {
 
   @override
   void loadUrl(Uri url) {
-    _service.activeWebViewController
-        ?.loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())))
+    final controller = _service.activeWebViewController;
+    if (controller == null) return; // still pending; the view loads it on create
+    _service._browserLoadIssuedUrl = url.toString();
+    controller
+        .loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())))
         .ignore();
   }
 }

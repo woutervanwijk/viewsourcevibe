@@ -36,6 +36,18 @@ class RenderedDom {
     this.shadowRootCount = 0,
   });
 
+  @override
+  bool operator ==(Object other) =>
+      other is RenderedDom &&
+      other.text == text &&
+      other.unwrappedRawDocument == unwrappedRawDocument &&
+      other.iframeCount == iframeCount &&
+      other.shadowRootCount == shadowRootCount;
+
+  @override
+  int get hashCode => Object.hash(
+      text, unwrappedRawDocument, iframeCount, shadowRootCount);
+
   /// Parts of the page that [text] does not contain.
   List<String> get limitations => [
         if (iframeCount > 0) 'iframes not included ($iframeCount)',
@@ -104,6 +116,22 @@ class BrowserCookie {
     required this.isHttpOnly,
     required this.sameSite,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      other is BrowserCookie &&
+      other.name == name &&
+      other.value == value &&
+      sameObserved(other.domain, domain) &&
+      sameObserved(other.path, path) &&
+      sameObserved(other.expires, expires) &&
+      sameObserved(other.isSecure, isSecure) &&
+      sameObserved(other.isHttpOnly, isHttpOnly) &&
+      sameObserved(other.sameSite, sameSite);
+
+  @override
+  int get hashCode => Object.hash(name, value, domain, path, expires, isSecure,
+      isHttpOnly, sameSite);
 }
 
 class StorageItem {
@@ -112,6 +140,13 @@ class StorageItem {
   /// UTF-8 bytes of key + value.
   final int bytes;
   const StorageItem(this.key, this.bytes);
+
+  @override
+  bool operator ==(Object other) =>
+      other is StorageItem && other.key == key && other.bytes == bytes;
+
+  @override
+  int get hashCode => Object.hash(key, bytes);
 }
 
 class StorageArea {
@@ -124,12 +159,37 @@ class StorageArea {
   final List<StorageItem> topItems;
   const StorageArea(
       {required this.count, required this.bytes, required this.topItems});
+
+  @override
+  bool operator ==(Object other) {
+    if (other is! StorageArea) return false;
+    if (other.count != count || !sameObserved(other.bytes, bytes)) {
+      return false;
+    }
+    if (other.topItems.length != topItems.length) return false;
+    for (var i = 0; i < topItems.length; i++) {
+      if (other.topItems[i] != topItems[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => Object.hash(count, bytes, topItems.length);
 }
 
 class BrowserStorage {
   final Observed<StorageArea> local;
   final Observed<StorageArea> session;
   const BrowserStorage({required this.local, required this.session});
+
+  @override
+  bool operator ==(Object other) =>
+      other is BrowserStorage &&
+      sameObserved(other.local, local) &&
+      sameObserved(other.session, session);
+
+  @override
+  int get hashCode => Object.hash(local, session);
 }
 
 class NavigationTiming {
@@ -145,6 +205,19 @@ class NavigationTiming {
     required this.loadEvent,
     required this.protocol,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      other is NavigationTiming &&
+      sameObserved(other.timeToFirstByte, timeToFirstByte) &&
+      sameObserved(other.domInteractive, domInteractive) &&
+      sameObserved(other.domContentLoaded, domContentLoaded) &&
+      sameObserved(other.loadEvent, loadEvent) &&
+      sameObserved(other.protocol, protocol);
+
+  @override
+  int get hashCode => Object.hash(
+      timeToFirstByte, domInteractive, domContentLoaded, loadEvent, protocol);
 }
 
 /// Everything the WebView told us about the current page, one section each.

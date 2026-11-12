@@ -96,6 +96,11 @@ class InspectionStore extends ChangeNotifier {
     if (old is Present<BrowserSnapshot> && !snap.hasPresentSection) return;
     final merged =
         old is Present<BrowserSnapshot> ? _merge(old.value, snap) : snap;
+    // A poll that reported nothing new keeps the same snapshot: no state
+    // change, no notification (load polls must not jank the UI).
+    if (old is Present<BrowserSnapshot> && identical(merged, old.value)) {
+      return;
+    }
     _set(_current.copyWith(
         browser: Present(merged, source: DataSource.browser)));
   }
@@ -239,8 +244,45 @@ class InspectionStore extends ChangeNotifier {
   }
 }
 
-Observed<T> _fresher<T>(Observed<T> old, Observed<T> fresh) =>
-    fresh is Present<T> || old is! Present<T> ? fresh : old;
+Observed<T> _fresher<T>(Observed<T> old, Observed<T> fresh) {
+  if (fresh is Present<T> || old is! Present<T>) {
+    // Equal values keep the old instance, so a no-op poll merge stays
+    // identity-stable and the store can skip notifying.
+    if (old is Present<T> && fresh is Present<T> && old.value == fresh.value) {
+      return old;
+    }
+    return fresh;
+  }
+  return old;
+}
+
+/// Whether [a] and [b] hold the same data; used to drop no-op poll merges.
+bool _sameBrowser(BrowserSnapshot a, BrowserSnapshot b) {
+  if (identical(a, b)) return true;
+  final ra = a.resources, rb = b.resources;
+  var sameResources = identical(ra, rb);
+  if (!sameResources &&
+      ra is Present<List<ResourceEntry>> &&
+      rb is Present<List<ResourceEntry>>) {
+    final la = ra.value, lb = rb.value;
+    sameResources = la.length == lb.length;
+    for (var i = 0; i < la.length && sameResources; i++) {
+      sameResources = resourceEntriesEqual(la[i], lb[i]);
+    }
+  }
+  return a.url == b.url &&
+      a.platform == b.platform &&
+      sameObserved(a.contentType, b.contentType) &&
+      sameObserved(a.renderedDom, b.renderedDom) &&
+      sameResources &&
+      sameObserved(a.cookies, b.cookies) &&
+      sameObserved(a.storage, b.storage) &&
+      sameObserved(a.navigation, b.navigation) &&
+      sameObserved(a.snapshotTimeMs, b.snapshotTimeMs) &&
+      a.resourcesTruncated == b.resourcesTruncated &&
+      a.resourcesDropped == b.resourcesDropped &&
+      a.rawPayload == b.rawPayload;
+}
 
 BrowserSnapshot _merge(BrowserSnapshot old, BrowserSnapshot n) {
   final Observed<List<ResourceEntry>> resources;
@@ -251,7 +293,7 @@ BrowserSnapshot _merge(BrowserSnapshot old, BrowserSnapshot n) {
   } else {
     resources = _fresher(o, f);
   }
-  return BrowserSnapshot(
+  final merged = BrowserSnapshot(
     url: n.url,
     platform: n.platform,
     contentType: _fresher(old.contentType, n.contentType),
@@ -265,4 +307,5 @@ BrowserSnapshot _merge(BrowserSnapshot old, BrowserSnapshot n) {
     resourcesDropped: max(old.resourcesDropped, n.resourcesDropped),
     rawPayload: n.rawPayload ?? old.rawPayload,
   );
+  return _sameBrowser(old, merged) ? old : merged;
 }

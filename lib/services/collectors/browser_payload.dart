@@ -90,7 +90,12 @@ BrowserSnapshot parseBrowserPayload(Object? raw, BrowserPlatform platform,
     url: pageUrl,
     platform: platform,
     contentType: contentType,
-    renderedDom: _section(p['dom'], (m) => _parseDom(m, ctString)),
+    // A collect with {dom: false} reports the section as skipped: the DOM of
+    // the last full collect stays (the merge keeps a Present over this).
+    renderedDom: p['dom'] is Map && p['dom']['skipped'] == true
+        ? const Unavailable<RenderedDom>(
+            UnavailableReason.notReportedByPlatform, 'dom skipped in this collect')
+        : _section(p['dom'], (m) => _parseDom(m, ctString)),
     resources: _section(
         p['resources'], (m) => _parseResources(m, platform, effectiveUrl)),
     resourcesTruncated: dropped > 0,
@@ -355,16 +360,32 @@ Observed<T> _prefer<T>(Observed<T> fresh, Observed<T> old) {
   return fresh;
 }
 
+/// Value equality of two resource entries (no `==` on the class itself, so
+/// merges can stay identity-stable when nothing changed).
+bool resourceEntriesEqual(ResourceEntry a, ResourceEntry b) =>
+    a.url == b.url &&
+    a.type == b.type &&
+    a.source == b.source &&
+    a.fromCache == b.fromCache &&
+    a.frameOrigin == b.frameOrigin &&
+    sameObserved(a.startTime, b.startTime) &&
+    sameObserved(a.duration, b.duration) &&
+    sameObserved(a.transfer, b.transfer) &&
+    sameObserved(a.decoded, b.decoded);
+
 /// Union by absolute URL. Fresh values win only where they are [Present]; a
 /// Present value is never replaced by an Unavailable (B11/B12). An observer
-/// entry is never replaced by a patch entry.
+/// entry is never replaced by a patch entry. When nothing actually changed,
+/// [old] itself is returned, so callers can detect "no news" by identity.
 List<ResourceEntry> mergeResources(
     List<ResourceEntry> old, List<ResourceEntry> fresh) {
   final byUrl = <String, ResourceEntry>{for (final e in old) e.url: e};
+  var changed = false;
   for (final f in fresh) {
     final o = byUrl[f.url];
     if (o == null) {
       byUrl[f.url] = f;
+      changed = true;
     } else if (f.source == ResourceSource.dropped &&
         o.source != ResourceSource.dropped) {
       // A dropped placeholder never replaces a real entry.
@@ -376,7 +397,7 @@ List<ResourceEntry> mergeResources(
             o.source != ResourceSource.shownImage)) {
       continue;
     } else {
-      byUrl[f.url] = ResourceEntry(
+      final merged = ResourceEntry(
         url: f.url,
         type: f.type.isEmpty ? o.type : f.type,
         source: f.source,
@@ -391,9 +412,12 @@ List<ResourceEntry> mergeResources(
         // The first report of where it was loaded stays.
         frameOrigin: o.frameOrigin ?? f.frameOrigin,
       );
+      if (resourceEntriesEqual(merged, o)) continue;
+      byUrl[f.url] = merged;
+      changed = true;
     }
   }
-  return byUrl.values.toList();
+  return changed ? byUrl.values.toList() : old;
 }
 
 // ---- Navigation ----------------------------------------------------------

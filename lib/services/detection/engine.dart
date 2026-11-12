@@ -106,9 +106,53 @@ bool _sameSite(String host, String pageHost) =>
         host.endsWith('.$pageHost') ||
         pageHost.endsWith('.$host'));
 
+/// A literal prefix every match of [pattern] must contain, or null. Sound:
+/// leading anchors/boundaries are skipped, escapes are unescaped, and a
+/// quantifier right after the run makes its last char optional (trimmed).
+/// Used to skip patterns with a cheap `String.contains` on big inputs.
+String? _requiredPrefix(String pattern) {
+  const bs = '\\'; // one backslash
+  var i = 0;
+  while (i < pattern.length &&
+      (pattern.startsWith('^', i) ||
+          pattern.startsWith('$bs\\b', i) ||
+          pattern.startsWith('$bs\\B', i))) {
+    i += pattern.startsWith('^', i) ? 1 : 2;
+  }
+  final buf = StringBuffer();
+  while (i < pattern.length) {
+    final c = pattern[i];
+    if (c == bs) {
+      final n = i + 1 < pattern.length ? pattern[i + 1] : '';
+      if (n == 'n') {
+        buf.write('\n');
+      } else if (n == 'r') {
+        buf.write('\r');
+      } else if (n == 't') {
+        buf.write('\t');
+      } else if ('wWsSdDbB'.contains(n)) {
+        break; // character class / boundary: not a literal
+      } else {
+        buf.write(n); // escaped punctuation is literal
+      }
+      i += 2;
+      continue;
+    }
+    if ('.[]()|*+?{}^\$'.contains(c)) break;
+    buf.write(c);
+    i++;
+  }
+  var lit = buf.toString();
+  // A quantifier right after the run makes its last char optional.
+  if (i < pattern.length && '*+?{'.contains(pattern[i]) && lit.isNotEmpty) {
+    lit = lit.substring(0, lit.length - 1);
+  }
+  return lit.length >= 3 ? lit : null;
+}
+
 final _compiled = [
   for (final e in catalog)
-    for (final p in e.patterns) (e, RegExp(p)),
+    for (final p in e.patterns) (e, RegExp(p), _requiredPrefix(p)),
 ];
 
 final _cookieRules = [
@@ -121,7 +165,14 @@ final _cookieRules = [
 /// A technology pattern (jquery.min.js) does not hide who serves the file,
 /// so then the host's service (Google Hosted Libraries) is returned too.
 List<Entity> _entitiesForUrl(String url, String host, String pageHost) {
-  final byPattern = _compiled.where((c) => c.$2.hasMatch(url)).firstOrNull?.$1;
+  // Prefilter with the patterns' literal prefixes: a `contains` on a short URL
+  // is far cheaper than running every regex (big news pages have hundreds of
+  // URLs, e.g. inside inline JSON).
+  final byPattern = _compiled
+      .where((c) =>
+          c.$3 != null ? url.contains(c.$3!) && c.$2.hasMatch(url) : c.$2.hasMatch(url))
+      .firstOrNull
+      ?.$1;
   final byHost = _sameSite(host, pageHost) ? null : entityForHost(host);
   return [
     if (byPattern != null) byPattern,
@@ -322,6 +373,7 @@ List<Detection> scanSource({
 
   // Hostnames in URLs (`//host`, also JSON-escaped `\\/\\/host`).
   final terminator = RegExp('["\'\\s<>)]');
+  final urlEntitiesCache = <String, List<Entity>>{};
   for (final m in RegExp(
           r'(?:\\?/){2}([a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)',
           caseSensitive: false)
@@ -332,9 +384,14 @@ List<Detection> scanSource({
         .substring(m.end, end < 0 ? html.length : end)
         .replaceAll(r'\/', '/')
         .replaceFirst(RegExp(r'\\+$'), '');
-    final entities = _entitiesForUrl('//$host$path', host, pageHost);
-    if (entities.isEmpty) continue;
+    // Classify the position first: skipped regions (JSON-LD, comments, link
+    // and meta tags) record nothing, so their URLs need no entity lookup.
     final ctx = source.at(m.start);
+    if (ctx == _Ctx.skip) continue;
+    final urlKey = '//$host$path';
+    final entities = urlEntitiesCache.putIfAbsent(
+        urlKey, () => _entitiesForUrl(urlKey, host, pageHost));
+    if (entities.isEmpty) continue;
     // A URL that is a whole attribute value (src, href, srcset) is used; one
     // inside a JSON blob in an attribute is judged like script data.
     final inData = ctx == _Ctx.script ||
@@ -353,7 +410,7 @@ List<Detection> scanSource({
   }
 
   // Code patterns.
-  for (final (e, regex) in _compiled) {
+  for (final (e, regex, _) in _compiled) {
     if (found[e.name]?.inSource == true && found[e.name]!.version != null) {
       continue;
     }
@@ -440,11 +497,16 @@ List<Detection> detect({
   };
   Detection hit(Entity e) => found.putIfAbsent(e.name, () => Detection(e));
 
+  final requestEntitiesCache = <String, List<Entity>>{};
+  // Locating each request URL in the source is an O(html) scan per URL; skip
+  // it on big pages (the evidence line number is the only thing lost).
+  final scanForEvidence = html.length <= 512 * 1024;
   for (final url in requests.toSet()) {
     final host = _hostOf(url);
     if (host.isEmpty) continue;
-    for (final e in _entitiesForUrl(url, host, pageHost)) {
-      final index = html.isEmpty ? -1 : html.indexOf(url);
+    for (final e in requestEntitiesCache.putIfAbsent(
+        url, () => _entitiesForUrl(url, host, pageHost))) {
+      final index = !scanForEvidence || html.isEmpty ? -1 : html.indexOf(url);
       final ping = e.beacons.any((b) => RegExp(b).hasMatch(url));
       final d = hit(e)
         ..requests += 1

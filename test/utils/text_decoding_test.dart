@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -113,5 +114,26 @@ void main() {
     expect(d.text, '');
     expect(d.byteLength, 0);
     expect(d.isBinary, isFalse);
+  });
+
+  test('utf8ByteLength matches utf8.encode length', () {
+    const samples = [
+      'hello',
+      'héllo wörld',
+      '日本語テキスト',
+      'a😀b',
+      '𝔘𝔫𝔦',
+      'mix € 😀',
+    ];
+    for (final s in samples) {
+      expect(utf8ByteLength(s), utf8.encode(s).length, reason: s);
+    }
+    var seed = 42;
+    int rnd() => seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    for (var t = 0; t < 200; t++) {
+      final s = String.fromCharCodes(
+          [for (var i = 0; i < 50; i++) rnd() % 0x3000]);
+      expect(utf8ByteLength(s), utf8.encode(s).length);
+    }
   });
 }
