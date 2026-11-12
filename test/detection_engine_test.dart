@@ -170,6 +170,22 @@ void main() {
     });
   });
 
+  test('URL entity lookup: literal prefilter is necessary, not sufficient', () {
+    // A URL containing a pattern's literal prefix ("font" in "fonts.") but
+    // not matching the pattern must not detect that service.
+    expect(
+        externalServicesForUrl(
+            'https://fonts.googleapis.com/icon?family=Material+Icon',
+            'https://www.telegraaf.nl/nieuws/')
+        .map((e) => e.name),
+        isNot(contains('Font Awesome')));
+    expect(
+        externalServicesForUrl('https://kit.fontawesome.com/abc123.css',
+                'https://www.telegraaf.nl/nieuws/')
+            .map((e) => e.name),
+        contains('Font Awesome'));
+  });
+
   test('logos and origins come from the catalogue', () {
     expect(logoDomainFor('Facebook Pixel'), 'facebook.com');
     expect(logoDomainFor('Bootstrap 5.3'), 'getbootstrap.com');
