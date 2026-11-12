@@ -622,18 +622,35 @@ class HtmlService extends ChangeNotifier {
   }
 
   SourceView? _sourceView;
-  PageInspection? _sourceViewFor;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server,
+    Observed<FileSnapshot> file,
+    DataSource? primaryDocumentPreference,
+    DataSource? primaryDocument
+  })? _sourceViewFor;
   String? _sourceViewFallback;
 
   /// The document the Source tab and DOM tree show (from the store; the
   /// legacy current file only fills in when the store holds no document).
+  /// Cached on the snapshots it reads (record == compares them by identity),
+  /// not on the PageInspection object, which changes on every store merge.
   SourceView get sourceView {
     final current = store.current;
     final fallback = _currentFile?.content;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      server: current.server,
+      file: current.file,
+      primaryDocumentPreference: current.primaryDocumentPreference,
+      primaryDocument: current.primaryDocument
+    );
     if (_sourceView == null ||
-        !identical(current, _sourceViewFor) ||
+        _sourceViewFor != key ||
         !identical(fallback, _sourceViewFallback)) {
-      _sourceViewFor = current;
+      _sourceViewFor = key;
       _sourceViewFallback = fallback;
       _sourceView = deriveSourceView(current, fallbackText: fallback);
     }
@@ -768,96 +785,151 @@ class HtmlService extends ChangeNotifier {
   }
 
   List<Divergence>? _divergences;
-  PageInspection? _divergencesFor;
+  ({Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server})?
+      _divergencesFor;
 
   /// Where the app's own request and the browser disagree (UI: Task 10).
+  /// Cached on the two snapshots it reads, not on the PageInspection object.
   List<Divergence> get divergences {
     final current = store.current;
-    if (_divergences == null || !identical(current, _divergencesFor)) {
-      _divergencesFor = current;
+    final key = (browser: current.browser, server: current.server);
+    if (_divergences == null || _divergencesFor != key) {
+      _divergencesFor = key;
       _divergences = deriveDivergences(current);
     }
     return _divergences!;
   }
 
   Observed<GeneralModel>? _general;
-  PageInspection? _generalFor;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server,
+    Observed<RobotsInfo> robots
+  })? _generalFor;
 
   /// The General probe tab: server response, content-type check, source
-  /// diff, robots, storage, network and browser cards.
+  /// diff, robots, storage, network and browser cards. Cached on the
+  /// snapshots it reads, not on the PageInspection object.
   Observed<GeneralModel> get generalView {
     final current = store.current;
-    if (_general == null || !identical(current, _generalFor)) {
-      _generalFor = current;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      server: current.server,
+      robots: current.robots
+    );
+    if (_general == null || _generalFor != key) {
+      _generalFor = key;
       _general = deriveGeneral(current, divergences: divergences);
     }
     return _general!;
   }
 
   Observed<HeadersModel>? _headers;
-  PageInspection? _headersFor;
+  ({Observed<ServerSnapshot> server})? _headersFor;
 
   /// The Headers tab: insights from the final response, headers per hop.
+  /// Cached on the server snapshot, not on the PageInspection object.
   Observed<HeadersModel> get headersView {
     final current = store.current;
-    if (_headers == null || !identical(current, _headersFor)) {
-      _headersFor = current;
+    final key = (server: current.server);
+    if (_headers == null || _headersFor != key) {
+      _headersFor = key;
       _headers = deriveHeaders(current);
     }
     return _headers!;
   }
 
   Observed<SecurityModel>? _security;
-  PageInspection? _securityFor;
+  ({Observed<ServerSnapshot> server})? _securityFor;
 
   /// The Security tab: header audit, CSP and certificate of the final
-  /// response; no score while the response is unknown.
+  /// response; no score while the response is unknown. Cached on the
+  /// server snapshot, not on the PageInspection object.
   Observed<SecurityModel> get securityView {
     final current = store.current;
-    if (_security == null || !identical(current, _securityFor)) {
-      _securityFor = current;
+    final key = (server: current.server);
+    if (_security == null || _securityFor != key) {
+      _securityFor = key;
       _security = deriveSecurity(current);
     }
     return _security!;
   }
 
   Observed<CookiesModel>? _cookiesView;
-  PageInspection? _cookiesViewFor;
+  ({Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server})?
+      _cookiesViewFor;
 
   /// The Cookies tab: derived cookies with flags (unknown stays unknown)
-  /// and the privacy lens.
+  /// and the privacy lens. Cached on the snapshots it reads, not on the
+  /// PageInspection object.
   Observed<CookiesModel> get cookiesView {
     final current = store.current;
-    if (_cookiesView == null || !identical(current, _cookiesViewFor)) {
-      _cookiesViewFor = current;
+    final key = (browser: current.browser, server: current.server);
+    if (_cookiesView == null || _cookiesViewFor != key) {
+      _cookiesViewFor = key;
       _cookiesView = deriveCookiesView(current);
     }
     return _cookiesView!;
   }
 
   Observed<TimelineModel>? _timelineModel;
-  PageInspection? _timelineModelFor;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server
+  })? _timelineModelFor;
 
   /// The Request Timeline tab: the browser's requests (timing and size may
   /// be unknown per row), totals and the redirect chain of the server.
+  /// Cached on the snapshots it reads, not on the PageInspection object.
   Observed<TimelineModel> get timelineView {
     final current = store.current;
-    if (_timelineModel == null || !identical(current, _timelineModelFor)) {
-      _timelineModelFor = current;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      server: current.server
+    );
+    if (_timelineModel == null || _timelineModelFor != key) {
+      _timelineModelFor = key;
       _timelineModel = deriveTimeline(current);
     }
     return _timelineModel!;
   }
 
   Observed<PageSizeModel>? _pageSize;
-  PageInspection? _pageSizeFor;
+  ({
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server,
+    Map<String, Observed<int>> resourceEstimates,
+    Map<String, Observed<int>> freshEstimates,
+    List<String> declaredMedia,
+    bool browserSettled,
+    Observed<BrowserSnapshot> freshLoad,
+    Observed<Uint8List> freshScreenshot,
+    Observed<Uint8List> liveScreenshot
+  })? _pageSizeFor;
 
   /// The Page size tab's data: totals, breakdown and per-file sizes from the
   /// browser's resources, or the state that says why there are none.
+  /// Cached on everything derivePageSize reads, not on the PageInspection
+  /// object (which changes on every store merge, e.g. each size estimate).
   Observed<PageSizeModel> get pageSize {
     final current = store.current;
-    if (_pageSize == null || !identical(current, _pageSizeFor)) {
-      _pageSizeFor = current;
+    final key = (
+      browser: current.browser,
+      server: current.server,
+      resourceEstimates: current.resourceEstimates,
+      freshEstimates: current.freshEstimates,
+      declaredMedia: current.declaredMedia,
+      browserSettled: current.browserSettled,
+      freshLoad: current.freshLoad,
+      freshScreenshot: current.freshScreenshot,
+      liveScreenshot: current.liveScreenshot
+    );
+    if (_pageSize == null || _pageSizeFor != key) {
+      _pageSizeFor = key;
       _pageSize = derivePageSize(current);
     }
     return _pageSize!;
@@ -5149,12 +5221,26 @@ Technical details: $message''';
   /// sizes of its links. When the rendered DOM itself changed since the
   /// metadata was extracted (lazy loading swapped srcs in after the
   /// scroll-through), re-extract instead.
+  int _lastAppliedBrowserSig = -2;
+  String? _lastAppliedDomText;
+
   void _applyBrowserDerivedToMetadata() {
-    final domText = primaryDocumentInput(store.current)?.text;
-    if (domText != null && domText != _metadataDomText) {
+    final current = store.current;
+    final domText = primaryDocumentInput(current)?.text;
+    if (domText != null &&
+        !identical(domText, _metadataDomText) &&
+        domText != _metadataDomText) {
       _extractMetadata().ignore();
       return;
     }
+    // A load poll that changed neither the resources nor the document has
+    // nothing to apply: skip the rebuild (the common case while polling).
+    final sig = _browserSignature();
+    if (sig == _lastAppliedBrowserSig && identical(domText, _lastAppliedDomText)) {
+      return;
+    }
+    _lastAppliedBrowserSig = sig;
+    _lastAppliedDomText = domText;
     final metadata = _pageMetadata;
     if (metadata != null) {
       final weight = _pageWeight;
