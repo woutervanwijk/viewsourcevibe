@@ -570,29 +570,40 @@ class HtmlService extends ChangeNotifier {
   }
 
   DetectionsView? _detectionsView;
-  List<Detection>? _detectionsViewList;
-  PageInspection? _detectionsViewFor;
+  ({
+    List<Detection> list,
+    Observed<ServerSnapshot> server,
+    Observed<BrowserSnapshot> browser,
+    bool browserReachable
+  })? _detectionsViewKey;
   bool? _detectionsViewScanning;
   String? _detectionsViewError;
 
   /// Findings plus whether they are complete (scanning, failed, which sources
   /// were read). The Services, Privacy and Technology views read this.
+  /// Cached on the detections list and the two snapshots (record == compares
+  /// them by identity), not on the PageInspection object, which changes on
+  /// every store merge.
   DetectionsView get detectionsView {
     final list = detections;
     final current = store.current;
-    final sources =
-        describeCheckedSources(current, browserReachable: _browserReachable);
-    final scanning = _scanPending || sources.waiting;
+    final reachable = _browserReachable;
+    final key = (
+      list: list,
+      server: current.server,
+      browser: current.browser,
+      browserReachable: reachable
+    );
     if (_detectionsView == null ||
-        !identical(list, _detectionsViewList) ||
-        !identical(current, _detectionsViewFor) ||
-        scanning != _detectionsViewScanning ||
-        sources.line != _detectionsView!.sources.line ||
+        _detectionsViewKey != key ||
+        _scanPending != _detectionsViewScanning ||
         _scanError != _detectionsViewError) {
-      _detectionsViewList = list;
-      _detectionsViewFor = current;
-      _detectionsViewScanning = scanning;
+      _detectionsViewKey = key;
       _detectionsViewError = _scanError;
+      final sources =
+          describeCheckedSources(current, browserReachable: reachable);
+      final scanning = _scanPending || sources.waiting;
+      _detectionsViewScanning = scanning;
       _detectionsView = DetectionsView(
           detections: list,
           scanning: scanning,
