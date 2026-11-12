@@ -129,45 +129,96 @@ String? _value(HttpHop hop, String name) {
   return v == null || v.isEmpty ? null : v;
 }
 
+/// Fetch spec "determine nosniff": the first comma-separated value,
+/// trimmed, equals `nosniff` case-insensitively. Shared with the Headers tab.
+bool isNosniff(String? value) =>
+    value != null && value.split(',').first.trim().toLowerCase() == 'nosniff';
+
+/// Mozilla HTTP Observatory: HSTS counts from six months.
+const hstsMinSeconds = 15552000;
+
+/// The max-age of a Strict-Transport-Security value; null when missing or
+/// invalid. Shared with the Sovereignty page.
+int? hstsMaxAge(String? hsts) =>
+    int.tryParse(RegExp(r'max-age\s*=\s*"?(\d+)', caseSensitive: false)
+            .firstMatch(hsts ?? '')
+            ?.group(1) ??
+        '');
+
+const _goodReferrer = {
+  'no-referrer',
+  'same-origin',
+  'strict-origin',
+  'strict-origin-when-cross-origin',
+  'origin',
+  'origin-when-cross-origin',
+};
+const _knownReferrer = {
+  ..._goodReferrer,
+  'no-referrer-when-downgrade',
+  'unsafe-url',
+};
+
+SecurityCheck _hstsCheck(String? hsts, bool isHttps) {
+  if (!isHttps) {
+    return const SecurityCheck(
+        'HSTS', true, false, 'Page is not served over HTTPS.');
+  }
+  if (hsts == null) {
+    return const SecurityCheck(
+        'HSTS', true, false, 'Missing Strict-Transport-Security on HTTPS.');
+  }
+  final seconds = hstsMaxAge(hsts);
+  if (seconds == null) {
+    return const SecurityCheck(
+        'HSTS', true, false, 'Strict-Transport-Security has no valid max-age.');
+  }
+  return seconds >= hstsMinSeconds
+      ? SecurityCheck(
+          'HSTS', true, true, 'Strict-Transport-Security max-age=$seconds.')
+      : SecurityCheck('HSTS', true, false,
+          'Strict-Transport-Security max-age=$seconds is under 6 months ($hstsMinSeconds).');
+}
+
 SecurityAudit _audit(HttpHop hop) {
-  final csp = _value(hop, 'content-security-policy')?.toLowerCase();
-  final frameOptions = _value(hop, 'x-frame-options');
-  final nosniff = _value(hop, 'x-content-type-options')
-          ?.toLowerCase()
-          .contains('nosniff') ??
-      false;
-  final hsts = _value(hop, 'strict-transport-security');
+  final cspText = _value(hop, 'content-security-policy');
+  final csp = cspText == null ? null : _parseCsp(cspText.toLowerCase());
+  final protectsScripts = csp != null &&
+      (csp.containsKey('default-src') || csp.containsKey('script-src'));
+  final xfo = _value(hop, 'x-frame-options')?.toLowerCase();
+  final frames = xfo == 'deny' ||
+      xfo == 'sameorigin' ||
+      (csp?.containsKey('frame-ancestors') ?? false);
+  final nosniff = isNosniff(_value(hop, 'x-content-type-options'));
   final referrer = _value(hop, 'referrer-policy');
+  final referrerToken = referrer
+      ?.toLowerCase()
+      .split(',')
+      .map((t) => t.trim())
+      .lastWhere(_knownReferrer.contains, orElse: () => '');
+  final referrerGood = _goodReferrer.contains(referrerToken);
   final permissions = _value(hop, 'permissions-policy');
-  final isHttps = hop.url.scheme == 'https';
-  final frames =
-      frameOptions != null || (csp?.contains('frame-ancestors') ?? false);
 
   return SecurityAudit(
       [
-        SecurityCheck(
-            'HSTS',
-            isHttps,
-            hsts != null,
-            isHttps
-                ? (hsts != null
-                    ? 'Strict-Transport-Security is present.'
-                    : 'Missing Strict-Transport-Security on HTTPS.')
-                : 'HSTS is only meaningful on HTTPS responses.'),
+        _hstsCheck(_value(hop, 'strict-transport-security'),
+            hop.url.scheme == 'https'),
         SecurityCheck(
             'CSP',
             true,
-            csp != null,
-            csp != null
-                ? 'Content-Security-Policy is present.'
-                : 'Missing Content-Security-Policy.'),
+            protectsScripts,
+            protectsScripts
+                ? 'Content-Security-Policy restricts scripts.'
+                : csp != null
+                    ? 'Content-Security-Policy has no default-src or script-src.'
+                    : 'Missing Content-Security-Policy.'),
         SecurityCheck(
             'Frames',
             true,
             frames,
             frames
                 ? 'Frame protection is present.'
-                : 'Missing X-Frame-Options or CSP frame-ancestors.'),
+                : 'Missing X-Frame-Options (DENY/SAMEORIGIN) or CSP frame-ancestors.'),
         SecurityCheck(
             'No Sniff',
             true,
@@ -178,10 +229,12 @@ SecurityAudit _audit(HttpHop hop) {
         SecurityCheck(
             'Referrer',
             true,
-            referrer != null,
-            referrer != null
-                ? 'Referrer-Policy is present.'
-                : 'Missing Referrer-Policy.'),
+            referrerGood,
+            referrer == null
+                ? 'Missing Referrer-Policy.'
+                : referrerGood
+                    ? 'Referrer-Policy is $referrerToken.'
+                    : 'Referrer-Policy "$referrer" leaks the full URL or is not recognised.'),
         SecurityCheck(
             'Permissions',
             true,
@@ -203,29 +256,50 @@ Map<String, List<String>> _parseCsp(String csp) {
   for (final part in csp.split(';')) {
     final tokens = part.trim().split(RegExp(r'\s+'));
     if (tokens.isEmpty || tokens.first.isEmpty) continue;
-    result[tokens.first.toLowerCase()] = tokens.skip(1).toList();
+    // CSP3: a repeated directive is ignored, the first one wins.
+    result.putIfAbsent(
+        tokens.first.toLowerCase(), () => tokens.skip(1).toList());
   }
   return result;
 }
 
-List<CspFinding> _cspFindings(Map<String, List<String>> d) {
+bool _isBroadSource(String t) =>
+    t == '*' ||
+    t == 'http:' ||
+    t == 'https:' ||
+    t == 'data:' ||
+    t.startsWith('*.') ||
+    t.contains('://*.');
+
+List<CspFinding> _cspFindings(Map<String, List<String>> d,
+    {bool frameOptionsSet = false}) {
   final findings = <CspFinding>[];
   final defaultSrc = d['default-src'] ?? const [];
   final scriptSrc = d['script-src'] ?? defaultSrc;
-  final objectSrc = d['object-src'];
+  final objectSrc = d['object-src'] ?? defaultSrc;
   if (scriptSrc.contains("'unsafe-inline'")) {
-    findings.add(const CspFinding(
-        CspSeverity.high, "script-src allows 'unsafe-inline'."));
+    // CSP3: a nonce, hash or 'strict-dynamic' makes browsers ignore it.
+    final ignored = scriptSrc.any((t) =>
+        t == "'strict-dynamic'" ||
+        t.startsWith("'nonce-") ||
+        t.startsWith("'sha256-") ||
+        t.startsWith("'sha384-") ||
+        t.startsWith("'sha512-"));
+    findings.add(ignored
+        ? const CspFinding(CspSeverity.low,
+            "script-src has 'unsafe-inline' next to a nonce, hash or 'strict-dynamic': it is only a fallback for old browsers.")
+        : const CspFinding(
+            CspSeverity.high, "script-src allows 'unsafe-inline'."));
   }
   if (scriptSrc.contains("'unsafe-eval'")) {
     findings.add(
         const CspFinding(CspSeverity.high, "script-src allows 'unsafe-eval'."));
   }
-  if (defaultSrc.contains('*') || scriptSrc.contains('*')) {
+  if (defaultSrc.any(_isBroadSource) || scriptSrc.any(_isBroadSource)) {
     findings.add(const CspFinding(
         CspSeverity.medium, 'Wildcard source allows broad loading.'));
   }
-  if (objectSrc == null || !objectSrc.contains("'none'")) {
+  if (!objectSrc.contains("'none'")) {
     findings.add(const CspFinding(
         CspSeverity.medium, "object-src should usually be 'none'."));
   }
@@ -234,8 +308,11 @@ List<CspFinding> _cspFindings(Map<String, List<String>> d) {
         const CspFinding(CspSeverity.medium, 'Missing base-uri protection.'));
   }
   if (d['frame-ancestors'] == null) {
-    findings.add(const CspFinding(
-        CspSeverity.medium, 'Missing frame-ancestors clickjacking control.'));
+    findings.add(CspFinding(
+        frameOptionsSet ? CspSeverity.low : CspSeverity.medium,
+        frameOptionsSet
+            ? 'No frame-ancestors; X-Frame-Options covers clickjacking.'
+            : 'Missing frame-ancestors clickjacking control.'));
   }
   if (findings.isEmpty) {
     findings.add(const CspFinding(
@@ -248,12 +325,15 @@ CspModel _csp(HttpHop hop) {
   // Several policies may arrive as repeated headers or comma-separated; each
   // one is enforced, so each is judged.
   final raw = hop.headers['content-security-policy'] ?? const <String>[];
+  final xfo = _value(hop, 'x-frame-options')?.toLowerCase();
+  final frameOptionsSet = xfo == 'deny' || xfo == 'sameorigin';
   final policies = <CspPolicy>[];
   for (final value in raw) {
     for (final text in value.split(',')) {
       final directives = _parseCsp(text);
       if (directives.isEmpty) continue;
-      final findings = _cspFindings(directives);
+      final findings =
+          _cspFindings(directives, frameOptionsSet: frameOptionsSet);
       final score = (100 -
               findings.where((f) => f.severity == CspSeverity.high).length *
                   22 -
@@ -332,7 +412,7 @@ CertificateModel _certificate(
           ? 'Common name unknown'
           : matches
               ? 'CN matches host'
-              : 'CN differs from host';
+              : 'CN differs from host (SAN not checked)';
   final der = cert['der']?.toString();
   return CertificateModel(
     validityLabel: label,

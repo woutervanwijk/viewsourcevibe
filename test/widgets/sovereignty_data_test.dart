@@ -107,9 +107,23 @@ void main() {
       expect(find.textContaining('size unknown'), findsOneWidget);
     });
 
+    testWidgets('low coverage: score shown with coverage, grade Indicative',
+        (tester) async {
+      await show(tester, fullPage(),
+          analyzer: () async => report(checks: const [
+                SovereigntyCheck(
+                    Pillar.security, 'c', CheckStatus.pass, 'ok'),
+              ]));
+      expect(find.text('Indicative'), findsOneWidget);
+      expect(find.text('Good'), findsNothing);
+      expect(find.textContaining('based on 20% of the checks'), findsOneWidget);
+    });
+
     testWidgets('(b) a verified report shows its score', (tester) async {
       await show(tester, fullPage(),
           analyzer: () async => report(checks: const [
+                SovereigntyCheck(
+                    Pillar.infrastructure, 'i', CheckStatus.pass, ''),
                 SovereigntyCheck(Pillar.residency, 'a', CheckStatus.pass, ''),
               ]));
       expect(find.text('100'), findsOneWidget);

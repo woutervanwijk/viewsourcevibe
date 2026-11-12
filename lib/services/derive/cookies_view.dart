@@ -121,17 +121,44 @@ class CookiesModel {
 
 String _flag(bool? v) => v == null ? 'unknown' : (v ? 'yes' : 'no');
 
-CookieRow _row(CookieInfo c) {
+String? _bare(String? d) {
+  if (d == null || d.isEmpty) return null;
+  final l = d.toLowerCase();
+  return l.startsWith('.') ? l.substring(1) : l;
+}
+
+bool _related(String a, String b) =>
+    a == b || a.endsWith('.$b') || b.endsWith('.$a');
+
+/// The page's final URL: server's when known, else the browser's.
+Uri? _pageUrl(PageInspection p) {
+  final s = p.server;
+  if (s is Present<ServerSnapshot>) {
+    final f = s.value.finalUrl;
+    if (f is Present<Uri>) return f.value;
+  }
+  final b = p.browser;
+  return b is Present<BrowserSnapshot> ? b.value.url : null;
+}
+
+CookieRow _row(CookieInfo c, Uri? page, DateTime now) {
   final fromServer = c.source.contains('Server');
   final category = c.category.name;
-  final provider = c.provider ?? '';
   final sameSiteLower = c.sameSite?.toLowerCase();
-  final weak = fromServer
-      ? (sameSiteLower == null ||
-          sameSiteLower.isEmpty ||
-          (sameSiteLower == 'none' && c.secure != true))
-      : sameSiteLower == 'none' && c.secure == false;
-  final missingSecure = fromServer ? c.secure != true : c.secure == false;
+  // A missing SameSite defaults to Lax in browsers; only None is weak.
+  final weak = sameSiteLower == 'none';
+  final https = page?.scheme == 'https';
+  final missingSecure =
+      https && (fromServer ? c.secure != true : c.secure == false);
+  final host = page?.host.toLowerCase();
+  final cookieHost = _bare(c.domain ?? c.requestHost);
+  final thirdParty = host != null &&
+      host.isNotEmpty &&
+      cookieHost != null &&
+      !_related(cookieHost, host);
+  var expires = c.expires ?? (fromServer ? 'session' : 'unknown');
+  final exp = DateTime.tryParse(expires);
+  if (exp != null && exp.isBefore(now)) expires = '$expires (expired)';
   return CookieRow(
     name: c.name,
     value: c.value,
@@ -143,18 +170,12 @@ CookieRow _row(CookieInfo c) {
     httpOnly: _flag(c.httpOnly),
     sameSite: c.sameSite != null && c.sameSite!.isNotEmpty
         ? c.sameSite!
-        : (fromServer ? 'not set' : 'unknown'),
+        : (fromServer ? 'not set (Lax by default)' : 'unknown'),
     domain: c.domain ??
         (c.requestHost != null ? '${c.requestHost} (host-only)' : 'unknown'),
     path: c.path ?? (fromServer ? 'default' : 'unknown'),
-    expires: c.expires ?? (fromServer ? 'session' : 'unknown'),
-    thirdPartyish: category == 'advertising' ||
-        category == 'social' ||
-        (c.domain ?? '').startsWith('.') ||
-        provider.contains('Google') ||
-        provider.contains('Meta') ||
-        provider.contains('Facebook') ||
-        provider.contains('DoubleClick'),
+    expires: expires,
+    thirdPartyish: thirdParty,
     weakSameSite: weak,
     missingSecure: missingSecure,
   );
@@ -212,7 +233,12 @@ Observed<CookiesModel> deriveCookiesView(PageInspection p, {DateTime? now}) {
   ];
   final complete = missing.isEmpty;
 
-  final rows = deriveCookies(p, now: now).map(_row).toList()..sort(_compare);
+  final page = _pageUrl(p);
+  final clock = (now ?? DateTime.now()).toUtc();
+  final rows = deriveCookies(p, now: now)
+      .map((c) => _row(c, page, clock))
+      .toList()
+    ..sort(_compare);
   int count(bool Function(CookieRow) f) => rows.where(f).length;
   final analytics = count((r) => r.category == 'analytics');
   final advertising = count((r) => r.category == 'advertising');
@@ -238,13 +264,17 @@ Observed<CookiesModel> deriveCookiesView(PageInspection p, {DateTime? now}) {
             notSecure * 2)
         .clamp(0, 100);
   }
-  final verdict = score == null
+  final baseVerdict = score == null
       ? 'Not judged: no cookies seen and a source is unknown.'
       : score >= 75
           ? 'Low visible tracking pressure from cookies.'
           : score >= 45
               ? 'Moderate cookie tracking signals detected.'
               : 'Heavy tracking or weak cookie boundaries detected.';
+
+  final verdict = score != null && !complete
+      ? '$baseVerdict (partial: not all cookie sources could be read)'
+      : baseVerdict;
 
   final notes = <CookieNote>[
     if (advertising > 0)
@@ -255,7 +285,7 @@ Observed<CookiesModel> deriveCookiesView(PageInspection p, {DateTime? now}) {
           '${_plural(analytics, 'analytics cookie')} can measure repeat visits.'),
     if (weak > 0)
       CookieNote(Icons.open_in_new, InsightTone.bad,
-          '${_plural(weak, 'cookie')} missing strict SameSite protection.'),
+          '${_plural(weak, 'cookie')} use SameSite=None (sent on cross-site requests).'),
     if (notSecure > 0)
       CookieNote(Icons.lock_open, InsightTone.bad,
           '${_plural(notSecure, 'cookie')} not marked Secure.'),
@@ -322,7 +352,7 @@ Observed<CookiesModel> deriveCookiesView(PageInspection p, {DateTime? now}) {
                 Icons.public, '$thirdParty cross-site-ish', InsightTone.bad),
           if (weak > 0)
             CookieChip(
-                Icons.open_in_new, '$weak weak SameSite', InsightTone.bad),
+                Icons.open_in_new, '$weak SameSite=None', InsightTone.bad),
         ],
         notes: notes.take(4).toList(),
       ),

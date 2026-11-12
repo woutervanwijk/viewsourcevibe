@@ -1,8 +1,9 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
-import 'package:view_source_vibe/services/detection/catalog.dart';
+import 'package:view_source_vibe/services/detection/engine.dart';
 import '../detection_helpers.dart';
 import '../fixtures/inspection/builders.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
@@ -763,13 +764,20 @@ void main() {
       expect(SovereigntyService.registrableDomain('github.io'), 'github.io');
     });
 
-    test('security.txt: 200 present, 404 absent, anything else unknown', () {
-      expect(SovereigntyService.classifySecurityTxt(200), isTrue);
-      expect(SovereigntyService.classifySecurityTxt(404), isFalse);
-      expect(SovereigntyService.classifySecurityTxt(403), isNull);
-      expect(SovereigntyService.classifySecurityTxt(429), isNull);
-      expect(SovereigntyService.classifySecurityTxt(500), isNull);
-      expect(SovereigntyService.classifySecurityTxt(null), isNull);
+    test('security.txt: published needs 200 + text/plain + Contact:', () {
+      const body = 'Contact: mailto:sec@example.com\nExpires: 2030-01-01';
+      bool? c(int? s, {String? ct, String? b}) =>
+          SovereigntyService.classifySecurityTxt(s, contentType: ct, body: b);
+      expect(c(200, ct: 'text/plain; charset=utf-8', b: body), isTrue);
+      expect(c(200, ct: 'Text/Plain', b: '# x\ncontact: a@b.c'), isTrue);
+      expect(c(200, ct: 'text/html', b: body), isFalse);
+      expect(c(200, ct: 'text/plain', b: 'Not found page'), isFalse);
+      expect(c(200), isFalse);
+      expect(c(404), isFalse);
+      expect(c(403), isNull);
+      expect(c(429), isNull);
+      expect(c(500), isNull);
+      expect(c(null), isNull);
     });
 
     test('limited() never runs more than the limit at once', () async {
@@ -993,5 +1001,211 @@ void main() {
       expect(of('a.test').bytes, isNull); // the document itself: no size here
       expect(hosts.first.host, 'a.test');
     });
+  });
+
+  group('Audit fixes (V1-V15)', () {
+    test('V1 DMARC reads the tag named exactly p', () {
+      expect(classifyDmarc(['v=DMARC1; sp=none; p=reject']).$1,
+          CheckStatus.pass);
+      expect(classifyDmarc(['v=DMARC1; sp=reject']).$1, CheckStatus.fail);
+    });
+
+    test('V2 SPF per RFC 7208', () {
+      expect(classifySpf(['v=spf1 include:foo-all.example ~all']).$1,
+          CheckStatus.warn);
+      final multi = classifySpf(['v=spf1 -all', 'v=spf1 ~all']);
+      expect(multi.$1, CheckStatus.fail);
+      expect(multi.$2, contains('Multiple SPF records'));
+      expect(classifySpf(['v=spf1 redirect=_spf.example.com']).$1,
+          CheckStatus.unknown);
+      expect(classifySpf(['v=spf1x -all']).$2, 'No SPF record');
+      expect(classifySpf(['V=SPF1 -all']).$1, CheckStatus.pass);
+      expect(classifySpf(['v=spf1 ?all']).$1, CheckStatus.fail);
+      expect(classifySpf(['v=spf1 all']).$1, CheckStatus.fail);
+      expect(classifySpf(['v=spf1 mx ~all -all']).$1, CheckStatus.pass);
+      final none = classifySpf(['v=spf1 mx']);
+      expect(none.$1, CheckStatus.fail);
+      expect(none.$2, contains('no all mechanism'));
+    });
+
+    test('V5 registrableDomain second-level labels and hosting suffixes', () {
+      final cases = {
+        'www.example.go.kr': 'example.go.kr',
+        'www.example.or.kr': 'example.or.kr',
+        'www.example.gob.mx': 'example.gob.mx',
+        'www.example.gouv.fr': 'example.gouv.fr',
+        'www.example.asso.fr': 'example.asso.fr',
+        'www.example.nhs.uk': 'example.nhs.uk',
+        'www.example.me.uk': 'example.me.uk',
+        'www.example.ltd.uk': 'example.ltd.uk',
+        'www.example.ac.jp': 'example.ac.jp',
+        'x.example.s3.amazonaws.com': 'example.s3.amazonaws.com',
+        'www.example.de': 'example.de',
+      };
+      cases.forEach((h, want) {
+        expect(SovereigntyService.registrableDomain(h), want, reason: h);
+      });
+    });
+
+    test('V6 provider patterns match whole words', () {
+      for (final h in [
+        'lawsociety.org.uk',
+        'novhotels.com',
+        'bunnyshop.nl',
+        'oracleofbacon.org',
+        'ionosphere.nl',
+        'vercelli.it',
+        'tencentral.nl',
+        'azurelane.nl',
+        'msftfans.nl',
+      ]) {
+        expect(matchProvider([h]), isNull, reason: h);
+      }
+      final real = {
+        'ns-1582.awsdns-05.co.uk': 'Amazon (AWS)',
+        'd111.cloudfront.net': 'Amazon (AWS)',
+        'AMAZON-02': 'Amazon (AWS)',
+        'bucket.s3.amazonaws.com': 'Amazon (AWS)',
+        'CLOUDFLARENET': 'Cloudflare',
+        'ns1.ovh.net': 'OVHcloud',
+        'OVH SAS': 'OVHcloud',
+        'HETZNER-AS': 'Hetzner',
+        'aspmx.l.google.com': 'Google',
+        'outlook-com.olc.protection.outlook.com': 'Microsoft',
+        'Let\'s Encrypt': 'Let\'s Encrypt',
+        'Sectigo Limited': 'Sectigo',
+        'DigiCert Inc': 'DigiCert',
+        'GlobalSign nv-sa': 'GlobalSign',
+        'mail.protonmail.ch': 'Proton',
+        'x.b-cdn.net': 'Bunny.net',
+      };
+      real.forEach((h, want) {
+        expect(matchProvider([h])?.name, want, reason: h);
+      });
+    });
+
+    test('V6 corrected provider countries', () {
+      expect(matchProvider(['imperva'])?.country, 'FR');
+      expect(matchProvider(['Sectigo Limited'])?.country, 'US');
+      expect(matchProvider(['GlobalSign nv-sa'])?.country, 'JP');
+    });
+
+    test('V7 CDN header detection is strict', () {
+      expect(
+          detectCdnFromHeaders({'X-Served-By': 'varnish-01', 'X-Cache': 'HIT'}),
+          isNull);
+      expect(detectCdnFromHeaders({'x-fastly-request-id': 'a'})?.name,
+          'Fastly');
+      expect(
+          detectCdnFromHeaders({
+            'x-served-by': 'cache-ams21-AMS',
+            'x-cache': 'HIT',
+            'via': '1.1 varnish',
+          })?.name,
+          'Fastly');
+      expect(detectCdnFromHeaders({'Via': '1.1 varnish'}), isNull);
+      expect(detectCdnFromHeaders({'Server': 'nginx-gwsomething'}), isNull);
+      expect(detectCdnFromHeaders({'Server': 'gws'})?.name, 'Google');
+      expect(detectCdnFromHeaders({'x-goog-generation': '1'})?.name, 'Google');
+      expect(detectCdnFromHeaders({'x-amz-request-id': 'abc'}), isNull);
+      expect(detectCdnFromHeaders({'Server': 'AmazonS3'}), isNull);
+      expect(detectCdnFromHeaders({'x-amz-cf-id': 'abc'})?.name,
+          'Amazon (AWS)');
+      expect(detectCdnFromHeaders({'Via': '1.1 x.cloudfront.net (CloudFront)'})
+          ?.name, 'Amazon (AWS)');
+    });
+
+    test('V9 no response headers: CDN check is unknown, not pass', () async {
+      final r = await SovereigntyService.analyze(
+        pageUrl: '',
+        inspection: const PageInspection.empty(),
+        detections: const [],
+        html: '',
+      );
+      final c = r.checks.firstWhere((c) => c.title.startsWith('CDN / proxy'));
+      expect(c.status, CheckStatus.unknown);
+      expect(c.weight, 3);
+    });
+
+    test('V11 residency: low located share is unknown; truncation stated', () {
+      HostInfo h(String n, {String? ip, int r = 1}) => HostInfo(n)
+        ..requests = r
+        ..ipCountry = ip;
+      Iterable<SovereigntyCheck> res(List<HostInfo> hs, {int? total}) =>
+          SovereigntyService.residencyChecks(hs, null, eu, totalHosts: total);
+      SovereigntyCheck req(List<HostInfo> hs, {int? total}) => res(hs,
+              total: total)
+          .firstWhere((c) => c.title.startsWith('Requests served'));
+
+      final low = req([h('a', ip: 'NL'), for (var i = 0; i < 9; i++) h('b$i')]);
+      expect(low.status, CheckStatus.unknown);
+      expect(low.evidence, contains('10%'));
+
+      final ok = req([h('a', ip: 'NL'), h('b', ip: 'DE')]);
+      expect(ok.status, CheckStatus.pass);
+
+      final cut = req([for (var i = 0; i < 40; i++) h('h$i', ip: 'NL')],
+          total: 55);
+      expect(cut.evidence, contains('first 40 of 55'));
+      expect(ok.evidence, isNot(contains('first 40')));
+    });
+
+    test('V14 findPrivacyLink ignores non-pages', () {
+      expect(findPrivacyLink('<a href="#" id="x">Cookie settings</a>'), isNull);
+      expect(findPrivacyLink('<a href="#privacy">Privacy</a>'), isNull);
+      expect(findPrivacyLink('<a href="javascript:void(0)">Privacy</a>'),
+          isNull);
+      expect(findPrivacyLink('<a href="/cookiebar.js">x</a>'), isNull);
+      expect(findPrivacyLink('<a href="/privacy.css">x</a>'), isNull);
+      expect(findPrivacyLink('<a href="/cookies">Cookies</a>'), isNull);
+      expect(findPrivacyLink('<a href="/c">Cookie policy</a>'), '/c');
+      expect(findPrivacyLink('<a href="/cookiebeleid">x</a>'),
+          '/cookiebeleid');
+      expect(findPrivacyLink('<a href="/cookieverklaring">x</a>'),
+          '/cookieverklaring');
+      expect(findPrivacyLink('<a href=/privacy>Privacy</a>'), '/privacy');
+      expect(findPrivacyLink('<a href=/privacy >Privacy</a>'), '/privacy');
+      expect(findPrivacyLink("<a\nhref='/privacy'>P</a>"), '/privacy');
+    });
+
+    test('V15 trackers are counted once', () async {
+      Detection d(String name) => Detection(entityNamed(name)!);
+      final ga = d('Google Analytics');
+      final r = await SovereigntyService.analyze(
+        pageUrl: '',
+        inspection: const PageInspection.empty(),
+        detections: [ga, ga, ga],
+        html: '',
+      );
+      final c = r.checks.firstWhere((c) => c.title == 'Number of trackers');
+      expect(c.status, CheckStatus.warn, reason: c.evidence);
+      expect(c.evidence, 'Google Analytics');
+    });
+
+    test('Google Fonts evidence cites the LG München I ruling', () {
+      final c = SovereigntyService.privacyChecks(
+        [HostInfo('fonts.googleapis.com')],
+        const [],
+        null,
+        eu,
+      ).firstWhere((c) => c.title.startsWith('Fonts'));
+      expect(c.evidence, contains('LG München I (20 Jan 2022, 3 O 17493/20)'));
+    });
+  });
+
+  test('whole-word provider patterns still know compound tracker hosts', () {
+    for (final (host, name) in [
+      ('www.googletagmanager.com', 'Google'),
+      ('pagead2.googlesyndication.com', 'Google'),
+      ('www.googleadservices.com', 'Google'),
+      ('rr3---sn-5hne6nsr.googlevideo.com', 'Google'),
+      ('www.google-analytics.com', 'Google'),
+      ('scontent.cdninstagram.com', 'Meta'),
+      ('connect.facebook.net', 'Meta'),
+      ('static.cloudflareinsights.com', 'Cloudflare'),
+      ('a248.e.akamaihd.net', 'Akamai'),
+    ]) {
+      expect(matchProvider([host])?.name, name, reason: host);
+    }
   });
 }

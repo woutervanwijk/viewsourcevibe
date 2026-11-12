@@ -274,9 +274,14 @@ class _SovereigntyViewState extends State<SovereigntyView> {
                       ?.copyWith(color: color, fontWeight: FontWeight.bold),
                 ),
                 const Text(' / 100  '),
-                Text(summary.grade!, style: TextStyle(color: color)),
+                Text(summary.lowCoverage ? 'Indicative' : summary.grade!,
+                    style: TextStyle(color: color)),
               ],
             ),
+          if (score != null)
+            Text(
+                'based on ${(summary.coverage * 100).round()}% of the checks',
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
           Wrap(spacing: 12, children: [
             for (final e in counters.entries)

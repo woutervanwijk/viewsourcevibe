@@ -61,7 +61,7 @@ void main() {
   }
 
   final goodHeaders = {
-    'strict-transport-security': ['max-age=1'],
+    'strict-transport-security': ['max-age=31536000'],
     'content-security-policy': ["default-src 'self'; frame-ancestors 'none'"],
     'x-content-type-options': ['nosniff'],
     'referrer-policy': ['no-referrer'],

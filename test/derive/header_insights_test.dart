@@ -180,4 +180,123 @@ void main() {
           multi.hops.single.lines.map((l) => l.name), ['set-cookie', 'vary']);
     });
   });
+
+  group('cache-control (RFC 9111)', () {
+    HeaderInsight cache(String v) => insight(
+        headers(withHeaders({
+          'cache-control': [v]
+        })),
+        InsightId.cache);
+
+    test('no-cache and max-age=0 always revalidate (info)', () {
+      for (final v in ['no-cache', 'no-cache, max-age=86400', 'max-age=0']) {
+        final i = cache(v);
+        expect(i.label, 'Always revalidate', reason: v);
+        expect(i.tone, InsightTone.info, reason: v);
+      }
+    });
+
+    test('no-store wins and warns', () {
+      final i = cache('no-store, max-age=100');
+      expect(i.label, 'No-store');
+      expect(i.tone, InsightTone.warn);
+    });
+
+    test('short cache is info, long is good', () {
+      expect(cache('max-age=60').label, 'Short cache');
+      expect(cache('max-age=60').tone, InsightTone.info);
+      expect(cache('max-age=86400').label, 'Cacheable');
+      expect(cache('max-age=86400').tone, InsightTone.good);
+    });
+
+    test('s-maxage is used and mentioned; private is mentioned', () {
+      final s = cache('max-age=60, s-maxage=86400');
+      expect(s.label, 'Cacheable');
+      expect(s.detail, contains('s-maxage'));
+      final p = cache('private, max-age=86400');
+      expect(p.detail, contains('private'));
+      expect(cache('private').label, isNot('No cache policy'));
+    });
+  });
+
+  group('compression wording', () {
+    test('no encoding says gzip/deflate and that br/zstd is not requested', () {
+      final i = insight(headers(withHeaders({})), InsightId.compression);
+      expect(i.label, 'No gzip/deflate compression');
+      expect(i.detail, contains('br/zstd'));
+      expect(i.tone, InsightTone.warn);
+    });
+  });
+
+  group('cdn insight', () {
+    HeaderInsight cdn(Map<String, List<String>> h) =>
+        insight(headers(withHeaders(h)), InsightId.cdn);
+
+    test('names the provider like the Sovereignty page', () {
+      expect(
+          cdn({
+            'x-vercel-id': ['fra1::a']
+          }).label,
+          'Vercel');
+      expect(
+          cdn({
+            'x-vercel-id': ['fra1::a']
+          }).tone,
+          InsightTone.brand);
+      expect(
+          cdn({
+            'cf-ray': ['a-AMS']
+          }).label,
+          'Cloudflare');
+      expect(
+          cdn({
+            'x-amz-cf-id': ['a']
+          }).label,
+          'Amazon (AWS)');
+    });
+
+    test('cache hit only as a HIT token in x-cache / cf-cache-status', () {
+      expect(
+          cdn({
+            'server': ['Whitehall']
+          }).label,
+          isNot('Cache hit'));
+      expect(
+          cdn({
+            'x-cache': ['Miss from cloudfront']
+          }).label,
+          isNot('Cache hit'));
+      expect(
+          cdn({
+            'x-cache': ['HIT from x']
+          }).label,
+          'Cache hit');
+      expect(
+          cdn({
+            'x-cache': ['hit']
+          }).label,
+          'Cache hit');
+    });
+
+    test('proxy headers without a provider stay Proxy/CDN', () {
+      expect(
+          cdn({
+            'via': ['1.1 proxy']
+          }).label,
+          'Proxy/CDN');
+    });
+  });
+
+  group('nosniff note', () {
+    test('uses the same rule as the audit', () {
+      List<String> notes(String v) => headers(withHeaders({
+            'x-content-type-options': [v],
+            'content-type': ['text/html'],
+          })).notes.map((n) => n.text).toList();
+      expect(notes('nosniff, nosniff').where((t) => t.contains('nosniff')),
+          isEmpty);
+      expect(notes('NOSNIFF').where((t) => t.contains('nosniff')), isEmpty);
+      expect(notes('nope').where((t) => t.contains('nosniff')), isNotEmpty);
+    });
+  });
 }

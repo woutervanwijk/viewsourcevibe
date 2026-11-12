@@ -63,5 +63,49 @@ void main() {
       expect(cookie.category, CookieCategory.functional);
       expect(cookie.provider, 'WordPress');
     });
+
+    test('consent wildcard only matches consent-manager state names (K7)', () {
+      for (final n in [
+        'consent_ad_id',
+        'trackingconsent_ads',
+        'ad_consent_id',
+        'user_consent_tracking_uid'
+      ]) {
+        expect(CookieUtils.analyze('$n=1', 'Server').category,
+            isNot(CookieCategory.essential),
+            reason: n);
+      }
+      for (final n in ['consentmanager_x', 'cmp_state', 'ConsentMode']) {
+        expect(
+            CookieUtils.analyze('$n=1', 'Server').provider, 'Consent Manager',
+            reason: n);
+      }
+    });
+
+    test('longest matching prefix wins (K8)', () {
+      final prefixes = CookieUtils.prefixKeysForTest;
+      for (var i = 0; i < prefixes.length; i++) {
+        for (var j = i + 1; j < prefixes.length; j++) {
+          expect(
+              prefixes[j].startsWith(prefixes[i]) && prefixes[j] != prefixes[i],
+              isFalse,
+              reason: '${prefixes[i]} listed before longer ${prefixes[j]}');
+        }
+      }
+    });
+
+    test('Max-Age and Expires handling (K9)', () {
+      final now = DateTime.utc(2026, 1, 1);
+      String? e(String a) =>
+          CookieUtils.analyze('a=1; $a', 'Server', now: now).expires;
+      expect(e('Max-Age=0'), 'expired (deleted)');
+      expect(e('Max-Age=-5'), 'expired (deleted)');
+      expect(e('Max-Age=60'), '2026-01-01T00:01:00.000Z');
+      expect(e('Expires=Wed, 01 Jan 2031 00:00:00 GMT'),
+          '2031-01-01T00:00:00.000Z');
+      expect(e('Expires=garbage'), 'garbage');
+      expect(e('Max-Age=0; Expires=Wed, 01 Jan 2031 00:00:00 GMT'),
+          'expired (deleted)');
+    });
   });
 }

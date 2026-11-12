@@ -1,3 +1,5 @@
+import 'dart:io' show HttpDate;
+
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
@@ -52,7 +54,18 @@ class CookieInfo {
 class CookieUtils {
   static final List<String> _prefixKeys = _knownCookies.keys
       .where((k) => k.endsWith('_') || k.endsWith('-'))
-      .toList();
+      .toList()
+    ..sort((a, b) => b.length.compareTo(a.length)); // longest prefix wins
+
+  /// Prefix keys in lookup order (longest first).
+  static List<String> get prefixKeysForTest => _prefixKeys;
+
+  /// Names of consent-manager state cookies (not any name containing
+  /// "consent": "consent_ad_id" is an ad id).
+  static final RegExp _consentName = RegExp(
+      r'^(cookie_?)?consent(_?(mode|status|settings|preferences|state))?$'
+      r'|cookieconsent|consentmanager|^cmp',
+      caseSensitive: false);
 
   static final Map<String, Map<String, dynamic>> _knownCookies = {
     // --- Google & DoubleClick ---
@@ -4400,8 +4413,8 @@ class CookieUtils {
       };
     }
 
-    // Wildcard consent detection - check if cookie name contains 'consent'
-    if (knownData == null && name.toLowerCase().contains('consent')) {
+    // Wildcard consent detection for consent-manager state names.
+    if (knownData == null && _consentName.hasMatch(name)) {
       knownData = {'cat': CookieCategory.essential, 'prov': 'Consent Manager'};
     }
 
@@ -4409,10 +4422,18 @@ class CookieUtils {
 
     // Max-Age wins over Expires (RFC 6265 5.3): expires = now + Max-Age.
     if (maxAge != null) {
-      expires = (now ?? DateTime.now())
-          .toUtc()
-          .add(Duration(seconds: maxAge))
-          .toIso8601String();
+      expires = maxAge <= 0
+          ? 'expired (deleted)'
+          : (now ?? DateTime.now())
+              .toUtc()
+              .add(Duration(seconds: maxAge))
+              .toIso8601String();
+    } else if (expires != null) {
+      try {
+        expires = HttpDate.parse(expires).toUtc().toIso8601String();
+      } catch (_) {
+        // Unparsable Expires: keep the raw text.
+      }
     }
 
     return CookieInfo(
