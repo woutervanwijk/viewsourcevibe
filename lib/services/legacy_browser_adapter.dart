@@ -1,4 +1,4 @@
-import 'dart:convert';
+import '../utils/text_decoding.dart';
 
 import '../models/html_file.dart';
 import '../models/inspection/browser_snapshot.dart';
@@ -94,7 +94,7 @@ HtmlFile? legacyDomFile(BrowserSnapshot b,
     path: b.url.toString(),
     content: dom.text,
     lastModified: DateTime.now(),
-    size: utf8.encode(dom.text).length,
+    size: utf8ByteLength(dom.text),
     isUrl: true,
   );
 }

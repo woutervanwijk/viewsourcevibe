@@ -2,6 +2,28 @@ import 'dart:convert';
 
 enum CharsetSource { header, bom, meta, fallback }
 
+/// UTF-8 byte length of [s] without allocating the encoded bytes —
+/// `utf8.encode(s).length` would allocate the whole string, which for the
+/// rendered DOM of a big page (several MB) is a needless copy on the UI
+/// thread.
+int utf8ByteLength(String s) {
+  var bytes = 0;
+  for (var i = 0; i < s.length; i++) {
+    final cu = s.codeUnitAt(i);
+    if (cu < 0x80) {
+      bytes += 1;
+    } else if (cu < 0x800) {
+      bytes += 2;
+    } else if (cu >= 0xD800 && cu <= 0xDBFF && i + 1 < s.length) {
+      bytes += 4;
+      i++; // skip the low surrogate of the pair
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+}
+
 class DecodedText {
   final String text;
   final String charset;
