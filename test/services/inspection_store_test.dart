@@ -195,6 +195,49 @@ void main() {
     expect(store.current.browser, isA<Present<BrowserSnapshot>>());
   });
 
+  test('a poll that changes nothing does not notify and keeps identity', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    store.applyBrowser(g, _browser('https://a.test/',
+        dom: '<p/>', resources: [_res('https://a.test/a.js', transfer: 10)]));
+    final before = store.current;
+    final browserBefore =
+        (store.current.browser as Present<BrowserSnapshot>).value;
+    notifies = 0;
+    // The same payload again: a load poll with the DOM skipped and the same
+    // resources must not notify (that is what janks big pages).
+    store.applyBrowser(g, _browser('https://a.test/',
+        resources: [_res('https://a.test/a.js', transfer: 10)]));
+    expect(notifies, 0);
+    expect(identical(store.current, before), isTrue);
+    expect(
+        identical(
+            (store.current.browser as Present<BrowserSnapshot>).value,
+            browserBefore),
+        isTrue);
+  });
+
+  test('a poll that adds a resource notifies once; repeating it does not', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    store.applyBrowser(g, _browser('https://a.test/',
+        dom: '<p/>', resources: [_res('https://a.test/a.js')]));
+    notifies = 0;
+    store.applyBrowser(g, _browser('https://a.test/',
+        resources: [_res('https://a.test/a.js'), _res('https://a.test/b.js')]));
+    expect(notifies, 1);
+    final b = (store.current.browser as Present<BrowserSnapshot>).value;
+    expect(
+        (b.resources as Present<List<ResourceEntry>>)
+            .value
+            .map((e) => e.url),
+        containsAll(['https://a.test/a.js', 'https://a.test/b.js']));
+    final before = store.current;
+    notifies = 0;
+    store.applyBrowser(g, _browser('https://a.test/',
+        resources: [_res('https://a.test/a.js'), _res('https://a.test/b.js')]));
+    expect(notifies, 0);
+    expect(identical(store.current, before), isTrue);
+  });
+
   test('server Failed stays visible', () {
     final g = store.beginUrl(Uri.parse('https://a.test/'));
     store.applyServer(g, const Failed('timeout'));
