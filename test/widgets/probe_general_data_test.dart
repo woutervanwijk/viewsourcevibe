@@ -7,6 +7,7 @@ import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
 
 import '../fixtures/inspection/bot_blocked.dart';
+import '../fixtures/inspection/builders.dart';
 import '../fixtures/inspection/full_page.dart';
 import '../fixtures/inspection/ios_partial.dart';
 import '../fixtures/inspection/local_file.dart';
@@ -63,6 +64,26 @@ void main() {
       await show(tester, botBlocked());
       expect(find.textContaining("server returned 403 to the app's request"),
           findsOneWidget);
+    });
+
+    testWidgets('(b) a www-only redirect is summarized as a minor note',
+        (tester) async {
+      // Server ended on www., the browser on the bare host.
+      final p = urlInspection(
+        url: 'https://example.com/',
+        serverResult: server(serverSnapshot(
+            url: 'https://example.com/',
+            hops: [
+              hop('https://www.example.com/', 200,
+                  headers: {'content-type': ['text/html']})
+            ],
+            body: '<html/>')),
+        browserResult: browser(
+            browserSnapshot(url: 'https://example.com/', dom: '<html/>')),
+      );
+      await show(tester, p);
+      expect(find.textContaining('1 minor difference'), findsOneWidget);
+      expect(find.textContaining('www.example.com'), findsWidgets);
     });
 
     testWidgets('(c) local file: says there is nothing to probe',

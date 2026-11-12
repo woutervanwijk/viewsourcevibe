@@ -223,6 +223,10 @@ class ProbeGeneralView extends StatelessWidget {
   }
 
   Widget _buildDivergences(BuildContext context, List<Divergence> items) {
+    final major = items.where((d) => !d.lowSeverity).toList();
+    final minor = items.where((d) => d.lowSeverity).toList();
+    final muted = TextStyle(
+        fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant);
     return _card(
       context,
       [
@@ -230,18 +234,14 @@ class ProbeGeneralView extends StatelessWidget {
             "The app's request and the browser differ",
             color: Colors.orange),
         const SizedBox(height: 10),
-        for (final d in items)
+        for (final d in major)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                    d.lowSeverity
-                        ? Icons.info_outline
-                        : Icons.warning_amber_rounded,
-                    size: 15,
-                    color: d.lowSeverity ? Colors.grey : Colors.orange),
+                const Icon(Icons.warning_amber_rounded,
+                    size: 15, color: Colors.orange),
                 const SizedBox(width: 7),
                 Expanded(
                     child:
@@ -249,6 +249,27 @@ class ProbeGeneralView extends StatelessWidget {
               ],
             ),
           ),
+        if (minor.isNotEmpty) ...[
+          if (major.isNotEmpty) const SizedBox(height: 4),
+          Text(
+            '${minor.length} minor difference${minor.length == 1 ? '' : 's'} '
+            "between the app's request and the browser "
+            '(notes, e.g. www vs non-www)',
+            style: muted,
+          ),
+          for (final d in minor)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, size: 15, color: Colors.grey),
+                  const SizedBox(width: 7),
+                  Expanded(child: Text(d.message, style: muted)),
+                ],
+              ),
+            ),
+        ],
       ],
       border: Colors.orange.withValues(alpha: 0.4),
     );

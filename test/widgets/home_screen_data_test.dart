@@ -10,13 +10,10 @@ import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/reader_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
-import 'package:view_source_vibe/widgets/divergence_banner.dart';
 import 'package:view_source_vibe/widgets/source_viewer.dart';
 
-import '../fixtures/inspection/bot_blocked.dart';
 import '../fixtures/inspection/builders.dart';
 import '../fixtures/inspection/full_page.dart';
-import '../fixtures/inspection/local_file.dart';
 import '../fixtures/inspection/pump.dart';
 
 /// Records the scheduler phase each tab call happened in.
@@ -61,72 +58,6 @@ Future<void> pumpHome(WidgetTester tester, HtmlService service) async {
 }
 
 void main() {
-  group('divergence banner', () {
-    testWidgets('shown on the home screen for bot_blocked', (tester) async {
-      final service = makeService(seedStore(InspectionStore(), botBlocked()));
-      addTearDown(service.dispose);
-      await pumpHome(tester, service);
-      expect(find.byType(DivergenceBanner), findsOneWidget);
-      expect(find.textContaining('curl ≠ browser'), findsOneWidget);
-      expect(find.textContaining('server returned 403'), findsOneWidget);
-    });
-
-    testWidgets('absent for full_page', (tester) async {
-      final service = makeService(seedStore(InspectionStore(), fullPage()));
-      addTearDown(service.dispose);
-      await pumpHome(tester, service);
-      expect(find.textContaining('curl ≠ browser'), findsNothing);
-      expect(find.textContaining('server returned'), findsNothing);
-    });
-
-    testWidgets('absent for a local file', (tester) async {
-      final service = makeService(seedStore(InspectionStore(), localFile()));
-      addTearDown(service.dispose);
-      await pumpHome(tester, service);
-      expect(find.textContaining('curl ≠ browser'), findsNothing);
-    });
-
-    testWidgets('can be dismissed', (tester) async {
-      final service = makeService(seedStore(InspectionStore(), botBlocked()));
-      addTearDown(service.dispose);
-      await pumpHome(tester, service);
-      await tester.tap(find.byTooltip('Dismiss'));
-      await tester.pump();
-      expect(find.textContaining('server returned 403'), findsNothing);
-    });
-
-    testWidgets('low severity differences are collapsed', (tester) async {
-      // Server ended on www., the browser on the bare host.
-      final p = urlInspection(
-        url: 'https://example.com/',
-        serverResult: server(serverSnapshot(
-            url: 'https://example.com/',
-            hops: [
-              hop('https://www.example.com/', 200, headers: {
-                'content-type': ['text/html']
-              })
-            ],
-            body: '<html/>')),
-        browserResult: browser(
-            browserSnapshot(url: 'https://example.com/', dom: '<html/>')),
-      );
-      final service = makeService(seedStore(InspectionStore(), p));
-      addTearDown(service.dispose);
-      expect(service.divergences.single.lowSeverity, isTrue);
-      final msg = service.divergences.single.message;
-
-      await tester.pumpWidget(MultiProvider(
-        providers: [ChangeNotifierProvider<HtmlService>.value(value: service)],
-        child: const MaterialApp(home: Scaffold(body: DivergenceBanner())),
-      ));
-      expect(find.text(msg), findsNothing);
-      expect(find.textContaining('1 minor difference'), findsOneWidget);
-      await tester.tap(find.textContaining('1 minor difference'));
-      await tester.pump();
-      expect(find.text(msg), findsOneWidget);
-    });
-  });
-
   group('home screen', () {
     Future<SpyService> localHome(WidgetTester tester) async {
       final service = SpyService(InspectionStore());
