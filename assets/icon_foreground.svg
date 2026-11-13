@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100">
+  <!-- Android adaptive-icon foreground: the glyph only; flutter_launcher_icons adds a 16% inset, which puts it in the safe zone. Background is #FFB547. -->
+  <g>
+    <g stroke="#111827" stroke-width="4" stroke-linecap="round">
+      <path d="M27 34 H44"/><path d="M50 34 H73"/>
+      <path d="M17 42 H36"/><path d="M64 42 H83"/>
+      <path d="M12 50 H32"/><path d="M68 50 H88"/>
+      <path d="M17 58 H36"/><path d="M64 58 H83"/>
+      <path d="M27 66 H58"/><path d="M64 66 H73"/>
+    </g>
+    <circle cx="50" cy="50" r="11" fill="#111827"/>
+    <circle cx="54" cy="46" r="3" fill="#FFB547"/>
+  </g>
+</svg>
