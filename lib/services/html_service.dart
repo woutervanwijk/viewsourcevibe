@@ -1481,9 +1481,80 @@ class HtmlService extends ChangeNotifier {
 
       // Reader tab: extract the article lazily, once per page generation.
       if (isHtml && index == readerTabIndex) {
-        _readerService?.extractIfStale().ignore();
+        final reader = _readerService;
+        if (reader != null) {
+          // In low-resource mode the Browser WebView is paused once its tab
+          // is hidden, but extraction evaluates JS in it — so pause only
+          // after the extraction has finished.
+          reader.extractIfStale().whenComplete(_applyWebViewResourceMode).ignore();
+        } else {
+          _applyWebViewResourceMode();
+        }
+      } else {
+        _applyWebViewResourceMode();
       }
     }
+  }
+
+  /// In low-resource mode, pause the WebView whose tab is not visible
+  /// (Android `WebView.onPause` / Windows `TrySuspend`) and pause its media,
+  /// so the Browser and Reader WebViews don't both burn CPU/memory on older
+  /// devices. The visible tab's WebView is resumed. No-op when the setting
+  /// is off.
+  void _applyWebViewResourceMode() {
+    if (!(_appSettings?.lowResourceMode ?? false)) return;
+    final browserActive = _activeTabIndex == browserTabIndex;
+    final readerActive = isHtml && _activeTabIndex == readerTabIndex;
+    _setWebViewPaused(activeWebViewController, paused: !browserActive);
+    final readerController = _readerService?.viewController;
+    if (readerController != null &&
+        !identical(readerController, activeWebViewController)) {
+      _setWebViewPaused(readerController, paused: !readerActive);
+    }
+  }
+
+  Future<void> _setWebViewPaused(InAppWebViewController? controller,
+      {required bool paused}) async {
+    if (controller == null) return;
+    try {
+      if (paused) {
+        await controller.pause();
+        await _pauseWebViewMedia(controller);
+      } else {
+        await controller.resume();
+      }
+    } catch (e) {
+      // pause()/resume() are only implemented on Android and Windows; the
+      // other platforms suspend background WebViews themselves.
+      debugPrint('WebView pause/resume not supported on this platform: $e');
+    }
+  }
+
+  Future<void> _pauseWebViewMedia(InAppWebViewController controller) async {
+    try {
+      await controller.pauseAllMediaPlayback();
+    } catch (_) {
+      // Android has no native pauseAllMediaPlayback; pause via JS instead.
+      try {
+        await controller.evaluateJavascript(
+            source: "document.querySelectorAll('video,audio')"
+                '.forEach(function(m){try{m.pause()}catch(e){}});');
+      } catch (_) {}
+    }
+  }
+
+  /// App went to background: suspend both WebViews (low-resource mode only).
+  void suspendWebViewsForBackground() {
+    if (!(_appSettings?.lowResourceMode ?? false)) return;
+    _setWebViewPaused(activeWebViewController, paused: true);
+    _setWebViewPaused(_readerService?.viewController, paused: true);
+  }
+
+  /// App is back in the foreground: resume the WebViews. Safe to call even
+  /// when low-resource mode is off (nothing was paused then).
+  void resumeWebViews() {
+    _setWebViewPaused(activeWebViewController, paused: false);
+    _setWebViewPaused(_readerService?.viewController, paused: false);
   }
 
   /// Trigger a browser reload if the URL has changed and the browser tab is visible
@@ -2315,7 +2386,7 @@ Technical details: $message''';
     _verticalScrollController = null;
     _activeHorizontalScrollController = null;
 
-    _appSettings?.removeListener(notifyListeners);
+    _appSettings?.removeListener(_onAppSettingsChanged);
 
     super.dispose();
   }
@@ -2379,7 +2450,21 @@ Technical details: $message''';
   void setAppSettings(AppSettings settings) {
     _appSettings = settings;
     // Listen to settings changes to update tab indices dynamically
-    _appSettings?.addListener(notifyListeners);
+    _appSettings?.addListener(_onAppSettingsChanged);
+  }
+
+  bool _lowResourceModeWasOn = false;
+
+  void _onAppSettingsChanged() {
+    final low = _appSettings?.lowResourceMode ?? false;
+    if (low) {
+      _applyWebViewResourceMode();
+    } else if (_lowResourceModeWasOn) {
+      // Turned off: make sure no WebView stays paused.
+      resumeWebViews();
+    }
+    _lowResourceModeWasOn = low;
+    notifyListeners();
   }
 
   void setUrlHistoryService(UrlHistoryService service) {

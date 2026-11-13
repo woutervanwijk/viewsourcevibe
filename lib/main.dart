@@ -641,6 +641,10 @@ class AppLifecycleObserver with WidgetsBindingObserver {
       // App is going to background or being closed - save state
       debugPrint('📱 App going to background, saving state...');
       htmlService.saveCurrentState(appStateService);
+      // Low-resource mode: suspend both WebViews while backgrounded.
+      htmlService.suspendWebViewsForBackground();
+    } else if (state == AppLifecycleState.resumed) {
+      htmlService.resumeWebViews();
     }
   }
 }

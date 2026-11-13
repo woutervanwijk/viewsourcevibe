@@ -10,6 +10,7 @@ import 'package:view_source_vibe/services/collectors/vsv_collect_js.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/navigation_policy.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
+import 'package:view_source_vibe/utils/low_resource_webview.dart';
 import 'package:view_source_vibe/widgets/scroll_through_banner.dart';
 import 'dart:io';
 import 'dart:collection';
@@ -49,11 +50,11 @@ class _BrowserViewState extends State<BrowserView> {
     _htmlService = Provider.of<HtmlService>(context, listen: false);
     final s = Provider.of<AppSettings>(context, listen: false);
     if (!identical(_appSettings, s)) {
-      _appSettings?.removeListener(_applyCacheSetting);
+      _appSettings?.removeListener(_applyWebViewSettings);
       _appSettings = s;
-      _appSettings?.addListener(_applyCacheSetting);
+      _appSettings?.addListener(_applyWebViewSettings);
     }
-    _applyCacheSetting();
+    _applyWebViewSettings();
   }
 
   @override
@@ -65,13 +66,14 @@ class _BrowserViewState extends State<BrowserView> {
   void dispose() {
     // Use the cached reference — Provider.of is NOT safe here
     // because the widget's element is already deactivated.
-    _appSettings?.removeListener(_applyCacheSetting);
+    _appSettings?.removeListener(_applyWebViewSettings);
     _htmlService?.clearWebViewController();
     super.dispose();
   }
 
-  /// Applies the "Disable browser cache" setting to the live WebView.
-  void _applyCacheSetting() {
+  /// Applies the live-adjustable WebView settings ("Disable browser cache",
+  /// low-resource media/renderer policy) to the running WebView.
+  void _applyWebViewSettings() {
     final s = _appSettings;
     final c = _controller;
     if (s == null || c == null) return;
@@ -82,6 +84,8 @@ class _BrowserViewState extends State<BrowserView> {
           cacheMode: s.disableBrowserCache
               ? CacheMode.LOAD_NO_CACHE
               : CacheMode.LOAD_DEFAULT,
+          mediaPlaybackRequiresUserGesture: s.lowResourceMode,
+          rendererPriorityPolicy: lowResourceRendererPriorityPolicy(s),
         ))
         .ignore();
   }
@@ -221,7 +225,9 @@ class _BrowserViewState extends State<BrowserView> {
 
   @override
   Widget build(BuildContext context) {
-    final disableCache = context.watch<AppSettings>().disableBrowserCache;
+    final appSettings = context.watch<AppSettings>();
+    final disableCache = appSettings.disableBrowserCache;
+    final lowResource = appSettings.lowResourceMode;
     final webView = InAppWebView(
       gestureRecognizers: widget.gestureRecognizers,
       onWebContentProcessDidTerminate: (controller) {
@@ -232,7 +238,9 @@ class _BrowserViewState extends State<BrowserView> {
       initialSettings: InAppWebViewSettings(
         isInspectable: kDebugMode,
         preferredContentMode: UserPreferredContentMode.RECOMMENDED,
-        mediaPlaybackRequiresUserGesture: false,
+        // Low-resource mode: no autoplay — media only plays after a tap, so
+        // hidden tabs don't burn CPU on video decoding.
+        mediaPlaybackRequiresUserGesture: lowResource,
         allowFileAccess: false,
         allowFileAccessFromFileURLs: false,
         allowContentAccess: false,
@@ -242,6 +250,7 @@ class _BrowserViewState extends State<BrowserView> {
         cacheEnabled: !disableCache,
         cacheMode:
             disableCache ? CacheMode.LOAD_NO_CACHE : CacheMode.LOAD_DEFAULT,
+        rendererPriorityPolicy: lowResourceRendererPriorityPolicy(appSettings),
       ),
       initialUserScripts: UnmodifiableListView<UserScript>([
         // Resource observer + fetch/XHR patch, and the one-shot collector
