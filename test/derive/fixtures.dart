@@ -41,7 +41,9 @@ BrowserCookie cookie(String name,
         Observed<bool> secure =
             const Unavailable(UnavailableReason.notExposedToPage),
         Observed<bool> httpOnly =
-            const Unavailable(UnavailableReason.notExposedToPage)}) =>
+            const Unavailable(UnavailableReason.notExposedToPage),
+        Observed<String> sameSite =
+            const Unavailable(UnavailableReason.notReportedByPlatform)}) =>
     BrowserCookie(
         name: name,
         value: value,
@@ -50,7 +52,7 @@ BrowserCookie cookie(String name,
         expires: expires,
         isSecure: secure,
         isHttpOnly: httpOnly,
-        sameSite: const Unavailable(UnavailableReason.notReportedByPlatform));
+        sameSite: sameSite);
 
 BrowserSnapshot browserSnap({
   String url = 'https://a.test/page',

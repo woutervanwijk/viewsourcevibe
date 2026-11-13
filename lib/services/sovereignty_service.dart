@@ -13,6 +13,7 @@ import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart'
     show hstsMaxAge, hstsMinSeconds;
 import 'package:view_source_vibe/services/detection/engine.dart';
+import 'package:view_source_vibe/services/derive/score_band.dart';
 
 class HostingProvider {
   final String name;
@@ -502,11 +503,11 @@ class SovereigntyReport {
   String? get grade {
     final s = score;
     if (s == null) return null;
-    return s >= 80
-        ? 'Good'
-        : s >= 50
-            ? 'Fair'
-            : 'Poor';
+    return switch (sovereigntyScale.band(s)!) {
+      ScoreBand.good => 'Good',
+      ScoreBand.fair => 'Fair',
+      ScoreBand.poor => 'Poor',
+    };
   }
 
   int count(CheckStatus status) =>
@@ -1050,7 +1051,9 @@ class SovereigntyService {
             ? 'CMS: ${cms.name} (open source)'
             : 'CMS: ${cms.name}${origin != null ? ' ($origin)' : ''}',
         status,
-        cms.evidence.firstOrNull?.detail ?? 'Detected in the page source',
+        // The title says where ("HTML line 414: "images.ctfassets.net"");
+        // the detail is a raw source excerpt that reads as noise here.
+        cms.evidence.firstOrNull?.title ?? 'Detected in the page source',
         weight: 1,
         alternatives: status == CheckStatus.fail
             ? alternativesFor('cms', home)
@@ -1224,11 +1227,11 @@ class SovereigntyService {
     final privacy = html == null ? null : findPrivacyLink(html);
     final consent =
         _detectedServiceNames(detections, {DetectionCategory.consent});
+    // The same trackers as the Privacy tab: every tracking category,
+    // social widgets included (they follow visitors across sites).
     final trackers = _detectedServiceNames(detections, {
-      DetectionCategory.advertising,
-      DetectionCategory.behavior,
-      DetectionCategory.analytics,
-      DetectionCategory.marketing,
+      for (final c in DetectionCategory.values)
+        if (c.isTracking) c
     }).toSet().toList();
     final fonts = {
       ..._detectedServiceNames(detections, {DetectionCategory.fonts}),
@@ -1272,15 +1275,14 @@ class SovereigntyService {
         trackers.isEmpty ? 'None detected' : trackers.join(', '),
       ),
       _servicesCheck(
-        'Analytics, ads & marketing in the site\'s jurisdiction',
+        'Trackers in the site\'s jurisdiction',
         trackers,
         2,
         home,
       ),
       _servicesCheck(
-        'Widgets, embeds & payments in the site\'s jurisdiction',
-        _detectedServiceNames(detections,
-            {DetectionCategory.social, DetectionCategory.ecommerce}),
+        'Payments & e-commerce in the site\'s jurisdiction',
+        _detectedServiceNames(detections, {DetectionCategory.ecommerce}),
         1,
         home,
       ),
@@ -1603,7 +1605,13 @@ class SovereigntyService {
       final rtype = u16(pos);
       final rdlen = u16(pos + 8);
       final rdata = pos + 10;
-      if (rtype == type && rdata + rdlen <= d.length) {
+      // A null MX (RFC 7505: exchange ".") means the domain takes no mail;
+      // it is not a mail server.
+      final nullMx = type == 15 &&
+          rtype == 15 &&
+          rdata + rdlen <= d.length &&
+          readName(rdata + 2).$1.isEmpty;
+      if (rtype == type && rdata + rdlen <= d.length && !nullMx) {
         out.add(switch (type) {
           15 => readName(rdata + 2).$1,
           16 => _txt(d.sublist(rdata, rdata + rdlen)),

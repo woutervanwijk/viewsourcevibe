@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
@@ -180,6 +182,46 @@ void main() {
                   now: DateTime.utc(2026, 12, 25))
               .validityTone,
           CertTone.bad);
+    });
+
+    // Real certificate of www.rtvutrecht.nl (validation run 2026-11-13):
+    // CN=rtvutrecht.nl, SAN covers www.rtvutrecht.nl.
+    final realPem =
+        File('test/fixtures/certs/rtvutrecht.pem').readAsStringSync();
+
+    test('reads the DNS names of the subjectAltName extension', () {
+      expect(subjectAltNames(realPem),
+          ['rtvutrecht.nl', 'www.rtvutrecht.nl', 'utrecht.regiogroei.cloud']);
+      expect(subjectAltNames(null), isEmpty);
+      expect(subjectAltNames('-----BEGIN-----'), isEmpty);
+    });
+
+    test('a host covered by the SAN matches, even when the CN differs', () {
+      final c = certOf(
+          page({},
+              url: 'https://www.rtvutrecht.nl/',
+              certificate: server({
+                ...cert,
+                'subjectParsed': {'Common Name': 'rtvutrecht.nl'},
+                'pem': realPem,
+              })),
+          now: DateTime.utc(2026, 6, 1));
+      expect(c.hostMatches, isTrue);
+      expect(c.hostLabel, 'SAN matches host');
+    });
+
+    test('a host in neither CN nor SAN differs', () {
+      final c = certOf(
+          page({},
+              url: 'https://other.test/',
+              certificate: server({
+                ...cert,
+                'subjectParsed': {'Common Name': 'rtvutrecht.nl'},
+                'pem': realPem,
+              })),
+          now: DateTime.utc(2026, 6, 1));
+      expect(c.hostMatches, isFalse);
+      expect(c.hostLabel, 'Host not in certificate (CN or SAN)');
     });
 
     test('no common name is unknown, not "differs"', () {
@@ -446,14 +488,14 @@ void main() {
                 .certificate as Present<CertificateModel>)
             .value;
 
-    test('a CN mismatch says SAN was not checked', () {
+    test('a CN mismatch without SAN data says SAN is not available', () {
       final c = certOf({
         'subjectParsed': {'Common Name': 'Some Org'},
         'issuerParsed': {},
         'endValidity': '2027-01-01T00:00:00Z',
       });
       expect(c.hostMatches, isFalse);
-      expect(c.hostLabel, 'CN differs from host (SAN not checked)');
+      expect(c.hostLabel, 'CN differs from host (SAN not available)');
     });
   });
 }

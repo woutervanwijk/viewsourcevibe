@@ -7,6 +7,8 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
 import 'package:view_source_vibe/utils/format_utils.dart';
+import 'package:view_source_vibe/services/derive/score_band.dart';
+import 'package:view_source_vibe/widgets/score_band_color.dart';
 
 class SovereigntyView extends StatefulWidget {
   const SovereigntyView({super.key});
@@ -237,13 +239,7 @@ class _SovereigntyViewState extends State<SovereigntyView> {
   Widget _scoreCard(BuildContext context, SovereigntySummary summary,
       SovereigntyReport report) {
     final score = summary.score;
-    final color = score == null
-        ? Colors.grey
-        : score >= 80
-            ? Colors.green
-            : score >= 50
-                ? Colors.orange
-                : Colors.red;
+    final color = bandColor(sovereigntyScale.band(score));
     final counters = {
       CheckStatus.pass: 'passed',
       CheckStatus.warn: 'warnings',
@@ -279,8 +275,7 @@ class _SovereigntyViewState extends State<SovereigntyView> {
               ],
             ),
           if (score != null)
-            Text(
-                'based on ${(summary.coverage * 100).round()}% of the checks',
+            Text('based on ${(summary.coverage * 100).round()}% of the checks',
                 style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
           Wrap(spacing: 12, children: [

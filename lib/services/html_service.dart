@@ -796,8 +796,10 @@ class HtmlService extends ChangeNotifier {
   }
 
   List<Divergence>? _divergences;
-  ({Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server})?
-      _divergencesFor;
+  ({
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server
+  })? _divergencesFor;
 
   /// Where the app's own request and the browser disagree (UI: Task 10).
   /// Cached on the two snapshots it reads, not on the PageInspection object.
@@ -869,8 +871,10 @@ class HtmlService extends ChangeNotifier {
   }
 
   Observed<CookiesModel>? _cookiesView;
-  ({Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server})?
-      _cookiesViewFor;
+  ({
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server
+  })? _cookiesViewFor;
 
   /// The Cookies tab: derived cookies with flags (unknown stays unknown)
   /// and the privacy lens. Cached on the snapshots it reads, not on the
@@ -1056,12 +1060,16 @@ class HtmlService extends ChangeNotifier {
   }
 
   /// What the analysis reads from the browser: whether it is Present, the
-  /// URL it is on and how many resources it reported. A change after the
-  /// analysis started makes the report stale.
+  /// URL it is on, how many resources it reported and which services were
+  /// detected (a tracker known only from a cookie that arrived later must
+  /// reach the privacy pillar too). A change after the analysis started
+  /// makes the report stale.
   String get _currentSovereigntyInputKey {
     final browser = store.current.browser;
     final count = SovereigntyService.browserResources(store.current).length;
-    return '${browser is Present<BrowserSnapshot>}|$_sovereigntyUri|$count';
+    final services = (detections.map((d) => d.name).toList()..sort()).join(',');
+    return '${browser is Present<BrowserSnapshot>}|$_sovereigntyUri|$count'
+        '|$services';
   }
 
   /// Registrable domain the per-site jurisdiction choice is stored under.
@@ -4422,7 +4430,8 @@ Technical details: $message''';
       // image resize options (?width=112 vs ?width=264 or none) must NOT
       // match: they serve different bytes (e.g. thumbnail vs full original).
       if (u.path.length > 3) {
-        final byCb = byResourceKey['$host|${u.path}|${queryWithoutCacheBusters(u)}'];
+        final byCb =
+            byResourceKey['$host|${u.path}|${queryWithoutCacheBusters(u)}'];
         if (byCb != null) return _sizeOf(byCb);
       }
 
@@ -4873,8 +4882,7 @@ Technical details: $message''';
 
     // Hidden sizes, like the live load (shared lookup cache per page).
     final urls = estimateTargetsOf(store.current.freshLoad, const {},
-        limit: _maxEstimateLookups,
-        declaredMedia: store.current.declaredMedia);
+        limit: _maxEstimateLookups, declaredMedia: store.current.declaredMedia);
     var next = 0;
     Future<void> worker() async {
       while (next < urls.length && !stale()) {
@@ -5247,7 +5255,8 @@ Technical details: $message''';
     // A load poll that changed neither the resources nor the document has
     // nothing to apply: skip the rebuild (the common case while polling).
     final sig = _browserSignature();
-    if (sig == _lastAppliedBrowserSig && identical(domText, _lastAppliedDomText)) {
+    if (sig == _lastAppliedBrowserSig &&
+        identical(domText, _lastAppliedDomText)) {
       return;
     }
     _lastAppliedBrowserSig = sig;
@@ -5304,7 +5313,8 @@ class _ControllerBrowserLoader implements BrowserLoader {
   @override
   void loadUrl(Uri url) {
     final controller = _service.activeWebViewController;
-    if (controller == null) return; // still pending; the view loads it on create
+    if (controller == null)
+      return; // still pending; the view loads it on create
     _service._browserLoadIssuedUrl = url.toString();
     controller
         .loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())))

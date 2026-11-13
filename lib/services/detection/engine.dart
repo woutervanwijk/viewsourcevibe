@@ -65,6 +65,9 @@ class Detection {
         'category': category.name,
         'evidence': [for (final e in evidence) e.toMap()],
         'hosts': hosts.toList(),
+        // The cookies this service set; the evidence list is capped and may
+        // not show them all.
+        if (cookies.isNotEmpty) 'cookies': cookies.toList(),
         'inSource': inSource,
         if (version != null) 'version': version,
       };
@@ -80,6 +83,7 @@ class Detection {
       ..inSource = raw['inSource'] == true
       ..version = raw['version']?.toString();
     d.hosts.addAll([for (final h in raw['hosts'] as List? ?? []) '$h']);
+    d.cookies.addAll([for (final c in raw['cookies'] as List? ?? []) '$c']);
     for (final e in raw['evidence'] as List? ?? []) {
       if (DetectionEvidence.fromMap(e) case final item?) d.evidence.add(item);
     }

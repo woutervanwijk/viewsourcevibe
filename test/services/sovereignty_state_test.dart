@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
@@ -186,6 +187,52 @@ void main() {
               resources: [resource('https://img.test/b.png', 'img')]));
       await pumpEventQueue();
       expect(calls, hasLength(3));
+    });
+
+    // Validation run 2026-11-13 (rijksoverheid.nl): a tracker known only
+    // from a cookie that arrived later was on Services but not in the
+    // Sovereignty privacy pillar.
+    test('a tracker found later (by cookie only) re-runs the analysis',
+        () async {
+      final p = fullPage();
+      seedStore(store, p.copyWith(browser: const Pending()));
+      service.watchSovereignty(true);
+      await pumpEventQueue();
+      final gen = store.current.generation;
+      final res = [resource('https://cdn.test/a.js', 'script')];
+      store.applyBrowser(
+          gen,
+          browserSnapshot(
+              url: 'https://example.com/',
+              dom: '<html></html>',
+              resources: res,
+              cookies: const []));
+      await pumpEventQueue();
+      final before = calls.length;
+
+      // Same resources; a Google Analytics cookie appears.
+      store.applyBrowser(
+          gen,
+          browserSnapshot(
+              url: 'https://example.com/',
+              dom: '<html></html>',
+              resources: res,
+              cookies: [
+                BrowserCookie(
+                  name: '_ga',
+                  value: 'GA1.1.1.1',
+                  domain: browser('.example.com'),
+                  path: browser('/'),
+                  expires: const Unavailable(
+                      UnavailableReason.notReportedByPlatform),
+                  isSecure: browser(true),
+                  isHttpOnly: browser(false),
+                  sameSite: browser('Lax'),
+                ),
+              ]));
+      await pumpEventQueue();
+      expect(calls.length, before + 1,
+          reason: 'the detections changed, so the privacy pillar must too');
     });
 
     test('a changed legal home re-runs the analysis', () async {

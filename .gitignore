@@ -54,3 +54,5 @@ android/.kotlin/sessions/
 android/key.properties
 *.jks
 *.keystore
+# Site validation runs (validation/README.md)
+validation/runs/
