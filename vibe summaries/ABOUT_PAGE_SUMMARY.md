@@ -66,7 +66,7 @@ Successfully implemented a comprehensive about page for View Source Vibe that is
    - Architecture overview
 
 6. **Copyright Section**
-   - © 2025 Wouter van Wijk & Mistral Vibe
+   - © 2026 Wouter van Wijk & Mistral Vibe
    - All rights reserved notice
 
 ### Navigation Integration
@@ -105,7 +105,7 @@ Successfully implemented a comprehensive about page for View Source Vibe that is
 ## Copyright Information
 The about page includes the required copyright notice:
 ```
-© 2025 Wouter van Wijk & Mistral Vibe
+© 2026 Wouter van Wijk & Mistral Vibe
 All rights reserved.
 ```
 

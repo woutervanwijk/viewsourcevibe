@@ -126,7 +126,7 @@ The collaboration between Wouter van Wijk and Mistral Vibe AI has resulted in **
 
 ### **Copyright & Collaboration**
 ```
-© 2025 Wouter van Wijk & Mistral Vibe
+© 2026 Wouter van Wijk & Mistral Vibe
 All rights reserved.
 
 This project represents a successful collaboration between human expertise and AI intelligence, demonstrating how Mistral Vibe AI can enhance and accelerate software development while maintaining the highest standards of quality and innovation.
