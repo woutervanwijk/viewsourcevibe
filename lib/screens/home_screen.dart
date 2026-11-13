@@ -602,14 +602,29 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: SegmentedButton<TabGroup>(
                       segments: [
                         for (final g in groups)
-                          ButtonSegment(value: g, label: Text(g.label)),
+                          ButtonSegment(
+                            value: g,
+                            // Always one line: on very narrow phones the
+                            // label shrinks instead of wrapping.
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(g.label,
+                                  maxLines: 1, softWrap: false),
+                            ),
+                          ),
                       ],
                       selected: {current.group},
                       showSelectedIcon: false,
-                      // Same corners as the chips below (Material 3: 8).
+                      // Same corners as the chips below (Material 3: 8);
+                      // smaller text and padding so four labels fit.
                       style: ButtonStyle(
                         shape: WidgetStatePropertyAll(RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8))),
+                        textStyle: const WidgetStatePropertyAll(TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w500)),
+                        padding: const WidgetStatePropertyAll(
+                            EdgeInsets.symmetric(horizontal: 6)),
+                        visualDensity: VisualDensity.compact,
                       ),
                       onSelectionChanged: (selection) =>
                           _selectGroup(selection.first),
