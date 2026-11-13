@@ -309,8 +309,11 @@ void main() {
       expect(htmlService.currentFile, isNotNull);
       expect(htmlService.currentFile?.isUrl, isTrue);
 
-      // Find and tap the clean button
+      // The clean button only shows while the field is focused.
       final cleanButton = find.byIcon(Icons.clear);
+      expect(cleanButton, findsNothing);
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
       expect(cleanButton, findsOneWidget);
       await tester.tap(cleanButton);
       await tester.pumpAndSettle();

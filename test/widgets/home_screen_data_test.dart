@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/app_tab.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -99,17 +100,27 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
-    testWidgets('Reader tab appears for HTML pages, before DOM Tree',
+    testWidgets('Reader sits in the Page group, DOM Tree in the Code group',
         (tester) async {
       final service = makeService(seedStore(InspectionStore(), fullPage()));
       addTearDown(service.dispose);
       await pumpHome(tester, service);
 
-      expect(find.text('Reader'), findsOneWidget);
-      expect(find.text('DOM Tree'), findsOneWidget);
-      final readerX = tester.getTopLeft(find.text('Reader')).dx;
-      final domX = tester.getTopLeft(find.text('DOM Tree')).dx;
-      expect(readerX, lessThan(domX));
+      // The page opens on a Page tab: its chips include Reader.
+      expect(service.activeTabIndex, service.tabIndexOf(AppTab.metadata));
+      expect(find.widgetWithText(ChoiceChip, 'Reader'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'DOM Tree'), findsNothing);
+
+      // Tapping the Code group shows its chips and opens its first tab.
+      await tester.tap(find.descendant(
+          of: find.byType(SegmentedButton<TabGroup>),
+          matching: find.text('Code')));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(service.activeTabIndex, service.tabIndexOf(AppTab.domTree));
+      expect(find.widgetWithText(ChoiceChip, 'DOM Tree'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Reader'), findsNothing);
 
       await tester.pumpWidget(const SizedBox());
     });

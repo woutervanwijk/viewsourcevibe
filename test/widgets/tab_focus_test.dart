@@ -86,9 +86,9 @@ void main() {
     final initial = state.currentTabIndex;
     expect(state.activeTabFocusNode?.hasFocus, isFalse);
 
-    // Tap the second tab in the strip. The body tap handler unfocuses on
-    // tap, but once the tab animation settles the page focus must win.
-    await tester.tap(find.byType(Tab).at(1));
+    // Tap another tab's chip. The body tap handler unfocuses on tap, but
+    // once the tab animation settles the page focus must win.
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Media'));
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }

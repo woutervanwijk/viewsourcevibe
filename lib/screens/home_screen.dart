@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/models/app_tab.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/widgets/source_viewer.dart';
 import 'package:view_source_vibe/widgets/toolbar.dart';
@@ -41,15 +42,19 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
-  final _tabScrollController = TabBarScrollController();
-  bool _lastIsHtmlOrXml = false;
-  bool _lastShowMetadataTabs = false;
-  bool _lastShowServerTabs = false;
-  bool _lastIsBrowserSupported = true;
-  bool _lastShouldShowBrowser = true;
-  int _lastBrowserTabIndex = -1;
+  final _tabScrollController = ScrollController();
+
+  /// The tabs on screen, in order; the TabController indexes into this list.
+  List<AppTab> _tabs = const [];
   List<String> _tabLabels = const [];
   List<String> _tabTags = const [];
+
+  /// Last tab the user had open in each group, so tapping a group returns
+  /// there instead of always to its first tab.
+  final Map<TabGroup, AppTab> _lastTabInGroup = {};
+
+  /// Key of the selected chip, scrolled into view when the tab changes.
+  final _selectedChipKey = GlobalKey();
 
   /// Label of the tab the user is on. Tabs come and go while a page loads,
   /// so the selection follows the tab itself, not its index.
@@ -74,8 +79,10 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     // Use addPostFrameCallback to initialize correct length after first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final htmlService = Provider.of<HtmlService>(context, listen: false);
-      _updateTabs(htmlService, force: true);
+      // Rebuild, so the tab bar and pages use the new controller.
+      setState(() => _updateTabs(htmlService, force: true));
     });
   }
 
@@ -90,6 +97,11 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ? _tabTags[_tabController.index]
               : null;
     }
+    if (_tabController.index < _tabs.length) {
+      final tab = _tabs[_tabController.index];
+      _lastTabInGroup[tab.group] = tab;
+    }
+    _revealSelectedChip();
 
     final htmlService = Provider.of<HtmlService>(context, listen: false);
     htmlService.setActiveTabIndex(_tabController.index);
@@ -154,60 +166,61 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return _tabFocusNodes[_tabTags[index]];
   }
 
+  /// Rebuilds the TabController when the set of visible tabs changed. The
+  /// selection follows the tab the user was on, wherever it moved.
   void _updateTabs(HtmlService htmlService, {bool force = false}) {
-    final isHtmlOrXml = htmlService.isHtmlOrXml;
-    final showMetadataTabs = htmlService.showMetadataTabs;
-    final showServerTabs = htmlService.showServerTabs;
-    final isBrowserSupported = htmlService.isBrowserSupported;
-    final shouldShowBrowser = htmlService.shouldShowBrowserTab;
-    final browserTabIndex = htmlService.browserTabIndex;
-
-    if (isHtmlOrXml == _lastIsHtmlOrXml &&
-        showMetadataTabs == _lastShowMetadataTabs &&
-        showServerTabs == _lastShowServerTabs &&
-        isBrowserSupported == _lastIsBrowserSupported &&
-        shouldShowBrowser == _lastShouldShowBrowser &&
-        browserTabIndex == _lastBrowserTabIndex &&
-        !force) {
-      return;
-    }
+    final tabs = htmlService.visibleTabs;
+    if (!force && listEquals(tabs, _tabs)) return;
 
     final oldIndex = _tabController.index;
-    final specs = _tabSpecs(htmlService);
-    final labels = [for (final (_, label, _) in specs) label];
-    final tags = [for (final (_, _, tag) in specs) tag];
-
-    if (!_listEquals(labels, _tabLabels) || force) {
-      final newLength = labels.length;
-      final keep =
-          _selectedTabLabel == null ? -1 : labels.indexOf(_selectedTabLabel!);
-      _tabController.removeListener(_handleTabSelection);
-      // We don't dispose here if called during build to avoid issues
-      _tabController = TabController(
-        length: newLength,
-        vsync: this,
-        initialIndex: keep >= 0 ? keep : oldIndex.clamp(0, newLength - 1),
-      );
-      _tabController.addListener(_handleTabSelection);
-      _tabLabels = labels;
-      _tabTags = tags;
-      _lastIsHtmlOrXml = isHtmlOrXml;
-      _lastShowMetadataTabs = showMetadataTabs;
-      _lastShowServerTabs = showServerTabs;
-      _lastIsBrowserSupported = isBrowserSupported;
-      _lastShouldShowBrowser = shouldShowBrowser;
-      _lastBrowserTabIndex = browserTabIndex;
-      if (keep >= 0) {
-        // Called during build: notify the service after this frame.
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => htmlService.setActiveTabIndex(keep));
-      }
+    final newLength = tabs.length;
+    final keep = _selectedTabLabel == null
+        ? -1
+        : tabs.indexWhere((t) => t.label == _selectedTabLabel);
+    var initial = keep >= 0 ? keep : oldIndex.clamp(0, newLength - 1);
+    // Without "Always use Browser" the Browser tab loads the page when it
+    // shows, so the app never lands on it by itself; only a request (startup,
+    // deep link) or the user opens it.
+    if (keep < 0 &&
+        !htmlService.useBrowserByDefault &&
+        tabs[initial] == AppTab.browser &&
+        newLength > 1) {
+      initial = 1;
     }
+    _tabController.removeListener(_handleTabSelection);
+    // We don't dispose here if called during build to avoid issues
+    _tabController = TabController(
+      length: newLength,
+      vsync: this,
+      initialIndex: initial,
+    );
+    _tabController.addListener(_handleTabSelection);
+    _tabs = tabs;
+    _tabLabels = [for (final t in tabs) t.label];
+    _tabTags = [for (final t in tabs) t.tag];
+    // Called during build: notify the service after this frame.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => htmlService.setActiveTabIndex(initial));
   }
 
-  static bool _listEquals(List<String> a, List<String> b) =>
-      a.length == b.length &&
-      Iterable<int>.generate(a.length).every((i) => a[i] == b[i]);
+  /// Tapping a group opens the tab last used in it, else its first tab.
+  void _selectGroup(TabGroup group) {
+    final last = _lastTabInGroup[group];
+    final target = last != null && _tabs.contains(last)
+        ? last
+        : _tabs.firstWhere((t) => t.group == group);
+    _tabController.animateTo(_tabs.indexOf(target));
+  }
+
+  /// Keep the selected chip visible in its (horizontally scrolling) row.
+  void _revealSelectedChip() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chipContext = _selectedChipKey.currentContext;
+      if (!mounted || chipContext == null) return;
+      Scrollable.ensureVisible(chipContext,
+          alignment: 0.5, duration: const Duration(milliseconds: 200));
+    });
+  }
 
   @override
   void dispose() {
@@ -232,8 +245,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   /// Dots button at the right of the tab strip: shows every tab at once in a
   /// two-column dialog; tapping one switches to it.
   void _showTabOverview() {
-    final htmlService = Provider.of<HtmlService>(context, listen: false);
-    final specs = _tabSpecs(htmlService);
+    final specs = [for (final t in _tabs) (t.icon, t.label, t.tag)];
     final current = _tabController.index;
     showDialog(
       context: context,
@@ -403,58 +415,10 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// Tabs in display order as (icon, label, page tag). The tags match the
-  /// [TabPageWrapper] tags in [_getTabViews]; both lists are kept in sync.
-  List<(IconData, String, String)> _tabSpecs(HtmlService htmlService) {
-    final isHtml = htmlService.isHtml;
-    final isHtmlOrXml = htmlService.isHtmlOrXml;
-    final showMetadataTabs = htmlService.showMetadataTabs;
-    final showServerTabs = htmlService.showServerTabs;
-    final isBrowserSupported = htmlService.isBrowserSupported;
-    final useBrowserByDefault = htmlService.browserTabIndex == 0;
-    final shouldShowBrowser =
-        isBrowserSupported && htmlService.shouldShowBrowserTab;
-    const browserTab = (Icons.language, 'Browser', 'browser');
-
-    return [
-      if (shouldShowBrowser && useBrowserByDefault) browserTab,
-      if (showMetadataTabs) ...[
-        (Icons.info_outline, 'Metadata', 'metadata'),
-        (Icons.perm_media_outlined, 'Media', 'media'),
-        (Icons.scale_outlined, 'Size', 'page-size'),
-        (Icons.layers_outlined, 'Services', 'services'),
-        (Icons.privacy_tip_outlined, 'Privacy', 'privacy'),
-        if (showServerTabs) (Icons.public, 'Sovereignty', 'sovereignty'),
-      ],
-      if (isHtml) (Icons.chrome_reader_mode, 'Reader', 'reader'),
-      if (isHtmlOrXml) (Icons.account_tree_outlined, 'DOM Tree', 'dom-tree'),
-      (Icons.code, 'Source', 'source'),
-      if (showServerTabs) ...[
-        (Icons.cookie_outlined, 'Cookies', 'cookies'),
-        (Icons.timeline, 'Timeline', 'request-timeline'),
-        (Icons.network_check, 'Probe', 'probe'),
-        (Icons.list_alt, 'Headers', 'headers'),
-        (Icons.security, 'Security', 'security'),
-        if (!showMetadataTabs) (Icons.public, 'Sovereignty', 'sovereignty'),
-      ],
-      // When 'Always use browser' is off, Browser tab goes last
-      if (shouldShowBrowser && !useBrowserByDefault) browserTab,
-    ];
-  }
-
-  List<Widget> _getTabs(HtmlService htmlService) => [
-        for (final (icon, label, _) in _tabSpecs(htmlService))
-          _buildTab(icon, label),
-      ];
-
+  /// One page per tab in [_tabs], in the same order.
   List<Widget> _getTabViews(HtmlService htmlService, HtmlFile? currentFile) {
-    final isHtml = htmlService.isHtml;
     final isHtmlOrXml = htmlService.isHtmlOrXml;
-    final showMetadataTabs = htmlService.showMetadataTabs;
-    final showServerTabs = htmlService.showServerTabs;
-    final isBrowserSupported = htmlService.isBrowserSupported;
-    final useBrowserByDefault = htmlService.browserTabIndex == 0;
-    final shouldShowBrowser = htmlService.shouldShowBrowserTab;
+    final useBrowserByDefault = htmlService.useBrowserByDefault;
 
     final sourceView = currentFile != null
         ? KeepAliveWrapper(
@@ -519,111 +483,29 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
 
-    if (!isBrowserSupported) {
-      return [
-        if (showMetadataTabs) ...[
-          KeepAliveWrapper(
-              child: _buildRefreshable(const MetadataView(), 'metadata')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const MediaView(), 'media')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const PageSizeView(), 'page-size')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const ServicesView(), 'services')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const PrivacyView(), 'privacy')),
-          if (showServerTabs)
-            KeepAliveWrapper(
-                child:
-                    _buildRefreshable(const SovereigntyView(), 'sovereignty')),
-        ],
-        if (isHtml) readerView,
-        if (isHtmlOrXml)
-          KeepAliveWrapper(
-              child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
-        sourceView,
-        if (showServerTabs)
-          KeepAliveWrapper(
-              child: _buildRefreshable(const ProbeCookiesView(), 'cookies')),
-        if (showServerTabs) ...[
-          KeepAliveWrapper(
-              child: _buildRefreshable(
-                  const RequestTimelineView(), 'request-timeline')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const ProbeGeneralView(), 'probe')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const ProbeHeadersView(), 'headers')),
-          KeepAliveWrapper(
-              child: _buildRefreshable(const ProbeSecurityView(), 'security')),
-          if (!showMetadataTabs)
-            KeepAliveWrapper(
-                child:
-                    _buildRefreshable(const SovereigntyView(), 'sovereignty')),
-        ],
-      ];
-    }
+    Widget page(AppTab tab, Widget view) => KeepAliveWrapper(
+        key: ValueKey('tab_${tab.tag}'),
+        child: _buildRefreshable(view, tab.tag));
 
     return [
-      if (shouldShowBrowser && useBrowserByDefault) browserView,
-      if (showMetadataTabs) ...[
-        KeepAliveWrapper(
-            key: const ValueKey('tab_metadata'),
-            child: _buildRefreshable(const MetadataView(), 'metadata')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_media'),
-            child: _buildRefreshable(const MediaView(), 'media')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_page_size'),
-            child: _buildRefreshable(const PageSizeView(), 'page-size')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_services'),
-            child: _buildRefreshable(const ServicesView(), 'services')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_privacy'),
-            child: _buildRefreshable(const PrivacyView(), 'privacy')),
-        if (showServerTabs)
-          KeepAliveWrapper(
-              key: const ValueKey('tab_sovereignty'),
-              child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
-      ],
-
-      // Reader, DOM Tree and Source sit right of the metadata tabs
-      if (isHtml) readerView,
-      if (isHtmlOrXml)
-        KeepAliveWrapper(
-            key: const ValueKey('tab_dom_tree'),
-            child: _buildRefreshable(const DomTreeView(), 'dom-tree')),
-      sourceView,
-
-      // 6. Probe: Cookies
-      if (showServerTabs)
-        KeepAliveWrapper(
-            key: const ValueKey('tab_cookies'),
-            child: _buildRefreshable(const ProbeCookiesView(), 'cookies')),
-
-      // 7-10. Probe: Timeline, General, Headers, Security
-      if (showServerTabs) ...[
-        KeepAliveWrapper(
-            key: const ValueKey('tab_timeline'),
-            child: _buildRefreshable(
-                const RequestTimelineView(), 'request-timeline')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_probe'),
-            child: _buildRefreshable(const ProbeGeneralView(), 'probe')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_headers'),
-            child: _buildRefreshable(const ProbeHeadersView(), 'headers')),
-        KeepAliveWrapper(
-            key: const ValueKey('tab_security'),
-            child: _buildRefreshable(const ProbeSecurityView(), 'security')),
-        if (!showMetadataTabs)
-          KeepAliveWrapper(
-              key: const ValueKey('tab_sovereignty'),
-              child: _buildRefreshable(const SovereigntyView(), 'sovereignty')),
-      ],
-
-      // When 'Always use browser' is off, Browser tab goes last
-      if (shouldShowBrowser && !useBrowserByDefault) browserView,
+      for (final tab in _tabs)
+        switch (tab) {
+          AppTab.browser => browserView,
+          AppTab.metadata => page(tab, const MetadataView()),
+          AppTab.media => page(tab, const MediaView()),
+          AppTab.services => page(tab, const ServicesView()),
+          AppTab.reader => readerView,
+          AppTab.domTree => page(tab, const DomTreeView()),
+          AppTab.source => sourceView,
+          AppTab.size => page(tab, const PageSizeView()),
+          AppTab.headers => page(tab, const ProbeHeadersView()),
+          AppTab.timeline => page(tab, const RequestTimelineView()),
+          AppTab.probe => page(tab, const ProbeGeneralView()),
+          AppTab.privacy => page(tab, const PrivacyView()),
+          AppTab.sovereignty => page(tab, const SovereigntyView()),
+          AppTab.security => page(tab, const ProbeSecurityView()),
+          AppTab.cookies => page(tab, const ProbeCookiesView()),
+        },
     ];
   }
 
@@ -636,29 +518,16 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return Selector<HtmlService, _HomeScreenStructure>(
       selector: (context, service) => _HomeScreenStructure(
-        isHtml: service.isHtml,
-        isHtmlOrXml: service.isHtmlOrXml,
-        showMetadataTabs: service.showMetadataTabs,
-        showServerTabs: service.showServerTabs,
-        isBrowserSupported: service.isBrowserSupported,
-        shouldShowBrowserTab: service.shouldShowBrowserTab,
-        browserTabIndex: service.browserTabIndex,
+        tabs: service.visibleTabs,
         currentFile: service.currentFile,
         isLoading: service.isLoading,
         requestedTabIndex: service.requestedTabIndex,
       ),
       builder: (context, structure, child) {
         HomeScreen.structureBuilds++;
-        // Update TabController synchronously if content type changed
-        // This MUST happen before building the TabBar to avoid length mismatch
-        if (structure.isHtmlOrXml != _lastIsHtmlOrXml ||
-            structure.showMetadataTabs != _lastShowMetadataTabs ||
-            structure.showServerTabs != _lastShowServerTabs ||
-            structure.isBrowserSupported != _lastIsBrowserSupported ||
-            structure.shouldShowBrowserTab != _lastShouldShowBrowser ||
-            structure.browserTabIndex != _lastBrowserTabIndex) {
-          _updateTabs(htmlService);
-        }
+        // Update the TabController synchronously when the tabs changed. This
+        // MUST happen before building the tab bar to avoid a length mismatch.
+        _updateTabs(htmlService);
 
         // Handle requested tab switch (never mutate the service in build).
         if (structure.requestedTabIndex != null && !_tabRequestScheduled) {
@@ -697,42 +566,39 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           },
           child: Scaffold(
             appBar: AppBar(
-              title: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const AboutScreen(),
-                        ),
-                      );
-                    },
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: Image.asset(
-                              'assets/icon.webp',
-                              width: 28,
-                              height: 28,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          const Text(
-                            'View\nSource\nVibe',
-                            style: TextStyle(fontSize: 10, height: 1),
-                          ),
-                        ],
-                      ),
+              title: GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const AboutScreen(),
                     ),
+                  );
+                },
+                // Shrinks on very narrow screens instead of overflowing.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.asset(
+                          'assets/icon.webp',
+                          width: 28,
+                          height: 28,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'View Source Vibe',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  const ToolbarBackButton(),
-                ],
+                ),
               ),
               actions: const [
                 Toolbar(),
@@ -747,39 +613,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   UrlInput(key: urlInputKey),
-                  // The Toolbar with Navigation Tabs
-                  Listener(
-                    onPointerSignal: _onTabStripPointerSignal,
-                    child: Container(
-                      color: Theme.of(context).colorScheme.surface,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TabBar(
-                              controller: _tabController,
-                              scrollController: _tabScrollController,
-                              isScrollable: true,
-                              tabAlignment: TabAlignment.start,
-                              labelColor:
-                                  Theme.of(context).colorScheme.primary,
-                              unselectedLabelColor: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                              indicatorColor:
-                                  Theme.of(context).colorScheme.primary,
-                              indicatorSize: TabBarIndicatorSize.label,
-                              tabs: _getTabs(htmlService),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'All tabs',
-                            icon: const Icon(Icons.more_vert),
-                            onPressed: _showTabOverview,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  _buildTabGroupBar(context),
                   const Divider(height: 1),
                   Expanded(
                     child:
@@ -814,16 +648,91 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTab(IconData icon, String text) {
-    return Tab(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 8),
-          Text(text),
-        ],
-      ),
+  /// Two-level tab bar: a group selector (Page · Code · Network · Trust) and
+  /// a row of chips for the tabs of the selected group. The current tab
+  /// decides the group, so swiping between pages moves across groups too.
+  Widget _buildTabGroupBar(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _tabController,
+      builder: (context, _) {
+        if (_tabs.isEmpty) return const SizedBox.shrink();
+        final current = _tabs[_tabController.index.clamp(0, _tabs.length - 1)];
+        final groups = [
+          for (final g in TabGroup.values)
+            if (_tabs.any((t) => t.group == g)) g,
+        ];
+        final groupTabs = [
+          for (final t in _tabs)
+            if (t.group == current.group) t,
+        ];
+        return Container(
+          color: Theme.of(context).colorScheme.surface,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (groups.length > 1)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<TabGroup>(
+                      segments: [
+                        for (final g in groups)
+                          ButtonSegment(value: g, label: Text(g.label)),
+                      ],
+                      selected: {current.group},
+                      showSelectedIcon: false,
+                      // Same corners as the chips below (Material 3: 8).
+                      style: ButtonStyle(
+                        shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8))),
+                      ),
+                      onSelectionChanged: (selection) =>
+                          _selectGroup(selection.first),
+                    ),
+                  ),
+                ),
+              Listener(
+                onPointerSignal: _onTabStripPointerSignal,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        key: const ValueKey('tab-chip-strip'),
+                        controller: _tabScrollController,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+                        child: Row(
+                          children: [
+                            for (final tab in groupTabs)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  key: tab == current ? _selectedChipKey : null,
+                                  avatar: Icon(tab.icon, size: 18),
+                                  label: Text(tab.label),
+                                  selected: tab == current,
+                                  showCheckmark: false,
+                                  onSelected: (_) => _tabController
+                                      .animateTo(_tabs.indexOf(tab)),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'All tabs',
+                      icon: const Icon(Icons.more_vert),
+                      onPressed: _showTabOverview,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -831,25 +740,13 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 /// Helper class to track structure-defining state for HomeScreen
 @immutable
 class _HomeScreenStructure {
-  final bool isHtml;
-  final bool isHtmlOrXml;
-  final bool showMetadataTabs;
-  final bool showServerTabs;
-  final bool isBrowserSupported;
-  final bool shouldShowBrowserTab;
-  final int browserTabIndex;
+  final List<AppTab> tabs;
   final HtmlFile? currentFile;
   final bool isLoading;
   final int? requestedTabIndex;
 
   const _HomeScreenStructure({
-    required this.isHtml,
-    required this.isHtmlOrXml,
-    required this.showMetadataTabs,
-    required this.showServerTabs,
-    required this.isBrowserSupported,
-    required this.shouldShowBrowserTab,
-    required this.browserTabIndex,
+    required this.tabs,
     this.currentFile,
     required this.isLoading,
     this.requestedTabIndex,
@@ -859,36 +756,21 @@ class _HomeScreenStructure {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is _HomeScreenStructure &&
-          runtimeType == other.runtimeType &&
-          isHtml == other.isHtml &&
-          isHtmlOrXml == other.isHtmlOrXml &&
-          showMetadataTabs == other.showMetadataTabs &&
-          showServerTabs == other.showServerTabs &&
-          isBrowserSupported == other.isBrowserSupported &&
-          shouldShowBrowserTab == other.shouldShowBrowserTab &&
-          browserTabIndex == other.browserTabIndex &&
+          listEquals(tabs, other.tabs) &&
           currentFile == other.currentFile &&
           isLoading == other.isLoading &&
           requestedTabIndex == other.requestedTabIndex;
 
   @override
-  int get hashCode =>
-      isHtml.hashCode ^
-      isHtmlOrXml.hashCode ^
-      showMetadataTabs.hashCode ^
-      showServerTabs.hashCode ^
-      isBrowserSupported.hashCode ^
-      shouldShowBrowserTab.hashCode ^
-      browserTabIndex.hashCode ^
-      currentFile.hashCode ^
-      isLoading.hashCode ^
-      requestedTabIndex.hashCode;
+  int get hashCode => Object.hash(
+      Object.hashAll(tabs), currentFile, isLoading, requestedTabIndex);
 }
 
 class TabPageWrapper extends StatefulWidget {
   final Widget child;
   final bool isBrowserTab;
   final String tag;
+
   /// Focus node for the page; HomeScreen requests focus on it when this tab
   /// is selected, so the page scrolls with the keyboard. Placed inside the
   /// [PrimaryScrollController] so scroll key events reach the page's

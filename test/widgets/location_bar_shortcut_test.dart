@@ -115,14 +115,19 @@ void main() {
       (tester) async {
     final service = makeService(seedStore(InspectionStore(), fullPage()));
     addTearDown(service.dispose);
+    // Narrow window, so the chips of a group overflow and the strip scrolls.
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await pumpApp(tester, service);
 
     final state = homeScreenKey.currentState!;
-    expect(find.byType(TabBar), findsOneWidget);
+    final strip = find.byKey(const ValueKey('tab-chip-strip'));
+    expect(strip, findsOneWidget);
     expect(state.tabStripOffset, 0);
 
     final pointer = TestPointer(1, PointerDeviceKind.mouse);
-    final center = tester.getCenter(find.byType(TabBar));
+    final center = tester.getCenter(strip);
     await tester.sendEventToBinding(pointer.hover(center));
     // Wheel "down" reports a positive dy; the strip is horizontal, so it
     // must scroll right (this was a no-op on macOS/Windows before).

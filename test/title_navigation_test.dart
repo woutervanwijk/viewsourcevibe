@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
+import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -37,8 +38,7 @@ void main() {
       final appBarFinder = find.byType(AppBar);
       expect(appBarFinder, findsOneWidget);
 
-      // Find the title text "View\nSource\nVibe"
-      final titleText = find.text('View\nSource\nVibe');
+      final titleText = find.text('View Source Vibe');
       expect(titleText, findsOneWidget);
 
       // Tap the title text directly (the GestureDetector should handle the tap)
@@ -72,33 +72,29 @@ void main() {
       final appBarFinder = find.byType(AppBar);
       expect(appBarFinder, findsOneWidget);
 
-      // Find the title text "View\nSource\nVibe"
-      final titleText = find.text('View\nSource\nVibe');
+      final titleText = find.text('View Source Vibe');
       expect(titleText, findsOneWidget);
 
-      // Find the Row that contains this text
+      // One row: icon, then the name on one line.
       final titleRow = find.ancestor(
         of: titleText,
         matching: find.byType(Row),
       );
-      // Inner row: icon + text; outer row: logo + back button.
-      expect(titleRow, findsNWidgets(2));
-
-      // Find the Image (icon) inside the nearest Row
       final iconImage = find.descendant(
         of: titleRow.first,
         matching: find.byType(Image),
       );
       expect(iconImage, findsOneWidget);
 
-      // The back button sits in the title, right of the logo and name.
+      // Back and Reload sit in the address bar, below the title.
       final back = find.descendant(
-        of: titleRow.last,
+        of: find.byType(UrlInput),
         matching: find.byTooltip('Back'),
       );
       expect(back, findsOneWidget);
-      expect(tester.getTopLeft(back).dx,
-          greaterThan(tester.getTopRight(titleText).dx));
+      expect(find.byTooltip('Reload'), findsOneWidget);
+      expect(tester.getTopLeft(back).dy,
+          greaterThan(tester.getBottomLeft(titleText).dy));
     });
   });
 }

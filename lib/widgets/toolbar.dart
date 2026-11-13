@@ -234,14 +234,15 @@ class Toolbar extends StatelessWidget {
     return Row(
       children: [
         IconButton(
-          icon: const Icon(Icons.folder_open),
+          // Thin Cupertino glyphs for the whole toolbar, one consistent weight.
+          icon: const Icon(CupertinoIcons.folder),
           tooltip: 'Open File',
           onPressed: () => _pickFile(context),
         ),
         if (Platform.isIOS || Platform.isAndroid)
           IconButton(
             icon: Icon(
-              Platform.isIOS ? CupertinoIcons.share : Icons.share,
+              Platform.isIOS ? CupertinoIcons.share : Icons.share_outlined,
               size: 24,
             ),
             tooltip: 'Share',
@@ -251,7 +252,7 @@ class Toolbar extends StatelessWidget {
           selector: (context, service) => service.currentFile != null,
           builder: (context, hasFile, child) {
             return IconButton(
-              icon: const Icon(Icons.archive_outlined),
+              icon: const Icon(CupertinoIcons.tray_arrow_down),
               tooltip: 'Export Inspection Package',
               onPressed:
                   hasFile ? () => _exportInspectionPackage(context) : null,
@@ -259,7 +260,7 @@ class Toolbar extends StatelessWidget {
           },
         ),
         IconButton(
-          icon: const Icon(Icons.settings),
+          icon: const Icon(CupertinoIcons.gear),
           tooltip: 'Settings',
           onPressed: () => _showSettingsScreen(context),
         ),

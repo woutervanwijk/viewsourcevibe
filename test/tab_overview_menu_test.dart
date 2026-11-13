@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:view_source_vibe/models/app_tab.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -39,7 +40,7 @@ void main() {
       final dots = find.byIcon(Icons.more_vert);
       expect(dots, findsOneWidget);
 
-      final tabCount = tester.widgetList(find.byType(Tab)).length;
+      final tabCount = service.visibleTabs.length;
       expect(tabCount, greaterThan(2));
 
       await tester.tap(dots);
@@ -59,13 +60,13 @@ void main() {
 
       // Tapping a tab in the dialog closes it and switches the tab.
       final before = service.activeTabIndex;
-      expect(before, 0);
+      expect(before, isNot(service.tabIndexOf(AppTab.media)));
       await tester.tap(
           find.descendant(of: dialog, matching: find.text('Media')));
       await tester.pumpAndSettle();
 
       expect(find.byType(AlertDialog), findsNothing);
-      expect(service.activeTabIndex, isNot(before));
+      expect(service.activeTabIndex, service.tabIndexOf(AppTab.media));
     });
   });
 }

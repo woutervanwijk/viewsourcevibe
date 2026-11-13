@@ -210,24 +210,23 @@ void main() {
 
       await service.loadFile(_htmlUrlFile());
 
+      // Page: Browser, Metadata, Media, Services, Reader; Code: DOM Tree,
+      // Source.
       expect(service.browserTabIndex, 0);
-      // Metadata(5) + Sovereignty(1) come before Reader.
-      expect(service.readerTabIndex, 7);
-      expect(service.sourceTabIndex, 9);
+      expect(service.readerTabIndex, 4);
+      expect(service.sourceTabIndex, 6);
     });
 
-    test('browser-last layout: counts include Reader before Source', () async {
+    test('the layout does not depend on the browser-first setting', () async {
       final service = _service();
       service.setAppSettings(AppSettings()..useBrowserByDefault = false);
       addTearDown(service.dispose);
 
       await service.loadFile(_htmlUrlFile());
 
-      // Metadata(5) + Sovereignty(1) + Reader + DOM Tree + Source(1) +
-      // server tabs(6) + Browser.
-      expect(service.readerTabIndex, 6);
-      expect(service.sourceTabIndex, 8);
-      expect(service.browserTabIndex, 14);
+      expect(service.browserTabIndex, 0);
+      expect(service.readerTabIndex, 4);
+      expect(service.sourceTabIndex, 6);
     });
 
     test('non-HTML files have no Reader tab offset', () async {
@@ -246,6 +245,27 @@ void main() {
       expect(service.isHtml, isFalse);
       // No metadata tabs, no Reader, no DOM Tree: Source first.
       expect(service.sourceTabIndex, 0);
+    });
+
+    test('a Browser request opens Browser, or Source when there is none',
+        () async {
+      final service = _service();
+      addTearDown(service.dispose);
+
+      await service.loadFile(_htmlUrlFile());
+      expect(service.resolveTabRequest(HtmlService.browserTab),
+          service.browserTabIndex);
+
+      await service.loadFile(HtmlFile(
+        name: 'data.json',
+        path: '/tmp/data.json',
+        content: '{"a": 1}',
+        lastModified: DateTime(2024),
+        size: 8,
+      ));
+      expect(service.browserTabIndex, -1);
+      expect(service.resolveTabRequest(HtmlService.browserTab),
+          service.sourceTabIndex);
     });
   });
 }
