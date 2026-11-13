@@ -767,4 +767,50 @@ void main() {
       expect(vsvScrollThroughJs, contains('backToTop'));
     });
   });
+
+  group('main document status', () {
+    test('responseStatus from the navigation section', () {
+      expect(present(parseMainStatus({'ok': true, 'status': 403})), 403);
+      expect(present(parseMainStatus({'ok': true, 'status': 200.0})), 200);
+    });
+
+    test('missing or 0 is unavailable, never a status', () {
+      for (final nav in [
+        {'ok': true},
+        {'ok': true, 'status': null},
+        {'ok': true, 'status': 0},
+        {'ok': false, 'error': 'no navigation timing entry'},
+        null,
+      ]) {
+        expect(unavailable(parseMainStatus(nav)),
+            UnavailableReason.notReportedByPlatform,
+            reason: '$nav');
+      }
+    });
+
+    test('the payload carries it; the collector asks for it', () {
+      final raw = jsonEncode({
+        'url': 'https://a.test/',
+        'navigation': {'ok': true, 'responseStart': 5, 'status': 404},
+      });
+      final s = parseBrowserPayload(raw, BrowserPlatform.android,
+          pageUrl: Uri.parse('https://a.test/'));
+      expect(present(s.mainStatus), 404);
+      expect(vsvCollectJs, contains('nav.responseStatus'));
+    });
+
+    test("the WebView's HTTP error fills in when the page cannot tell", () {
+      const fromPage = Unavailable<int>(
+          UnavailableReason.notReportedByPlatform, 'not exposed');
+      expect(present(mainStatusWithHttpError(fromPage, 403)), 403);
+      final none = mainStatusWithHttpError(fromPage, null);
+      expect(unavailable(none), UnavailableReason.notReportedByPlatform);
+      expect((none as Unavailable).detail, contains('no HTTP error'));
+      // The page's own report wins.
+      expect(
+          present(mainStatusWithHttpError(
+              const Present(200, source: DataSource.browser), 403)),
+          200);
+    });
+  });
 }

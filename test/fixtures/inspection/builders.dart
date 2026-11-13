@@ -82,6 +82,7 @@ BrowserSnapshot browserSnapshot({
   BrowserPlatform platform = BrowserPlatform.macos,
   List<ResourceEntry>? resources,
   List<BrowserCookie>? cookies,
+  int? mainStatus,
 }) =>
     BrowserSnapshot(
       url: Uri.parse(url),
@@ -94,6 +95,9 @@ BrowserSnapshot browserSnapshot({
       storage: _na<BrowserStorage>(),
       navigation: _na<NavigationTiming>(),
       snapshotTimeMs: browser(1200.0),
+      mainStatus: mainStatus == null
+          ? BrowserSnapshot.mainStatusNotReported
+          : browser(mainStatus),
     );
 
 ResourceEntry resource(

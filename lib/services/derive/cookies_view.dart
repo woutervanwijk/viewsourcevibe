@@ -11,6 +11,7 @@ import 'cookies.dart';
 import 'header_insights.dart' show InsightTone;
 import 'observed_text.dart';
 import 'probe_general.dart' show probeGate;
+import 'score_band.dart';
 
 /// One cookie as the Cookies tab shows it. Flags are "yes", "no" or
 /// "unknown": a flag the platform did not expose is never "no".
@@ -269,11 +270,12 @@ Observed<CookiesModel> deriveCookiesView(PageInspection p, {DateTime? now}) {
   }
   final verdict = score == null
       ? 'No score: not enough data (not all cookie sources could be read).'
-      : score >= 75
-          ? 'Low visible tracking pressure from cookies.'
-          : score >= 45
-              ? 'Moderate cookie tracking signals detected.'
-              : 'Heavy tracking or weak cookie boundaries detected.';
+      : switch (cookieScale.band(score)!) {
+          ScoreBand.good => 'Low visible tracking pressure from cookies.',
+          ScoreBand.fair => 'Moderate cookie tracking signals detected.',
+          ScoreBand.poor =>
+            'Heavy tracking or weak cookie boundaries detected.',
+        };
 
   final notes = <CookieNote>[
     if (advertising > 0)

@@ -153,6 +153,17 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     _settingsTile(
                       context: context,
+                      icon: Icons.battery_saver_outlined,
+                      title: 'Low resource mode',
+                      description:
+                          'For older devices: pause the Browser/Reader WebView while its tab is hidden, require a tap before media plays, and let the system reclaim memory from hidden pages',
+                      control: Switch(
+                        value: settings.lowResourceMode,
+                        onChanged: (value) => settings.lowResourceMode = value,
+                      ),
+                    ),
+                    _settingsTile(
+                      context: context,
                       icon: Icons.gavel_outlined,
                       title: 'Default site jurisdiction',
                       description:

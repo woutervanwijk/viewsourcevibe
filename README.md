@@ -131,7 +131,7 @@ flutter run
 
 ## 📝 License
 
-© 2025 Wouter van Wijk & Mistral Vibe & Gemini & Claude
+© 2026 Wouter van Wijk & Mistral Vibe & Gemini & Claude
 
 Released under the MIT License (see [LICENSE](LICENSE)). Third-party data and
 packages are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -8,6 +8,7 @@ All notable, user-facing changes to View Source Vibe are documented here.
 - **Reader** tab (HTML pages): renders the page as a clean article using Readability.js, extracted from the live browser view when available. Links in the article open in the Browser tab.
 - **Size** tab: "Fresh load" measurement — reloads the page with an empty cache on a phone-sized viewport and shows both loads side by side, each with its own verdict. Third-party iframes are labelled.
 - Settings → Behavior: **Load lazy content** (off by default) scrolls the page once after it loads — and back to the top — so lazy images and embeds are actually fetched and measured; a banner above the Browser tab shows while this happens. Plus **Disable browser cache** and **Always clean cookies**.
+- Settings → Behavior: **Low resource mode** (off by default) for older devices. The Browser and Reader tabs each run their own WebView, and both stay alive at once; in this mode the WebView of a hidden tab is paused (and its media stopped) until its tab is selected again, media in the Browser tab only plays after a tap, Android marks hidden pages as waived renderer priority so the system can reclaim their memory, and both WebViews are suspended while the app is in the background.
 
 ### Improved
 - Central data point: one reactive store per page load holding the browser, server and file results (with a generation, so stale results are dropped).

@@ -14,6 +14,8 @@ import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/utils/format_utils.dart';
+import 'package:view_source_vibe/services/derive/score_band.dart';
+import 'package:view_source_vibe/widgets/score_band_color.dart';
 
 // ---------------------------------------------------------------------------
 // Shared pieces of the migrated probe tabs
@@ -1133,14 +1135,7 @@ class ProbeSecurityView extends StatelessWidget {
     final audit = state.value;
     final percentage = audit.percentage!;
     final score = percentage / 100;
-    final Color scoreColor;
-    if (percentage >= 80) {
-      scoreColor = Colors.green;
-    } else if (percentage >= 50) {
-      scoreColor = Colors.orange;
-    } else {
-      scoreColor = Colors.red;
-    }
+    final scoreColor = bandColor(securityScale.band(percentage));
 
     return _card(
       context,
@@ -1262,13 +1257,7 @@ class ProbeSecurityView extends StatelessWidget {
     }
     final csp = state.value;
     final score = csp.score;
-    final color = score == null
-        ? Colors.grey
-        : score >= 80
-            ? Colors.green
-            : score >= 50
-                ? Colors.orange
-                : Colors.red;
+    final color = bandColor(cspScale.band(score));
 
     return _card(
       context,
@@ -1708,13 +1697,7 @@ class ProbeCookiesView extends StatelessWidget {
 
   Widget _buildCookiePrivacyLens(BuildContext context, CookiesModel m) {
     final score = m.score;
-    final color = score == null
-        ? Colors.grey
-        : score >= 75
-            ? Colors.green
-            : score >= 45
-                ? Colors.orange
-                : Colors.red;
+    final color = bandColor(cookieScale.band(score));
 
     return _card(
       context,

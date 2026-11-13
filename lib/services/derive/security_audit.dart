@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
 import '../../models/inspection/server_snapshot.dart';
@@ -377,6 +379,74 @@ bool _hostMatches(String host, String commonName) {
   return false;
 }
 
+/// The DNS names in the subjectAltName extension (OID 2.5.29.17) of a PEM
+/// certificate; empty when there is none or the PEM cannot be read. Browsers
+/// match the host against these names, not the Common Name (RFC 6125).
+List<String> subjectAltNames(String? pem) {
+  if (pem == null) return const [];
+  final b64 = pem
+      .split('\n')
+      .where((l) => !l.startsWith('-----'))
+      .join()
+      .replaceAll(RegExp(r'\s'), '');
+  final List<int> der;
+  try {
+    der = base64.decode(b64);
+  } on FormatException {
+    return const [];
+  }
+  // Header of the element at [pos]: (content start, content length).
+  (int, int)? header(int pos) {
+    if (pos + 1 >= der.length) return null;
+    var len = der[pos + 1];
+    var start = pos + 2;
+    if (len & 0x80 != 0) {
+      final n = len & 0x7F;
+      if (n == 0 || n > 3 || start + n > der.length) return null;
+      len = 0;
+      for (var i = 0; i < n; i++) {
+        len = (len << 8) | der[start + i];
+      }
+      start += n;
+    }
+    return start + len <= der.length ? (start, len) : null;
+  }
+
+  const sanOid = [0x06, 0x03, 0x55, 0x1D, 0x11];
+  for (var i = 0; i + sanOid.length < der.length; i++) {
+    var hit = true;
+    for (var j = 0; j < sanOid.length && hit; j++) {
+      hit = der[i + j] == sanOid[j];
+    }
+    if (!hit) continue;
+    var pos = i + sanOid.length;
+    if (pos < der.length && der[pos] == 0x01) {
+      final crit = header(pos); // optional "critical" BOOLEAN
+      if (crit == null) return const [];
+      pos = crit.$1 + crit.$2;
+    }
+    if (pos >= der.length || der[pos] != 0x04) return const []; // OCTET STRING
+    final octets = header(pos);
+    if (octets == null || der[octets.$1] != 0x30) return const [];
+    final seq = header(octets.$1);
+    if (seq == null) return const [];
+    final names = <String>[];
+    var p = seq.$1;
+    while (p < seq.$1 + seq.$2) {
+      final h = header(p);
+      if (h == null) break;
+      if (der[p] == 0x82) {
+        // [2] dNSName, IA5String
+        names.add(
+            ascii.decode(der.sublist(h.$1, h.$1 + h.$2), allowInvalid: true));
+      }
+      p = h.$1 + h.$2;
+    }
+    return names;
+  }
+  return const [];
+}
+
 String _formatDate(String iso) {
   if (iso.isEmpty) return 'Unknown';
   final d = DateTime.tryParse(iso);
@@ -418,14 +488,21 @@ CertificateModel _certificate(
   }
   final subject = _fields(cert['subjectParsed']);
   final commonName = subject['Common Name'] ?? '';
-  final matches = _hostMatches(host, commonName);
+  final sans = subjectAltNames(cert['pem']?.toString());
+  final cnMatches = _hostMatches(host, commonName);
+  final sanMatches = sans.any((n) => _hostMatches(host, n));
+  final matches = cnMatches || sanMatches;
   final hostLabel = host.isEmpty
       ? 'Host unknown'
-      : commonName.isEmpty
-          ? 'Common name unknown'
-          : matches
-              ? 'CN matches host'
-              : 'CN differs from host (SAN not checked)';
+      : cnMatches
+          ? 'CN matches host'
+          : sanMatches
+              ? 'SAN matches host'
+              : sans.isNotEmpty
+                  ? 'Host not in certificate (CN or SAN)'
+                  : commonName.isEmpty
+                      ? 'Common name unknown'
+                      : 'CN differs from host (SAN not available)';
   final der = cert['der']?.toString();
   return CertificateModel(
     validityLabel: label,

@@ -32,6 +32,7 @@ import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/request_timeline.dart';
@@ -785,9 +786,25 @@ class HtmlService extends ChangeNotifier {
     });
   }
 
+  Observed<BrowserSnapshot>? _blockPageFor;
+  BlockPage? _blockPage;
+
+  /// The browser got an error, block or challenge page instead of the site
+  /// (see [browserBlockPage]); null when it got the site or nothing is known.
+  BlockPage? get blockPage {
+    final browser = store.current.browser;
+    if (!identical(_blockPageFor, browser)) {
+      _blockPageFor = browser;
+      _blockPage = browserBlockPage(store.current);
+    }
+    return _blockPage;
+  }
+
   List<Divergence>? _divergences;
-  ({Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server})?
-      _divergencesFor;
+  ({
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server
+  })? _divergencesFor;
 
   /// Where the app's own request and the browser disagree (UI: Task 10).
   /// Cached on the two snapshots it reads, not on the PageInspection object.
@@ -859,8 +876,10 @@ class HtmlService extends ChangeNotifier {
   }
 
   Observed<CookiesModel>? _cookiesView;
-  ({Observed<BrowserSnapshot> browser, Observed<ServerSnapshot> server})?
-      _cookiesViewFor;
+  ({
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server
+  })? _cookiesViewFor;
 
   /// The Cookies tab: derived cookies with flags (unknown stays unknown)
   /// and the privacy lens. Cached on the snapshots it reads, not on the
@@ -1046,12 +1065,16 @@ class HtmlService extends ChangeNotifier {
   }
 
   /// What the analysis reads from the browser: whether it is Present, the
-  /// URL it is on and how many resources it reported. A change after the
-  /// analysis started makes the report stale.
+  /// URL it is on, how many resources it reported and which services were
+  /// detected (a tracker known only from a cookie that arrived later must
+  /// reach the privacy pillar too). A change after the analysis started
+  /// makes the report stale.
   String get _currentSovereigntyInputKey {
     final browser = store.current.browser;
     final count = SovereigntyService.browserResources(store.current).length;
-    return '${browser is Present<BrowserSnapshot>}|$_sovereigntyUri|$count';
+    final services = (detections.map((d) => d.name).toList()..sort()).join(',');
+    return '${browser is Present<BrowserSnapshot>}|$_sovereigntyUri|$count'
+        '|$services|${blockPage?.label}';
   }
 
   /// Registrable domain the per-site jurisdiction choice is stored under.
@@ -1448,9 +1471,80 @@ class HtmlService extends ChangeNotifier {
 
       // Reader tab: extract the article lazily, once per page generation.
       if (isHtml && index == readerTabIndex) {
-        _readerService?.extractIfStale().ignore();
+        final reader = _readerService;
+        if (reader != null) {
+          // In low-resource mode the Browser WebView is paused once its tab
+          // is hidden, but extraction evaluates JS in it — so pause only
+          // after the extraction has finished.
+          reader.extractIfStale().whenComplete(_applyWebViewResourceMode).ignore();
+        } else {
+          _applyWebViewResourceMode();
+        }
+      } else {
+        _applyWebViewResourceMode();
       }
     }
+  }
+
+  /// In low-resource mode, pause the WebView whose tab is not visible
+  /// (Android `WebView.onPause` / Windows `TrySuspend`) and pause its media,
+  /// so the Browser and Reader WebViews don't both burn CPU/memory on older
+  /// devices. The visible tab's WebView is resumed. No-op when the setting
+  /// is off.
+  void _applyWebViewResourceMode() {
+    if (!(_appSettings?.lowResourceMode ?? false)) return;
+    final browserActive = _activeTabIndex == browserTabIndex;
+    final readerActive = isHtml && _activeTabIndex == readerTabIndex;
+    _setWebViewPaused(activeWebViewController, paused: !browserActive);
+    final readerController = _readerService?.viewController;
+    if (readerController != null &&
+        !identical(readerController, activeWebViewController)) {
+      _setWebViewPaused(readerController, paused: !readerActive);
+    }
+  }
+
+  Future<void> _setWebViewPaused(InAppWebViewController? controller,
+      {required bool paused}) async {
+    if (controller == null) return;
+    try {
+      if (paused) {
+        await controller.pause();
+        await _pauseWebViewMedia(controller);
+      } else {
+        await controller.resume();
+      }
+    } catch (e) {
+      // pause()/resume() are only implemented on Android and Windows; the
+      // other platforms suspend background WebViews themselves.
+      debugPrint('WebView pause/resume not supported on this platform: $e');
+    }
+  }
+
+  Future<void> _pauseWebViewMedia(InAppWebViewController controller) async {
+    try {
+      await controller.pauseAllMediaPlayback();
+    } catch (_) {
+      // Android has no native pauseAllMediaPlayback; pause via JS instead.
+      try {
+        await controller.evaluateJavascript(
+            source: "document.querySelectorAll('video,audio')"
+                '.forEach(function(m){try{m.pause()}catch(e){}});');
+      } catch (_) {}
+    }
+  }
+
+  /// App went to background: suspend both WebViews (low-resource mode only).
+  void suspendWebViewsForBackground() {
+    if (!(_appSettings?.lowResourceMode ?? false)) return;
+    _setWebViewPaused(activeWebViewController, paused: true);
+    _setWebViewPaused(_readerService?.viewController, paused: true);
+  }
+
+  /// App is back in the foreground: resume the WebViews. Safe to call even
+  /// when low-resource mode is off (nothing was paused then).
+  void resumeWebViews() {
+    _setWebViewPaused(activeWebViewController, paused: false);
+    _setWebViewPaused(_readerService?.viewController, paused: false);
   }
 
   /// Trigger a browser reload if the URL has changed and the browser tab is visible
@@ -2282,7 +2376,7 @@ Technical details: $message''';
     _verticalScrollController = null;
     _activeHorizontalScrollController = null;
 
-    _appSettings?.removeListener(notifyListeners);
+    _appSettings?.removeListener(_onAppSettingsChanged);
 
     super.dispose();
   }
@@ -2346,7 +2440,21 @@ Technical details: $message''';
   void setAppSettings(AppSettings settings) {
     _appSettings = settings;
     // Listen to settings changes to update tab indices dynamically
-    _appSettings?.addListener(notifyListeners);
+    _appSettings?.addListener(_onAppSettingsChanged);
+  }
+
+  bool _lowResourceModeWasOn = false;
+
+  void _onAppSettingsChanged() {
+    final low = _appSettings?.lowResourceMode ?? false;
+    if (low) {
+      _applyWebViewResourceMode();
+    } else if (_lowResourceModeWasOn) {
+      // Turned off: make sure no WebView stays paused.
+      resumeWebViews();
+    }
+    _lowResourceModeWasOn = low;
+    notifyListeners();
   }
 
   void setUrlHistoryService(UrlHistoryService service) {
@@ -2922,16 +3030,11 @@ Technical details: $message''';
       // Compare hosts (case-insensitive)
       if (uri1.host.toLowerCase() != uri2.host.toLowerCase()) return false;
 
-      // Compare paths (ignoring trailing slashes)
-      String path1 = uri1.path;
-      String path2 = uri2.path;
-      if (path1.endsWith('/') && path1.length > 1) {
-        path1 = path1.substring(0, path1.length - 1);
-      }
-      if (path2.endsWith('/') && path2.length > 1) {
-        path2 = path2.substring(0, path2.length - 1);
-      }
-      if (path1 != path2) return false;
+      // Compare paths, ignoring a trailing slash: "https://a.nl" and
+      // "https://a.nl/" are the same page (an empty path is "/").
+      String bare(String path) =>
+          path.endsWith('/') ? path.substring(0, path.length - 1) : path;
+      if (bare(uri1.path) != bare(uri2.path)) return false;
 
       // Compare query parameters
       // We don't compare fragments as they usually don't trigger a full reload
@@ -4412,7 +4515,8 @@ Technical details: $message''';
       // image resize options (?width=112 vs ?width=264 or none) must NOT
       // match: they serve different bytes (e.g. thumbnail vs full original).
       if (u.path.length > 3) {
-        final byCb = byResourceKey['$host|${u.path}|${queryWithoutCacheBusters(u)}'];
+        final byCb =
+            byResourceKey['$host|${u.path}|${queryWithoutCacheBusters(u)}'];
         if (byCb != null) return _sizeOf(byCb);
       }
 
@@ -4762,6 +4866,9 @@ Technical details: $message''';
       snapshot = snapshot
           .withCookies(Present(nativeCookies, source: DataSource.browser));
     }
+    snapshot = snapshot.withMainStatus(mainStatusWithHttpError(
+        snapshot.mainStatus,
+        _browserHttpError?.gen == gen ? _browserHttpError!.status : null));
     if (!snapshot.hasPresentSection) {
       store.applyBrowserFailure(
           gen,
@@ -4863,8 +4970,7 @@ Technical details: $message''';
 
     // Hidden sizes, like the live load (shared lookup cache per page).
     final urls = estimateTargetsOf(store.current.freshLoad, const {},
-        limit: _maxEstimateLookups,
-        declaredMedia: store.current.declaredMedia);
+        limit: _maxEstimateLookups, declaredMedia: store.current.declaredMedia);
     var next = 0;
     Future<void> worker() async {
       while (next < urls.length && !stale()) {
@@ -5050,7 +5156,9 @@ Technical details: $message''';
         if (!isPartial) _isLoading = false;
         _isWebViewLoading = false;
         _webViewLoadingUrl = null;
-        _browserLoadIssuedUrl = null;
+        // _browserLoadIssuedUrl stays: the WebView has this page now, and a
+        // later rebuild must not load it again (it is reset by the next
+        // navigation).
         notifyListeners();
       }
     }
@@ -5168,6 +5276,17 @@ Technical details: $message''';
   /// a second). Before the load settled the polling picks them up; after
   /// it, collect again (lazy images and ads load when the user scrolls), at
   /// most once per [_lateCollectDelay] and never two at a time.
+  /// The WebView's main-frame HTTP error (status >= 400) of the current
+  /// load, for engines whose page cannot read its own status (WebKit).
+  ({int gen, int status})? _browserHttpError;
+
+  /// The browser started loading a new main-frame document.
+  void onBrowserLoadStart() => _browserHttpError = null;
+
+  /// The WebView received an HTTP error for the main frame.
+  void onBrowserMainFrameHttpError(int status) =>
+      _browserHttpError = (gen: store.current.generation, status: status);
+
   void onBrowserResourcesChanged() {
     if (_disposed || !store.current.browserSettled) return;
     if (_lateCollecting) {
@@ -5237,7 +5356,8 @@ Technical details: $message''';
     // A load poll that changed neither the resources nor the document has
     // nothing to apply: skip the rebuild (the common case while polling).
     final sig = _browserSignature();
-    if (sig == _lastAppliedBrowserSig && identical(domText, _lastAppliedDomText)) {
+    if (sig == _lastAppliedBrowserSig &&
+        identical(domText, _lastAppliedDomText)) {
       return;
     }
     _lastAppliedBrowserSig = sig;
@@ -5294,7 +5414,8 @@ class _ControllerBrowserLoader implements BrowserLoader {
   @override
   void loadUrl(Uri url) {
     final controller = _service.activeWebViewController;
-    if (controller == null) return; // still pending; the view loads it on create
+    if (controller == null)
+      return; // still pending; the view loads it on create
     _service._browserLoadIssuedUrl = url.toString();
     controller
         .loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())))

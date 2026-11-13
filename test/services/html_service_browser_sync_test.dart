@@ -868,4 +868,35 @@ void main() {
       expect(js is Map ? js['size'] : null, isNull);
     });
   });
+
+  group('main document status (WebKit HTTP error callback)', () {
+    test('a main-frame HTTP error reaches the snapshot and marks a block page',
+        () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserLoadStart();
+      service.onBrowserMainFrameHttpError(403);
+      await service.syncWebViewState('https://a.test/');
+      expect((browserOf(service).mainStatus as Present<int>).value, 403);
+      expect(service.blockPage?.label, 'error page (HTTP 403)');
+    });
+
+    test('a new load forgets the previous error', () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserMainFrameHttpError(403);
+      service.onBrowserLoadStart();
+      await service.syncWebViewState('https://a.test/');
+      final st = browserOf(service).mainStatus;
+      expect(st, isA<Unavailable<int>>());
+      expect((st as Unavailable).detail, contains('no HTTP error'));
+      expect(service.blockPage, isNull);
+    });
+
+    test('an error of an older navigation is not applied', () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserMainFrameHttpError(403);
+      await loadAndAnswer('https://b.test/');
+      await service.syncWebViewState('https://b.test/');
+      expect(browserOf(service).mainStatus, isA<Unavailable<int>>());
+    });
+  });
 }

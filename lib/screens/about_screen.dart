@@ -210,7 +210,7 @@ class AboutScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            '© 2025 Wouter van Wijk & Mistral Vibe & Gemini & Claude',
+                            '© 2026 Wouter van Wijk & Mistral Vibe & Gemini & Claude',
                             style: bodyStyle,
                           ),
                           const SizedBox(height: 8),
