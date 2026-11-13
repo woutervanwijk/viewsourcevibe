@@ -2940,16 +2940,11 @@ Technical details: $message''';
       // Compare hosts (case-insensitive)
       if (uri1.host.toLowerCase() != uri2.host.toLowerCase()) return false;
 
-      // Compare paths (ignoring trailing slashes)
-      String path1 = uri1.path;
-      String path2 = uri2.path;
-      if (path1.endsWith('/') && path1.length > 1) {
-        path1 = path1.substring(0, path1.length - 1);
-      }
-      if (path2.endsWith('/') && path2.length > 1) {
-        path2 = path2.substring(0, path2.length - 1);
-      }
-      if (path1 != path2) return false;
+      // Compare paths, ignoring a trailing slash: "https://a.nl" and
+      // "https://a.nl/" are the same page (an empty path is "/").
+      String bare(String path) =>
+          path.endsWith('/') ? path.substring(0, path.length - 1) : path;
+      if (bare(uri1.path) != bare(uri2.path)) return false;
 
       // Compare query parameters
       // We don't compare fragments as they usually don't trigger a full reload
@@ -5068,7 +5063,9 @@ Technical details: $message''';
         if (!isPartial) _isLoading = false;
         _isWebViewLoading = false;
         _webViewLoadingUrl = null;
-        _browserLoadIssuedUrl = null;
+        // _browserLoadIssuedUrl stays: the WebView has this page now, and a
+        // later rebuild must not load it again (it is reset by the next
+        // navigation).
         notifyListeners();
       }
     }

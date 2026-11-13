@@ -87,6 +87,7 @@ void main() {
       final started = DateTime.now().toUtc();
       final clock = Stopwatch()..start();
       String? error;
+      Object? pageState;
       var pending = <String>[];
 
       try {
@@ -112,6 +113,17 @@ void main() {
           await tester.pump(const Duration(seconds: 8));
         }
 
+        // What the page itself sees: hidden or unfocused pages hold back
+        // some scripts (analytics waits for a visible page).
+        try {
+          pageState = await html.activeWebViewController?.evaluateJavascript(
+              source: 'JSON.stringify({visibility: document.visibilityState,'
+                  ' focus: document.hasFocus(), cookies: document.cookie'
+                  ".split(';').filter(Boolean).length})");
+        } catch (e) {
+          pageState = 'unavailable: $e';
+        }
+
         final bytes = InspectionExportService().buildPackageBytes(html);
         File('${dir.path}/app.zip').writeAsBytesSync(bytes);
       } catch (e) {
@@ -126,6 +138,7 @@ void main() {
         'waitedMs': clock.elapsedMilliseconds,
         'timedOut': pending.isNotEmpty,
         'pendingAtExport': pending,
+        'pageState': pageState?.toString(),
         if (error != null) 'error': error,
       };
       File('${dir.path}/app-meta.json')
