@@ -186,7 +186,9 @@ SecurityAudit _audit(HttpHop hop) {
   final cspText = _value(hop, 'content-security-policy');
   final csp = cspText == null ? null : _parseCsp(cspText.toLowerCase());
   final protectsScripts = csp != null &&
-      (csp.containsKey('default-src') || csp.containsKey('script-src'));
+      (csp.containsKey('default-src') ||
+          csp.containsKey('script-src') ||
+          csp.containsKey('script-src-elem'));
   final xfo = _value(hop, 'x-frame-options')?.toLowerCase();
   final frames = xfo == 'deny' ||
       xfo == 'sameorigin' ||
@@ -212,7 +214,7 @@ SecurityAudit _audit(HttpHop hop) {
             protectsScripts
                 ? 'Content-Security-Policy restricts scripts.'
                 : csp != null
-                    ? 'Content-Security-Policy has no default-src or script-src.'
+                    ? 'Content-Security-Policy has no default-src, script-src or script-src-elem.'
                     : 'Missing Content-Security-Policy.'),
         SecurityCheck(
             'Frames',
@@ -278,26 +280,37 @@ List<CspFinding> _cspFindings(Map<String, List<String>> d,
   final findings = <CspFinding>[];
   final defaultSrc = d['default-src'] ?? const [];
   final scriptSrc = d['script-src'] ?? defaultSrc;
+  // CSP3: <script> elements follow script-src-elem, then script-src, then
+  // default-src; inline event handlers follow script-src-attr the same way.
+  final elemName =
+      d.containsKey('script-src-elem') ? 'script-src-elem' : 'script-src';
+  final scriptElem = d['script-src-elem'] ?? scriptSrc;
   final objectSrc = d['object-src'] ?? defaultSrc;
-  if (scriptSrc.contains("'unsafe-inline'")) {
+  if (scriptElem.contains("'unsafe-inline'")) {
     // CSP3: a nonce, hash or 'strict-dynamic' makes browsers ignore it.
-    final ignored = scriptSrc.any((t) =>
+    final ignored = scriptElem.any((t) =>
         t == "'strict-dynamic'" ||
         t.startsWith("'nonce-") ||
         t.startsWith("'sha256-") ||
         t.startsWith("'sha384-") ||
         t.startsWith("'sha512-"));
     findings.add(ignored
-        ? const CspFinding(CspSeverity.low,
-            "script-src has 'unsafe-inline' next to a nonce, hash or 'strict-dynamic': it is only a fallback for old browsers.")
-        : const CspFinding(
-            CspSeverity.high, "script-src allows 'unsafe-inline'."));
+        ? CspFinding(CspSeverity.low,
+            "$elemName has 'unsafe-inline' next to a nonce, hash or 'strict-dynamic': it is only a fallback for old browsers.")
+        : CspFinding(CspSeverity.high, "$elemName allows 'unsafe-inline'."));
   }
+  // eval() is governed by script-src (not script-src-elem).
   if (scriptSrc.contains("'unsafe-eval'")) {
     findings.add(
         const CspFinding(CspSeverity.high, "script-src allows 'unsafe-eval'."));
   }
-  if (defaultSrc.any(_isBroadSource) || scriptSrc.any(_isBroadSource)) {
+  if ((d['script-src-attr'] ?? const []).contains("'unsafe-inline'")) {
+    findings.add(const CspFinding(CspSeverity.medium,
+        "script-src-attr allows 'unsafe-inline' (inline event handlers)."));
+  }
+  if (defaultSrc.any(_isBroadSource) ||
+      scriptSrc.any(_isBroadSource) ||
+      scriptElem.any(_isBroadSource)) {
     findings.add(const CspFinding(
         CspSeverity.medium, 'Wildcard source allows broad loading.'));
   }

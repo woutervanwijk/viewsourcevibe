@@ -462,6 +462,44 @@ void main() {
       });
     }
 
+    test('script-src-elem overrides script-src for <script> elements (C6)', () {
+      // CSP3: elements follow script-src-elem, then script-src, then
+      // default-src. A strict script-src-elem makes a loose script-src moot
+      // for scripts; a loose script-src-elem is the one that counts.
+      expect(
+          has(
+              csp(cspH("script-src 'unsafe-inline'; "
+                  "script-src-elem 'self'; $tail")),
+              CspSeverity.high,
+              "script-src-elem allows 'unsafe-inline'"),
+          isFalse);
+      expect(
+          has(
+              csp(cspH("script-src 'self'; "
+                  "script-src-elem 'unsafe-inline'; $tail")),
+              CspSeverity.high,
+              "script-src-elem allows 'unsafe-inline'"),
+          isTrue);
+      expect(
+          has(csp(cspH("script-src 'self'; script-src-elem https:; $tail")),
+              CspSeverity.medium, 'Wildcard'),
+          isTrue);
+      expect(
+          has(
+              csp(cspH(
+                  "script-src 'self'; script-src-attr 'unsafe-inline'; $tail")),
+              CspSeverity.medium,
+              "script-src-attr allows 'unsafe-inline'"),
+          isTrue);
+    });
+
+    test('script-src-elem alone counts as protecting scripts (C6)', () {
+      final a = audit(page({
+        'content-security-policy': ["script-src-elem 'self'"]
+      }));
+      expect(a.checks.singleWhere((c) => c.label == 'CSP').passing, isTrue);
+    });
+
     test('duplicate directive: first wins', () {
       final m =
           csp(cspH("script-src 'self'; script-src 'unsafe-inline'; $tail"));

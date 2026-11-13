@@ -40,12 +40,12 @@ void main() {
     test('Should identify AWS/Amazon cookies', () {
       final cookie = CookieUtils.analyze('AWSALB=1234567890', 'Server');
       expect(cookie.category, CookieCategory.functional);
-      expect(cookie.provider, 'AWS Load Balancer');
+      expect(cookie.provider, 'Amazon Web Services'); // OCD platform name
     });
 
     test('Should identify Cloudflare cookies', () {
       final cookie = CookieUtils.analyze('__cf_bm=12345', 'Server');
-      expect(cookie.category, CookieCategory.essential);
+      expect(cookie.category, CookieCategory.functional); // OCD: Functional
       expect(cookie.provider, 'Cloudflare');
     });
 
@@ -92,6 +92,16 @@ void main() {
               reason: '${prefixes[i]} listed before longer ${prefixes[j]}');
         }
       }
+    });
+
+    test('Set-Cookie is split at the first semicolon, quotes are not special',
+        () {
+      // RFC 6265 5.2: browsers split the string at the first ";" even inside
+      // a quoted value.
+      final cookie = CookieUtils.analyze('a="x;y"; Secure', 'Server');
+      expect(cookie.name, 'a');
+      expect(cookie.value, '"x');
+      expect(cookie.secure, isTrue);
     });
 
     test('Max-Age and Expires handling (K9)', () {

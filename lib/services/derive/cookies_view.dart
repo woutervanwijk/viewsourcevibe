@@ -253,8 +253,11 @@ Observed<CookiesModel> deriveCookiesView(PageInspection p, {DateTime? now}) {
   final weak = count((r) => r.weakSameSite);
   final notSecure = count((r) => r.missingSecure);
 
+  // Only with every source read: cookies set later by JavaScript are not in
+  // the Set-Cookie headers, and the server's cookies are not all the browser
+  // holds, so a half-read list says too little to judge.
   int? score;
-  if (rows.isNotEmpty || complete) {
+  if (complete) {
     score = (100 -
             advertising * 12 -
             analytics * 7 -
@@ -265,18 +268,14 @@ Observed<CookiesModel> deriveCookiesView(PageInspection p, {DateTime? now}) {
             notSecure * 2)
         .clamp(0, 100);
   }
-  final baseVerdict = score == null
-      ? 'Not judged: no cookies seen and a source is unknown.'
+  final verdict = score == null
+      ? 'No score: not enough data (not all cookie sources could be read).'
       : switch (cookieScale.band(score)!) {
           ScoreBand.good => 'Low visible tracking pressure from cookies.',
           ScoreBand.fair => 'Moderate cookie tracking signals detected.',
           ScoreBand.poor =>
             'Heavy tracking or weak cookie boundaries detected.',
         };
-
-  final verdict = score != null && !complete
-      ? '$baseVerdict (partial: not all cookie sources could be read)'
-      : baseVerdict;
 
   final notes = <CookieNote>[
     if (advertising > 0)

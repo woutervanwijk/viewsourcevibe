@@ -976,10 +976,39 @@ void main() {
 
     test('a verified failing report really scores 0', () {
       final r = report([
-        const SovereigntyCheck(Pillar.security, 'c', CheckStatus.fail, ''),
+        const SovereigntyCheck(
+            Pillar.infrastructure, 'i', CheckStatus.fail, ''),
+        const SovereigntyCheck(Pillar.residency, 'r', CheckStatus.fail, ''),
       ]);
       expect(r.score, 0);
       expect(r.grade, 'Poor');
+    });
+
+    test('too little verified: no score, no grade, coverage still reported',
+        () {
+      final r = report([
+        const SovereigntyCheck(Pillar.security, 'c', CheckStatus.pass, ''),
+        const SovereigntyCheck(
+            Pillar.infrastructure, 'i', CheckStatus.unknown, '',
+            weight: 3),
+      ]);
+      expect(r.coverage, closeTo(0.2, 0.001));
+      expect(r.score, isNull);
+      expect(r.grade, isNull);
+      expect(r.toJson()['score'], isNull);
+      expect(r.toJson()['coverage'], 0.2);
+    });
+
+    test('just over half verified is enough for a score', () {
+      final r = report([
+        const SovereigntyCheck(
+            Pillar.infrastructure, 'i', CheckStatus.pass, ''),
+        const SovereigntyCheck(Pillar.residency, 'r', CheckStatus.unknown, ''),
+        const SovereigntyCheck(Pillar.security, 's', CheckStatus.unknown, ''),
+        const SovereigntyCheck(Pillar.privacy, 'p', CheckStatus.pass, ''),
+      ]);
+      expect(r.coverage, closeTo(0.55, 0.001));
+      expect(r.score, 100);
     });
 
     test('host bytes: unknown stays null, known sums, mixed is partial', () {
@@ -1017,8 +1046,8 @@ void main() {
 
   group('Audit fixes (V1-V15)', () {
     test('V1 DMARC reads the tag named exactly p', () {
-      expect(classifyDmarc(['v=DMARC1; sp=none; p=reject']).$1,
-          CheckStatus.pass);
+      expect(
+          classifyDmarc(['v=DMARC1; sp=none; p=reject']).$1, CheckStatus.pass);
       expect(classifyDmarc(['v=DMARC1; sp=reject']).$1, CheckStatus.fail);
     });
 
@@ -1106,8 +1135,8 @@ void main() {
       expect(
           detectCdnFromHeaders({'X-Served-By': 'varnish-01', 'X-Cache': 'HIT'}),
           isNull);
-      expect(detectCdnFromHeaders({'x-fastly-request-id': 'a'})?.name,
-          'Fastly');
+      expect(
+          detectCdnFromHeaders({'x-fastly-request-id': 'a'})?.name, 'Fastly');
       expect(
           detectCdnFromHeaders({
             'x-served-by': 'cache-ams21-AMS',
@@ -1121,10 +1150,12 @@ void main() {
       expect(detectCdnFromHeaders({'x-goog-generation': '1'})?.name, 'Google');
       expect(detectCdnFromHeaders({'x-amz-request-id': 'abc'}), isNull);
       expect(detectCdnFromHeaders({'Server': 'AmazonS3'}), isNull);
-      expect(detectCdnFromHeaders({'x-amz-cf-id': 'abc'})?.name,
+      expect(
+          detectCdnFromHeaders({'x-amz-cf-id': 'abc'})?.name, 'Amazon (AWS)');
+      expect(
+          detectCdnFromHeaders({'Via': '1.1 x.cloudfront.net (CloudFront)'})
+              ?.name,
           'Amazon (AWS)');
-      expect(detectCdnFromHeaders({'Via': '1.1 x.cloudfront.net (CloudFront)'})
-          ?.name, 'Amazon (AWS)');
     });
 
     test('V9 no response headers: CDN check is unknown, not pass', () async {
@@ -1145,9 +1176,9 @@ void main() {
         ..ipCountry = ip;
       Iterable<SovereigntyCheck> res(List<HostInfo> hs, {int? total}) =>
           SovereigntyService.residencyChecks(hs, null, eu, totalHosts: total);
-      SovereigntyCheck req(List<HostInfo> hs, {int? total}) => res(hs,
-              total: total)
-          .firstWhere((c) => c.title.startsWith('Requests served'));
+      SovereigntyCheck req(List<HostInfo> hs, {int? total}) =>
+          res(hs, total: total)
+              .firstWhere((c) => c.title.startsWith('Requests served'));
 
       final low = req([h('a', ip: 'NL'), for (var i = 0; i < 9; i++) h('b$i')]);
       expect(low.status, CheckStatus.unknown);
@@ -1156,8 +1187,8 @@ void main() {
       final ok = req([h('a', ip: 'NL'), h('b', ip: 'DE')]);
       expect(ok.status, CheckStatus.pass);
 
-      final cut = req([for (var i = 0; i < 40; i++) h('h$i', ip: 'NL')],
-          total: 55);
+      final cut =
+          req([for (var i = 0; i < 40; i++) h('h$i', ip: 'NL')], total: 55);
       expect(cut.evidence, contains('first 40 of 55'));
       expect(ok.evidence, isNot(contains('first 40')));
     });
@@ -1165,14 +1196,13 @@ void main() {
     test('V14 findPrivacyLink ignores non-pages', () {
       expect(findPrivacyLink('<a href="#" id="x">Cookie settings</a>'), isNull);
       expect(findPrivacyLink('<a href="#privacy">Privacy</a>'), isNull);
-      expect(findPrivacyLink('<a href="javascript:void(0)">Privacy</a>'),
-          isNull);
+      expect(
+          findPrivacyLink('<a href="javascript:void(0)">Privacy</a>'), isNull);
       expect(findPrivacyLink('<a href="/cookiebar.js">x</a>'), isNull);
       expect(findPrivacyLink('<a href="/privacy.css">x</a>'), isNull);
       expect(findPrivacyLink('<a href="/cookies">Cookies</a>'), isNull);
       expect(findPrivacyLink('<a href="/c">Cookie policy</a>'), '/c');
-      expect(findPrivacyLink('<a href="/cookiebeleid">x</a>'),
-          '/cookiebeleid');
+      expect(findPrivacyLink('<a href="/cookiebeleid">x</a>'), '/cookiebeleid');
       expect(findPrivacyLink('<a href="/cookieverklaring">x</a>'),
           '/cookieverklaring');
       expect(findPrivacyLink('<a href=/privacy>Privacy</a>'), '/privacy');

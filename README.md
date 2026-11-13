@@ -133,6 +133,11 @@ flutter run
 
 © 2025 Wouter van Wijk & Mistral Vibe & Gemini & Claude
 
-Released under the MIT License.
+Released under the MIT License (see [LICENSE](LICENSE)). Third-party data and
+packages are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The name "View Source Vibe" and the app icon are not covered by the MIT
+License: you may fork and modify the code, but please don't publish a copy
+under the same name or icon, or in a way that suggests it is the original app.
 
 *View Source Vibe - Your pocket web page explorer.* 🚀

@@ -253,7 +253,12 @@ class _SovereigntyViewState extends State<SovereigntyView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (score == null)
-            Text('No score: nothing could be verified',
+            Text(
+                summary.coverage == 0
+                    ? 'No score: nothing could be verified'
+                    : 'No score: only ${(summary.coverage * 100).round()}% of '
+                        'the checks could be verified '
+                        '(at least ${(SovereigntyReport.minCoverage * 100).round()}% needed)',
                 style: Theme.of(context)
                     .textTheme
                     .titleMedium
@@ -270,8 +275,7 @@ class _SovereigntyViewState extends State<SovereigntyView> {
                       ?.copyWith(color: color, fontWeight: FontWeight.bold),
                 ),
                 const Text(' / 100  '),
-                Text(summary.lowCoverage ? 'Indicative' : summary.grade!,
-                    style: TextStyle(color: color)),
+                Text(summary.grade!, style: TextStyle(color: color)),
               ],
             ),
           if (score != null)

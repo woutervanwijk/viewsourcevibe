@@ -1,0 +1,10 @@
+Open Cookie Database (OCD)
+source:  https://github.com/jkwakman/Open-Cookie-Database
+file:    open-cookie-database.csv
+url:     https://raw.githubusercontent.com/jkwakman/Open-Cookie-Database/7786335566460016f07a50705a92fc781c976f6f/open-cookie-database.csv
+commit:  7786335566460016f07a50705a92fc781c976f6f
+date:    2026-11-06T18:57:01Z
+license: Apache-2.0
+The CSV is vendored unmodified. Regenerate lib/utils/cookie_db.g.dart with:
+  dart run tool/gen_cookie_db.dart
+To update: replace the CSV with a newer commit, update this file, regenerate.
