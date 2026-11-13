@@ -31,6 +31,7 @@ import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
+import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/request_timeline.dart';
@@ -795,6 +796,20 @@ class HtmlService extends ChangeNotifier {
     });
   }
 
+  Observed<BrowserSnapshot>? _blockPageFor;
+  BlockPage? _blockPage;
+
+  /// The browser got an error, block or challenge page instead of the site
+  /// (see [browserBlockPage]); null when it got the site or nothing is known.
+  BlockPage? get blockPage {
+    final browser = store.current.browser;
+    if (!identical(_blockPageFor, browser)) {
+      _blockPageFor = browser;
+      _blockPage = browserBlockPage(store.current);
+    }
+    return _blockPage;
+  }
+
   List<Divergence>? _divergences;
   ({
     Observed<BrowserSnapshot> browser,
@@ -1069,7 +1084,7 @@ class HtmlService extends ChangeNotifier {
     final count = SovereigntyService.browserResources(store.current).length;
     final services = (detections.map((d) => d.name).toList()..sort()).join(',');
     return '${browser is Present<BrowserSnapshot>}|$_sovereigntyUri|$count'
-        '|$services';
+        '|$services|${blockPage?.label}';
   }
 
   /// Registrable domain the per-site jurisdiction choice is stored under.
@@ -4776,6 +4791,9 @@ Technical details: $message''';
       snapshot = snapshot
           .withCookies(Present(nativeCookies, source: DataSource.browser));
     }
+    snapshot = snapshot.withMainStatus(mainStatusWithHttpError(
+        snapshot.mainStatus,
+        _browserHttpError?.gen == gen ? _browserHttpError!.status : null));
     if (!snapshot.hasPresentSection) {
       store.applyBrowserFailure(
           gen,
@@ -5183,6 +5201,17 @@ Technical details: $message''';
   /// a second). Before the load settled the polling picks them up; after
   /// it, collect again (lazy images and ads load when the user scrolls), at
   /// most once per [_lateCollectDelay] and never two at a time.
+  /// The WebView's main-frame HTTP error (status >= 400) of the current
+  /// load, for engines whose page cannot read its own status (WebKit).
+  ({int gen, int status})? _browserHttpError;
+
+  /// The browser started loading a new main-frame document.
+  void onBrowserLoadStart() => _browserHttpError = null;
+
+  /// The WebView received an HTTP error for the main frame.
+  void onBrowserMainFrameHttpError(int status) =>
+      _browserHttpError = (gen: store.current.generation, status: status);
+
   void onBrowserResourcesChanged() {
     if (_disposed || !store.current.browserSettled) return;
     if (_lateCollecting) {

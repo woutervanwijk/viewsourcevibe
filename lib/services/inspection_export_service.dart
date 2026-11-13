@@ -81,11 +81,26 @@ class InspectionExportService {
       FileTarget() => target.file.path,
       NoTarget() => '',
     };
+    final block = htmlService.blockPage;
+    // What was measured on a block page is not the site's: the analysis is
+    // unavailable, with the block page's own result kept beside it.
+    Map<String, Object?> unlessBlocked(Map<String, Object?> json) =>
+        block == null
+            ? json
+            : {
+                'status': 'unavailable',
+                'reason': UnavailableReason.blockedBySite.name,
+                'detail': block.detail,
+                'onBlockPage': json,
+              };
     final manifest = {
       'format': 'view-source-vibe-inspection-package',
       'formatVersion': packageFormatVersion,
       'exportedAt': exportedAt,
       'source': InspectionExportData.manifestSource(p, name, path),
+      // The browser got an error, block or challenge page instead of the site.
+      'blockPage':
+          block == null ? null : {...block.toMap(), 'detail': block.detail},
     };
 
     // Texts of the documents we hold. A source we do not hold is not written.
@@ -120,10 +135,10 @@ class InspectionExportService {
     final scorecardJson = InspectionExportData.securityScorecard(security);
     final certificateJson = InspectionExportData.certificate(security);
     final robotsJson = InspectionExportData.robots(general);
-    final weightJson = InspectionExportData.pageWeight(p);
-    final metadataJson =
-        observedJson(metadata, (m) => m.data, source: DataSource.browser);
-    final detectionsJson = {
+    final weightJson = unlessBlocked(InspectionExportData.pageWeight(p));
+    final metadataJson = unlessBlocked(
+        observedJson(metadata, (m) => m.data, source: DataSource.browser));
+    final detectionsJson = unlessBlocked({
       'status': detections.failure != null
           ? 'failed'
           : detections.complete
@@ -132,7 +147,7 @@ class InspectionExportService {
       if (detections.failure != null) 'detail': detections.failure,
       'checked': detections.sources.line,
       'value': [for (final d in detections.detections) d.toMap()],
-    };
+    });
     final sovereigntyJson = observedJson(sovereignty, (r) => r.toJson(),
         source: DataSource.server, provenance: Provenance.derived);
 
@@ -180,8 +195,9 @@ class InspectionExportService {
     addJson('analysis/robots-sitemap.json', robotsJson);
     addJson(
         'analysis/structured-data.json',
-        observedJson(metadata, (m) => m.data['structuredData'] ?? const [],
-            source: DataSource.browser));
+        unlessBlocked(observedJson(
+            metadata, (m) => m.data['structuredData'] ?? const [],
+            source: DataSource.browser)));
     addJson('analysis/page-weight.json', weightJson);
 
     // The raw collector payload of the last sync, so real-device fixtures can
@@ -460,6 +476,7 @@ class InspectionExportService {
 <main>
   <h1>Inspection Package</h1>
   <p class="muted">Exported ${_escape(manifest['exportedAt'])} by View Source Vibe.</p>
+  ${manifest['blockPage'] is Map ? '<div class="card"><strong>Not the site:</strong> ${_escape((manifest['blockPage'] as Map)['detail'])}.</div>' : ''}
 
   <section class="grid">
     ${_metricCard('Target', '${source['path']}')}

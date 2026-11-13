@@ -195,6 +195,17 @@ void main() {
     expect(store.current.browser, isA<Present<BrowserSnapshot>>());
   });
 
+  test('mainStatus: the newest collect wins (a reload after a 403)', () {
+    final gen = store.beginUrl(Uri.parse('https://a.test/'));
+    store.applyBrowser(
+        gen,
+        _browser('https://a.test/', dom: '<p>block</p>').withMainStatus(
+            const Present(403, source: DataSource.browser)));
+    store.applyBrowser(gen, _browser('https://a.test/', dom: '<p>site</p>'));
+    final b = (store.current.browser as Present<BrowserSnapshot>).value;
+    expect(b.mainStatus, isA<Unavailable<int>>());
+  });
+
   test('a poll that changes nothing does not notify and keeps identity', () {
     final g = store.beginUrl(Uri.parse('https://a.test/'));
     store.applyBrowser(g, _browser('https://a.test/',

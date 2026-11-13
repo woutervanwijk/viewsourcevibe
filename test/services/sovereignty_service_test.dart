@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
+import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import '../detection_helpers.dart';
 import '../fixtures/inspection/builders.dart';
@@ -1217,6 +1218,21 @@ void main() {
       ('a248.e.akamaihd.net', 'Akamai'),
     ]) {
       expect(matchProvider([host])?.name, name, reason: host);
+    }
+  });
+
+  test('on a block page the privacy pillar is not verifiable', () {
+    final checks = SovereigntyService.privacyChecks(
+      [HostInfo('fonts.googleapis.com')],
+      const [],
+      '<a href="/privacy">Privacy</a>',
+      eu,
+      blockPage: const BlockPage(status: 403, byMarker: true),
+    );
+    expect(checks, isNotEmpty);
+    for (final c in checks) {
+      expect(c.status, CheckStatus.unknown, reason: c.title);
+      expect(c.evidence, contains('block page (HTTP 403)'), reason: c.title);
     }
   });
 }
