@@ -9,6 +9,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
+import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart'
     show hstsMaxAge, hstsMinSeconds;
@@ -724,7 +725,8 @@ class SovereigntyService {
         securityTxtInvalid: securityTxt?.servedInvalid ?? false,
         server: server,
       ),
-      ...privacyChecks(analyzed, detections, html, home),
+      ...privacyChecks(analyzed, detections, html, home,
+          blockPage: browserBlockPage(inspection)),
     ];
 
     return SovereigntyReport(
@@ -1221,9 +1223,20 @@ class SovereigntyService {
     List<HostInfo> hosts,
     List<Detection> detections,
     String? html,
-    String home,
-  ) {
+    String home, {
+    BlockPage? blockPage,
+  }) {
     const p = Pillar.privacy;
+    // The trackers, consent tool and privacy link of a block page say
+    // nothing about the site: the pillar is not verifiable.
+    if (blockPage != null) {
+      return [
+        for (final c in privacyChecks(hosts, detections, html, home))
+          SovereigntyCheck(c.pillar, c.title, CheckStatus.unknown,
+              'Not verifiable: ${blockPage.detail}',
+              weight: c.weight),
+      ];
+    }
     final privacy = html == null ? null : findPrivacyLink(html);
     final consent =
         _detectedServiceNames(detections, {DetectionCategory.consent});

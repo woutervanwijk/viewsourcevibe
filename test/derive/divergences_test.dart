@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 
+import '../fixtures/inspection/browser_blocked.dart';
 import 'fixtures.dart';
 
 void main() {
@@ -73,5 +74,39 @@ void main() {
         }),
         browser: browserSnap()));
     expect(d.map((x) => x.kind), [DivergenceKind.contentType]);
+  });
+
+  test('403 to the app and a block page in the browser: both blocked', () {
+    final d = deriveDivergences(browserBlocked());
+    expect(d.single.kind, DivergenceKind.bothBlocked);
+    expect(
+        d.single.message, contains("server returned 403 to the app's request"));
+    expect(
+        d.single.message,
+        contains(
+            'the browser got a block page (HTTP 403) too: neither saw the site'));
+    expect(d.single.message, isNot(contains('loaded the page')));
+  });
+
+  test('both blocked also when the browser status is unknown (DOM markers)',
+      () {
+    final d = deriveDivergences(browserBlocked(browserStatus: null));
+    expect(d.single.kind, DivergenceKind.bothBlocked);
+  });
+
+  test('403 to the app, browser got the page with a known status', () {
+    final d = deriveDivergences(inspection(
+        server: serverSnap(status: 403, ua: 'curl/8', body: 'Forbidden'),
+        browser: browserSnap(mainStatus: 200)));
+    expect(d.single.message,
+        "server returned 403 to the app's request (UA curl/8) but the browser loaded the page (HTTP 200)");
+  });
+
+  test('a browser error status with an ok server is browserBlocked', () {
+    final d = deriveDivergences(inspection(
+        server: serverSnap(), browser: browserSnap(mainStatus: 429)));
+    expect(d.single.kind, DivergenceKind.browserBlocked);
+    expect(d.single.message,
+        "the browser got an error page (HTTP 429) while the app's request got 200");
   });
 }

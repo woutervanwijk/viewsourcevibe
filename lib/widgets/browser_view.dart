@@ -267,6 +267,7 @@ class _BrowserViewState extends State<BrowserView> {
       },
       onLoadStart: (controller, url) {
         _lastSyncedUrl = null;
+        Provider.of<HtmlService>(context, listen: false).onBrowserLoadStart();
       },
       onLoadStop: (controller, url) async {
         if (mounted && url != null) {
@@ -323,6 +324,8 @@ class _BrowserViewState extends State<BrowserView> {
       onReceivedHttpError: (controller, request, errorResponse) {
         if (request.isForMainFrame ?? true) {
           final htmlService = Provider.of<HtmlService>(context, listen: false);
+          final status = errorResponse.statusCode;
+          if (status != null) htmlService.onBrowserMainFrameHttpError(status);
           // Http errors mean we got a response like 404, we don't necessarily want to kill the view completely
           // but we should mark loading as done.
           htmlService.updateWebViewLoadingProgress(1.0);

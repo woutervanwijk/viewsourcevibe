@@ -2,8 +2,16 @@ import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
 import '../../models/inspection/server_snapshot.dart';
+import 'block_page.dart';
 
-enum DivergenceKind { serverStatus, finalUrl, redirectHost, contentType }
+enum DivergenceKind {
+  serverStatus,
+  bothBlocked,
+  browserBlocked,
+  finalUrl,
+  redirectHost,
+  contentType
+}
 
 /// A place where the app's own request (the "server" core) and the browser
 /// disagree. Shown as a note, never as an error.
@@ -31,7 +39,10 @@ bool _isHtmlType(String? ct) {
 }
 
 /// Differences between what the server fetch and the browser saw.
-///  1. the server answered >= 400 while the browser has a rendered DOM,
+///  1. the server answered >= 400 while the browser has a rendered DOM: the
+///     browser got the page, or (`bothBlocked`) a block page as well; a
+///     browser block page after a server answer below 400 is
+///     `browserBlocked`,
 ///  2. the server's final URL and the browser URL differ by host or path
 ///     (scheme, a trailing slash, query and fragment are ignored);
 ///     www <-> non-www alone is the low-severity kind `redirectHost`,
@@ -48,13 +59,27 @@ List<Divergence> deriveDivergences(PageInspection p) {
   final b = browser.value;
   final last = s.hops.last;
   final hasDom = b.renderedDom is Present<RenderedDom>;
+  final blocked = browserBlockPage(p);
   final out = <Divergence>[];
 
-  if (last.statusCode >= 400 && hasDom) {
+  if (last.statusCode >= 400 && blocked != null) {
+    out.add(Divergence(
+        DivergenceKind.bothBlocked,
+        "server returned ${last.statusCode} to the app's request "
+        '(UA ${s.userAgent}) and the browser got ${blocked.aLabel} too: '
+        'neither saw the site'));
+  } else if (last.statusCode >= 400 && hasDom) {
+    final st = b.mainStatus;
     out.add(Divergence(
         DivergenceKind.serverStatus,
         "server returned ${last.statusCode} to the app's request "
-        '(UA ${s.userAgent}) but the browser loaded the page'));
+        '(UA ${s.userAgent}) but the browser loaded the page'
+        '${st is Present<int> ? ' (HTTP ${st.value})' : ''}'));
+  } else if (blocked != null) {
+    out.add(Divergence(
+        DivergenceKind.browserBlocked,
+        'the browser got ${blocked.aLabel} while the app\'s request got '
+        '${last.statusCode}'));
   }
 
   final fin = s.finalUrl;

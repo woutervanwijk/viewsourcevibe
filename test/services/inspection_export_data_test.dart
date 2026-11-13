@@ -11,6 +11,7 @@ import 'package:view_source_vibe/services/observed_json.dart';
 import '../derive/fixtures.dart'
     show inspection, serverSnap, browserSnap, cookie;
 import '../fixtures/inspection/bot_blocked.dart';
+import '../fixtures/inspection/browser_blocked.dart';
 import '../fixtures/inspection/full_page.dart';
 import '../fixtures/inspection/ios_partial.dart';
 import '../fixtures/inspection/local_file.dart';
@@ -196,6 +197,49 @@ void main() {
     test('sovereignty is exported as its state, not as an empty map', () {
       final a = export(fullPage());
       expect(json(a, 'analysis/sovereignty.json')['status'], 'pending');
+    });
+  });
+
+  group('block page', () {
+    Archive export(PageInspection p) {
+      final service = makeService(seedStore(InspectionStore(), p));
+      addTearDown(service.dispose);
+      return ZipDecoder()
+          .decodeBytes(InspectionExportService().buildPackageBytes(service));
+    }
+
+    dynamic json(Archive a, String name) =>
+        jsonDecode(utf8.decode(a.findFile(name)!.readBytes()!));
+
+    test('the manifest names it; content analyses are unavailable', () {
+      final a = export(browserBlocked());
+      final block = json(a, 'manifest.json')['blockPage'];
+      expect(block['label'], 'block page (HTTP 403)');
+      expect(block['status'], 403);
+      expect(json(a, 'network/browser-probe.json')['value']['mainStatus']
+          ['value'], 403);
+      for (final f in [
+        'analysis/metadata.json',
+        'analysis/detections.json',
+        'analysis/structured-data.json',
+        'analysis/page-weight.json',
+      ]) {
+        final j = json(a, f);
+        expect(j['status'], 'unavailable', reason: f);
+        expect(j['reason'], 'blockedBySite', reason: f);
+        expect(j['detail'], contains('block page (HTTP 403)'), reason: f);
+        expect(j.containsKey('value'), isFalse, reason: f);
+        expect(j['onBlockPage'], isA<Map>(), reason: f);
+      }
+      expect(utf8.decode(a.findFile('report.html')!.readBytes()!),
+          contains('Not the site:'));
+    });
+
+    test('a normal page has no block page', () {
+      final a = export(fullPage());
+      expect(json(a, 'manifest.json')['blockPage'], isNull);
+      expect(json(a, 'analysis/page-weight.json')['status'],
+          isNot('unavailable'));
     });
   });
 }
