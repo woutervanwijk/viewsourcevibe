@@ -157,7 +157,7 @@ Neveneffect van V6 (hele woorden): samengestelde hostnamen zoals `googletagmanag
 ## 3. Besluiten voor jou
 1. **Gewichten en drempels** van alle vier scores (geen externe norm): houden, of afleiden van Observatory (security) en documenteren.
 2. ~~Cookie-database~~ gedaan (follow-up).
-3. **Licenties**: OCD-naamsvermelding gedaan; GPLv3 vs MIT rechttrekken is open.
+3. ~~Licenties~~ gedaan: OCD-naamsvermelding, en het project is MIT (LICENSE vervangen, README en About aangevuld met een merknaam/icoon-voorbehoud).
 4. **SAN** uit het certificaat (DER) parsen, zodat de hostcheck echt klopt.
 5. **TLS-CA-check** (V10): adequaat warn / buitenlands fail, of lager gewicht.
 6. ~~Lage dekking~~ gedaan: score verborgen onder 50% dekking.
