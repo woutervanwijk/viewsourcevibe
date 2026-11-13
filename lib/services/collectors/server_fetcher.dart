@@ -10,7 +10,7 @@ import '../probe_service.dart';
 
 /// The User-Agent of every direct fetch: honest about being this app.
 const kServerUserAgent =
-    'ViewSourceVibe/1.3.0 (+https://github.com/woutervanwijk/viewsourcevibe)';
+    'ViewSourceVibe/2.0.0 (+https://github.com/woutervanwijk/viewsourcevibe)';
 
 /// Curl-like direct fetch of a URL, independent of any WebView.
 abstract class ServerFetcher {

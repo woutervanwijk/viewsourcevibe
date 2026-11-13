@@ -86,7 +86,7 @@ class AboutScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Web page explorer · Version 1.3.0',
+                    'Web page explorer · Version 2.0.0',
                     textAlign: TextAlign.center,
                     style:
                         TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
@@ -110,8 +110,9 @@ class AboutScreen extends StatelessWidget {
                               );
                             }
                           },
-                          icon: Icon(
-                              Platform.isIOS ? CupertinoIcons.share : Icons.share_outlined),
+                          icon: Icon(Platform.isIOS
+                              ? CupertinoIcons.share
+                              : Icons.share_outlined),
                           label: const Text('Share app'),
                           style: ButtonStyle(shape: kUiButtonShape),
                         ),

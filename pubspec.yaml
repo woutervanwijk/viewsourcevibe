@@ -1,6 +1,6 @@
 name: view_source_vibe
 description: Web page explorer - source, tech stack, trackers and hosting
-version: 1.3.0+1300
+version: 2.0.0+2000
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
