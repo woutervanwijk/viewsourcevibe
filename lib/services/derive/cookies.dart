@@ -64,7 +64,13 @@ List<CookieInfo> mergeCookies(
       path: existing.path ?? bc.path,
       requestHost: existing.requestHost,
       expires: existing.expires ?? bc.expires,
-      sameSite: existing.sameSite ?? bc.sameSite,
+      // WebKit reports a cookie without SameSite as "None"; when the server
+      // set it without the attribute, keep "not set" so the cookie reads the
+      // same whether or not the browser also saw it.
+      sameSite: existing.sameSite ??
+          (existing.source == 'Server' && bc.sameSite?.toLowerCase() == 'none'
+              ? null
+              : bc.sameSite),
       secure: _anyTrue(existing.secure, bc.secure),
       httpOnly: _anyTrue(existing.httpOnly, bc.httpOnly),
       category: existing.category == CookieCategory.unknown

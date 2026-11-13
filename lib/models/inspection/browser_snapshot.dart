@@ -231,6 +231,11 @@ class BrowserSnapshot {
   final Observed<BrowserStorage> storage;
   final Observed<NavigationTiming> navigation;
 
+  /// HTTP status of the main document as the browser received it
+  /// (PerformanceNavigationTiming.responseStatus, or the WebView's main-frame
+  /// HTTP error callback for >= 400 where the page cannot see it).
+  final Observed<int> mainStatus;
+
   /// performance.now() when the snapshot was taken: resources are a snapshot up
   /// to this time.
   final Observed<double> snapshotTimeMs;
@@ -253,6 +258,7 @@ class BrowserSnapshot {
     required this.storage,
     required this.navigation,
     required this.snapshotTimeMs,
+    this.mainStatus = mainStatusNotReported,
     this.resourcesTruncated = false,
     this.resourcesDropped = 0,
     this.rawPayload,
@@ -268,18 +274,32 @@ class BrowserSnapshot {
       navigation is Present ||
       snapshotTimeMs is Present;
 
+  static const mainStatusNotReported = Unavailable<int>(
+      UnavailableReason.notReportedByPlatform,
+      'the browser did not report the HTTP status of the page');
+
   /// A copy with [cookies] replaced (e.g. by the native cookie manager's).
   BrowserSnapshot withCookies(Observed<List<BrowserCookie>> cookies) =>
+      copyWith(cookies: cookies);
+
+  /// A copy with [mainStatus] replaced (e.g. by the WebView's HTTP error).
+  BrowserSnapshot withMainStatus(Observed<int> mainStatus) =>
+      copyWith(mainStatus: mainStatus);
+
+  BrowserSnapshot copyWith(
+          {Observed<List<BrowserCookie>>? cookies,
+          Observed<int>? mainStatus}) =>
       BrowserSnapshot(
         url: url,
         platform: platform,
         contentType: contentType,
         renderedDom: renderedDom,
         resources: resources,
-        cookies: cookies,
+        cookies: cookies ?? this.cookies,
         storage: storage,
         navigation: navigation,
         snapshotTimeMs: snapshotTimeMs,
+        mainStatus: mainStatus ?? this.mainStatus,
         resourcesTruncated: resourcesTruncated,
         resourcesDropped: resourcesDropped,
         rawPayload: rawPayload,

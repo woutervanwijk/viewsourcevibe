@@ -29,3 +29,20 @@ NavigationDecision decideMainFrameNavigation({
   if (isPendingLoad || isCurrentFile) return NavigationDecision.allow;
   return NavigationDecision.allowAndNotify;
 }
+
+/// Whether the WebView already has [targetUrl] (loaded or loading), so the
+/// view must not load it again. [issuedUrl] is the load the app gave the
+/// WebView for the current navigation; [currentUrl] is where the WebView is.
+/// A second load of the same page runs its scripts twice and reads the page
+/// from cache: trackers then set other cookies than on a real visit
+/// (validation run 2026-11-13, rijksoverheid.nl). URLs are compared with
+/// [same] (trailing slash and redirect-insensitive where the caller wants).
+bool browserAlreadyHas({
+  required String targetUrl,
+  required String? issuedUrl,
+  required String? currentUrl,
+  required bool Function(String a, String b) same,
+}) =>
+    targetUrl.isNotEmpty &&
+    ((issuedUrl != null && same(issuedUrl, targetUrl)) ||
+        (currentUrl != null && same(currentUrl, targetUrl)));

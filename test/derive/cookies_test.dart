@@ -43,6 +43,35 @@ void main() {
     expect(c.where((x) => x.domain == 'other.test'), hasLength(1));
   });
 
+  // Validation run 2026-11-13 (kvk.nl, nl.wikipedia.org): WebKit reports a
+  // cookie whose Set-Cookie has no SameSite as "None". Merged, that made the
+  // same cookie "None" (weak) when the browser saw it and "not set" when
+  // only the server did.
+  group('SameSite of a merged cookie', () {
+    List<String?> merged(String header, String browser) => deriveCookies(
+            inspection(
+                server: serverSnap(setCookies: [header]),
+                browser: browserSnap(cookies: [
+                  cookie('a', sameSite: b(browser)),
+                ])),
+            now: now)
+        .map((c) => c.sameSite)
+        .toList();
+
+    test('header without SameSite + browser "None" stays not set', () {
+      expect(merged('a=1', 'None'), [null]);
+    });
+
+    test('header without SameSite + browser "Lax" keeps the browser value',
+        () {
+      expect(merged('a=1', 'Lax'), ['Lax']);
+    });
+
+    test('the header value wins', () {
+      expect(merged('a=1; SameSite=Strict', 'None'), ['Strict']);
+    });
+  });
+
   test('unknown browser flags stay null, never false', () {
     final c = deriveCookies(
         inspection(browser: browserSnap(cookies: [cookie('x')])),

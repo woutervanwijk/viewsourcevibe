@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
+import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import '../detection_helpers.dart';
 import '../fixtures/inspection/builders.dart';
@@ -138,6 +139,17 @@ void main() {
       ]);
       expect(SovereigntyService.parseDnsRecords(data, 2),
           ['ns-311.awsdns-38.com', 'ns-823.awsdns-38.com']);
+    });
+
+    test('a null MX (RFC 7505, "0 .") is no mail server', () {
+      // example.com MX: preference 0, exchange = root.
+      final data = Uint8List.fromList([
+        0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0,
+        7, 101, 120, 97, 109, 112, 108, 101, 3, 99, 111, 109, 0, 0, 15, 0, 1,
+        0xC0, 0x0C, 0, 15, 0, 1, 0, 0, 0x0E, 0x10, 0, 3, // answer header
+        0, 0, 0, // preference 0, exchange "."
+      ]);
+      expect(SovereigntyService.parseDnsRecords(data, 15), isEmpty);
     });
 
     test('tolerates garbage', () {
@@ -1236,6 +1248,21 @@ void main() {
       ('a248.e.akamaihd.net', 'Akamai'),
     ]) {
       expect(matchProvider([host])?.name, name, reason: host);
+    }
+  });
+
+  test('on a block page the privacy pillar is not verifiable', () {
+    final checks = SovereigntyService.privacyChecks(
+      [HostInfo('fonts.googleapis.com')],
+      const [],
+      '<a href="/privacy">Privacy</a>',
+      eu,
+      blockPage: const BlockPage(status: 403, byMarker: true),
+    );
+    expect(checks, isNotEmpty);
+    for (final c in checks) {
+      expect(c.status, CheckStatus.unknown, reason: c.title);
+      expect(c.evidence, contains('block page (HTTP 403)'), reason: c.title);
     }
   });
 }

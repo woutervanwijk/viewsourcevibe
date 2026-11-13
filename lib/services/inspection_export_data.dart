@@ -145,6 +145,7 @@ class InspectionExportData {
           ),
           'snapshotTimeMs':
               observedPlain(b.snapshotTimeMs, source: DataSource.browser),
+          'mainStatus': observedPlain(b.mainStatus, source: DataSource.browser),
         },
         source: DataSource.browser,
       );

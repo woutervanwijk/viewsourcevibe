@@ -1,0 +1,56 @@
+# Sites for the validation harness (see validation/README.md).
+# Each site is here for a reason; together they cover every analysis tab.
+# expect_detections / forbid_detections: ground truth for the detections
+# check, set once by hand (Wappalyzer/BuiltWith in a normal browser). Names
+# must match the app's detection names (analysis/detections.json "name").
+sites:
+  - slug: example
+    url: https://example.com
+    why: Baseline, nearly empty. Any tracker or cookie the app reports is a false positive.
+    expect_detections: []
+    forbid_detections: [Google Analytics, Google Tag Manager, Meta Pixel]
+  - slug: rijksoverheid
+    url: https://www.rijksoverheid.nl
+    why: Dutch government; strict headers, Dutch hosting, little tracking.
+    expect_detections: []
+    forbid_detections: [Meta Pixel]
+  - slug: github
+    url: https://github.com
+    why: Strong CSP and HSTS, US hosting; high security, low sovereignty.
+    expect_detections: []
+    forbid_detections: []
+  - slug: ad
+    url: https://www.ad.nl
+    why: Heavy news site with consent wall and many third parties (known jank site).
+    expect_detections: []
+    forbid_detections: []
+  - slug: bol
+    url: https://www.bol.com
+    why: Bot protection; the app's own request may get a 403/challenge while the browser gets 200.
+    expect_detections: []
+    forbid_detections: []
+  - slug: rtvutrecht
+    url: https://www.rtvutrecht.nl
+    why: Cross-origin resources without Timing-Allow-Origin; sizes must be unavailable/estimated, never 0.
+    expect_detections: []
+    forbid_detections: []
+  - slug: wikipedia-nl
+    url: https://nl.wikipedia.org
+    why: No trackers, structured data, cache headers.
+    expect_detections: []
+    forbid_detections: [Google Analytics, Google Tag Manager]
+  - slug: techcrunch
+    url: https://techcrunch.com
+    why: WordPress site; WordPress/jQuery detection, many scripts.
+    expect_detections: [WordPress]
+    forbid_detections: []
+  - slug: allbirds
+    url: https://www.allbirds.com
+    why: Shopify store; Shopify detection and _shopify_* cookies.
+    expect_detections: [Shopify]
+    forbid_detections: []
+  - slug: kvk
+    url: http://kvk.nl
+    why: Redirect chain http -> https -> www.
+    expect_detections: []
+    forbid_detections: []

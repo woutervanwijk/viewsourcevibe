@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:view_source_vibe/widgets/analysis_disclaimer.dart';
+import 'package:view_source_vibe/widgets/block_page_banner.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -369,8 +370,21 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (const {'browser-content', 'reader', 'source', 'dom-tree'}.contains(tag)) {
       return page;
     }
+    // Tabs that analyse the page content say so when it is a block page.
+    const contentTabs = {
+      'metadata',
+      'media',
+      'page-size',
+      'services',
+      'privacy',
+      'sovereignty'
+    };
     return Column(
-      children: [Expanded(child: page), const AnalysisDisclaimer()],
+      children: [
+        if (contentTabs.contains(tag)) const BlockPageBanner(),
+        Expanded(child: page),
+        const AnalysisDisclaimer(),
+      ],
     );
   }
 

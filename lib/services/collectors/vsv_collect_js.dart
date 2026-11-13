@@ -378,7 +378,9 @@ window.__vsv_collect = function(opts) {
     return {
       responseStart: nav.responseStart, domInteractive: nav.domInteractive,
       domContentLoaded: nav.domContentLoadedEventEnd, loadEnd: nav.loadEventEnd,
-      protocol: nav.nextHopProtocol || null
+      protocol: nav.nextHopProtocol || null,
+      // HTTP status of the document (absent where the engine lacks it).
+      status: typeof nav.responseStatus === 'number' ? nav.responseStatus : null
     };
   });
 

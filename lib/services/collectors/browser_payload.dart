@@ -103,6 +103,7 @@ BrowserSnapshot parseBrowserPayload(Object? raw, BrowserPlatform platform,
     cookies: _section(p['cookies'], _parseJsCookies),
     storage: _parseStorage(p['storage']),
     navigation: _section(p['navigation'], (m) => _parseNavigation(m)),
+    mainStatus: parseMainStatus(p['navigation']),
     snapshotTimeMs: _section(p['timing'], (m) {
       final n = m['now'];
       if (n is! num) throw const FormatException('timing.now missing');
@@ -422,6 +423,24 @@ List<ResourceEntry> mergeResources(
 
 // ---- Navigation ----------------------------------------------------------
 
+/// The main document's HTTP status from the collector's navigation section
+/// (PerformanceNavigationTiming.responseStatus). Not every engine has it;
+/// 0 means the engine has it but could not tell for this response.
+Observed<int> parseMainStatus(Object? navigation) {
+  const na = UnavailableReason.notReportedByPlatform;
+  if (navigation is! Map || navigation['ok'] != true) {
+    return const Unavailable(na, 'no navigation timing entry');
+  }
+  final s = navigation['status'];
+  if (s is num && s >= 100 && s < 600) return _measured(s.toInt());
+  if (s is num) {
+    return const Unavailable(
+        na, 'the browser reported no status for this response');
+  }
+  return const Unavailable(
+      na, 'this browser does not expose the HTTP status to the page');
+}
+
 NavigationTiming _parseNavigation(Map<String, dynamic> m) {
   Observed<double> t(Object? v) {
     if (v is! num) {
@@ -441,6 +460,19 @@ NavigationTiming _parseNavigation(Map<String, dynamic> m) {
         ? _measured(proto)
         : const Unavailable(UnavailableReason.notReportedByPlatform),
   );
+}
+
+/// [fromPage] (the page's own report) wins; otherwise the WebView's
+/// main-frame HTTP error [httpError] (only reported for >= 400). Without
+/// either the status stays unknown, with the hint that no error was seen.
+Observed<int> mainStatusWithHttpError(Observed<int> fromPage, int? httpError) {
+  if (fromPage is Present<int>) return fromPage;
+  if (httpError != null) return _measured(httpError);
+  if (fromPage is Unavailable<int>) {
+    return Unavailable(fromPage.reason,
+        '${fromPage.detail}; the WebView reported no HTTP error (>= 400)');
+  }
+  return fromPage;
 }
 
 // ---- Storage -------------------------------------------------------------
