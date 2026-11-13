@@ -7,6 +7,7 @@ import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/collectors/readability_js.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/reader_service.dart';
+import 'package:view_source_vibe/utils/low_resource_webview.dart';
 
 /// The Reader tab: the current page rendered as a clean article, extracted
 /// with Readability.js (see [ReaderService]). All parsing happens in the
@@ -23,6 +24,7 @@ class ReaderView extends StatefulWidget {
 
 class _ReaderViewState extends State<ReaderView> {
   ReaderService? _reader;
+  AppSettings? _appSettings;
   bool _inViewParsed = false;
 
   @override
@@ -30,6 +32,8 @@ class _ReaderViewState extends State<ReaderView> {
     super.initState();
     _reader = context.read<ReaderService>();
     _reader!.addListener(_onReader);
+    _appSettings = context.read<AppSettings>();
+    _appSettings!.addListener(_onAppSettings);
     // Sync after the first frame so notifyListeners never fires mid-build.
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncWithService());
   }
@@ -37,8 +41,17 @@ class _ReaderViewState extends State<ReaderView> {
   @override
   void dispose() {
     _reader?.removeListener(_onReader);
+    _appSettings?.removeListener(_onAppSettings);
     _reader?.setViewController(null);
     super.dispose();
+  }
+
+  /// Applies live-adjustable settings (low-resource renderer policy) to the
+  /// running reader WebView when the setting changes.
+  void _onAppSettings() {
+    final s = _appSettings;
+    if (s == null) return;
+    _reader?.viewController?.setSettings(settings: _buildSettings(s)).ignore();
   }
 
   void _onReader() => _syncWithService();
@@ -76,13 +89,14 @@ class _ReaderViewState extends State<ReaderView> {
     }
   }
 
-  InAppWebViewSettings get _settings => InAppWebViewSettings(
+  InAppWebViewSettings _buildSettings(AppSettings s) => InAppWebViewSettings(
         isInspectable: kDebugMode,
         mediaPlaybackRequiresUserGesture: true,
         allowFileAccess: false,
         allowFileAccessFromFileURLs: false,
         allowContentAccess: false,
         allowsInlineMediaPlayback: true,
+        rendererPriorityPolicy: lowResourceRendererPriorityPolicy(s),
       );
 
   void _onWebViewCreated(InAppWebViewController controller) {
@@ -120,6 +134,7 @@ class _ReaderViewState extends State<ReaderView> {
   @override
   Widget build(BuildContext context) {
     final reader = context.watch<ReaderService>();
+    final appSettings = context.watch<AppSettings>();
     // Watch the effective dark mode so a theme change re-renders the article.
     return Selector<AppSettings, bool>(
       selector: (context, s) => s.themeMode == ThemeModeOption.system
@@ -162,7 +177,7 @@ class _ReaderViewState extends State<ReaderView> {
             return InAppWebView(
               key: ValueKey('reader-article-${html.hashCode}'),
               gestureRecognizers: widget.gestureRecognizers,
-              initialSettings: _settings,
+              initialSettings: _buildSettings(appSettings),
               initialData: InAppWebViewInitialData(
                 data: html,
                 baseUrl: base != null && base.isNotEmpty ? WebUri(base) : null,
@@ -183,7 +198,7 @@ class _ReaderViewState extends State<ReaderView> {
             return InAppWebView(
               key: ValueKey('reader-raw-$path'),
               gestureRecognizers: widget.gestureRecognizers,
-              initialSettings: _settings,
+              initialSettings: _buildSettings(appSettings),
               initialData: content.isNotEmpty
                   ? InAppWebViewInitialData(data: content, baseUrl: base)
                   : null,
