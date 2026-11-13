@@ -7,7 +7,6 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
-import 'package:view_source_vibe/services/detection/catalog.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
