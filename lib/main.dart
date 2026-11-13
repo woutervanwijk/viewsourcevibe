@@ -72,7 +72,7 @@ Future<void> handleDeepLink(Uri uri, HtmlService htmlService) async {
     if (url != null && url.isNotEmpty) {
       debugPrint('Opening URL from deep link: $url');
       try {
-        await htmlService.loadFromUrl(url);
+        await htmlService.loadFromUrl(url, switchToTab: HtmlService.browserTab);
       } catch (e) {
         debugPrint('Error loading URL from deep link: $e');
       }
@@ -89,7 +89,8 @@ Future<void> handleDeepLink(Uri uri, HtmlService htmlService) async {
       if (url != null) {
         debugPrint('Opening URL from deep-linked text: $url');
         try {
-          await htmlService.loadFromUrl(url);
+          await htmlService.loadFromUrl(url,
+              switchToTab: HtmlService.browserTab);
         } catch (e) {
           debugPrint('Error loading URL from deep link: $e');
         }
@@ -233,7 +234,8 @@ Try these solutions:
   else if (uri.scheme == 'http' || uri.scheme == 'https') {
     debugPrint('Opening web URL: ${uri.toString()}');
     try {
-      await htmlService.loadFromUrl(uri.toString());
+      await htmlService.loadFromUrl(uri.toString(),
+          switchToTab: HtmlService.browserTab);
     } catch (e) {
       debugPrint('Error loading web URL: $e');
     }
@@ -417,7 +419,10 @@ Future<void> _performDelayedInitialization(
           if (savedState.pendingUrl != null &&
               savedState.pendingUrl!.isNotEmpty) {
             try {
-              htmlService.loadFromUrl(savedState.pendingUrl!).catchError((e) {
+              htmlService
+                  .loadFromUrl(savedState.pendingUrl!,
+                      switchToTab: HtmlService.browserTab)
+                  .catchError((e) {
                 debugPrint('❌ Failed to restore pending URL async: $e');
               });
             } catch (e) {
@@ -431,7 +436,10 @@ Future<void> _performDelayedInitialization(
               // It's a URL
               try {
                 debugPrint('🌐 Restoring URL: ${savedState.filePath}');
-                htmlService.loadFromUrl(savedState.filePath!).catchError((e) {
+                htmlService
+                    .loadFromUrl(savedState.filePath!,
+                        switchToTab: HtmlService.browserTab)
+                    .catchError((e) {
                   debugPrint('❌ Failed to restore URL async: $e');
                 });
               } catch (e) {

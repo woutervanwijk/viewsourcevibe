@@ -5,6 +5,7 @@ import 'package:view_source_vibe/screens/about_screen.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
+import 'package:view_source_vibe/widgets/section_box.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -12,296 +13,239 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<AppSettings>(context);
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Theme Settings Section
-              const Text(
-                'Theme Settings',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-
-              _card([
-                _settingsTile(
-                  context: context,
-                  icon: Icons.dark_mode_outlined,
-                  title: 'Theme Mode',
-                  description: _getThemeModeDescription(settings.themeMode),
-                  control: DropdownButton<ThemeModeOption>(
-                    value: settings.themeMode,
-                    isDense: true,
-                    iconSize: 18,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    onChanged: (value) {
-                      if (value != null) settings.themeMode = value;
-                    },
-                    items: [
-                      for (final mode in ThemeModeOption.values)
-                        DropdownMenuItem(
-                          value: mode,
-                          child: Text(_getThemeModeLabel(mode)),
-                        ),
-                    ],
-                  ),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.palette_outlined,
-                  title: 'Syntax Highlight Theme',
-                  description: AppSettings.getThemeMetadata(
-                          AppSettings.getBaseThemeName(settings.themeName))
-                      .description,
-                  control: _valueControl(
-                    AppSettings.isThemePair(
-                            AppSettings.getBaseThemeName(settings.themeName))
-                        ? '${AppSettings.getThemeMetadata(AppSettings.getBaseThemeName(settings.themeName)).name} (Auto)'
-                        : AppSettings.getThemeMetadata(settings.themeName).name,
-                  ),
-                  onTap: () => _showThemeDialog(context, settings),
-                ),
-              ]),
-
-              const SizedBox(height: 24),
-
-              // Display Settings Section
-              const Text(
-                'Display Settings',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-
-              _card([
-                _settingsTile(
-                  context: context,
-                  icon: Icons.format_size,
-                  title: 'Font Size',
-                  description: 'Text size used in the source viewer',
-                  control: _valueControl('${settings.fontSize.toInt()}px'),
-                  onTap: () => _showFontSizeDialog(context, settings),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.format_list_numbered,
-                  title: 'Show Line Numbers',
-                  description: 'Display line numbers in editor',
-                  control: Switch(
-                    value: settings.showLineNumbers,
-                    onChanged: (value) => settings.showLineNumbers = value,
-                  ),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.wrap_text,
-                  title: 'Wrap Text',
-                  description: 'Enable text wrapping',
-                  control: Switch(
-                    value: settings.wrapText,
-                    onChanged: (value) => settings.wrapText = value,
-                  ),
-                ),
-              ]),
-
-              const SizedBox(height: 24),
-
-              // Behavior Settings Section
-              const Text(
-                'Behavior',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-
-              _card([
-                _settingsTile(
-                  context: context,
-                  icon: Icons.public,
-                  title: 'Always use Browser',
-                  description:
-                      'Load pages in browser immediately. Disable to load source via Curl first (the more pure loading option to see e.g. cookie walls, etc. and when sites block Curl requests)',
-                  control: Switch(
-                    value: settings.useBrowserByDefault,
-                    onChanged: (value) => settings.useBrowserByDefault = value,
-                  ),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.vertical_align_bottom,
-                  title: 'Load lazy content',
-                  description:
-                      'Scroll the page once after it loads (and back to the top), so lazy images and embeds are actually fetched and measured in the Page size tab instead of estimated',
-                  control: Switch(
-                    value: settings.scrollToLoadLazy,
-                    onChanged: (value) => settings.scrollToLoadLazy = value,
-                  ),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.no_flash_outlined,
-                  title: 'Disable browser cache',
-                  description:
-                      'The in-app browser never uses its cache: every page and resource is downloaded fresh (like the Fresh load measurement)',
-                  control: Switch(
-                    value: settings.disableBrowserCache,
-                    onChanged: (value) => settings.disableBrowserCache = value,
-                  ),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.cookie_outlined,
-                  title: 'Always clean cookies',
-                  description:
-                      'Clear all cookies before every page load, so each visit starts without cookies (consent walls and paywalls may reappear)',
-                  control: Switch(
-                    value: settings.cleanCookies,
-                    onChanged: (value) => settings.cleanCookies = value,
-                  ),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.battery_saver_outlined,
-                  title: 'Low resource mode',
-                  description:
-                      'For older devices: pause the Browser/Reader WebView while its tab is hidden, require a tap before media plays, and let the system reclaim memory from hidden pages',
-                  control: Switch(
-                    value: settings.lowResourceMode,
-                    onChanged: (value) => settings.lowResourceMode = value,
-                  ),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.gavel_outlined,
-                  title: 'Default site jurisdiction',
-                  description:
-                      'Legal home assumed for a site when the Sovereignty tab cannot detect it. You can change it per site.',
-                  control: DropdownButton<String?>(
-                    value: settings.homeJurisdictionSetting,
-                    isDense: true,
-                    iconSize: 18,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    onChanged: (value) =>
-                        settings.homeJurisdictionSetting = value,
-                    items: [
-                      DropdownMenuItem(
-                        value: null,
-                        child: Text(
-                            'Auto (${jurisdictionLabel(defaultHomeJurisdiction())})'),
-                      ),
-                      for (final j in homeJurisdictionChoices)
-                        DropdownMenuItem(
-                          value: j,
-                          child: Text(jurisdictionLabel(j)),
-                        ),
-                    ],
-                  ),
-                ),
-              ]),
-
-              const SizedBox(height: 24),
-
-              // Data Section
-              const Text(
-                'Data',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-
-              _card([
-                _settingsTile(
-                  context: context,
-                  icon: Icons.history,
-                  title: 'Clear History',
-                  description: 'Remove all saved URLs from history',
-                  onTap: () => _confirmClearHistory(context),
-                ),
-              ]),
-
-              const SizedBox(height: 8),
-
-              _card([
-                _settingsTile(
-                  context: context,
-                  icon: Icons.cached,
-                  title: 'Clear Browser Cache',
-                  description: 'Clear cached images and files',
-                  onTap: () => _clearBrowserCache(context),
-                ),
-                _settingsTile(
-                  context: context,
-                  icon: Icons.delete_forever,
-                  iconColor: Colors.red,
-                  title: 'Clear Everything',
-                  description: 'Clear cache, cookies, and local storage',
-                  onTap: () => _confirmClearEverything(context),
-                ),
-              ]),
-
-              const SizedBox(height: 24),
-              const Text(
-                'About',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-
-              _card([
-                _settingsTile(
-                  context: context,
-                  icon: Icons.info_outline,
-                  title: 'About View Source Vibe',
-                  description:
-                      'Learn more about the app and development process',
-                  onTap: () => _navigateToAboutScreen(context),
-                ),
-              ]),
-
-              const SizedBox(height: 32),
-
-              // Reset and Close Buttons
-              Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => settings.resetToDefaults(),
-                      child: const Text('Reset to Defaults'),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Close'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        title: const Text(
+          'Settings',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
       ),
-    );
-  }
-
-  Widget _card(List<Widget> tiles) {
-    return Card(
-      child: Column(
-        children: [
-          for (var i = 0; i < tiles.length; i++) ...[
-            if (i > 0) const Divider(height: 1, indent: 50),
-            tiles[i],
-          ],
-        ],
+      body: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            // Readable line length on tablets and desktop.
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SectionLabel('Appearance'),
+                  SectionBox(children: [
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.dark_mode_outlined,
+                      title: 'Theme',
+                      description: _getThemeModeDescription(settings.themeMode),
+                      below: SegmentedButton<ThemeModeOption>(
+                        segments: [
+                          for (final mode in ThemeModeOption.values)
+                            ButtonSegment(
+                              value: mode,
+                              label: Text(_getThemeModeLabel(mode)),
+                            ),
+                        ],
+                        selected: {settings.themeMode},
+                        showSelectedIcon: false,
+                        style: ButtonStyle(shape: kUiButtonShape),
+                        onSelectionChanged: (s) => settings.themeMode = s.first,
+                      ),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.palette_outlined,
+                      title: 'Syntax highlight theme',
+                      description: AppSettings.getThemeMetadata(
+                              AppSettings.getBaseThemeName(settings.themeName))
+                          .description,
+                      control: _valueControl(
+                        context,
+                        AppSettings.isThemePair(AppSettings.getBaseThemeName(
+                                settings.themeName))
+                            ? '${AppSettings.getThemeMetadata(AppSettings.getBaseThemeName(settings.themeName)).name} (Auto)'
+                            : AppSettings.getThemeMetadata(settings.themeName)
+                                .name,
+                      ),
+                      onTap: () => _showThemeDialog(context, settings),
+                    ),
+                  ]),
+                  const SectionLabel('Source viewer'),
+                  SectionBox(children: [
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.format_size,
+                      title: 'Font size',
+                      description: 'Text size used in the source viewer',
+                      control: _valueControl(
+                          context, '${settings.fontSize.toInt()}px'),
+                      onTap: () => _showFontSizeDialog(context, settings),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.format_list_numbered,
+                      title: 'Show line numbers',
+                      description: 'Display line numbers in the editor',
+                      control: Switch(
+                        value: settings.showLineNumbers,
+                        onChanged: (value) => settings.showLineNumbers = value,
+                      ),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.wrap_text,
+                      title: 'Wrap text',
+                      description: 'Wrap long lines instead of scrolling',
+                      control: Switch(
+                        value: settings.wrapText,
+                        onChanged: (value) => settings.wrapText = value,
+                      ),
+                    ),
+                  ]),
+                  const SectionLabel('Loading pages'),
+                  SectionBox(children: [
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.language,
+                      title: 'Always use Browser',
+                      description:
+                          'Load pages in browser immediately. Disable to load source via Curl first (the more pure loading option to see e.g. cookie walls, etc. and when sites block Curl requests)',
+                      control: Switch(
+                        value: settings.useBrowserByDefault,
+                        onChanged: (value) =>
+                            settings.useBrowserByDefault = value,
+                      ),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.vertical_align_bottom,
+                      title: 'Load lazy content',
+                      description:
+                          'Scroll the page once after it loads (and back to the top), so lazy images and embeds are actually fetched and measured in the Page size tab instead of estimated',
+                      control: Switch(
+                        value: settings.scrollToLoadLazy,
+                        onChanged: (value) => settings.scrollToLoadLazy = value,
+                      ),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.no_flash_outlined,
+                      title: 'Disable browser cache',
+                      description:
+                          'The in-app browser never uses its cache: every page and resource is downloaded fresh (like the Fresh load measurement)',
+                      control: Switch(
+                        value: settings.disableBrowserCache,
+                        onChanged: (value) =>
+                            settings.disableBrowserCache = value,
+                      ),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.cookie_outlined,
+                      title: 'Always clean cookies',
+                      description:
+                          'Clear all cookies before every page load, so each visit starts without cookies (consent walls and paywalls may reappear)',
+                      control: Switch(
+                        value: settings.cleanCookies,
+                        onChanged: (value) => settings.cleanCookies = value,
+                      ),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.battery_saver_outlined,
+                      title: 'Low resource mode',
+                      description:
+                          'For older devices: pause the Browser/Reader WebView while its tab is hidden, require a tap before media plays, and let the system reclaim memory from hidden pages',
+                      control: Switch(
+                        value: settings.lowResourceMode,
+                        onChanged: (value) => settings.lowResourceMode = value,
+                      ),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.gavel_outlined,
+                      title: 'Default site jurisdiction',
+                      description:
+                          'Legal home assumed for a site when the Sovereignty tab cannot detect it. You can change it per site.',
+                      control: DropdownButton<String?>(
+                        value: settings.homeJurisdictionSetting,
+                        isDense: true,
+                        iconSize: 18,
+                        underline: const SizedBox.shrink(),
+                        borderRadius: BorderRadius.circular(kUiRadius),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: scheme.onSurface,
+                        ),
+                        onChanged: (value) =>
+                            settings.homeJurisdictionSetting = value,
+                        items: [
+                          DropdownMenuItem(
+                            value: null,
+                            child: Text(
+                                'Auto (${jurisdictionLabel(defaultHomeJurisdiction())})'),
+                          ),
+                          for (final j in homeJurisdictionChoices)
+                            DropdownMenuItem(
+                              value: j,
+                              child: Text(jurisdictionLabel(j)),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ]),
+                  const SectionLabel('Data'),
+                  SectionBox(children: [
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.history,
+                      title: 'Clear history',
+                      description: 'Remove all saved URLs from history',
+                      onTap: () => _confirmClearHistory(context),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.cached,
+                      title: 'Clear browser cache',
+                      description: 'Clear cached images and files',
+                      onTap: () => _clearBrowserCache(context),
+                    ),
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.delete_forever_outlined,
+                      iconColor: scheme.error,
+                      title: 'Clear everything',
+                      description: 'Clear cache, cookies, and local storage',
+                      onTap: () => _confirmClearEverything(context),
+                    ),
+                  ]),
+                  const SectionLabel('About'),
+                  SectionBox(children: [
+                    _settingsTile(
+                      context: context,
+                      icon: Icons.info_outline,
+                      title: 'About View Source Vibe',
+                      description:
+                          'Learn more about the app and development process',
+                      onTap: () => _navigateToAboutScreen(context),
+                    ),
+                  ]),
+                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.center,
+                    child: OutlinedButton.icon(
+                      onPressed: () => settings.resetToDefaults(),
+                      icon: const Icon(Icons.restart_alt),
+                      label: const Text('Reset to defaults'),
+                      style: ButtonStyle(shape: kUiButtonShape),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -312,7 +256,7 @@ class SettingsScreen extends StatelessWidget {
     required String title,
     String? description,
     Widget? control,
-    Widget? trailing,
+    Widget? below,
     VoidCallback? onTap,
     Color? iconColor,
   }) {
@@ -320,66 +264,77 @@ class SettingsScreen extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon,
-                    size: 22, color: iconColor ?? theme.colorScheme.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        // Icon at the top, control centered on the whole tile height.
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.topCenter,
+                widthFactor: 1,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Icon(icon,
+                      size: 22, color: iconColor ?? theme.colorScheme.primary),
                 ),
-                if (trailing != null)
-                  trailing
-                else if (control == null && onTap != null)
-                  Icon(Icons.arrow_forward_ios,
-                      size: 16, color: theme.colorScheme.onSurfaceVariant),
-              ],
-            ),
-            if (description != null || control != null) ...[
-              const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  if (description != null)
-                    Expanded(
-                      child: Text(
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (description != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
                         description,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    )
-                  else
-                    const Spacer(),
-                  if (control != null) ...[
-                    const SizedBox(width: 12),
-                    control,
+                    ],
+                    if (below != null) ...[
+                      const SizedBox(height: 10),
+                      below,
+                    ],
                   ],
-                ],
+                ),
               ),
+              // Control (switch, value, chevron) to the right of the text.
+              if (control != null || onTap != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    widthFactor: 1,
+                    child: control ??
+                        Icon(Icons.chevron_right,
+                            color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _valueControl(String value) {
+  Widget _valueControl(BuildContext context, String value) {
+    final theme = Theme.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value, style: const TextStyle(fontSize: 13)),
-        const Icon(Icons.arrow_forward_ios, size: 14),
+        Text(value,
+            style: TextStyle(
+                fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+        Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
       ],
     );
   }
@@ -390,9 +345,9 @@ class SettingsScreen extends StatelessWidget {
       case ThemeModeOption.system:
         return 'System';
       case ThemeModeOption.light:
-        return 'Light Theme';
+        return 'Light';
       case ThemeModeOption.dark:
-        return 'Dark Theme';
+        return 'Dark';
     }
   }
 

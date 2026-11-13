@@ -86,21 +86,18 @@ flutter_launcher_icons:
   image_path: "assets/icon.webp"
   min_sdk_android: 21
   remove_alpha_ios: true
-  # web:
-  #   generate: true
-  #   image_path: "assets/icon.webp"
-  #   background_color: "#FFFFFF"
-  #   theme_color: "#FFFFFF"
+  adaptive_icon_background: "#FFB547"
+  adaptive_icon_foreground: "assets/icon_foreground.png"
   windows:
     generate: true
-    image_path: "assets/icon.webp"
+    image_path: "assets/icon_desktop.png"
     icon_size: 48
   macos:
     generate: true
-    image_path: "assets/icon.webp"
+    image_path: "assets/icon_desktop.png"
   linux:
     generate: true
-    image_path: "assets/icon.webp"
+    image_path: "assets/icon_desktop.png"
 
 dependency_overrides:
   flutter_inappwebview_macos:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/models/html_file.dart';
+import 'package:view_source_vibe/models/app_tab.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
 import 'dart:async';
@@ -415,57 +416,46 @@ class HtmlService extends ChangeNotifier {
   /// Whether pages load in the Browser tab by default (browser-first mode).
   bool get useBrowserByDefault => _useBrowserByDefault;
 
-  /// The index of the Browser tab in the current tab layout.
-  int get browserTabIndex {
-    if (_useBrowserByDefault) return 0;
-    int idx = 1; // Source
-    if (isHtml) idx += 1; // Reader
-    if (isHtmlOrXml) idx += 1; // DOM Tree
-    if (showMetadataTabs) {
-      idx += 5; // Metadata + Media + Size + Services + Privacy
-    }
-    if (showServerTabs) {
-      idx += 6; // Cookies + Timeline + Probe + Headers + Security + Sovereignty
-    }
-    return idx;
-  }
+  /// The tabs of the current content, in display order. HomeScreen builds
+  /// its tab bar and pages from this same list.
+  List<AppTab> get visibleTabs => visibleTabsFor(
+        browser: isBrowserSupported && shouldShowBrowserTab,
+        metadata: showMetadataTabs,
+        isHtml: isHtml,
+        isHtmlOrXml: isHtmlOrXml,
+        server: showServerTabs,
+      );
+
+  /// Index of [tab] in the current layout, -1 when it is not shown.
+  int tabIndexOf(AppTab tab) => visibleTabs.indexOf(tab);
+
+  /// The index of the Browser tab in the current tab layout (-1 if hidden).
+  int get browserTabIndex => tabIndexOf(AppTab.browser);
 
   /// Symbolic tab requests, resolved by HomeScreen once the tab layout for
   /// the newly loaded content is known.
   static const viewerTab = -1;
   static const sourceTab = -2;
+  static const browserTab = -3;
 
   int resolveTabRequest(int index) => switch (index) {
         viewerTab => viewerTabIndex,
         sourceTab => sourceTabIndex,
+        browserTab => browserTabIndex >= 0 ? browserTabIndex : sourceTabIndex,
         _ => index,
       };
 
-  /// Reader sits right before DOM Tree, which sits right of the metadata
-  /// tabs. Only present for HTML pages.
-  int get readerTabIndex {
-    int idx = _useBrowserByDefault ? 1 : 0; // Browser first
-    if (showMetadataTabs) {
-      idx += 5; // Metadata + Media + Size + Services + Privacy
-      if (showServerTabs) idx += 1; // Sovereignty
-    }
-    return idx;
-  }
+  /// Reader tab index (-1 when not shown; only HTML pages have it).
+  int get readerTabIndex => tabIndexOf(AppTab.reader);
 
-  /// Source sits right of DOM Tree, which sits right of the metadata tabs.
-  int get sourceTabIndex {
-    int idx = _useBrowserByDefault ? 1 : 0; // Browser first
-    if (showMetadataTabs) {
-      idx += 5; // Metadata + Media + Size + Services + Privacy
-      if (showServerTabs) idx += 1; // Sovereignty
-    }
-    if (isHtml) idx += 1; // Reader
-    if (isHtmlOrXml) idx += 1; // DOM Tree
-    return idx;
-  }
+  /// Source tab index; Source is always shown.
+  int get sourceTabIndex => tabIndexOf(AppTab.source);
 
-  /// Tab that shows the loaded file itself: Browser if first, else Source.
-  int get viewerTabIndex => _useBrowserByDefault ? 0 : sourceTabIndex;
+  /// Tab that shows the loaded file itself: Browser in browser-first mode
+  /// (when shown), else Source.
+  int get viewerTabIndex => _useBrowserByDefault && browserTabIndex >= 0
+      ? browserTabIndex
+      : sourceTabIndex;
 
   HtmlFile? get currentFile => _currentFile;
   ScrollController? get scrollController => _verticalScrollController;
@@ -1811,7 +1801,7 @@ class HtmlService extends ChangeNotifier {
       if (activeWebViewController == null &&
           switchToTab == null &&
           _activeTabIndex != browserTabIndex) {
-        _requestedTabIndex = browserTabIndex;
+        _requestedTabIndex = browserTab;
       }
 
       _recordBrowserFirstHistory(url);

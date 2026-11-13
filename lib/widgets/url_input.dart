@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/url_history_service.dart';
 import 'package:view_source_vibe/utils/path_name.dart';
+import 'package:view_source_vibe/widgets/toolbar.dart';
 
 /// Key of the home screen's [UrlInput]; the Cmd/Ctrl+L shortcut focuses it.
 final GlobalKey<UrlInputState> urlInputKey = GlobalKey<UrlInputState>();
@@ -252,21 +253,14 @@ class UrlInputState extends State<UrlInput> {
                                     : structure.currentFile != null
                                         ? 'Local file loaded: ${_getDisplayNameForPath(structure.currentFile!.name)}'
                                         : '',
-                                prefixIcon: IconButton(
-                                  icon: const Icon(Icons.link, size: 20),
-                                  tooltip: 'Reload',
-                                  onPressed: () {
-                                    _loadUrl(
-                                      switchToTab: structure.activeTabIndex,
-                                    );
-                                  },
-                                ),
+                                prefixIcon: const ToolbarBackButton(),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 suffixIcon: _UrlInputProgress(
                                     htmlService: htmlService,
-                                    controller: _urlController),
+                                    controller: _urlController,
+                                    focusNode: _focusNode),
                                 contentPadding: const EdgeInsets.symmetric(
                                   vertical: 10,
                                   horizontal: 12,
@@ -465,10 +459,12 @@ class _AutocompleteOptionsState extends State<_AutocompleteOptions> {
 class _UrlInputProgress extends StatelessWidget {
   final HtmlService htmlService;
   final TextEditingController controller;
+  final FocusNode focusNode;
 
   const _UrlInputProgress({
     required this.htmlService,
     required this.controller,
+    required this.focusNode,
   });
 
   @override
@@ -503,24 +499,66 @@ class _UrlInputProgress extends StatelessWidget {
             }
 
             // Use ListenableBuilder for the controller text to avoid rebuilding the whole UrlInput
+            // The clear button only shows while editing (field focused).
             return ListenableBuilder(
-              listenable: controller,
+              listenable: Listenable.merge([controller, focusNode]),
               builder: (context, _) {
-                if (controller.text.isNotEmpty) {
-                  return IconButton(
-                    icon: const Icon(Icons.clear, size: 20),
-                    onPressed: () {
-                      controller.clear();
-                      htmlService.cancelWebViewLoad();
-                    },
-                  );
-                }
-                return const SizedBox.shrink();
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (focusNode.hasFocus && controller.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 20),
+                        tooltip: 'Clear',
+                        // Compact: with the glyphs' own inset, ~12px from Reload.
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 20, minHeight: 40),
+                        style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        onPressed: () {
+                          controller.clear();
+                          htmlService.cancelWebViewLoad();
+                        },
+                      ),
+                    const _ReloadButton(),
+                  ],
+                );
               },
             );
           },
         );
       },
+    );
+  }
+}
+
+/// Reloads the open page or file and stays on the current tab. Disabled
+/// while nothing is loaded; while loading, the progress ring takes its place
+/// (tap it to stop).
+class _ReloadButton extends StatelessWidget {
+  const _ReloadButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFile =
+        context.select<HtmlService, bool>((s) => s.currentFile != null);
+    return IconButton(
+      icon: const Icon(Icons.refresh, size: 22),
+      tooltip: 'Reload',
+      // Narrow, so the clear button sits close (~12px between glyphs).
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+      style: IconButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      onPressed: hasFile
+          ? () {
+              final service = context.read<HtmlService>();
+              service
+                  .reloadCurrentFile(switchToTab: service.activeTabIndex)
+                  .ignore();
+            }
+          : null,
     );
   }
 }
@@ -561,4 +599,3 @@ class _UrlInputStructure {
       activeTabIndex.hashCode ^
       fileNotice.hashCode;
 }
-

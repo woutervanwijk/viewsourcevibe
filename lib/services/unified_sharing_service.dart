@@ -173,14 +173,16 @@ class UnifiedSharingService {
           'UnifiedSharingService: handlePendingSharedContent type=$type content=${content?.substring(0, content.length > 80 ? 80 : content.length)}');
 
       if (type == 'url' && content != null && content.isNotEmpty) {
-        await htmlService.loadFromUrl(content);
+        await htmlService.loadFromUrl(content,
+            switchToTab: HtmlService.browserTab);
         return true;
       } else if (type == 'text' && content != null && content.isNotEmpty) {
         // Check if it's actually a URL
         final trimmed = content.trim();
         final uri = Uri.tryParse(trimmed);
         if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-          await htmlService.loadFromUrl(trimmed);
+          await htmlService.loadFromUrl(trimmed,
+              switchToTab: HtmlService.browserTab);
           return true;
         }
         // Otherwise use the navigator context for full handling
@@ -374,7 +376,7 @@ class UnifiedSharingService {
         return;
       }
 
-      await htmlService.loadFromUrl(url);
+      await htmlService.loadFromUrl(url, switchToTab: HtmlService.browserTab);
     } catch (e) {
       debugPrint('UnifiedSharingService: Error loading URL: $e');
       if (context.mounted) {
