@@ -533,32 +533,53 @@ class _UrlInputProgress extends StatelessWidget {
   }
 }
 
-/// Reloads the open page or file and stays on the current tab. Disabled
-/// while nothing is loaded; while loading, the progress ring takes its place
-/// (tap it to stop).
+/// Reloads the open page or file and stays on the current tab. A long press
+/// first clears everything the browser stored for the site (cookies, cache,
+/// storage). Disabled while nothing is loaded; while loading, the progress
+/// ring takes its place (tap it to stop).
 class _ReloadButton extends StatelessWidget {
   const _ReloadButton();
+
+  Future<void> _clearAndReload(BuildContext context) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    HapticFeedback.mediumImpact();
+    final host = await context.read<HtmlService>().reloadWithClearedSiteData();
+    messenger?.showSnackBar(SnackBar(
+      content: Text(host == null
+          ? 'Reloaded'
+          : 'Cleared cookies, cache and storage for $host'),
+      duration: const Duration(seconds: 3),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
     final hasFile =
         context.select<HtmlService, bool>((s) => s.currentFile != null);
-    return IconButton(
-      icon: const Icon(Icons.refresh, size: 22),
-      tooltip: 'Reload',
-      // Narrow, so the clear button sits close (~12px between glyphs).
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
-      style: IconButton.styleFrom(
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-      onPressed: hasFile
-          ? () {
-              final service = context.read<HtmlService>();
-              service
-                  .reloadCurrentFile(switchToTab: service.activeTabIndex)
-                  .ignore();
-            }
-          : null,
+    // The tooltip shows on hover only: on touch, a long press is the
+    // clear-and-reload gesture, not "show tooltip".
+    return Tooltip(
+      message: 'Reload (hold to clear site data first)',
+      triggerMode: TooltipTriggerMode.manual,
+      child: GestureDetector(
+        onLongPress: hasFile ? () => _clearAndReload(context) : null,
+        child: IconButton(
+          icon: const Icon(Icons.refresh, size: 22),
+          // Narrow, so the clear button sits close (~12px between glyphs).
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+          style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          onPressed: hasFile
+              ? () {
+                  final service = context.read<HtmlService>();
+                  service
+                      .reloadCurrentFile(switchToTab: service.activeTabIndex)
+                      .ignore();
+                }
+              : null,
+        ),
+      ),
     );
   }
 }

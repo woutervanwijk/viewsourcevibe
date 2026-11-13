@@ -92,7 +92,8 @@ void main() {
         matching: find.byTooltip('Back'),
       );
       expect(back, findsOneWidget);
-      expect(find.byTooltip('Reload'), findsOneWidget);
+      expect(find.byTooltip('Reload (hold to clear site data first)'),
+          findsOneWidget);
       expect(tester.getTopLeft(back).dy,
           greaterThan(tester.getBottomLeft(titleText).dy));
     });

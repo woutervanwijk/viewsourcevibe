@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/app_tab.dart';
+import 'package:view_source_vibe/services/site_data_cleaner.dart' as site_data;
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
 import 'dart:async';
@@ -108,6 +109,10 @@ class HtmlService extends ChangeNotifier {
   /// Deletes every cookie (the "Always clean cookies" setting); a seam for
   /// tests.
   final Future<void> Function() _deleteAllCookies;
+
+  /// Removes the browser's data for one site (long-press Reload); a seam
+  /// for tests.
+  final Future<void> Function(Uri url) _clearSiteData;
   final ResourceSizeLookup _sizeLookup;
   final FreshLoadMeasurer _freshMeasurer;
   final BrowserScreenshot? _browserScreenshotOverride;
@@ -1615,6 +1620,7 @@ class HtmlService extends ChangeNotifier {
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
     Future<void> Function()? deleteAllCookies,
+    Future<void> Function(Uri url)? clearSiteData,
     FreshLoadMeasurer? freshLoadMeasurer,
     BrowserScreenshot? browserScreenshot,
     BrowserPlatform? browserPlatform,
@@ -1632,6 +1638,7 @@ class HtmlService extends ChangeNotifier {
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
         _deleteAllCookies = deleteAllCookies ??
             (() => CookieManager.instance().deleteAllCookies()),
+        _clearSiteData = clearSiteData ?? site_data.clearSiteData,
         _sizeLookup = sizeLookup ?? _lookupResourceSize,
         _browserScreenshotOverride = browserScreenshot,
         _freshMeasurer = freshLoadMeasurer ??
@@ -2263,6 +2270,27 @@ Technical details: $message''';
     } catch (e) {
       _setFileNotice('Could not reload ${file.name}: ${_errorText(e)}');
     }
+  }
+
+  /// Long-press Reload: forget everything the browser stored for the open
+  /// site (cookies, cache, storage), then load it again on the same tab.
+  /// Returns the host that was cleared, or null when nothing was (a local
+  /// file is only reloaded).
+  Future<String?> reloadWithClearedSiteData() async {
+    final file = _currentFile;
+    if (file == null) return null;
+    final url = file.isUrl ? Uri.tryParse(file.path) : null;
+    String? cleared;
+    if (url != null && url.host.isNotEmpty) {
+      try {
+        await _clearSiteData(url);
+        cleared = url.host;
+      } catch (e) {
+        debugPrint('Clearing site data failed: $e');
+      }
+    }
+    await reloadCurrentFile(switchToTab: _activeTabIndex);
+    return cleared;
   }
 
   /// Pull-to-refresh: reloads what is open. A local file is re-read from
