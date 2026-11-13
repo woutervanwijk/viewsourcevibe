@@ -208,13 +208,13 @@ void main() {
       expect(https.rows.single.missingSecure, isTrue);
     });
 
-    test('incomplete sources: verdict says partial (K5)', () {
+    test('incomplete sources: no score, the cookies are still listed', () {
       final m = one('IDE=1', complete: false);
       expect(m.complete, isFalse);
-      expect(m.score, isNotNull);
-      expect(m.verdict,
-          endsWith('(partial: not all cookie sources could be read)'));
-      expect(one('IDE=1').verdict, isNot(contains('partial')));
+      expect(m.rows, hasLength(1));
+      expect(m.score, isNull);
+      expect(m.verdict, contains('not enough data'));
+      expect(one('IDE=1').score, isNotNull);
     });
 
     test('expired cookies are shown as expired (K9)', () {

@@ -249,6 +249,20 @@ void main() async {
   // Initialize Flutter binding before any async operations
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Third-party data shipped in the app: shown on the licenses page.
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle
+        .loadString('assets/licenses/open-cookie-database-LICENSE.txt');
+    yield LicenseEntryWithLineBreaks(
+      ['Open Cookie Database'],
+      'Cookie names, categories and platforms (lib/utils/cookie_db.g.dart) '
+      'are derived from the Open Cookie Database by Jack Kwakman and '
+      'contributors, https://github.com/jkwakman/Open-Cookie-Database. '
+      'Changes: converted to Dart source, categories mapped to this '
+      "app's categories, entries added and overridden.\n\n$text",
+    );
+  });
+
   // Disable InAppWebView debug logging
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
     PlatformInAppWebViewController.debugLoggingSettings.enabled = false;

@@ -32,7 +32,8 @@ void main() {
     test('some outside', () {
       final s = summarizeSovereignty(
           report([host('a', country: 'NL'), host('b', country: 'US')]));
-      expect(s.headline, startsWith('50% of requests go to companies based outside'));
+      expect(s.headline,
+          startsWith('50% of requests go to companies based outside'));
     });
 
     test('everything unknown is not "all requests stay"', () {
@@ -108,7 +109,8 @@ void main() {
         SovereigntyCheck(Pillar.privacy, 'd', CheckStatus.pass, ''),
       ]));
       expect(s.coverage, closeTo(0.35, 0.001));
-      expect(s.lowCoverage, isTrue);
+      expect(s.score, isNull);
+      expect(s.grade, isNull);
     });
     test('half-verified pillar counts proportionally', () {
       final s = summarizeSovereignty(report([], checks: const [

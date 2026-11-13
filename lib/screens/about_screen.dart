@@ -229,7 +229,20 @@ class AboutScreen extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => showLicensePage(
+                    context: context,
+                    applicationName: 'View Source Vibe',
+                  ),
+                  icon: const Icon(Icons.description_outlined),
+                  label: const Text('Open source licenses'),
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               // Close Button
               Center(

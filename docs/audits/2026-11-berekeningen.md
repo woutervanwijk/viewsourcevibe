@@ -60,7 +60,7 @@ Elke bevinding is eerst aangetoond met een falende test (of, waar dat niet kan, 
 | C3 | fout | Wildcard-check ziet alleen `*`, niet `https:`, `http:`, `data:` of `*.domein`. | Google CSP Evaluator | fix |
 | C4 | fout | Dubbele directive: laatste wint, spec zegt eerste. | CSP Level 3 parsing | fix |
 | C5 | misleidend | Ontbrekende `frame-ancestors` kost 12 punten ook als X-Frame-Options al beschermt. | — | fix (→ low) |
-| C6 | discutabel | `script-src-elem`-fallbackketen niet gemodelleerd. | CSP Level 3 | niet gedaan (laag) |
+| C6 | fout | `script-src-elem`/`script-src-attr` genegeerd; alleen `script-src` werd beoordeeld. | CSP Level 3 | fix (follow-up) |
 | — | ontwerpkeuze | Gewichten 22/12 en drempels 80/50 hebben geen externe norm. | — | besluit |
 
 ### 2.3 Certificaat
@@ -86,7 +86,7 @@ Elke bevinding is eerst aangetoond met een falende test (of, waar dat niet kan, 
 | K7 | fout | Elke naam met "consent" wordt essential (`consent_ad_id`, `trackingconsent_ads`). | fix |
 | K8 | fout | Prefix-match: eerste i.p.v. langste wint; 4 specifieke prefixen onbereikbaar (`_gac_gb_`, `_vis_opt_exp_`, …). | fix |
 | K9 | fout | `Max-Age=0` (= verwijderen) en verlopen/ongeldige `Expires` niet herkend. | fix |
-| K10 | laag | Gequote waarden met `;` breken parsing. | niet gedaan |
+| K10 | ok | Was een valse bevinding: RFC 6265 §5.2 splitst de Set-Cookie-string bij de eerste `;`, quotes zijn niet speciaal. Huidig gedrag klopt; test legt het vast. | geen fix nodig |
 | K11 | ontwerpkeuze | `NID`/`IDE` bewust als eigen cookie behandeld (niet-onderscheidende naam). | besluit |
 | — | ontwerpkeuze | Gewichten 12/7/6/3/6/5/2 en drempels 75/45. | besluit |
 
@@ -146,10 +146,18 @@ Vastgelegd in `test/derive/cross_page_consistency_test.dart`: dezelfde response 
 
 Neveneffect van V6 (hele woorden): samengestelde hostnamen zoals `googletagmanager`, `googlesyndication`, `cdninstagram`, `akamaihd`, `cloudflareinsights` staan nu expliciet in de patronen (matchten voorheen via substring). Bewust nog wél een match: namen waarin `-` een woordgrens is (`gcp-pharma.nl`, `comodo-pizza.nl`).
 
+### 2.10 Follow-up (na PR #44)
+- **C6** opgelost (`script-src-elem`, `script-src-attr`).
+- **K10** was geen bug (zie boven).
+- **Cookie-database** opnieuw opgebouwd: `tool/gen_cookie_db.dart` genereert `lib/utils/cookie_db.g.dart` uit de gepinde OCD-CSV (`tool/data/`, commit 7786335, 2026-11-06). Wildcard komt uit het OCD-veld (niet meer uit een `_`/`-`-suffix), langste prefix wint, wildcards korter dan 3 tekens matchen exact. Handmatige kennis staat apart in `lib/utils/cookie_overrides.dart` (275 namen die niet in OCD staan). Voor namen in OCD wint OCD; 108 van de 2293 oude namen kregen een andere categorie (o.a. Google `SID`-familie en Facebook `c_user` → advertising). Tien OCD-namen zonder wildcardvlag waar het echte cookie een id achter de naam zet (`Hm_lvt_<id>`) staan in `forcedWildcard`.
+- **Social**: 19 cookies via regel (platform in Facebook/Instagram/LinkedIn/Pinterest/TikTok/X en omschrijving over delen/plugin/login, zonder advertentie-woorden); pixel- en advertentiecookies blijven advertising.
+- **Licentie-attributie**: Apache-2.0 tekst van OCD in `assets/licenses/`, geregistreerd in de licentiepagina van de app (About → Open source licenses) en in `THIRD_PARTY_NOTICES.md`. De projectlicentie zelf (GPLv3 vs MIT) is nog open.
+- **Te weinig data → geen score**: Sovereignty toont geen score of cijfer onder 50% dekking (`SovereigntyReport.minCoverage`); Cookie Privacy Lens toont alleen een score als zowel de Set-Cookie-headers als de browsercookies gelezen zijn. De Security Headers Score en de CSP-score hebben altijd een response nodig en tonen anders al niets.
+
 ## 3. Besluiten voor jou
 1. **Gewichten en drempels** van alle vier scores (geen externe norm): houden, of afleiden van Observatory (security) en documenteren.
-2. **Cookie-database**: genereren uit gepinde OCD-CSV met wildcard-veld en overrides; categorie "social" vullen of schrappen.
-3. **Licenties**: OCD-naamsvermelding (Apache-2.0) toevoegen; GPLv3 vs MIT rechttrekken.
+2. ~~Cookie-database~~ gedaan (follow-up).
+3. **Licenties**: OCD-naamsvermelding gedaan; GPLv3 vs MIT rechttrekken is open.
 4. **SAN** uit het certificaat (DER) parsen, zodat de hostcheck echt klopt.
 5. **TLS-CA-check** (V10): adequaat warn / buitenlands fail, of lager gewicht.
-6. **Lage dekking**: alleen tonen (zoals nu gefixt) of het cijfer onderdrukken onder een drempel.
+6. ~~Lage dekking~~ gedaan: score verborgen onder 50% dekking.
