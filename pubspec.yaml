@@ -76,6 +76,7 @@ flutter:
   
   assets:
     - assets/icon.webp
+    - assets/licenses/open-cookie-database-LICENSE.txt
 
 flutter_launcher_icons:
   android: "launcher_icon"

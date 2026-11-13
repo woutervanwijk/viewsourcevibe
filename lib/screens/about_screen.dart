@@ -221,7 +221,8 @@ class AboutScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Released under the MIT License.',
+                        'Released under the MIT License. The name and icon of '
+                        'View Source Vibe are not covered by that license.',
                         style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                     ],
@@ -229,7 +230,20 @@ class AboutScreen extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => showLicensePage(
+                    context: context,
+                    applicationName: 'View Source Vibe',
+                  ),
+                  icon: const Icon(Icons.description_outlined),
+                  label: const Text('Open source licenses'),
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               // Close Button
               Center(

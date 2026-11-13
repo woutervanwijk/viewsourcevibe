@@ -27,11 +27,9 @@ class SovereigntySummary {
   final double unknownShare;
   final List<PillarLine> pillars;
 
-  /// 0..1: share of the 100 pillar points that rest on verified checks.
+  /// 0..1: share of the 100 pillar points that rest on verified checks. The
+  /// score is null (not shown) below [SovereigntyReport.minCoverage].
   final double coverage;
-
-  /// Below half coverage the score is only indicative.
-  bool get lowCoverage => coverage < 0.5;
 
   const SovereigntySummary({
     required this.coverage,
@@ -48,22 +46,6 @@ String _pct(double share) {
   if (p == 0 && share > 0) return '<1%';
   if (p == 100 && share < 1) return '>99%';
   return '$p%';
-}
-
-/// Share of the 100 points whose checks could be verified: each pillar
-/// contributes pillarMax x (verified weight / total weight).
-double _coverage(SovereigntyReport r) {
-  var covered = 0.0;
-  for (final p in Pillar.values) {
-    final all = r.checks.where((c) => c.pillar == p);
-    final total = all.fold<double>(0, (a, c) => a + c.weight);
-    if (total == 0) continue;
-    final known = all
-        .where((c) => c.status != CheckStatus.unknown)
-        .fold<double>(0, (a, c) => a + c.weight);
-    covered += pillarMax[p]! * known / total;
-  }
-  return covered / 100;
 }
 
 /// Score, pillar lines and the headline for a report. Unknown stays unknown:
@@ -96,7 +78,7 @@ SovereigntySummary summarizeSovereignty(SovereigntyReport r) {
   }
 
   return SovereigntySummary(
-    coverage: _coverage(r),
+    coverage: r.coverage,
     score: r.score,
     grade: r.grade,
     headline: headline,

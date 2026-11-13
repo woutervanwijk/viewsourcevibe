@@ -486,9 +486,30 @@ class SovereigntyReport {
     return pillarMax[pillar]! * earned / totalWeight;
   }
 
-  /// 0–100 over the pillars that could be verified; null when none could be
-  /// (an unverifiable report has no score, not a score of 0).
+  /// Below this share of verified checks there is no score at all.
+  static const minCoverage = 0.5;
+
+  /// 0..1: share of the 100 pillar points that rest on verified checks; each
+  /// pillar counts pillarMax × (verified weight / total weight).
+  double get coverage {
+    var covered = 0.0;
+    for (final p in Pillar.values) {
+      final all = checks.where((c) => c.pillar == p);
+      final total = all.fold<double>(0, (a, c) => a + c.weight);
+      if (total == 0) continue;
+      final known = all
+          .where((c) => c.status != CheckStatus.unknown)
+          .fold<double>(0, (a, c) => a + c.weight);
+      covered += pillarMax[p]! * known / total;
+    }
+    return covered / 100;
+  }
+
+  /// 0–100 over the pillars that could be verified; null when too little
+  /// could be verified ([minCoverage]): such a report has no score, not a
+  /// score of 0 and not a guess.
   int? get score {
+    if (coverage < minCoverage) return null;
     var earned = 0.0, max = 0;
     for (final p in Pillar.values) {
       final s = pillarScore(p);
@@ -553,6 +574,7 @@ class SovereigntyReport {
         'tlsIssuer': tlsIssuer,
         'score': score,
         'grade': grade,
+        'coverage': double.parse(coverage.toStringAsFixed(2)),
         'pillars': {
           for (final p in Pillar.values) p.name: pillarScore(p)?.round(),
         },
