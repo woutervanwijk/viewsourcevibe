@@ -77,7 +77,7 @@ Update the following files with your actual app identifiers:
 ### 1. Desktop Releases (`build-desktop.yml`)
 
 **Triggers:**
-- Push tags matching `v*`, for example `v1.1.4`
+- Push tags matching `v*`, for example `v2.0.0`
 - Manual runs from the GitHub Actions UI
 
 **Jobs:**
@@ -87,16 +87,16 @@ Update the following files with your actual app identifiers:
 
 **Usage:**
 ```bash
-git tag v1.1.4
-git push origin v1.1.4
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
 If a tag needs to be rebuilt, delete and recreate the remote tag carefully:
 
 ```bash
-git push origin :refs/tags/v1.1.4
-git tag -f v1.1.4
-git push origin v1.1.4 --force
+git push origin :refs/tags/v2.0.0
+git tag -f v2.0.0
+git push origin v2.0.0 --force
 ```
 
 ### 2. iOS CI/CD (`ios-ci-cd.yml.disabled`)

@@ -1,5 +1,5 @@
 # View Source Vibe
-*Pocket web page explorer*
+*Web page explorer*
 
 Viewing the source of a webpage is sooooo early 2026!! Just use View Source Vibe to easily see what's in the page, without looking at the source. Of course we included a source code viewer and a DOM Tree, but you probably don't need them for most quick glances, because of our easy to use exploring tools.
 
@@ -103,8 +103,8 @@ Tagged releases build desktop artifacts through GitHub Actions:
 To create a release build, push a version tag:
 
 ```bash
-git tag v1.1.4
-git push origin v1.1.4
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
 The macOS notarization workflow requires these GitHub Actions secrets:
