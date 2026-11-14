@@ -2,7 +2,7 @@
 // scale, so they cannot disagree at a boundary.
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/derive/score_band.dart';
 import 'package:view_source_vibe/widgets/score_band_color.dart';

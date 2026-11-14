@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/widgets/safe_network_svg.dart';

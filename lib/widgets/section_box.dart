@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Corner radius shared by the tab chips, group selector and section boxes.
 const double kUiRadius = 8;
