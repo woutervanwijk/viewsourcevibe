@@ -22,7 +22,7 @@ In a nice user interface you can easily view:
 
 | iOS | Android |
 |-----|---------|
-| ![iOS Mobile](assets/vibe%20screens/ios/Simulator%20Screenshot%20-%20iPhone%208%20Plus%20-%202026-02-18%20at%2016.46.49.png) | ![Android Tablet](assets/vibe%20screens/android/pixel%20tablet/Screenshot_1771434114.png) |
+| ![iOS Mobile](assets/store%20screenshots/ios-iphone-6.9/01-page.png) | ![Android Tablet](assets/store%20screenshots/android-pixel-tablet/06-sovereignty.png) |
 
 
 This started as an experiment with Vibe coding (literally with Mistral Vibe). Vibe coding really suits me, because I mostly want the results of a good app, not the coding itself. I used Flutter because I know it already (we coded the Fiper.net app in it). I began with a simple View Source app, and gradually added more and more features, using Vibe and later also Gemini, Claude to help me with the implementation.
