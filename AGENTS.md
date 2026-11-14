@@ -24,7 +24,7 @@ Cross-platform (iOS, Android, macOS, Windows, Linux) Flutter app to inspect web 
 3. **UI/UX**: Material/Cupertino per platform; responsive for phones, tablets, desktop (`Expanded`, `Flexible`, `LayoutBuilder`, constraints).
 4. **WebView & parsing**: be careful with `flutter_inappwebview` settings/injected scripts/cache — easily breaks per-platform features. DOM/HTML parsing must handle malformed HTML gracefully.
 5. **Errors & logs**: catch exceptions on file/parse/HTTP; show user-friendly errors (SnackBar/error UI). No raw `print()` in production code.
-6. **Tests**: add/maintain unit tests in `test/` for complex utilities, parsers, sharing logic (e.g. `test_sharing_logic.dart`).
+6. **Tests**: add/maintain unit tests in `test/` for complex utilities, parsers, sharing logic (e.g. `test/unified_sharing_url_detection_test.dart`).
 
 ## Workflow
 - Before implementing: read `pubspec.yaml` and how similar features are built in `screens/`/`services/`.
