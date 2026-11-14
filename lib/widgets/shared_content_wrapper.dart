@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
 
 /// A wrapper widget that initializes shared content handling when the app starts

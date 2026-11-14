@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart' show IconData, Icons;
+import 'package:material_ui/material_ui.dart' show IconData, Icons;
 
 import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';

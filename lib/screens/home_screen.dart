@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:view_source_vibe/widgets/analysis_disclaimer.dart';
 import 'package:view_source_vibe/widgets/block_page_banner.dart';
 import 'package:flutter/services.dart';

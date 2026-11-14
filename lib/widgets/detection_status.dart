@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
 
 /// What a Services/Privacy tab shows when it has no findings: scanning,

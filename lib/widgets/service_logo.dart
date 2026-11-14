@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:view_source_vibe/services/logo_service.dart';
 
 /// Cached logo for a service/tracker, by [domain] or by a name [label];

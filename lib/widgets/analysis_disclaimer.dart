@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Footer under the analysis tabs: their results are heuristic.
 class AnalysisDisclaimer extends StatelessWidget {

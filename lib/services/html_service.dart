@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/models/html_file.dart';
@@ -5442,8 +5442,10 @@ class _ControllerBrowserLoader implements BrowserLoader {
   @override
   void loadUrl(Uri url) {
     final controller = _service.activeWebViewController;
-    if (controller == null)
-      return; // still pending; the view loads it on create
+    if (controller == null) {
+      // still pending; the view loads it on create
+      return;
+    }
     _service._browserLoadIssuedUrl = url.toString();
     controller
         .loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())))
