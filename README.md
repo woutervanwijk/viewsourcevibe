@@ -103,8 +103,8 @@ Tagged releases build desktop artifacts through GitHub Actions:
 To create a release build, push a version tag:
 
 ```bash
-git tag v1.1.4
-git push origin v1.1.4
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
 The macOS notarization workflow requires these GitHub Actions secrets:
