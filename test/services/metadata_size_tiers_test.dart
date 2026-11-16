@@ -43,7 +43,7 @@ void main() {
           'https://cdn.test/exact.js', // tier 1: exact
           'https://cdn.test/dir/', // tier 2: resource is /dir (trailing /)
           'https://cdn.test/cached.js?v=1', // tier 3: resource ?v=2 (cache-buster)
-          'https://a.test/deep/chunk.js', // tier 4: other host, same filename
+          'https://a.test/deep/chunk.js', // other host, same filename: no match
         ],
         'media': <String, dynamic>{
           'images': <dynamic>[
@@ -88,7 +88,7 @@ void main() {
     expect(sizeOf('https://cdn.test/exact.js')['transfer'], 11);
     expect(sizeOf('https://cdn.test/dir/')['transfer'], 22);
     expect(sizeOf('https://cdn.test/cached.js?v=1')['transfer'], 33);
-    expect(sizeOf('https://a.test/deep/chunk.js')['transfer'], 44);
+    expect(js['https://a.test/deep/chunk.js'], isNot(contains('size')));
 
     final images = {
       for (final i in service.pageMetadata!['media']['images'] as List)
@@ -98,6 +98,10 @@ void main() {
         (images['https://img.test/img/123/0.50/slug.jpg?w=100'] as Map)['size']
             ['transfer'],
         55);
+    expect(
+        (images['https://img.test/img/123/0.50/slug.jpg?w=100'] as Map)['size']
+            ['estimated'],
+        isTrue);
     expect(
         (images['https://other.test/thumb.jpg?width=112'] as Map)['size'],
         isNull);
