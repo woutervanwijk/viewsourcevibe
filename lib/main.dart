@@ -265,6 +265,17 @@ void main() async {
     );
   });
 
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle
+        .loadString('assets/licenses/public-suffix-list-LICENSE.txt');
+    yield LicenseEntryWithLineBreaks(
+      ['Public Suffix List'],
+      'The same-site rules (lib/utils/public_suffix.g.dart) are derived from '
+      'the Public Suffix List, https://publicsuffix.org/. Changes: converted '
+      'to Dart source.\n\n$text',
+    );
+  });
+
   // Disable InAppWebView debug logging
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
     PlatformInAppWebViewController.debugLoggingSettings.enabled = false;

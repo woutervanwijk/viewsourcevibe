@@ -1,6 +1,7 @@
 import 'package:view_source_vibe/models/detection_evidence.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/detection/catalog.dart';
+import 'package:view_source_vibe/utils/site.dart';
 
 export 'package:view_source_vibe/services/detection/catalog.dart';
 
@@ -104,12 +105,6 @@ String _hostOf(String url) {
       '';
 }
 
-bool _sameSite(String host, String pageHost) =>
-    pageHost.isNotEmpty &&
-    (host == pageHost ||
-        host.endsWith('.$pageHost') ||
-        pageHost.endsWith('.$host'));
-
 /// A literal prefix every match of [pattern] must contain, or null. Sound:
 /// leading anchors/boundaries are skipped, escapes are unescaped, and a
 /// quantifier right after the run makes its last char optional (trimmed).
@@ -177,7 +172,9 @@ List<Entity> _entitiesForUrl(String url, String host, String pageHost) {
           c.$3 != null ? url.contains(c.$3!) && c.$2.hasMatch(url) : c.$2.hasMatch(url))
       .firstOrNull
       ?.$1;
-  final byHost = _sameSite(host, pageHost) ? null : entityForHost(host);
+  final byHost = pageHost.isNotEmpty && sameSite(host, pageHost)
+      ? null
+      : entityForHost(host);
   return [
     if (byPattern != null) byPattern,
     if (byHost != null &&
@@ -192,7 +189,9 @@ List<Entity> _entitiesForUrl(String url, String host, String pageHost) {
 List<Entity> externalServicesForUrl(String url, String pageUrl) {
   final host = _hostOf(url);
   final pageHost = _hostOf(pageUrl);
-  if (host.isEmpty || _sameSite(host, pageHost)) return const [];
+  if (host.isEmpty || (pageHost.isNotEmpty && sameSite(host, pageHost))) {
+    return const [];
+  }
   final own = pageHost.isEmpty ? null : entityForHost(pageHost);
   return [
     for (final e in _entitiesForUrl(url, host, pageHost))
@@ -533,7 +532,9 @@ List<Detection> detect({
         .replaceFirst(RegExp(r'^\.'), '')
         .toLowerCase();
     var e = entityForCookie(name);
-    if (e == null && domain.isNotEmpty && !_sameSite(domain, pageHost)) {
+    if (e == null &&
+        domain.isNotEmpty &&
+        !(pageHost.isNotEmpty && sameSite(domain, pageHost))) {
       e = entityForHost(domain);
     }
     final category = _cookieCategories[cookie['category']];

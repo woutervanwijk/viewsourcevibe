@@ -9,6 +9,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
+import 'package:view_source_vibe/utils/site.dart' as site;
 import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart'
@@ -1488,52 +1489,8 @@ class SovereigntyService {
     return country;
   }
 
-  /// Multi-label public suffixes that are common enough to matter here. This
-  /// is a PSL-lite, NOT the full Public Suffix List: an unlisted suffix is
-  /// treated as a single label (so `x.example.co.id` gives `co.id`).
-  static const _publicSuffixes = {
-    'co.uk', 'ac.uk', 'gov.uk', 'org.uk',
-    'com.au', 'net.au', 'org.au',
-    'co.nz',
-    'co.jp', 'ne.jp', 'or.jp',
-    'com.br', 'com.cn', 'com.tr', 'co.za',
-    // Hosting platforms where every customer gets a subdomain.
-    'github.io', 'gitlab.io', 'netlify.app', 'vercel.app', 'pages.dev',
-    'herokuapp.com', 'azurewebsites.net', 'cloudfront.net', 'blogspot.com',
-    'appspot.com', 'web.app', 'firebaseapp.com',
-    'amazonaws.com', 's3.amazonaws.com', 'elasticbeanstalk.com',
-  };
-
-  /// Registrable domain: the public suffix (from [_publicSuffixes], else the
-  /// generic `{co,com,org,gov,…}.<ccTLD>` pattern, else the last
-  /// label) plus one label. `foo.github.io` stays `foo.github.io`; an IP
-  /// address is returned unchanged; the result is lowercase.
-  static String registrableDomain(String host) {
-    final h = host.toLowerCase();
-    if (h.contains(':') || RegExp(r'^\d+(\.\d+){3}$').hasMatch(h)) return h;
-    final parts = h.split('.');
-    if (parts.length <= 2) return h;
-    const genericSld = {
-      'co', 'com', 'org', 'net', 'gov', 'ac', 'edu', 'go', 'or', 'ne', 'gob', //
-      'gouv', 'asso', 'nhs', 'me', 'ltd', 'plc', 'sch', 'mil', 'nic', 'gv',
-      'gen',
-    };
-    // Longest listed suffix wins (s3.amazonaws.com before amazonaws.com).
-    var take = 2;
-    for (var n = 3; n >= 2; n--) {
-      if (parts.length > n &&
-          _publicSuffixes.contains(parts.sublist(parts.length - n).join('.'))) {
-        take = n + 1;
-        break;
-      }
-    }
-    if (take == 2 &&
-        genericSld.contains(parts[parts.length - 2]) &&
-        parts.last.length == 2) {
-      take = 3;
-    }
-    return parts.sublist(parts.length - take).join('.');
-  }
+  /// Registrable domain from the Public Suffix List (see `utils/site.dart`).
+  static String registrableDomain(String host) => site.registrableDomain(host);
 
   // DoH resolvers that speak HTTP/1.1 (dart:io has no HTTP/2; Quad9 needs it).
   // European first, US fallback only when it is unreachable.
