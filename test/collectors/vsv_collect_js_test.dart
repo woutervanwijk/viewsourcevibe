@@ -22,6 +22,16 @@ void main() {
     expect(out['__probe'], isFalse);
   });
 
+  test('__vsv_frameIn records frame entries with their origin', () async {
+    final out = await runCollector(
+        after: "window.__vsv_frameIn({__vsv_frame: 1,"
+            "fo: 'https://ads.test', to: 1, e: [{n: 'https://ads.test/a.js',"
+            "it: 'script', st: 1, du: 1, tx: 10, enc: 9, dec: 20}], d: []});");
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['resources']['observer'].single,
+        containsPair('fo', 'https://ads.test'));
+  });
+
   test('a dropped resource does not break the resources section', () async {
     final out = await runCollector(
         after: "window.__vsv_dropped.push("

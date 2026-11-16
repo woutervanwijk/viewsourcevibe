@@ -9,6 +9,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../derive/network_quiet.dart';
 import 'collector_world.dart';
+import 'frame_relay.dart';
 
 /// Loads a page once more, apart from the live browser, the way Lighthouse
 /// does: empty cache, phone-sized screen, waiting until the network is
@@ -89,6 +90,11 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
       initialUserScripts: UnmodifiableListView<UserScript>([
         collectorUserScript(defaultTargetPlatform),
       ]),
+      onWebViewCreated: (controller) {
+        controller.addJavaScriptHandler(
+            handlerName: 'vsvFrame',
+            callback: (args) => relayFrameReport(controller, args));
+      },
       onLoadStop: (_, __) {
         if (!loaded.isCompleted) loaded.complete();
       },

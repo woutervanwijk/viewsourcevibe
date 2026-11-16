@@ -133,8 +133,17 @@ const String vsvResourceBootstrapJs = r'''
     try {
       var origin = '';
       try { origin = location.origin; } catch (e) {}
-      window.top.postMessage({__vsv_frame: 1, fo: origin,
-          to: performance.timeOrigin || null, e: out, d: dout}, '*');
+      var report = {__vsv_frame: 1, fo: origin,
+          to: performance.timeOrigin || null, e: out, d: dout};
+      // Through the native bridge when there is one: the embedding page can
+      // neither read nor forge that. postMessage is the fallback.
+      var b = window.flutter_inappwebview;
+      if (b && typeof b.callHandler === 'function') {
+        var r = b.callHandler('vsvFrame', report);
+        if (r && typeof r.catch === 'function') r.catch(function() {});
+      } else {
+        window.top.postMessage(report, '*');
+      }
     } catch (e) {}
   }
   // Top frame: an image served from the memory cache creates no timing
@@ -147,36 +156,43 @@ const String vsvResourceBootstrapJs = r'''
       }, true);
     } catch (e) {}
   }
-  // Top frame: take what the iframes post. Only messages of this shape from
-  // another window; the entries are page-provided data, like the timings.
+  // Top frame: take what the iframes report. The app calls __vsv_frameIn
+  // (bridge path); the message listener feeds the postMessage fallback. The
+  // entries are page-provided data, like the timings.
+  function frameIn(d) {
+    try {
+      if (!d || d.__vsv_frame !== 1) return;
+      if (!d.e || typeof d.e.length !== 'number') return;
+      var shift = (typeof d.to === 'number' && performance.timeOrigin)
+          ? d.to - performance.timeOrigin : null;
+      var fo = typeof d.fo === 'string' ? d.fo.slice(0, 200) : '';
+      for (var i = 0; i < d.e.length && i < MAX; i++) {
+        var x = d.e[i];
+        if (!x || typeof x.n !== 'string' || skip(x.n)) continue;
+        var st = num(x.st);
+        store(x.n, {it: typeof x.it === 'string' ? x.it : '',
+            st: st === null ? null : (shift === null ? null : st + shift),
+            du: num(x.du), tx: num(x.tx), enc: num(x.enc), dec: num(x.dec),
+            fr: 1, fo: fo});
+      }
+      // URLs the iframe's own buffer dropped.
+      var dl = d.d;
+      if (dl && typeof dl.length === 'number') {
+        for (var j = 0; j < dl.length && j < DROP_MAX; j++) {
+          var y = dl[j];
+          if (!y || typeof y.n !== 'string' || skip(y.n)) continue;
+          noteDropped(y.n, typeof y.it === 'string' ? y.it : '', fo);
+        }
+      }
+    } catch (e) {}
+  }
   if (isTop) {
+    window.__vsv_frameIn = frameIn;
     try {
       window.addEventListener('message', function(ev) {
         try {
-          var d = ev.data;
-          if (!d || d.__vsv_frame !== 1 || ev.source === window) return;
-          if (!d.e || typeof d.e.length !== 'number') return;
-          var shift = (typeof d.to === 'number' && performance.timeOrigin)
-              ? d.to - performance.timeOrigin : null;
-          var fo = typeof d.fo === 'string' ? d.fo.slice(0, 200) : '';
-          for (var i = 0; i < d.e.length && i < MAX; i++) {
-            var x = d.e[i];
-            if (!x || typeof x.n !== 'string' || skip(x.n)) continue;
-            var st = num(x.st);
-            store(x.n, {it: typeof x.it === 'string' ? x.it : '',
-                st: st === null ? null : (shift === null ? null : st + shift),
-                du: num(x.du), tx: num(x.tx), enc: num(x.enc), dec: num(x.dec),
-                fr: 1, fo: fo});
-          }
-          // URLs the iframe's own buffer dropped.
-          var dl = d.d;
-          if (dl && typeof dl.length === 'number') {
-            for (var j = 0; j < dl.length && j < DROP_MAX; j++) {
-              var y = dl[j];
-              if (!y || typeof y.n !== 'string' || skip(y.n)) continue;
-              noteDropped(y.n, typeof y.it === 'string' ? y.it : '', fo);
-            }
-          }
+          if (ev.data && ev.source === window) return;
+          frameIn(ev.data);
         } catch (e) {}
       });
     } catch (e) {}

@@ -7,6 +7,7 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/collectors/collector_world.dart';
+import 'package:view_source_vibe/services/collectors/frame_relay.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/navigation_policy.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
@@ -270,6 +271,10 @@ class _BrowserViewState extends State<BrowserView> {
         controller.addJavaScriptHandler(
             handlerName: 'vsvScrollThroughDone',
             callback: (_) => htmlService.onScrollThroughDone());
+        // An iframe's resources, relayed into the top frame's collector.
+        controller.addJavaScriptHandler(
+            handlerName: 'vsvFrame',
+            callback: (args) => relayFrameReport(controller, args));
 
         // Fix macOS background color crash
         if (!Platform.isMacOS) {
