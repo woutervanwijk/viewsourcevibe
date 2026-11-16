@@ -332,6 +332,7 @@ String wrapInReaderTemplate(
   return '''<!DOCTYPE html>
 <html$dir$lang>
 <head>
+<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 $base

@@ -136,6 +136,15 @@ void main() {
       final html = wrapInReaderTemplate(article, dark: false, baseUrl: null);
       expect(html, contains('Jane Doe · Example · 5 min read'));
     });
+
+    test('the reader page forbids scripts', () {
+      final html = wrapInReaderTemplate(article,
+          dark: false, baseUrl: 'https://a.test/');
+      const csp = '<meta http-equiv="Content-Security-Policy" '
+          'content="script-src \'none\'; object-src \'none\'">';
+      expect(html, contains(csp));
+      expect(html.indexOf(csp), lessThan(html.indexOf('<base ')));
+    });
   });
 
   group('ReaderService extraction and staleness', () {
