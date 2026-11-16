@@ -249,6 +249,9 @@ window.__vsv_collect = function(opts) {
     try { return (e && e.name ? e.name + ': ' + e.message : String(e)); }
     catch (x) { return 'unknown error'; }
   }
+  function skip(name) {
+    return !name || name.indexOf('data:') === 0 || name.indexOf('blob:') === 0;
+  }
   function section(fn) {
     try { var v = fn(); v.ok = true; return v; }
     catch (e) { return {ok: false, error: describe(e)}; }
