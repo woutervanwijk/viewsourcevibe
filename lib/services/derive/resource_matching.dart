@@ -64,7 +64,8 @@ Map<String, dynamic>? sizeOfTimelineEntry(Map match) {
   if (dec == null) {
     final isImage = match['initiatorType'] == 'img' ||
         match['initiatorType'] == 'image' ||
-        ProbeService.categorizeResource('${match['name']}', '') == 'image';
+        const {'image', 'media'}
+            .contains(ProbeService.categorizeResource('${match['name']}', ''));
     if (isImage) {
       return {'transfer': tx, 'decoded': tx, 'decodedFromTransfer': true};
     }

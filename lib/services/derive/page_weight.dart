@@ -42,7 +42,7 @@ class WeightBucket {
 /// The page weight derived from the browser's resources (plus the server's
 /// document). The totals are the sum of the [breakdown] by construction.
 class PageWeight {
-  /// Keys: scripts, css, images, html, other, thirdPartyFrames (everything
+  /// Keys: scripts, css, images, media, fonts, html, other, thirdPartyFrames (everything
   /// a cross-origin iframe loaded: ads, embeds, players).
   final Map<String, WeightBucket> breakdown;
 
@@ -153,18 +153,29 @@ PageWeight? deriveFreshPageWeight(PageInspection p) {
       declaredMedia: p.declaredMedia);
 }
 
-/// script, style, image, document or other. What the browser says it loaded
-/// (its initiator type) comes first: image CDNs often serve URLs without an
-/// extension (images.ad.nl/…/slug). The URL is only a fallback, e.g. for
-/// `link` (stylesheet or preload) and `css` (a url() in a stylesheet: an
-/// image or a font).
-String resourceCategory(ResourceEntry r, String pageUrl) =>
-    switch (r.type.toLowerCase()) {
-      'img' || 'image' || 'video' || 'audio' || 'media' => 'image',
-      'script' => 'script',
-      'iframe' || 'frame' => 'document',
-      _ => ProbeService.categorizeResource(r.url, pageUrl),
-    };
+/// script, style, image, media, font, document or other. What the browser
+/// says it loaded (its initiator type) comes first: image CDNs often serve
+/// URLs without an extension (images.ad.nl/…/slug). The URL's extension is
+/// only a fallback, e.g. for `link` (stylesheet or preload) and `css` (a
+/// url() in a stylesheet: an image or a font). Words in the URL never decide.
+String resourceCategory(ResourceEntry r, String pageUrl) {
+  final byExtension = ProbeService.resourceKindFromExtension(r.url);
+  return switch (r.type.toLowerCase()) {
+    'img' || 'image' => 'image',
+    'video' || 'audio' || 'media' || 'track' => 'media',
+    'script' => 'script',
+    'iframe' || 'frame' => 'document',
+    'link' => byExtension ?? 'style',
+    'css' => byExtension ?? 'other',
+    _ => byExtension ?? (_isPageUrl(r.url, pageUrl) ? 'document' : 'other'),
+  };
+}
+
+bool _isPageUrl(String url, String pageUrl) {
+  if (pageUrl.isEmpty) return false;
+  String trim(String u) => u.endsWith('/') ? u.substring(0, u.length - 1) : u;
+  return trim(url.toLowerCase()) == trim(pageUrl.toLowerCase());
+}
 
 /// A cross-origin iframe (ads, embeds) or something it loaded. Same-origin
 /// frames count as the page's own.
@@ -203,6 +214,8 @@ PageWeight? derivePageWeightOf(BrowserSnapshot b,
     'scripts': WeightBucket(),
     'css': WeightBucket(),
     'images': WeightBucket(),
+    'media': WeightBucket(),
+    'fonts': WeightBucket(),
     'html': WeightBucket(),
     'other': WeightBucket(),
     'thirdPartyFrames': WeightBucket(),
@@ -216,13 +229,15 @@ PageWeight? derivePageWeightOf(BrowserSnapshot b,
   for (final r in res.value) {
     resourceUrls.add(r.url);
     final category = resourceCategory(r, pageUrl);
-    final isImage = category == 'image';
+    final isImage = category == 'image' || category == 'media';
     final bucket = buckets[isThirdPartyFrame(r, b.url)
         ? 'thirdPartyFrames'
         : switch (category) {
             'script' => 'scripts',
             'style' => 'css',
             'image' => 'images',
+            'media' => 'media',
+            'font' => 'fonts',
             'document' => 'html',
             _ => 'other',
           }]!;

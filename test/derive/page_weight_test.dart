@@ -100,4 +100,58 @@ void main() {
         isNull);
     expect(derivePageWeight(inspection()), isNull);
   });
+
+  test('an XHR is not a stylesheet because its URL says lifestyle', () {
+    expect(
+        resourceCategory(
+            res('https://a.test/lifestyle/api', type: 'xmlhttprequest'),
+            'https://a.test/'),
+        'other');
+    expect(
+        resourceCategory(res('https://a.test/subscriptions', type: 'fetch'),
+            'https://a.test/'),
+        'other');
+    expect(
+        resourceCategory(
+            res('https://a.test', type: 'fetch'), 'https://a.test/'),
+        'document');
+  });
+
+  test('fonts and media have their own kind', () {
+    expect(resourceCategory(res('https://a.test/f.woff2', type: 'css'), ''),
+        'font');
+    expect(resourceCategory(res('https://a.test/v.mp4', type: 'video'), ''),
+        'media');
+    expect(resourceCategory(res('https://a.test/v.mp4', type: 'fetch'), ''),
+        'media');
+  });
+
+  test('a link without an extension is a stylesheet', () {
+    expect(
+        resourceCategory(
+            res('https://fonts.googleapis.com/css2?family=Inter', type: 'link'),
+            ''),
+        'style');
+  });
+
+  test('the breakdown has fonts and media buckets', () {
+    final w = derivePageWeight(inspection(
+        browser: browserSnap(resources: [
+      res('https://a.test/f.woff2', type: 'css', tx: b(100)),
+      res('https://a.test/v.mp4', type: 'video', tx: b(900)),
+    ])))!;
+    expect(w.breakdown['fonts']!.transfer, 100);
+    expect(w.breakdown['media']!.transfer, 900);
+    expect(w.breakdown['images']!.count, 0);
+    expect(w.breakdown.keys.toSet(), {
+      'scripts',
+      'css',
+      'images',
+      'media',
+      'fonts',
+      'html',
+      'other',
+      'thirdPartyFrames'
+    });
+  });
 }

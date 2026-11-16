@@ -123,6 +123,8 @@ class ProbeService {
     'image': [
       'png', 'jpg', 'jpeg', 'jfif', 'pjpeg', 'gif', 'webp', 'svg', 'ico', //
       'avif', 'bmp', 'apng', 'tif', 'tiff', 'heic', 'heif',
+    ],
+    'media': [
       'mp4', 'webm', 'mov', 'm4v', 'ogv', 'mp3', 'ogg', 'wav', 'm4a', 'aac',
     ],
     'font': ['woff', 'woff2', 'ttf', 'otf', 'eot'],
@@ -133,6 +135,12 @@ class ProbeService {
   /// ignored): script, style, image (incl. audio/video), font or document.
   /// Null when the extension is missing or unknown.
   static String? resourceTypeFromExtension(String url) {
+    final kind = resourceKindFromExtension(url);
+    return kind == 'media' ? 'image' : kind;
+  }
+
+  /// Like [resourceTypeFromExtension], but audio/video is `media`.
+  static String? resourceKindFromExtension(String url) {
     final path = (Uri.tryParse(url)?.path ?? url.split(RegExp('[?#]')).first)
         .toLowerCase();
     final lastSegment = path.substring(path.lastIndexOf('/') + 1);
@@ -145,46 +153,17 @@ class ProbeService {
     return null;
   }
 
+  /// script, style, image, media, document or other, from the extension, then
+  /// from the page URL. Words in the URL ("lifestyle", "script") say nothing:
+  /// what the browser says it loaded is `resourceCategory`'s job.
   static String categorizeResource(String name, String pageUrl) {
-    final byExtension = resourceTypeFromExtension(name);
+    final byExtension = resourceKindFromExtension(name);
     if (byExtension != null) {
       return byExtension == 'font' ? 'other' : byExtension;
     }
-
-    name = name.toLowerCase();
-    pageUrl = pageUrl.toLowerCase();
-
-    if (name.endsWith('.js') ||
-        name.contains('.js?') ||
-        name.contains('.js#') ||
-        name.contains('script')) {
-      return 'script';
-    }
-    if (name.endsWith('.css') ||
-        name.contains('.css?') ||
-        name.contains('.css#') ||
-        name.contains('style')) {
-      return 'style';
-    }
-    if (name.endsWith('.png') ||
-        name.endsWith('.jpg') ||
-        name.endsWith('.jpeg') ||
-        name.endsWith('.gif') ||
-        name.endsWith('.webp') ||
-        name.endsWith('.svg') ||
-        name.endsWith('.ico') ||
-        name.endsWith('.avif') ||
-        name.contains('image/') ||
-        name.contains('img_') ||
-        name.contains('/images/')) {
-      return 'image';
-    }
-    if (name == pageUrl ||
-        name == '$pageUrl/' ||
-        name.endsWith('.html') ||
-        name.endsWith('.htm') ||
-        name.contains('document') ||
-        (!name.contains('.') && name.startsWith('http'))) {
+    final page = pageUrl.toLowerCase();
+    final lower = name.toLowerCase();
+    if (page.isNotEmpty && (lower == page || lower == '$page/')) {
       return 'document';
     }
     return 'other';

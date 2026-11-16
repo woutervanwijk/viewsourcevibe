@@ -32,7 +32,7 @@ class ResourceSize {
   /// (width*height*4), which is megabytes even for small thumbnails.
   /// For other resources prefer the decoded (uncompressed) size, falling
   /// back to transfer size when unknown.
-  int get size => type == 'image'
+  int get size => type == 'image' || type == 'media'
       ? (transfer > 0 ? transfer : decoded)
       : (decoded > 0 ? decoded : transfer);
 

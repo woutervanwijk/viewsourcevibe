@@ -36,10 +36,33 @@ void main() {
           'other');
     });
 
-    test('falls back to heuristics without an extension', () {
+    test('words in the URL decide nothing', () {
       expect(
           ProbeService.categorizeResource('https://a.com/loadscript?id=1', ''),
-          'script');
+          'other');
+      expect(ProbeService.categorizeResource('https://a.com/lifestyle', ''),
+          'other');
+      expect(ProbeService.categorizeResource('https://a.com/images/x', ''),
+          'other');
     });
+
+    test('the page URL is a document, video is media', () {
+      expect(
+          ProbeService.categorizeResource('https://a.com/', 'https://a.com'),
+          'document');
+      expect(ProbeService.categorizeResource('https://a.com/v.mp4', ''),
+          'media');
+    });
+  });
+
+  test('resourceKindFromExtension separates media; type keeps it an image',
+      () {
+    expect(ProbeService.resourceKindFromExtension('https://a.com/v.mp4'),
+        'media');
+    expect(ProbeService.resourceTypeFromExtension('https://a.com/v.mp4'),
+        'image');
+    expect(ProbeService.resourceKindFromExtension('https://a.com/f.woff'),
+        'font');
+    expect(ProbeService.resourceKindFromExtension('https://a.com/x'), isNull);
   });
 }
