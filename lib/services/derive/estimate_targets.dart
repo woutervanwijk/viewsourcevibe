@@ -1,14 +1,21 @@
 import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
+import '../../utils/site.dart';
+import '../detection/engine.dart';
 import '../probe_service.dart';
 import 'page_weight.dart' show unfetchedDeclaredMedia;
 
 /// Initiator types of static resources. Choice: a plain GET of a script,
 /// stylesheet, font, image or media file is treated as safe to repeat (it is
-/// what the browser already did, and such URLs are not API calls). The small
-/// remaining risk is a script URL that is really a tracking endpoint; that is
-/// accepted because the page size would otherwise stay unknown.
+/// what the browser already did, and such URLs are not API calls). A script
+/// from a tracking service is a static file too, so it stays. The risk is a
+/// request that only looks like a file but reports the visit again, so these
+/// are never estimable (see [isEstimableResourceType]):
+/// 1. any URL matching a `beacons` pattern of a catalogue entity;
+/// 2. an image served by a catalogue tracking service (a tracking pixel);
+/// 3. an image from another site, with a query string and no image file
+///    extension (an unknown pixel endpoint).
 /// Everything else (xhr, fetch, beacon, ping, iframe, navigation, other,
 /// unknown) could be an API call or tracking with side effects. Audio and
 /// video are not downloaded: the browser streams only part of them, so a
@@ -22,8 +29,15 @@ const _estimableTypes = {
   'image',
 };
 
+final _beaconPatterns = [
+  for (final e in catalog)
+    for (final b in e.beacons) RegExp(b),
+];
+
 /// Whether the app may request this resource again to learn its size.
-bool isEstimableResourceType(String rawType, String url) {
+/// [pageUrl] (empty when unknown) is the page that loaded it.
+bool isEstimableResourceType(String rawType, String url,
+    {String pageUrl = ''}) {
   final type = rawType.toLowerCase();
   if (!_estimableTypes.contains(type)) return false;
   final uri = Uri.tryParse(url);
@@ -34,6 +48,19 @@ bool isEstimableResourceType(String rawType, String url) {
   if ((type == 'link' || type == 'css') &&
       ProbeService.resourceTypeFromExtension(url) == 'document') {
     return false;
+  }
+  if (_beaconPatterns.any((r) => r.hasMatch(url))) return false;
+  if (type == 'img' || type == 'image') {
+    if (externalServicesForUrl(url, pageUrl)
+        .any((e) => e.category.isTracking)) {
+      return false;
+    }
+    if (pageUrl.isNotEmpty &&
+        uri.hasQuery &&
+        !sameSite(uri.host, Uri.tryParse(pageUrl)?.host ?? '') &&
+        ProbeService.resourceTypeFromExtension(url) != 'image') {
+      return false;
+    }
   }
   return true;
 }
@@ -55,6 +82,7 @@ List<String> estimateTargetsOf(
   if (browser is! Present<BrowserSnapshot>) return const [];
   final res = browser.value.resources;
   if (res is! Present<List<ResourceEntry>>) return const [];
+  final pageUrl = browser.value.url.toString();
   final out = <String>{};
   final resourceUrls = <String>[];
   for (final r in res.value) {
@@ -63,14 +91,14 @@ List<String> estimateTargetsOf(
     final tx = r.transfer;
     if (tx is Present<int>) continue;
     if (estimates.containsKey(r.url)) continue;
-    if (!isEstimableResourceType(r.type, r.url)) continue;
+    if (!isEstimableResourceType(r.type, r.url, pageUrl: pageUrl)) continue;
     out.add(r.url);
   }
   // Declared in the DOM but never fetched: an image, so a plain GET is safe.
   for (final u in unfetchedDeclaredMedia(resourceUrls, declaredMedia)) {
     if (out.length >= limit) break;
     if (estimates.containsKey(u)) continue;
-    if (!isEstimableResourceType('img', u)) continue;
+    if (!isEstimableResourceType('img', u, pageUrl: pageUrl)) continue;
     out.add(u);
   }
   return out.toList();

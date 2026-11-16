@@ -59,6 +59,56 @@ void main() {
     });
   });
 
+  group('tracking pixels', () {
+    const page = 'https://shop.test/';
+    test('tracking pixels are never requested again', () {
+      expect(
+          isEstimableResourceType(
+              'img', 'https://www.facebook.com/tr?id=1&ev=PageView',
+              pageUrl: page),
+          isFalse);
+      expect(
+          isEstimableResourceType('img', 'https://px.ads.test/p?uid=9',
+              pageUrl: page),
+          isFalse);
+    });
+
+    test('a catalogue beacon pattern is never requested, any type', () {
+      expect(
+          isEstimableResourceType('css', 'https://p.typekit.net/p.css?s=1'),
+          isFalse);
+    });
+
+    test('ordinary images still are', () {
+      expect(
+          isEstimableResourceType(
+              'img', 'https://images.cdn.test/a/photo.jpg?w=200',
+              pageUrl: page),
+          isTrue);
+      expect(
+          isEstimableResourceType('img', 'https://shop.test/img?id=4',
+              pageUrl: page),
+          isTrue);
+      expect(
+          isEstimableResourceType('img', 'https://images.cdn.test/a/slug',
+              pageUrl: page),
+          isTrue);
+    });
+
+    test('tracker scripts are static files and stay estimable', () {
+      expect(
+          isEstimableResourceType(
+              'script', 'https://www.googletagmanager.com/gtag/js?id=G-1',
+              pageUrl: page),
+          isTrue);
+    });
+
+    test('without a page URL the old rules apply', () {
+      expect(isEstimableResourceType('img', 'https://px.ads.test/p?uid=9'),
+          isTrue);
+    });
+  });
+
   group('estimateTargets', () {
     test('the iOS fixture: unsized static resources, once each', () {
       expect(estimateTargets(iosPartial()), ['https://cdn.other.net/lib.js']);
