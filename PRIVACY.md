@@ -19,12 +19,13 @@ View Source Vibe functions entirely locally on your device. The application allo
 The application contacts:
 
 1. **The site you inspect**: the page itself (in the in-app browser and with a separate request by the app), its redirects, `robots.txt`, `sitemap.xml` and, once the Sovereignty tab has been opened, `/.well-known/security.txt`.
-2. **The hosts that page loads files from**: the in-app browser loads them like any browser. For files whose size the browser does not report, the app requests the file once more to measure it. Tracking pixels are never requested again.
+2. **The hosts that page loads files from**: the in-app browser loads them like any browser. For files whose size the browser does not report, the app requests the file once more to measure it. Known tracking pixels, and third-party images that look like pings, are not requested again.
 3. **RIPEstat (stat.ripe.net, RIPE NCC, Netherlands)**: the IP addresses of the hosts a page uses, to look up their network and country. Only after you open the Sovereignty tab. Once opened, the analysis also runs for the pages you open next during that session.
 4. **A DNS-over-HTTPS resolver** (doh.libredns.gr, Greece; dns.google, United States, as fallback): the domain name of the site, to read its DNS records. Only after you open the Sovereignty tab, as above.
-5. **DuckDuckGo's icon service (icons.duckduckgo.com)**: the domain names of services detected on a page, to show their logos. Logos are cached for 30 days.
+5. **Your device's DNS resolver** (usually your internet provider's or the one set in your operating system): the app looks up the IP address of every host a page uses, so this resolver sees those host names. Only after you open the Sovereignty tab, as above.
+6. **DuckDuckGo's icon service (icons.duckduckgo.com)**: the domain names of services detected on a page, to show their logos. Logos are cached for 30 days.
 
-These services see your IP address and the names listed above. They do not receive the page content, your history, cookies or any identifier from the app.
+These services see your IP address and the names listed above. They do not receive the page content, your history or cookies. RIPEstat sees the app name `viewsourcevibe` with each request, which is the same for every user and says nothing about you.
 
 Your history and the URLs you visit are stored on your device and are never sent to us.
 
