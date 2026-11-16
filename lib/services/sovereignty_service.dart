@@ -1450,14 +1450,25 @@ class SovereigntyService {
       'https://stat.ripe.net/data/$call/data.json'
       '?resource=$resource&sourceapp=viewsourcevibe';
 
-  static Future<Map<String, dynamic>?> _fetchJson(String url) async {
+  static Future<Map<String, dynamic>?> _fetchJson(String url) =>
+      fetchJsonWith(_ripeHttp, url);
+
+  /// GET [url] as JSON on [client]. Every response is drained or the request
+  /// aborted, so a pooled connection is never left busy.
+  @visibleForTesting
+  static Future<Map<String, dynamic>?> fetchJsonWith(
+      HttpClient client, String url) async {
+    HttpClientRequest? req;
     try {
-      final req = await _ripeHttp.getUrl(Uri.parse(url)).timeout(_timeout);
+      req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
       final res = await req.close().timeout(_timeout);
-      if (res.statusCode != 200) return null;
       final body = await res.transform(utf8.decoder).join().timeout(_timeout);
+      if (res.statusCode != 200) return null;
       return jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
+      try {
+        req?.abort();
+      } catch (_) {}
       return null;
     }
   }
