@@ -248,6 +248,9 @@ bool get _isDesktopPlatform {
 }
 
 void main() async {
+  // Release builds log nothing.
+  if (kReleaseMode) debugPrint = (String? message, {int? wrapWidth}) {};
+
   // Initialize Flutter binding before any async operations
   WidgetsFlutterBinding.ensureInitialized();
 

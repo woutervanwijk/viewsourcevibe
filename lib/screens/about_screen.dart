@@ -2,6 +2,7 @@ import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
+import 'package:view_source_vibe/utils/app_version.dart';
 import 'package:view_source_vibe/widgets/section_box.dart';
 import 'package:universal_io/io.dart';
 
@@ -86,7 +87,7 @@ class AboutScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Web page explorer · Version 2.0.0',
+                    'Web page explorer · Version $kAppVersion',
                     textAlign: TextAlign.center,
                     style:
                         TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
