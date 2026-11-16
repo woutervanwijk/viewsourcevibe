@@ -57,7 +57,7 @@ void main() {
         service: service, child: const PageSizeView());
     await tester.pump();
 
-    expect(find.text('≥ 7 KB'), findsOneWidget);
+    expect(find.text('≥ ≈ 7 KB'), findsOneWidget);
     expect(find.text('≥ 2 KB'), findsOneWidget);
     expect(find.textContaining('1 resource without size'), findsOneWidget);
     expect(find.textContaining('size lookup failed'), findsWidgets);

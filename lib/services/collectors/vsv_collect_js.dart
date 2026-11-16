@@ -311,8 +311,6 @@ window.__vsv_collect = function(opts) {
     return res;
   });
 
-  function num(v) { return typeof v === 'number' ? v : null; }
-
   out.resources = section(function() {
     var observer = [];
     var bootstrap = window.__vsv_obsOk === true &&
@@ -375,6 +373,8 @@ window.__vsv_collect = function(opts) {
     };
   });
 
+  function num(v) { return typeof v === 'number' ? v : null; }
+
   out.navigation = section(function() {
     var nav = performance.getEntriesByType('navigation')[0];
     if (!nav) throw new Error('no navigation timing entry');
@@ -383,7 +383,10 @@ window.__vsv_collect = function(opts) {
       domContentLoaded: nav.domContentLoadedEventEnd, loadEnd: nav.loadEventEnd,
       protocol: nav.nextHopProtocol || null,
       // HTTP status of the document (absent where the engine lacks it).
-      status: typeof nav.responseStatus === 'number' ? nav.responseStatus : null
+      status: typeof nav.responseStatus === 'number' ? nav.responseStatus : null,
+      // Document sizes: transferred, encoded (compressed) and decoded body.
+      tx: num(nav.transferSize), enc: num(nav.encodedBodySize),
+      dec: num(nav.decodedBodySize)
     };
   });
 

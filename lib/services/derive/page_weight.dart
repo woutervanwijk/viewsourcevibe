@@ -69,8 +69,9 @@ class PageWeight {
   /// size, or resources were truncated. Decoded is never estimated.
   final bool decodedLowerBound;
 
-  /// Set when the main document's sizes come from the server body (the
-  /// browser does not report them).
+  /// Where the main document's size comes from: the browser's navigation
+  /// entry (measured), or the app's own server fetch (estimated, when the
+  /// browser reports no document size).
   final DataSource? documentSource;
   final double? snapshotTimeMs;
 
@@ -269,13 +270,23 @@ PageWeight? derivePageWeightOf(BrowserSnapshot b,
   }
 
   DataSource? documentSource;
-  if (server is Present<ServerSnapshot>) {
+  final nav = b.navigation;
+  final navTransfer =
+      nav is Present<NavigationTiming> ? nav.value.documentTransfer : null;
+  if (navTransfer is Present<int>) {
+    final html = buckets['html']!;
+    html.count++;
+    html.addTransfer(navTransfer.value);
+    measured = (measured ?? 0) + navTransfer.value;
+    final navDecoded = (nav as Present<NavigationTiming>).value.documentDecoded;
+    if (navDecoded is Present<int>) html.addDecoded(navDecoded.value);
+    documentSource = DataSource.browser;
+  } else if (server is Present<ServerSnapshot>) {
     final body = server.value.body;
     if (body is Present<ServerBody>) {
       final html = buckets['html']!;
       html.count++;
-      html.addTransfer(body.value.transferLength);
-      measured = (measured ?? 0) + body.value.transferLength;
+      html.addEstimate(body.value.transferLength);
       html.addDecoded(body.value.byteLength);
       if (body.value.truncated) {
         transferGap = true;

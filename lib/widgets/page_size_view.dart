@@ -482,7 +482,7 @@ class _PageSizeViewState extends State<PageSizeView>
               context,
               '${active.declaredNote!}.',
             ),
-          if (weight.documentSource != null)
+          if (weight.documentSource == DataSource.server)
             _note(context,
                 'The page document is counted from the server response.',
                 italic: false),

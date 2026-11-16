@@ -61,6 +61,40 @@ void main() {
     expect(w.transfer, 600);
   });
 
+  NavigationTiming nav({Observed<int>? tx, Observed<int>? dec}) =>
+      NavigationTiming(
+        timeToFirstByte: b(1.0),
+        domInteractive: b(2.0),
+        domContentLoaded: b(3.0),
+        loadEvent: b(4.0),
+        protocol: b('h2'),
+        documentTransfer:
+            tx ?? const Unavailable(UnavailableReason.notReportedByPlatform),
+        documentDecoded:
+            dec ?? const Unavailable(UnavailableReason.notReportedByPlatform),
+      );
+
+  test('the document is sized by the browser when it reports it', () {
+    final w = derivePageWeight(inspection(
+        server: serverSnap(body: 'x' * 9999),
+        browser: browserSnap(
+            navigation: nav(tx: b(5300), dec: b(20000)), resources: [])))!;
+    expect(w.breakdown['html']!.transfer, 5300);
+    expect(w.breakdown['html']!.decoded, 20000);
+    expect(w.documentSource, DataSource.browser);
+    expect(w.transferEstimated, isFalse);
+  });
+
+  test('without browser sizes the server body counts as an estimate', () {
+    final w = derivePageWeight(inspection(
+        server: serverSnap(body: 'x' * 9999),
+        browser: browserSnap(navigation: nav(), resources: [])))!;
+    expect(w.breakdown['html']!.transfer, 9999);
+    expect(w.estimatedTransfer, 9999);
+    expect(w.transferEstimated, isTrue);
+    expect(w.documentSource, DataSource.server);
+  });
+
   test('null without browser resources', () {
     expect(derivePageWeight(inspection(browser: browserSnap(resources: null))),
         isNull);
