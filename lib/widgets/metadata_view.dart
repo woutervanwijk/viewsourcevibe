@@ -893,15 +893,15 @@ class MetadataView extends StatelessWidget {
   Widget _buildTechConfidenceSection(
       BuildContext context, List<Detection> tech) {
     final items = tech.map((d) {
-      final (score, reason) = d.confidence;
+      final (confidence, reason) = d.confidence;
       return (
         label: _techLabel(d),
-        score: score,
+        confidence: confidence,
         reason: reason,
         sources: d.evidence,
       );
     }).toList()
-      ..sort((a, b) => b.score.compareTo(a.score));
+      ..sort((a, b) => a.confidence.index.compareTo(b.confidence.index));
 
     return Card(
       elevation: 0,
@@ -913,11 +913,11 @@ class MetadataView extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: items.map((item) {
-            final color = item.score >= 80
-                ? Colors.green
-                : item.score >= 60
-                    ? Colors.orange
-                    : Colors.grey;
+            final color = switch (item.confidence) {
+              DetectionConfidence.high => Colors.green,
+              DetectionConfidence.medium => Colors.orange,
+              DetectionConfidence.low => Colors.grey,
+            };
             final sources = item.sources;
             return InkWell(
                 borderRadius: BorderRadius.circular(8),
@@ -926,29 +926,22 @@ class MetadataView extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Row(
                     children: [
-                      SizedBox(
+                      Container(
                         width: 46,
                         height: 46,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            CircularProgressIndicator(
-                              value: item.score / 100,
-                              strokeWidth: 5,
-                              color: color,
-                              backgroundColor: color.withValues(alpha: 0.12),
-                            ),
-                            Center(
-                              child: Text(
-                                '${item.score}',
-                                style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color.withValues(alpha: 0.12),
+                          border: Border.all(color: color, width: 2),
+                        ),
+                        child: Text(
+                          item.confidence.label,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),

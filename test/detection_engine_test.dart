@@ -193,4 +193,20 @@ void main() {
     expect(entityForHost('analytics.tiktok.com')?.name, 'TikTok Pixel');
     expect(entityForHost('www.tiktok.com')?.name, 'TikTok');
   });
+
+  group('confidence and cookie rules', () {
+    test('confidence is a label', () {
+      final d = Detection(entityNamed('Google Ads')!)..requests = 1;
+      expect(d.confidence.$1, DetectionConfidence.high);
+      expect(DetectionConfidence.medium.label, 'Medium');
+    });
+    test('the longest cookie rule wins', () {
+      const a = Entity('A', DetectionCategory.analytics);
+      const b = Entity('B', DetectionCategory.advertising);
+      expect(longestCookieRule('_gcl_au', [(a, '_g*'), (b, '_gcl_*')]), b);
+      expect(longestCookieRule('_gcl_au', [(b, '_gcl_*'), (a, '_g*')]), b);
+      expect(longestCookieRule('_ga', [(a, '_ga*'), (b, '_ga')]), b);
+      expect(longestCookieRule('other', [(a, '_g*')]), isNull);
+    });
+  });
 }

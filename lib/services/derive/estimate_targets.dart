@@ -29,11 +29,6 @@ const _estimableTypes = {
   'image',
 };
 
-final _beaconPatterns = [
-  for (final e in catalog)
-    for (final b in e.beacons) RegExp(b),
-];
-
 /// Whether the app may request this resource again to learn its size.
 /// [pageUrl] (empty when unknown) is the page that loaded it.
 bool isEstimableResourceType(String rawType, String url,
@@ -49,7 +44,7 @@ bool isEstimableResourceType(String rawType, String url,
       ProbeService.resourceTypeFromExtension(url) == 'document') {
     return false;
   }
-  if (_beaconPatterns.any((r) => r.hasMatch(url))) return false;
+  if (isBeaconUrl(url)) return false;
   if (type == 'img' || type == 'image') {
     if (externalServicesForUrl(url, pageUrl)
         .any((e) => e.category.isTracking)) {
