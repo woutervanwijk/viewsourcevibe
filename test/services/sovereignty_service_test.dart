@@ -119,6 +119,36 @@ void main() {
     });
   });
 
+  group('RIPEstat and anycast', () {
+    test('RIPEstat URLs name the app', () {
+      expect(
+          SovereigntyService.ripeUrl('prefix-overview', '1.2.3.4'),
+          'https://stat.ripe.net/data/prefix-overview/data.json'
+          '?resource=1.2.3.4&sourceapp=viewsourcevibe');
+    });
+
+    test('anycast hosts do not count as located', () {
+      final checks = SovereigntyService.residencyChecks([
+        HostInfo('a.nl')
+          ..requests = 3
+          ..ipCountry = 'NL',
+        HostInfo('cdn.example')
+          ..requests = 5
+          ..ipCountry = 'US'
+          ..anycast = true,
+      ], null, eu);
+      final c = checks.firstWhere(
+          (c) => c.title == 'Requests served from the site\'s jurisdiction');
+      expect(c.evidence, contains('100% in'));
+      expect(c.evidence, contains('of 3 located requests'));
+      expect(
+          c.evidence,
+          contains(
+              '1 host(s) on an anycast CDN (location depends on the visitor)'));
+      expect(HostInfo('x').toJson()['anycast'], false);
+    });
+  });
+
   group('DNS wire format', () {
     test('builds a query', () {
       final q = SovereigntyService.buildDnsQuery('nos.nl', 2);

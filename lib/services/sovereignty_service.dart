@@ -409,6 +409,9 @@ class HostInfo {
   String? asnCountry; // where the network operator is registered
   HostingProvider? provider; // known company, with its parent's HQ
 
+  /// On an anycast CDN: the GeoLite country is not where the visitor is served.
+  bool anycast = false;
+
   HostInfo(this.host);
 
   /// Whose law applies: the known company's HQ, else the country where the
@@ -435,6 +438,7 @@ class HostInfo {
         'ipCountry': ipCountry,
         'asnCountry': asnCountry,
         'region': regionOf(ipCountry),
+        'anycast': anycast,
         'provider': provider?.name,
         'providerCountry': provider?.country,
         'controlCountry': controlCountry,
@@ -820,7 +824,13 @@ class SovereigntyService {
   }) {
     const p = Pillar.residency;
     final main = hosts.isEmpty ? null : hosts.first;
-    final located = hosts.where((h) => h.ipCountry != null).toList();
+    final located =
+        hosts.where((h) => h.ipCountry != null && !h.anycast).toList();
+    final anycastCount = hosts.where((h) => h.anycast).length;
+    final anycastNote = anycastCount > 0
+        ? '; $anycastCount host(s) on an anycast CDN '
+            '(location depends on the visitor)'
+        : '';
     final total = located.fold<int>(0, (a, h) => a + h.requests);
     int requestsWhere(Relation r) => located
         .where((h) => relationTo(h.ipCountry, home) == r)
@@ -874,11 +884,11 @@ class SovereigntyService {
                     ? CheckStatus.warn
                     : CheckStatus.fail,
         total == 0
-            ? 'No server locations known$truncated'
+            ? 'No server locations known$truncated$anycastNote'
             : '${(own * 100).round()}% in $homeLabel'
                 '${adequate > 0 ? ', ${(adequate * 100).round()}% in adequate countries' : ''}'
                 ' (of $total located requests; ${(locatedShare * 100).round()}% of all requests located)'
-                '$truncated',
+                '$truncated$anycastNote',
         weight: 2,
       ),
       SovereigntyCheck(
@@ -1422,23 +1432,33 @@ class SovereigntyService {
     }
     // The network operator (ASN holder) outranks the hostname.
     info.provider = matchProvider([info.asnHolder, info.host]);
+    info.anycast = info.provider?.edge == true;
   }
 
   static Future<Map<String, dynamic>?> _getJson(String url) =>
       _ripeGate.run(() => _fetchJson(url));
 
+  // One client for all RIPEstat calls so connections are reused.
+  static HttpClient? _ripeClient;
+  static HttpClient get _ripeHttp => _ripeClient ??= HttpClient()
+    ..connectionTimeout = _timeout
+    ..idleTimeout = const Duration(seconds: 15);
+
+  /// RIPEstat asks regular API users to identify themselves with `sourceapp`.
+  @visibleForTesting
+  static String ripeUrl(String call, String resource) =>
+      'https://stat.ripe.net/data/$call/data.json'
+      '?resource=$resource&sourceapp=viewsourcevibe';
+
   static Future<Map<String, dynamic>?> _fetchJson(String url) async {
-    final client = HttpClient()..connectionTimeout = _timeout;
     try {
-      final req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
+      final req = await _ripeHttp.getUrl(Uri.parse(url)).timeout(_timeout);
       final res = await req.close().timeout(_timeout);
       if (res.statusCode != 200) return null;
       final body = await res.transform(utf8.decoder).join().timeout(_timeout);
       return jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
       return null;
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -1446,7 +1466,7 @@ class SovereigntyService {
     final cached = _asnCache[ip];
     if (cached != null) return cached;
     final json = await _getJson(
-      'https://stat.ripe.net/data/prefix-overview/data.json?resource=$ip',
+      ripeUrl('prefix-overview', ip),
     );
     final asns = (json?['data']?['asns'] as List?) ?? const [];
     final first = asns.isEmpty ? null : asns.first as Map;
@@ -1464,7 +1484,7 @@ class SovereigntyService {
   static Future<String?> _asnCountryFor(int asn) async {
     if (_asnCountryCache.containsKey(asn)) return _asnCountryCache[asn];
     final json = await _getJson(
-      'https://stat.ripe.net/data/rir-stats-country/data.json?resource=AS$asn',
+      ripeUrl('rir-stats-country', 'AS$asn'),
     );
     final located = (json?['data']?['located_resources'] as List?) ?? const [];
     final country =
@@ -1476,7 +1496,7 @@ class SovereigntyService {
   static Future<String?> _countryFor(String ip) async {
     if (_countryCache.containsKey(ip)) return _countryCache[ip];
     final json = await _getJson(
-      'https://stat.ripe.net/data/maxmind-geo-lite/data.json?resource=$ip',
+      ripeUrl('maxmind-geo-lite', ip),
     );
     final located = (json?['data']?['located_resources'] as List?) ?? const [];
     String? country;
