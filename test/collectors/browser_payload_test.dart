@@ -79,6 +79,29 @@ void main() {
     expect(nav.documentTransfer, isA<Unavailable<int>>());
   });
 
+  test('a malformed resource name never fails the resources section', () {
+    final s = parseBrowserPayload(
+        jsonEncode({
+          'v': 1,
+          'url': 'https://a.test/',
+          'contentType': 'text/html',
+          'resources': {
+            'ok': true,
+            'bootstrap': true,
+            'observer': [
+              {'n': 'http://[bad', 'it': 'script', 'tx': 10, 'enc': 9, 'dec': 20},
+              {'n': 'https://a.test/ok.js', 'it': 'script', 'tx': 5, 'enc': 4, 'dec': 8},
+              {'n': 'http://[bad2', 'it': 'script', 'tx': 0, 'enc': 0, 'dec': 0},
+            ],
+            'patch': [],
+            'shown': [],
+          },
+        }),
+        BrowserPlatform.macos,
+        pageUrl: Uri.parse('https://a.test/'));
+    expect(present(byUrl(s, 'https://a.test/ok.js').transfer), 5);
+  });
+
   test('every fixture is marked synthetic with a note', () {
     final dir = Directory('test/fixtures/browser');
     final files = dir.listSync().whereType<File>().toList();

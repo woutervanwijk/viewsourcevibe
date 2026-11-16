@@ -297,7 +297,7 @@ const _droppedDetail = 'not collected: the collector buffer was full';
 ({Observed<int> transfer, Observed<int> decoded, bool fromCache}) _sizesFrom(
     int? tx, int? enc, int? dec,
     {required bool webPage,
-    required bool sameOrigin,
+    required bool Function() sameOrigin,
     required bool webKitImage}) {
   const missing = Unavailable<int>(UnavailableReason.notReportedByPlatform,
       'field not reported by this browser');
@@ -308,7 +308,7 @@ const _droppedDetail = 'not collected: the collector buffer was full';
   if (!webPage) {
     transfer = _noOwnSizes;
     decoded = _noOwnSizes;
-  } else if (allZero && !sameOrigin) {
+  } else if (allZero && !sameOrigin()) {
     transfer = const Unavailable(
         UnavailableReason.blockedByPlatform, _crossOriginZero);
     decoded = const Unavailable(
@@ -353,7 +353,7 @@ ResourceEntry _observerEntry(
   final type = '${e['it'] ?? ''}';
   final sizes = _sizesFrom(tx, enc, dec,
       webPage: _isWebPage(pageUrl),
-      sameOrigin: _sameOrigin(Uri.parse(url), pageUrl),
+      sameOrigin: () => _sameOrigin(Uri.parse(url), pageUrl),
       webKitImage: platform.isWebKit && _isImage(type, url));
   final transfer = sizes.transfer, decoded = sizes.decoded;
   final fromCache = sizes.fromCache;
@@ -467,7 +467,7 @@ NavigationTiming _parseNavigation(Map<String, dynamic> m, bool webPage) {
 
   int? n(Object? v) => v is num ? v.toInt() : null;
   final sizes = _sizesFrom(n(m['tx']), n(m['enc']), n(m['dec']),
-      webPage: webPage, sameOrigin: true, webKitImage: false);
+      webPage: webPage, sameOrigin: () => true, webKitImage: false);
 
   final proto = m['protocol'];
   return NavigationTiming(
