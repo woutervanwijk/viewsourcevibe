@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_export_service.dart';
 import 'package:view_source_vibe/services/unified_sharing_service.dart';
+import 'package:view_source_vibe/widgets/share_package_dialog.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
@@ -188,6 +189,7 @@ class Toolbar extends StatelessWidget {
     try {
       final exportService = InspectionExportService();
       if (Platform.isIOS || Platform.isAndroid) {
+        if (!await confirmSharePackage(context)) return;
         final file =
             await exportService.createShareableInspectionPackage(htmlService);
         await UnifiedSharingService.shareFile(

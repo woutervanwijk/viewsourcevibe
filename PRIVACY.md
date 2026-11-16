@@ -1,6 +1,6 @@
 # Privacy Policy for View Source Vibe
 
-**Last updated: February 19, 2026**
+**Last updated: November 16, 2026**
 
 View Source Vibe ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how our application handles your information.
 
@@ -16,12 +16,17 @@ View Source Vibe functions entirely locally on your device. The application allo
 
 ## Network Access
 
-The application requires internet access solely to:
-1. Fetch the web pages and source code you explicitly request.
-2. Follow redirects to reach the destination URL.
-3. Fetch external resources (like CSS, JS, images) required to render the page in the browser view.
+The application contacts:
 
-Your browsing history and the URLs you visit are stored locally on your device for your convenience (History tab) and are never transmitted to our servers or any third parties.
+1. **The site you inspect**: the page itself (in the in-app browser and with a separate request by the app), its redirects, `robots.txt`, `sitemap.xml` and, once the Sovereignty tab has been opened, `/.well-known/security.txt`.
+2. **The hosts that page loads files from**: the in-app browser loads them like any browser. For files whose size the browser does not report, the app requests the file once more to measure it. Tracking pixels are never requested again.
+3. **RIPEstat (stat.ripe.net, RIPE NCC, Netherlands)**: the IP addresses of the hosts a page uses, to look up their network and country. Only after you open the Sovereignty tab. Once opened, the analysis also runs for the pages you open next during that session.
+4. **A DNS-over-HTTPS resolver** (doh.libredns.gr, Greece; dns.google, United States, as fallback): the domain name of the site, to read its DNS records. Only after you open the Sovereignty tab, as above.
+5. **DuckDuckGo's icon service (icons.duckduckgo.com)**: the domain names of services detected on a page, to show their logos. Logos are cached for 30 days.
+
+These services see your IP address and the names listed above. They do not receive the page content, your history, cookies or any identifier from the app.
+
+Your history and the URLs you visit are stored on your device and are never sent to us.
 
 ## Plain HTTP and TLS
 
