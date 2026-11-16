@@ -7,6 +7,7 @@ import 'package:view_source_vibe/services/site_data_cleaner.dart' as site_data;
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
 import 'dart:async';
+import 'dart:io' show HttpClient;
 import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:view_source_vibe/utils/font_url.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
@@ -112,7 +113,8 @@ class HtmlService extends ChangeNotifier {
   /// Removes the browser's data for one site (long-press Reload); a seam
   /// for tests.
   final Future<void> Function(Uri url) _clearSiteData;
-  final ResourceSizeLookup _sizeLookup;
+  /// Null: the default lookup on the per-navigation shared client.
+  final ResourceSizeLookup? _sizeLookup;
   final FreshLoadMeasurer _freshMeasurer;
   final BrowserScreenshot? _browserScreenshotOverride;
   final BrowserPlatform _platform;
@@ -1638,7 +1640,7 @@ class HtmlService extends ChangeNotifier {
         _deleteAllCookies = deleteAllCookies ??
             (() => CookieManager.instance().deleteAllCookies()),
         _clearSiteData = clearSiteData ?? site_data.clearSiteData,
-        _sizeLookup = sizeLookup ?? _lookupResourceSize,
+        _sizeLookup = sizeLookup,
         _browserScreenshotOverride = browserScreenshot,
         _freshMeasurer = freshLoadMeasurer ??
             (HeadlessFreshLoadMeasurer.supported
@@ -2379,6 +2381,8 @@ Technical details: $message''';
   @override
   void dispose() {
     _disposed = true;
+    _lookupClient?.close(force: true);
+    _lookupClient = null;
     _cancelBrowserRefreshes();
     _sovereigntyTimer?.cancel();
     webViewLoadingProgressNotifier.dispose();
@@ -4614,7 +4618,24 @@ Technical details: $message''';
       _sizeCache.clear();
       _sizeCacheGen = gen;
     }
-    return _sizeCache.putIfAbsent(url, () => _sizeLookup(url));
+    return _sizeCache.putIfAbsent(
+        url, () => (_sizeLookup ?? (u) => _lookupResourceSize(gen, u))(url));
+  }
+
+  // One client per navigation generation for the default size lookups, so up
+  // to 400 lookups share connections instead of a TLS handshake each.
+  HttpClient? _lookupClient;
+  int? _lookupClientGen;
+
+  HttpClient _clientFor(int gen) {
+    if (_lookupClientGen != gen) {
+      _lookupClient?.close(force: true);
+      _lookupClient = null;
+    }
+    _lookupClientGen = gen;
+    return _lookupClient ??= (HttpClient()
+      ..autoUncompress = false
+      ..connectionTimeout = const Duration(seconds: 15));
   }
 
   /// Own requests for the sizes the browser could not report (metadata items
@@ -4935,8 +4956,10 @@ Technical details: $message''';
 
   /// Our own download of a resource, measured like the browser's transfer
   /// size (compressed bytes plus headers); see [lookupTransferSize].
-  static Future<int?> _lookupResourceSize(String url) =>
-      lookupTransferSize(url, userAgent: kServerUserAgent);
+  Future<int?> _lookupResourceSize(int gen, String url) => lookupTransferSize(
+      url,
+      userAgent: kServerUserAgent,
+      shared: _clientFor(gen));
 
   /// The browser reported a URL change (history API / SPA route, redirect).
   /// The same document as the current navigation (R20) is nothing new; any

@@ -99,4 +99,64 @@ void main() {
     await server.close(force: true);
     expect(look('/gz'), throwsA(anything));
   });
+
+  group('shared client', () {
+    late HttpServer srv;
+    final ports = <int>[];
+    late String url;
+    setUp(() async {
+      ports.clear();
+      srv = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      url = 'http://127.0.0.1:${srv.port}';
+      srv.listen((r) async {
+        ports.add(r.connectionInfo!.remotePort);
+        final res = r.response;
+        if (r.uri.path == '/err') {
+          if (r.method == 'HEAD') {
+            res.statusCode = 405;
+          } else {
+            res.statusCode = 404;
+            res.write('nope');
+          }
+        } else {
+          res.headers.contentLength = 3;
+          res.write('abc');
+        }
+        await res.close();
+      });
+    });
+    tearDown(() => srv.close(force: true));
+
+    test('a shared client is reused and left open', () async {
+      final c = HttpClient()..autoUncompress = false;
+      await lookupTransferSize('$url/a.png', userAgent: 't', shared: c);
+      await lookupTransferSize('$url/a.png', userAgent: 't', shared: c);
+      expect(ports.toSet(), hasLength(1));
+      c.close(force: true);
+    });
+
+    test('an error response releases the connection for the next lookup',
+        () async {
+      final c = HttpClient()
+        ..autoUncompress = false
+        ..maxConnectionsPerHost = 1;
+      const t = Duration(seconds: 3);
+      expect(
+          await lookupTransferSize('$url/err',
+              userAgent: 't', shared: c, timeout: t),
+          isNull);
+      expect(
+          await lookupTransferSize('$url/a.png',
+              userAgent: 't', shared: c, timeout: t),
+          isNotNull);
+      c.close(force: true);
+    });
+
+    test('client and shared together are rejected', () {
+      expect(
+          lookupTransferSize('$url/a', userAgent: 't', client: HttpClient.new,
+              shared: HttpClient()),
+          throwsArgumentError);
+    });
+  });
 }
