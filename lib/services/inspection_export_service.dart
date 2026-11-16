@@ -18,9 +18,11 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/services/inspection_export_data.dart';
 import 'package:view_source_vibe/services/observed_json.dart';
+import 'package:view_source_vibe/utils/line_diff.dart';
 
 class InspectionExportService {
   static const int packageFormatVersion = 1;
+  static const int _maxDiffChanges = 2000;
 
   Future<File> exportCurrentInspection(HtmlService htmlService) async {
     final bytes = buildPackageBytes(htmlService);
@@ -116,8 +118,37 @@ class InspectionExportService {
     final localFileText = target is FileTarget && !target.file.isBinary
         ? target.file.text.text
         : null;
-    final diff =
-        serverSource != null && dom != null ? _lineDiff(serverSource, dom) : '';
+    final diff = serverSource != null && dom != null
+        ? unifiedDiff(serverSource, dom,
+            fromName: 'source/server.html',
+            toName: 'source/browser-dom.html',
+            maxChanges: _maxDiffChanges)
+        : null;
+    // No diff file when the texts match line for line or differ too much.
+    final sameLines = serverSource != null &&
+        dom != null &&
+        const LineSplitter().convert(serverSource).join('\n') ==
+            const LineSplitter().convert(dom).join('\n');
+    manifest['diff'] = diff != null
+        ? {'status': 'present'}
+        : serverSource == null || dom == null
+            ? {
+                'status': 'unavailable',
+                'reason': 'notApplicable',
+                'detail': 'no server source and browser DOM to compare',
+              }
+            : sameLines
+                ? {
+                    'status': 'unavailable',
+                    'reason': 'notApplicable',
+                    'detail':
+                        'server source and browser DOM have the same lines',
+                  }
+                : {
+                    'status': 'unavailable',
+                    'reason': 'exceedsLimit',
+                    'detail': 'more than $_maxDiffChanges changed lines',
+                  };
 
     final general = htmlService.generalView;
     final security = htmlService.securityView;
@@ -170,6 +201,7 @@ class InspectionExportService {
         weightJson: weightJson,
         hasServerSource: serverSource != null,
         hasBrowserSource: dom != null,
+        hasDiff: diff != null,
       ),
     );
 
@@ -178,7 +210,7 @@ class InspectionExportService {
     if (localFileText != null) {
       addString('source/local-file.txt', localFileText);
     }
-    if (diff.isNotEmpty) addString('source/diff.patch', diff);
+    if (diff != null) addString('source/diff.patch', diff);
 
     addJson('network/probe.json', probeJson);
     addJson('network/browser-probe.json', browserJson);
@@ -331,6 +363,7 @@ class InspectionExportService {
     required Map<String, Object?> weightJson,
     required bool hasServerSource,
     required bool hasBrowserSource,
+    required bool hasDiff,
   }) {
     final source = manifest['source'] as Map<String, Object?>;
     String observedText(Object? o) {
@@ -496,7 +529,7 @@ class InspectionExportService {
     ${_pill('report.html')}
     ${_pill('source/browser-dom.html', enabled: hasBrowserSource)}
     ${_pill('source/server.html', enabled: hasServerSource)}
-    ${_pill('source/diff.patch', enabled: hasServerSource && hasBrowserSource)}
+    ${_pill('source/diff.patch', enabled: hasDiff)}
     ${_pill('network/*.json')}
     ${_pill('analysis/*.json')}
   </div>
@@ -753,27 +786,6 @@ class InspectionExportService {
 
   static String _prettyJson(Object? value) {
     return const JsonEncoder.withIndent('  ').convert(_jsonSafe(value));
-  }
-
-  static String _lineDiff(String? before, String after) {
-    if (before == null || before.isEmpty || after.isEmpty || before == after) {
-      return '';
-    }
-    final a = const LineSplitter().convert(before);
-    final b = const LineSplitter().convert(after);
-    final buffer = StringBuffer()
-      ..writeln('--- source/server.html')
-      ..writeln('+++ source/browser-dom.html');
-    final max = a.length > b.length ? a.length : b.length;
-    for (var i = 0; i < max; i++) {
-      final left = i < a.length ? a[i] : null;
-      final right = i < b.length ? b[i] : null;
-      if (left == right) continue;
-      buffer.writeln('@@ line ${i + 1} @@');
-      if (left != null) buffer.writeln('-$left');
-      if (right != null) buffer.writeln('+$right');
-    }
-    return buffer.toString();
   }
 
   static String _slugFor(String value) {

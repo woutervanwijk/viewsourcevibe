@@ -8,6 +8,7 @@ import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/inspection_export_service.dart';
+import 'fixtures/inspection/builders.dart' as fx;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -161,6 +162,65 @@ void main() {
           .decode(archive.findFile('debug/browser-payload.json')!.readBytes()!);
       expect(text, isNot(contains('hunter2')));
       expect(text, contains('24'));
+    });
+
+    group('source/diff.patch', () {
+      Map<String, dynamic> manifestAndFiles(
+          String? serverText, String? domText, Set<String> names) {
+        final store = InspectionStore();
+        final gen = store.beginUrl(Uri.parse('https://example.com/'));
+        if (serverText != null) {
+          store.applyServer(
+              gen,
+              fx.server(fx.serverSnapshot(
+                  url: 'https://example.com/',
+                  hops: [fx.hop('https://example.com/', 200)],
+                  body: serverText)));
+        }
+        if (domText != null) {
+          store.applyBrowser(gen,
+              fx.browserSnapshot(url: 'https://example.com/', dom: domText));
+        }
+        final htmlService = HtmlService(store: store);
+        addTearDown(htmlService.dispose);
+        final archive = ZipDecoder().decodeBytes(
+            InspectionExportService().buildPackageBytes(htmlService));
+        names.addAll(archive.files.map((f) => f.name));
+        return jsonDecode(
+                utf8.decode(archive.findFile('manifest.json')!.readBytes()!))
+            as Map<String, dynamic>;
+      }
+
+      test('a real diff is written and the manifest says present', () {
+        final names = <String>{};
+        final m = manifestAndFiles('a\nb\nc\n', 'a\nX\nb\nc\n', names);
+        expect(names, contains('source/diff.patch'));
+        expect(m['diff'], {'status': 'present'});
+      });
+
+      test('too many changed lines: no file, manifest says why', () {
+        final names = <String>{};
+        final a = List.generate(3000, (i) => 'a$i').join('\n');
+        final b = List.generate(3000, (i) => 'b$i').join('\n');
+        final m = manifestAndFiles(a, b, names);
+        expect(names, isNot(contains('source/diff.patch')));
+        expect(m['diff'], {
+          'status': 'unavailable',
+          'reason': 'exceedsLimit',
+          'detail': 'more than 2000 changed lines',
+        });
+      });
+
+      test('without both sources the diff is not applicable', () {
+        final names = <String>{};
+        final m = manifestAndFiles('a\n', null, names);
+        expect(names, isNot(contains('source/diff.patch')));
+        expect(m['diff'], {
+          'status': 'unavailable',
+          'reason': 'notApplicable',
+          'detail': 'no server source and browser DOM to compare',
+        });
+      });
     });
   });
 }
