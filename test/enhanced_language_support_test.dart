@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:re_highlight/languages/all.dart';
 
 void main() {
@@ -12,383 +13,432 @@ void main() {
 
     test('Web Development file extensions should be supported', () {
       // HTML family
-      expect(htmlService.getLanguageForExtension('html'), 'html');
-      expect(htmlService.getLanguageForExtension('htm'), 'html');
-      expect(htmlService.getLanguageForExtension('xhtml'), 'html');
+      expect(SourceViewerEditor.getLanguageForExtension('html'), 'html');
+      expect(SourceViewerEditor.getLanguageForExtension('htm'), 'html');
+      expect(SourceViewerEditor.getLanguageForExtension('xhtml'), 'html');
 
       // CSS
-      expect(htmlService.getLanguageForExtension('css'), 'css');
+      expect(SourceViewerEditor.getLanguageForExtension('css'), 'css');
 
       // JavaScript family
-      expect(htmlService.getLanguageForExtension('js'), 'javascript');
-      expect(htmlService.getLanguageForExtension('javascript'), 'javascript');
-      expect(htmlService.getLanguageForExtension('mjs'), 'javascript');
-      expect(htmlService.getLanguageForExtension('cjs'), 'javascript');
+      expect(SourceViewerEditor.getLanguageForExtension('js'), 'javascript');
+      expect(SourceViewerEditor.getLanguageForExtension('javascript'),
+          'javascript');
+      expect(SourceViewerEditor.getLanguageForExtension('mjs'), 'javascript');
+      expect(SourceViewerEditor.getLanguageForExtension('cjs'), 'javascript');
 
       // TypeScript
-      expect(htmlService.getLanguageForExtension('ts'), 'typescript');
-      expect(htmlService.getLanguageForExtension('typescript'), 'typescript');
+      expect(SourceViewerEditor.getLanguageForExtension('ts'), 'typescript');
+      expect(SourceViewerEditor.getLanguageForExtension('typescript'),
+          'typescript');
 
       // JSX/TSX
-      expect(htmlService.getLanguageForExtension('jsx'), 'javascript');
-      expect(htmlService.getLanguageForExtension('tsx'), 'javascript');
+      expect(SourceViewerEditor.getLanguageForExtension('jsx'), 'javascript');
+      expect(SourceViewerEditor.getLanguageForExtension('tsx'), 'typescript');
 
       // JSON
-      expect(htmlService.getLanguageForExtension('json'), 'json');
-      expect(htmlService.getLanguageForExtension('json5'), 'json');
+      expect(SourceViewerEditor.getLanguageForExtension('json'), 'json');
+      expect(SourceViewerEditor.getLanguageForExtension('json5'), 'plaintext');
 
       // XML family
-      expect(htmlService.getLanguageForExtension('xml'), 'xml');
-      expect(htmlService.getLanguageForExtension('xsd'), 'xml');
-      expect(htmlService.getLanguageForExtension('xsl'), 'xml');
-      expect(htmlService.getLanguageForExtension('svg'), 'xml');
+      expect(SourceViewerEditor.getLanguageForExtension('xml'), 'xml');
+      expect(SourceViewerEditor.getLanguageForExtension('xsd'), 'xml');
+      expect(SourceViewerEditor.getLanguageForExtension('xsl'), 'xml');
+      expect(SourceViewerEditor.getLanguageForExtension('svg'), 'xml');
 
       // YAML
-      expect(htmlService.getLanguageForExtension('yaml'), 'yaml');
-      expect(htmlService.getLanguageForExtension('yml'), 'yaml');
+      expect(SourceViewerEditor.getLanguageForExtension('yaml'), 'yaml');
+      expect(SourceViewerEditor.getLanguageForExtension('yml'), 'yaml');
 
       // Vue
-      expect(htmlService.getLanguageForExtension('vue'), 'vue');
+      expect(SourceViewerEditor.getLanguageForExtension('vue'), 'plaintext');
 
       // Svelte
-      expect(htmlService.getLanguageForExtension('svelte'), 'html');
+      expect(SourceViewerEditor.getLanguageForExtension('svelte'), 'plaintext');
     });
 
     test('Markup and Documentation file extensions should be supported', () {
       // Markdown
-      expect(htmlService.getLanguageForExtension('md'), 'markdown');
-      expect(htmlService.getLanguageForExtension('markdown'), 'markdown');
+      expect(SourceViewerEditor.getLanguageForExtension('md'), 'markdown');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('markdown'), 'markdown');
 
       // Plain text
-      expect(htmlService.getLanguageForExtension('txt'), 'plaintext');
-      expect(htmlService.getLanguageForExtension('text'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('txt'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('text'), 'plaintext');
 
       // AsciiDoc
-      expect(htmlService.getLanguageForExtension('adoc'), 'asciidoc');
-      expect(htmlService.getLanguageForExtension('asciidoc'), 'asciidoc');
+      expect(SourceViewerEditor.getLanguageForExtension('adoc'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('asciidoc'), 'plaintext');
     });
 
     test('Programming Language file extensions should be supported', () {
       // Dart
-      expect(htmlService.getLanguageForExtension('dart'), 'dart');
+      expect(SourceViewerEditor.getLanguageForExtension('dart'), 'dart');
 
       // Python
-      expect(htmlService.getLanguageForExtension('py'), 'python');
-      expect(htmlService.getLanguageForExtension('python'), 'python');
+      expect(SourceViewerEditor.getLanguageForExtension('py'), 'python');
+      expect(SourceViewerEditor.getLanguageForExtension('python'), 'python');
 
       // Java
-      expect(htmlService.getLanguageForExtension('java'), 'java');
+      expect(SourceViewerEditor.getLanguageForExtension('java'), 'java');
 
       // Kotlin
-      expect(htmlService.getLanguageForExtension('kt'), 'kotlin');
-      expect(htmlService.getLanguageForExtension('kts'), 'kotlin');
+      expect(SourceViewerEditor.getLanguageForExtension('kt'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('kts'), 'plaintext');
 
       // Swift
-      expect(htmlService.getLanguageForExtension('swift'), 'swift');
+      expect(SourceViewerEditor.getLanguageForExtension('swift'), 'swift');
 
       // Go
-      expect(htmlService.getLanguageForExtension('go'), 'go');
+      expect(SourceViewerEditor.getLanguageForExtension('go'), 'go');
 
       // Rust
-      expect(htmlService.getLanguageForExtension('rs'), 'rust');
-      expect(htmlService.getLanguageForExtension('rust'), 'rust');
+      expect(SourceViewerEditor.getLanguageForExtension('rs'), 'rust');
+      expect(SourceViewerEditor.getLanguageForExtension('rust'), 'rust');
 
       // PHP
-      expect(htmlService.getLanguageForExtension('php'), 'php');
+      expect(SourceViewerEditor.getLanguageForExtension('php'), 'php');
 
       // Ruby
-      expect(htmlService.getLanguageForExtension('rb'), 'ruby');
-      expect(htmlService.getLanguageForExtension('ruby'), 'ruby');
+      expect(SourceViewerEditor.getLanguageForExtension('rb'), 'ruby');
+      expect(SourceViewerEditor.getLanguageForExtension('ruby'), 'ruby');
 
       // C++
-      expect(htmlService.getLanguageForExtension('cpp'), 'cpp');
-      expect(htmlService.getLanguageForExtension('cc'), 'cpp');
-      expect(htmlService.getLanguageForExtension('cxx'), 'cpp');
-      expect(htmlService.getLanguageForExtension('c++'), 'cpp');
-      expect(htmlService.getLanguageForExtension('h'), 'cpp');
-      expect(htmlService.getLanguageForExtension('hpp'), 'cpp');
-      expect(htmlService.getLanguageForExtension('hxx'), 'cpp');
+      expect(SourceViewerEditor.getLanguageForExtension('cpp'), 'cpp');
+      expect(SourceViewerEditor.getLanguageForExtension('cc'), 'cpp');
+      expect(SourceViewerEditor.getLanguageForExtension('cxx'), 'cpp');
+      expect(SourceViewerEditor.getLanguageForExtension('c++'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('h'), 'c');
+      expect(SourceViewerEditor.getLanguageForExtension('hpp'), 'cpp');
+      expect(SourceViewerEditor.getLanguageForExtension('hxx'), 'plaintext');
 
       // C
-      expect(htmlService.getLanguageForExtension('c'), 'c');
+      expect(SourceViewerEditor.getLanguageForExtension('c'), 'c');
 
       // C#
-      expect(htmlService.getLanguageForExtension('cs'), 'csharp');
+      expect(SourceViewerEditor.getLanguageForExtension('cs'), 'csharp');
 
       // Scala
-      expect(htmlService.getLanguageForExtension('scala'), 'scala');
+      expect(SourceViewerEditor.getLanguageForExtension('scala'), 'plaintext');
 
       // Haskell
-      expect(htmlService.getLanguageForExtension('hs'), 'haskell');
-      expect(htmlService.getLanguageForExtension('haskell'), 'haskell');
+      expect(SourceViewerEditor.getLanguageForExtension('hs'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('haskell'), 'plaintext');
 
       // Lua
-      expect(htmlService.getLanguageForExtension('lua'), 'lua');
+      expect(SourceViewerEditor.getLanguageForExtension('lua'), 'plaintext');
 
       // Perl
-      expect(htmlService.getLanguageForExtension('pl'), 'perl');
-      expect(htmlService.getLanguageForExtension('perl'), 'perl');
+      expect(SourceViewerEditor.getLanguageForExtension('pl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('perl'), 'plaintext');
 
       // R
-      expect(htmlService.getLanguageForExtension('r'), 'r');
+      expect(SourceViewerEditor.getLanguageForExtension('r'), 'plaintext');
 
       // Shell scripting
-      expect(htmlService.getLanguageForExtension('sh'), 'bash');
-      expect(htmlService.getLanguageForExtension('bash'), 'bash');
-      expect(htmlService.getLanguageForExtension('zsh'), 'bash');
-      expect(htmlService.getLanguageForExtension('fish'), 'bash');
+      expect(SourceViewerEditor.getLanguageForExtension('sh'), 'bash');
+      expect(SourceViewerEditor.getLanguageForExtension('bash'), 'bash');
+      expect(SourceViewerEditor.getLanguageForExtension('zsh'), 'bash');
+      expect(SourceViewerEditor.getLanguageForExtension('fish'), 'plaintext');
 
       // PowerShell
-      expect(htmlService.getLanguageForExtension('ps1'), 'powershell');
-      expect(htmlService.getLanguageForExtension('psm1'), 'powershell');
+      expect(SourceViewerEditor.getLanguageForExtension('ps1'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('psm1'), 'plaintext');
     });
 
     test('Configuration and Data file extensions should be supported', () {
       // INI files
-      expect(htmlService.getLanguageForExtension('ini'), 'ini');
-      expect(htmlService.getLanguageForExtension('conf'), 'ini');
-      expect(htmlService.getLanguageForExtension('config'), 'ini');
+      expect(SourceViewerEditor.getLanguageForExtension('ini'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('conf'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('config'), 'plaintext');
 
       // Properties
-      expect(htmlService.getLanguageForExtension('properties'), 'properties');
+      expect(SourceViewerEditor.getLanguageForExtension('properties'),
+          'plaintext');
 
       // TOML
-      expect(htmlService.getLanguageForExtension('toml'), 'toml');
+      expect(SourceViewerEditor.getLanguageForExtension('toml'), 'plaintext');
 
       // SQL
-      expect(htmlService.getLanguageForExtension('sql'), 'sql');
+      expect(SourceViewerEditor.getLanguageForExtension('sql'), 'sql');
 
       // GraphQL
-      expect(htmlService.getLanguageForExtension('graphql'), 'graphql');
-      expect(htmlService.getLanguageForExtension('gql'), 'graphql');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('graphql'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('gql'), 'plaintext');
 
       // Docker
-      expect(htmlService.getLanguageForExtension('dockerfile'), 'dockerfile');
+      expect(SourceViewerEditor.getLanguageForExtension('dockerfile'),
+          'plaintext');
 
       // Make
-      expect(htmlService.getLanguageForExtension('makefile'), 'makefile');
-      expect(htmlService.getLanguageForExtension('mk'), 'makefile');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('makefile'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('mk'), 'plaintext');
 
       // CMake
-      expect(htmlService.getLanguageForExtension('cmake'), 'cmake');
+      expect(SourceViewerEditor.getLanguageForExtension('cmake'), 'plaintext');
     });
 
     test('Styling and Preprocessor file extensions should be supported', () {
       // SCSS/Sass
-      expect(htmlService.getLanguageForExtension('scss'), 'scss');
-      expect(htmlService.getLanguageForExtension('sass'), 'scss');
+      expect(SourceViewerEditor.getLanguageForExtension('scss'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('sass'), 'plaintext');
 
       // Less
-      expect(htmlService.getLanguageForExtension('less'), 'less');
+      expect(SourceViewerEditor.getLanguageForExtension('less'), 'plaintext');
 
       // Stylus
-      expect(htmlService.getLanguageForExtension('styl'), 'stylus');
-      expect(htmlService.getLanguageForExtension('stylus'), 'stylus');
+      expect(SourceViewerEditor.getLanguageForExtension('styl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('stylus'), 'plaintext');
     });
 
     test('Other common file extensions should be supported', () {
       // Diff/Patch
-      expect(htmlService.getLanguageForExtension('diff'), 'diff');
-      expect(htmlService.getLanguageForExtension('patch'), 'diff');
+      expect(SourceViewerEditor.getLanguageForExtension('diff'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('patch'), 'plaintext');
 
       // Gitignore
-      expect(htmlService.getLanguageForExtension('gitignore'), 'gitignore');
-      expect(htmlService.getLanguageForExtension('ignore'), 'gitignore');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('gitignore'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ignore'), 'plaintext');
 
       // EditorConfig
-      expect(htmlService.getLanguageForExtension('editorconfig'), 'ini');
+      expect(SourceViewerEditor.getLanguageForExtension('editorconfig'),
+          'plaintext');
     });
 
     test('Unknown file extensions should fall back to plaintext', () {
-      expect(htmlService.getLanguageForExtension('unknown'), 'plaintext');
-      expect(htmlService.getLanguageForExtension('xyz123'), 'plaintext');
-      expect(htmlService.getLanguageForExtension(''), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('unknown'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('xyz123'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension(''), 'plaintext');
     });
 
     test('Additional re_highlight supported languages should be mapped', () {
       // Additional languages that were missing from original mapping
-      expect(htmlService.getLanguageForExtension('1c'), '1c');
-      expect(htmlService.getLanguageForExtension('abnf'), 'abnf');
-      expect(htmlService.getLanguageForExtension('accesslog'), 'accesslog');
+      expect(SourceViewerEditor.getLanguageForExtension('1c'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('abnf'), 'plaintext');
       expect(
-          htmlService.getLanguageForExtension('actionscript'), 'actionscript');
-      expect(htmlService.getLanguageForExtension('ada'), 'ada');
-      expect(htmlService.getLanguageForExtension('angelscript'), 'angelscript');
-      expect(htmlService.getLanguageForExtension('apache'), 'apache');
-      expect(htmlService.getLanguageForExtension('applescript'), 'applescript');
-      expect(htmlService.getLanguageForExtension('arcade'), 'arcade');
-      expect(htmlService.getLanguageForExtension('arduino'), 'arduino');
-      expect(htmlService.getLanguageForExtension('armasm'), 'armasm');
-      expect(htmlService.getLanguageForExtension('aspectj'), 'aspectj');
-      expect(htmlService.getLanguageForExtension('autohotkey'), 'autohotkey');
-      expect(htmlService.getLanguageForExtension('autoit'), 'autoit');
-      expect(htmlService.getLanguageForExtension('avrasm'), 'avrasm');
-      expect(htmlService.getLanguageForExtension('awk'), 'awk');
-      expect(htmlService.getLanguageForExtension('axapta'), 'axapta');
-      expect(htmlService.getLanguageForExtension('basic'), 'basic');
-      expect(htmlService.getLanguageForExtension('bnf'), 'bnf');
-      expect(htmlService.getLanguageForExtension('brainfuck'), 'brainfuck');
-      expect(htmlService.getLanguageForExtension('cal'), 'cal');
-      expect(htmlService.getLanguageForExtension('capnproto'), 'capnproto');
-      expect(htmlService.getLanguageForExtension('ceylon'), 'ceylon');
-      expect(htmlService.getLanguageForExtension('clean'), 'clean');
-      expect(htmlService.getLanguageForExtension('coq'), 'coq');
-      expect(htmlService.getLanguageForExtension('cos'), 'cos');
-      expect(htmlService.getLanguageForExtension('crmsh'), 'crmsh');
-      expect(htmlService.getLanguageForExtension('csp'), 'csp');
-      expect(htmlService.getLanguageForExtension('d'), 'd');
-      expect(htmlService.getLanguageForExtension('delphi'), 'delphi');
-      expect(htmlService.getLanguageForExtension('pas'), 'delphi');
-      expect(htmlService.getLanguageForExtension('django'), 'django');
-      expect(htmlService.getLanguageForExtension('dns'), 'dns');
-      expect(htmlService.getLanguageForExtension('dos'), 'dos');
-      expect(htmlService.getLanguageForExtension('dsconfig'), 'dsconfig');
-      expect(htmlService.getLanguageForExtension('dts'), 'dts');
-      expect(htmlService.getLanguageForExtension('dust'), 'dust');
-      expect(htmlService.getLanguageForExtension('ebnf'), 'ebnf');
-      expect(htmlService.getLanguageForExtension('erb'), 'erb');
-      expect(htmlService.getLanguageForExtension('excel'), 'excel');
-      expect(htmlService.getLanguageForExtension('xls'), 'excel');
-      expect(htmlService.getLanguageForExtension('xlsx'), 'excel');
-      expect(htmlService.getLanguageForExtension('fix'), 'fix');
-      expect(htmlService.getLanguageForExtension('flix'), 'flix');
-      expect(htmlService.getLanguageForExtension('fortran'), 'fortran');
-      expect(htmlService.getLanguageForExtension('f'), 'fortran');
-      expect(htmlService.getLanguageForExtension('f77'), 'fortran');
-      expect(htmlService.getLanguageForExtension('f90'), 'fortran');
-      expect(htmlService.getLanguageForExtension('f95'), 'fortran');
-      expect(htmlService.getLanguageForExtension('gams'), 'gams');
-      expect(htmlService.getLanguageForExtension('gauss'), 'gauss');
-      expect(htmlService.getLanguageForExtension('gcode'), 'gcode');
-      expect(htmlService.getLanguageForExtension('gherkin'), 'gherkin');
-      expect(htmlService.getLanguageForExtension('glsl'), 'glsl');
-      expect(htmlService.getLanguageForExtension('gml'), 'gml');
-      expect(htmlService.getLanguageForExtension('golo'), 'golo');
-      expect(htmlService.getLanguageForExtension('gradle'), 'gradle');
-      expect(htmlService.getLanguageForExtension('groovy'), 'groovy');
-      expect(htmlService.getLanguageForExtension('haml'), 'haml');
-      expect(htmlService.getLanguageForExtension('handlebars'), 'handlebars');
-      expect(htmlService.getLanguageForExtension('hbs'), 'handlebars');
-      expect(htmlService.getLanguageForExtension('hsp'), 'hsp');
-      expect(htmlService.getLanguageForExtension('http'), 'http');
-      expect(htmlService.getLanguageForExtension('hy'), 'hy');
-      expect(htmlService.getLanguageForExtension('inform7'), 'inform7');
-      expect(htmlService.getLanguageForExtension('irpf90'), 'irpf90');
-      expect(htmlService.getLanguageForExtension('isbl'), 'isbl');
-      expect(htmlService.getLanguageForExtension('jboss-cli'), 'jboss-cli');
-      expect(htmlService.getLanguageForExtension('julia'), 'julia');
-      expect(htmlService.getLanguageForExtension('jl'), 'julia');
-      expect(htmlService.getLanguageForExtension('lasso'), 'lasso');
-      expect(htmlService.getLanguageForExtension('latex'), 'latex');
-      expect(htmlService.getLanguageForExtension('tex'), 'latex');
-      expect(htmlService.getLanguageForExtension('ldif'), 'ldif');
-      expect(htmlService.getLanguageForExtension('leaf'), 'leaf');
-      expect(htmlService.getLanguageForExtension('lisp'), 'lisp');
-      expect(htmlService.getLanguageForExtension('lsp'), 'lisp');
-      expect(htmlService.getLanguageForExtension('livescript'), 'livescript');
-      expect(htmlService.getLanguageForExtension('llvm'), 'llvm');
-      expect(htmlService.getLanguageForExtension('lsl'), 'lsl');
-      expect(htmlService.getLanguageForExtension('mathematica'), 'mathematica');
-      expect(htmlService.getLanguageForExtension('nb'), 'mathematica');
-      expect(htmlService.getLanguageForExtension('matlab'), 'matlab');
-      expect(htmlService.getLanguageForExtension('maxima'), 'maxima');
-      expect(htmlService.getLanguageForExtension('mel'), 'mel');
-      expect(htmlService.getLanguageForExtension('mercury'), 'mercury');
-      expect(htmlService.getLanguageForExtension('mipsasm'), 'mipsasm');
-      expect(htmlService.getLanguageForExtension('mizar'), 'mizar');
-      expect(htmlService.getLanguageForExtension('mojolicious'), 'mojolicious');
-      expect(htmlService.getLanguageForExtension('monkey'), 'monkey');
-      expect(htmlService.getLanguageForExtension('moonscript'), 'moonscript');
-      expect(htmlService.getLanguageForExtension('n1ql'), 'n1ql');
-      expect(htmlService.getLanguageForExtension('nestedtext'), 'nestedtext');
-      expect(htmlService.getLanguageForExtension('nginx'), 'nginx');
-      expect(htmlService.getLanguageForExtension('nim'), 'nim');
-      expect(htmlService.getLanguageForExtension('nix'), 'nix');
-      expect(htmlService.getLanguageForExtension('nsis'), 'nsis');
-      expect(htmlService.getLanguageForExtension('objectivec'), 'objectivec');
-      expect(htmlService.getLanguageForExtension('mm'), 'objectivec');
-      expect(htmlService.getLanguageForExtension('ocaml'), 'ocaml');
-      expect(htmlService.getLanguageForExtension('ml'), 'ocaml');
-      expect(htmlService.getLanguageForExtension('mli'), 'ocaml');
-      expect(htmlService.getLanguageForExtension('openscad'), 'openscad');
-      expect(htmlService.getLanguageForExtension('scad'), 'openscad');
-      expect(htmlService.getLanguageForExtension('oxygene'), 'oxygene');
-      expect(htmlService.getLanguageForExtension('parser3'), 'parser3');
-      expect(htmlService.getLanguageForExtension('pf'), 'pf');
-      expect(htmlService.getLanguageForExtension('pgsql'), 'pgsql');
+          SourceViewerEditor.getLanguageForExtension('accesslog'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('actionscript'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ada'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('angelscript'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('apache'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('applescript'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('arcade'), 'plaintext');
       expect(
-          htmlService.getLanguageForExtension('php-template'), 'php-template');
-      expect(htmlService.getLanguageForExtension('pony'), 'pony');
-      expect(htmlService.getLanguageForExtension('processing'), 'processing');
-      expect(htmlService.getLanguageForExtension('profile'), 'profile');
-      expect(htmlService.getLanguageForExtension('prolog'), 'prolog');
-      expect(htmlService.getLanguageForExtension('protobuf'), 'protobuf');
-      expect(htmlService.getLanguageForExtension('proto'), 'protobuf');
-      expect(htmlService.getLanguageForExtension('puppet'), 'puppet');
-      expect(htmlService.getLanguageForExtension('pp'), 'puppet');
-      expect(htmlService.getLanguageForExtension('purebasic'), 'purebasic');
-      expect(htmlService.getLanguageForExtension('pb'), 'purebasic');
-      expect(htmlService.getLanguageForExtension('python-repl'), 'python-repl');
-      expect(htmlService.getLanguageForExtension('q'), 'q');
-      expect(htmlService.getLanguageForExtension('qml'), 'qml');
-      expect(htmlService.getLanguageForExtension('reasonml'), 'reasonml');
-      expect(htmlService.getLanguageForExtension('re'), 'reasonml');
-      expect(htmlService.getLanguageForExtension('rib'), 'rib');
-      expect(htmlService.getLanguageForExtension('roboconf'), 'roboconf');
-      expect(htmlService.getLanguageForExtension('routeros'), 'routeros');
-      expect(htmlService.getLanguageForExtension('rsl'), 'rsl');
-      expect(htmlService.getLanguageForExtension('ruleslanguage'),
-          'ruleslanguage');
-      expect(htmlService.getLanguageForExtension('sas'), 'sas');
-      expect(htmlService.getLanguageForExtension('scheme'), 'scheme');
-      expect(htmlService.getLanguageForExtension('scm'), 'scheme');
-      expect(htmlService.getLanguageForExtension('ss'), 'scheme');
-      expect(htmlService.getLanguageForExtension('scilab'), 'scilab');
-      expect(htmlService.getLanguageForExtension('sci'), 'scilab');
-      expect(htmlService.getLanguageForExtension('smali'), 'smali');
-      expect(htmlService.getLanguageForExtension('smalltalk'), 'smalltalk');
-      expect(htmlService.getLanguageForExtension('st'), 'smalltalk');
-      expect(htmlService.getLanguageForExtension('sml'), 'sml');
-      expect(htmlService.getLanguageForExtension('sqf'), 'sqf');
-      expect(htmlService.getLanguageForExtension('stan'), 'stan');
-      expect(htmlService.getLanguageForExtension('stata'), 'stata');
-      expect(htmlService.getLanguageForExtension('do'), 'stata');
-      expect(htmlService.getLanguageForExtension('ado'), 'stata');
-      expect(htmlService.getLanguageForExtension('step21'), 'step21');
-      expect(htmlService.getLanguageForExtension('stp'), 'step21');
-      expect(htmlService.getLanguageForExtension('subunit'), 'subunit');
+          SourceViewerEditor.getLanguageForExtension('arduino'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('armasm'), 'plaintext');
       expect(
-          htmlService.getLanguageForExtension('taggerscript'), 'taggerscript');
-      expect(htmlService.getLanguageForExtension('tap'), 'tap');
-      expect(htmlService.getLanguageForExtension('tcl'), 'tcl');
-      expect(htmlService.getLanguageForExtension('thrift'), 'thrift');
-      expect(htmlService.getLanguageForExtension('tp'), 'tp');
-      expect(htmlService.getLanguageForExtension('twig'), 'twig');
-      expect(htmlService.getLanguageForExtension('vala'), 'vala');
-      expect(htmlService.getLanguageForExtension('vapi'), 'vala');
-      expect(htmlService.getLanguageForExtension('vbnet'), 'vbnet');
-      expect(htmlService.getLanguageForExtension('vb'), 'vbnet');
-      expect(htmlService.getLanguageForExtension('vbscript'), 'vbscript');
-      expect(htmlService.getLanguageForExtension('vbs'), 'vbscript');
-      expect(htmlService.getLanguageForExtension('vbscript-html'),
-          'vbscript-html');
-      expect(htmlService.getLanguageForExtension('verilog'), 'verilog');
-      expect(htmlService.getLanguageForExtension('v'), 'verilog');
-      expect(htmlService.getLanguageForExtension('vhdl'), 'vhdl');
-      expect(htmlService.getLanguageForExtension('vhd'), 'vhdl');
-      expect(htmlService.getLanguageForExtension('vim'), 'vim');
-      expect(htmlService.getLanguageForExtension('vimrc'), 'vim');
-      expect(htmlService.getLanguageForExtension('wren'), 'wren');
-      expect(htmlService.getLanguageForExtension('x86asm'), 'x86asm');
-      expect(htmlService.getLanguageForExtension('asm'), 'x86asm');
-      expect(htmlService.getLanguageForExtension('xl'), 'xl');
-      expect(htmlService.getLanguageForExtension('xquery'), 'xquery');
-      expect(htmlService.getLanguageForExtension('xq'), 'xquery');
-      expect(htmlService.getLanguageForExtension('xql'), 'xquery');
-      expect(htmlService.getLanguageForExtension('xqy'), 'xquery');
-      expect(htmlService.getLanguageForExtension('zephir'), 'zephir');
-      expect(htmlService.getLanguageForExtension('zep'), 'zephir');
-      expect(htmlService.getLanguageForExtension('gn'), 'gn');
+          SourceViewerEditor.getLanguageForExtension('aspectj'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('autohotkey'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('autoit'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('avrasm'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('awk'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('axapta'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('basic'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('bnf'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('brainfuck'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('cal'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('capnproto'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ceylon'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('clean'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('coq'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('cos'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('crmsh'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('csp'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('d'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('delphi'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('pas'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('django'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('dns'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('dos'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('dsconfig'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('dts'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('dust'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ebnf'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('erb'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('excel'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('xls'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('xlsx'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('fix'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('flix'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('fortran'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('f'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('f77'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('f90'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('f95'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('gams'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('gauss'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('gcode'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('gherkin'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('glsl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('gml'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('golo'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('gradle'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('groovy'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('haml'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('handlebars'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('hbs'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('hsp'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('http'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('hy'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('inform7'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('irpf90'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('isbl'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('jboss-cli'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('julia'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('jl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('lasso'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('latex'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('tex'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ldif'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('leaf'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('lisp'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('lsp'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('livescript'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('llvm'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('lsl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('mathematica'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('nb'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('matlab'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('maxima'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('mel'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('mercury'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('mipsasm'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('mizar'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('mojolicious'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('monkey'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('moonscript'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('n1ql'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('nestedtext'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('nginx'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('nim'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('nix'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('nsis'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('objectivec'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('mm'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ocaml'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ml'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('mli'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('openscad'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('scad'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('oxygene'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('parser3'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('pf'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('pgsql'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('php-template'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('pony'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('processing'),
+          'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('profile'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('prolog'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('protobuf'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('proto'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('puppet'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('pp'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('purebasic'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('pb'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('python-repl'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('q'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('qml'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('reasonml'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('re'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('rib'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('roboconf'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('routeros'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('rsl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ruleslanguage'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('sas'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('scheme'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('scm'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ss'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('scilab'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('sci'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('smali'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('smalltalk'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('st'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('sml'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('sqf'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('stan'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('stata'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('do'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('ado'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('step21'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('stp'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('subunit'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('taggerscript'),
+          'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('tap'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('tcl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('thrift'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('tp'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('twig'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vala'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vapi'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vbnet'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vb'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('vbscript'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vbs'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vbscript-html'),
+          'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('verilog'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('v'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vhdl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vhd'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vim'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('vimrc'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('wren'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('x86asm'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('asm'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('xl'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('xquery'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('xq'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('xql'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('xqy'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('zephir'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('zep'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('gn'), 'plaintext');
     });
 
     test('Mode retrieval should work for supported languages', () {

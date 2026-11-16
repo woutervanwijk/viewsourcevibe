@@ -2,6 +2,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:re_highlight/languages/all.dart';
 
 void main() {
@@ -22,17 +23,16 @@ void main() {
     });
 
     test('HTML Service should support common file extensions', () {
-      final htmlService = HtmlService();
-
       // Test current supported extensions
-      expect(htmlService.getLanguageForExtension('html'), 'html');
-      expect(htmlService.getLanguageForExtension('htm'), 'html');
-      expect(htmlService.getLanguageForExtension('css'), 'css');
-      expect(htmlService.getLanguageForExtension('js'), 'javascript');
-      expect(htmlService.getLanguageForExtension('json'), 'json');
-      expect(htmlService.getLanguageForExtension('xml'), 'xml');
-      expect(htmlService.getLanguageForExtension('txt'), 'plaintext');
-      expect(htmlService.getLanguageForExtension('unknown'), 'plaintext');
+      expect(SourceViewerEditor.getLanguageForExtension('html'), 'html');
+      expect(SourceViewerEditor.getLanguageForExtension('htm'), 'html');
+      expect(SourceViewerEditor.getLanguageForExtension('css'), 'css');
+      expect(SourceViewerEditor.getLanguageForExtension('js'), 'javascript');
+      expect(SourceViewerEditor.getLanguageForExtension('json'), 'json');
+      expect(SourceViewerEditor.getLanguageForExtension('xml'), 'xml');
+      expect(SourceViewerEditor.getLanguageForExtension('txt'), 'plaintext');
+      expect(
+          SourceViewerEditor.getLanguageForExtension('unknown'), 'plaintext');
     });
 
     test('HTML Service should get modes for supported languages', () {

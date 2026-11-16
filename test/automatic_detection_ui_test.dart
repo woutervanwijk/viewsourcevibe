@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 
 void main() {
@@ -130,7 +131,7 @@ void main() {
       // Better logic: use content-based detection when Automatic
       final betterLogic = htmlService.selectedContentType ??
           (htmlFile.isUrl
-              ? htmlService.getLanguageForExtension('html')
+              ? SourceViewerEditor.getLanguageForExtension('html')
               : htmlFile.extension);
       print('  Better logic result: $betterLogic');
 
