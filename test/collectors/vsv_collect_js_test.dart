@@ -8,6 +8,20 @@ import 'package:view_source_vibe/services/collectors/browser_payload.dart';
 import '../support/collector_node.dart';
 
 void main() {
+  test('isolated: fetch and XHR are left alone', () async {
+    final out = await runCollector(
+        before: 'window.__vsv_isolated = true;',
+        probe: 'window.fetch === __nativeFetch');
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['__probe'], isTrue);
+  });
+
+  test('page world: fetch is patched (unchanged behaviour)', () async {
+    final out = await runCollector(probe: 'window.fetch === __nativeFetch');
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['__probe'], isFalse);
+  });
+
   test('a dropped resource does not break the resources section', () async {
     final out = await runCollector(
         after: "window.__vsv_dropped.push("

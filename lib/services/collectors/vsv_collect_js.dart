@@ -199,7 +199,7 @@ const String vsvResourceBootstrapJs = r'''
   }
   try {
     var origFetch = window.fetch;
-    if (isTop && typeof origFetch === 'function') {
+    if (!window.__vsv_isolated && isTop && typeof origFetch === 'function') {
       window.fetch = function(input, init) {
         var url = typeof input === 'string' ? input :
             (input && input.url) ? input.url : String(input);
@@ -214,7 +214,7 @@ const String vsvResourceBootstrapJs = r'''
       };
     }
   } catch (e) {}
-  if (isTop) try {
+  if (!window.__vsv_isolated && isTop) try {
     var xhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(m, u) {
       this.__vsvUrl = u;

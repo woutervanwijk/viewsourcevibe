@@ -27,6 +27,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
+import 'package:view_source_vibe/services/collectors/collector_world.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
@@ -5074,7 +5075,8 @@ Technical details: $message''';
     return controller.evaluateJavascript(
         source: dom
             ? 'window.__vsv_collect()'
-            : 'window.__vsv_collect({dom: false})');
+            : 'window.__vsv_collect({dom: false})',
+        contentWorld: collectorWorld(defaultTargetPlatform));
   }
 
   static Future<List<Map>> _nativeCookiesFromManager(String url) async {
@@ -5263,7 +5265,8 @@ Technical details: $message''';
     try {
       await c.evaluateJavascript(
           source:
-              'window.__vsv_scrollThrough && window.__vsv_scrollThrough(true)');
+              'window.__vsv_scrollThrough && window.__vsv_scrollThrough(true)',
+          contentWorld: collectorWorld(defaultTargetPlatform));
     } catch (_) {}
   }
 

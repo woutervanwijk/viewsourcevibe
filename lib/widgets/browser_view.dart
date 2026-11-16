@@ -6,7 +6,7 @@ import 'package:view_source_vibe/models/html_file.dart';
 
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/settings.dart';
-import 'package:view_source_vibe/services/collectors/vsv_collect_js.dart';
+import 'package:view_source_vibe/services/collectors/collector_world.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/navigation_policy.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
@@ -253,15 +253,9 @@ class _BrowserViewState extends State<BrowserView> {
         rendererPriorityPolicy: lowResourceRendererPriorityPolicy(appSettings),
       ),
       initialUserScripts: UnmodifiableListView<UserScript>([
-        // Resource observer + fetch/XHR patch, and the one-shot collector
-        // (window.__vsv_collect) that HtmlService calls on every sync.
-        UserScript(
-          source: '$vsvResourceBootstrapJs\n$vsvCollectJs\n$vsvScrollThroughJs',
-          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
-          // Also in iframes: they post their resources (ads, embeds) to the
-          // top frame, so the page size counts them.
-          forMainFrameOnly: false,
-        ),
+        // Resource observer, and the one-shot collector (__vsv_collect) that
+        // HtmlService calls on every sync. Isolated world on iOS/macOS.
+        collectorUserScript(defaultTargetPlatform),
       ]),
       onWebViewCreated: (controller) {
         _controller = controller;
