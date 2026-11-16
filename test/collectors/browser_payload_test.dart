@@ -410,6 +410,32 @@ void main() {
     expect(x.type, 'xhr');
   });
 
+  test('new storage shape: bytes and top items come from the page', () {
+    final s = parseBrowserPayload(
+        jsonEncode({
+          'v': 1,
+          'url': 'https://a.test/',
+          'contentType': 'text/html',
+          'storage': {
+            'local': {
+              'ok': true,
+              'count': 600,
+              'bytes': 9000,
+              'items': [
+                {'k': 'x', 'b': 800}
+              ],
+            },
+            'session': {'ok': false, 'error': 'x'},
+          },
+        }),
+        BrowserPlatform.macos,
+        pageUrl: Uri.parse('https://a.test/'));
+    final area = present(present(s.storage).local);
+    expect(area.count, 600);
+    expect(present(area.bytes), 9000);
+    expect(area.topItems.single, const StorageItem('x', 800));
+  });
+
   test('storage SecurityError fails only that area', () {
     final s = parse('storage_security_error.json', BrowserPlatform.ios,
         'https://example.com/');

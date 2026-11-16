@@ -517,19 +517,23 @@ Observed<StorageArea> _parseArea(Object? a) {
     final items = <StorageItem>[];
     var bytes = 0;
     for (final i in (a['items'] as List? ?? const [])) {
-      final k = '${i['k']}', v = '${i['v'] ?? ''}';
-      final b = utf8.encode(k).length + utf8.encode(v).length;
+      final k = '${i['k']}';
+      // New shape: the page sends sizes (`b`). Old fixtures send values (`v`).
+      final b = i['b'] is num
+          ? (i['b'] as num).toInt()
+          : utf8.encode(k).length + utf8.encode('${i['v'] ?? ''}').length;
       bytes += b;
       items.add(StorageItem(k, b));
     }
     items.sort((x, y) => y.bytes.compareTo(x.bytes));
-    final truncated = a['truncated'] == true;
+    final pageBytes = a['bytes'];
+    final truncated = pageBytes is! num && a['truncated'] == true;
     return _measured(StorageArea(
       count: (a['count'] as num?)?.toInt() ?? items.length,
       bytes: truncated
           ? const Unavailable(UnavailableReason.exceedsLimit,
               'only the first items were sent; total size not known')
-          : _measured(bytes),
+          : _measured(pageBytes is num ? pageBytes.toInt() : bytes),
       topItems: items.take(10).toList(),
     ));
   } catch (e) {

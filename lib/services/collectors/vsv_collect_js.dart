@@ -244,7 +244,7 @@ const String vsvResourceBootstrapJs = r'''
 const String vsvCollectJs = r'''
 window.__vsv_collect = function(opts) {
   opts = opts || {};
-  var STORAGE_MAX_ITEMS = 500;
+  var STORAGE_TOP_ITEMS = 50;
   function describe(e) {
     try { return (e && e.name ? e.name + ': ' + e.message : String(e)); }
     catch (x) { return 'unknown error'; }
@@ -390,17 +390,27 @@ window.__vsv_collect = function(opts) {
     };
   });
 
+  function utf8len(s) {
+    try { return new TextEncoder().encode(s).length; } catch (e) {}
+    try { return unescape(encodeURIComponent(s)).length; } catch (e) {}
+    return s.length;
+  }
+  // Sizes are computed here: the values never cross the JS bridge.
   function area(which) {
     try {
       var s = window[which];
       var count = s.length;
       var items = [];
-      var n = Math.min(count, STORAGE_MAX_ITEMS);
-      for (var i = 0; i < n; i++) {
+      var bytes = 0;
+      for (var i = 0; i < count; i++) {
         var k = s.key(i);
-        items.push({k: k, v: s.getItem(k) || ''});
+        var b = utf8len(String(k)) + utf8len(String(s.getItem(k) || ''));
+        bytes += b;
+        items.push({k: k, b: b});
       }
-      return {ok: true, count: count, items: items, truncated: count > n};
+      items.sort(function(x, y) { return y.b - x.b; });
+      return {ok: true, count: count, bytes: bytes,
+        items: items.slice(0, STORAGE_TOP_ITEMS)};
     } catch (e) {
       return {ok: false, error: describe(e)};
     }

@@ -25,4 +25,17 @@ void main() {
         (snap.resources as Present<List<ResourceEntry>>).value.single.source,
         ResourceSource.dropped);
   });
+
+  test('storage values never leave the page', () async {
+    final out = await runCollector(
+        before: "window.localStorage = {length: 2,"
+            "key: function(i) { return ['a', 'tok'][i]; },"
+            "getItem: function(k) { return k === 'a' ? '\u00e9' : 'secret-token'; }};");
+    if (out == null) return markTestSkipped('node not installed');
+    final local = out['storage']['local'];
+    expect(jsonEncode(local), isNot(contains('secret-token')));
+    expect(local['count'], 2);
+    expect(local['bytes'], 3 + 15); // 'a'+'é' = 1+2, 'tok'+'secret-token' = 3+12
+    expect(local['items'][0], {'k': 'tok', 'b': 15});
+  });
 }

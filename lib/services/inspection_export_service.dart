@@ -259,7 +259,11 @@ class InspectionExportService {
           if (items is List) {
             a['items'] = [
               for (final i in items)
-                if (i is Map) {'k': i['k'], 'bytes': _bytes(i['v'])}
+                if (i is Map)
+                  {
+                    'k': i['k'],
+                    'bytes': i['b'] is num ? i['b'] : _bytes(i['v'])
+                  }
             ];
           }
           st['$area'] = a;
