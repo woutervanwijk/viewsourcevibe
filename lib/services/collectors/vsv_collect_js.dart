@@ -455,6 +455,15 @@ window.__vsv_collect = function(opts) {
     return {total: list.length, items: items};
   });
 
+  // What the page can ask for at all: a WebView may lack these APIs.
+  out.capabilities = section(function() {
+    var n = typeof navigator !== 'undefined' ? navigator : {};
+    return {
+      mediaDevices: !!(n.mediaDevices && n.mediaDevices.getUserMedia),
+      geolocation: !!n.geolocation
+    };
+  });
+
   // What the site stored on the device. The lookups are promises, so they
   // start once per document and a later collect picks the results up.
   function startSiteStorage() {

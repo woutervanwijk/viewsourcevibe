@@ -206,6 +206,14 @@ Observed<PermissionsModel> derivePermissions(PageInspection p) {
     if (noHeader)
       "No Permissions-Policy header: embedded frames keep the browser's defaults.",
   ];
+  if (browserSnap?.mediaDevices case Present<bool>(value: false)) {
+    notes.add(
+        'This browser does not offer camera or microphone to pages, so a page cannot ask for them here.');
+  }
+  if (browserSnap?.geolocation case Present<bool>(value: false)) {
+    notes.add(
+        'This browser does not offer location to pages, so a page cannot ask for it here.');
+  }
   if (delegations is Present<List<Delegation>>) {
     final risky = delegations.value
         .where((d) => d.thirdParty && d.features.any(powerfulFeatures.contains))

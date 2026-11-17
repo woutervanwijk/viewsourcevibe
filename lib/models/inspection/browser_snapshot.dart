@@ -306,6 +306,9 @@ const kFramesNotCollected = Unavailable<List<FrameInfo>>(
 const kSiteStorageNotCollected = Unavailable<SiteStorage>(
     UnavailableReason.notReportedByPlatform, 'not collected');
 
+const kCapabilityNotCollected = Unavailable<bool>(
+    UnavailableReason.notReportedByPlatform, 'not collected');
+
 /// Everything the WebView told us about the current page, one section each.
 class BrowserSnapshot {
   final Uri url;
@@ -338,6 +341,11 @@ class BrowserSnapshot {
   /// Quota usage, IndexedDB, Cache Storage and service workers.
   final Observed<SiteStorage> siteStorage;
 
+  /// Whether the page can ask for camera/microphone and for location at all
+  /// (navigator.mediaDevices.getUserMedia / navigator.geolocation exist).
+  final Observed<bool> mediaDevices;
+  final Observed<bool> geolocation;
+
   /// The raw collector payload (debug export / fixture recording).
   final String? rawPayload;
 
@@ -357,6 +365,8 @@ class BrowserSnapshot {
     this.frames = kFramesNotCollected,
     this.frameCount = 0,
     this.siteStorage = kSiteStorageNotCollected,
+    this.mediaDevices = kCapabilityNotCollected,
+    this.geolocation = kCapabilityNotCollected,
     this.rawPayload,
   });
 
@@ -401,6 +411,8 @@ class BrowserSnapshot {
         frames: frames,
         frameCount: frameCount,
         siteStorage: siteStorage,
+        mediaDevices: mediaDevices,
+        geolocation: geolocation,
         rawPayload: rawPayload,
       );
 

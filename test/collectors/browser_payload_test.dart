@@ -947,6 +947,19 @@ void main() {
       expect(snap.frameCount, 3);
     });
 
+    test('capabilities map to Observed, missing is never false', () {
+      final snap = withSections({
+        'capabilities': {'ok': true, 'mediaDevices': false, 'geolocation': true},
+      });
+      expect(present(snap.mediaDevices), isFalse);
+      expect(present(snap.geolocation), isTrue);
+      final old = withSections({});
+      expect(unavailable(old.mediaDevices),
+          UnavailableReason.notReportedByPlatform);
+      expect(unavailable(old.geolocation),
+          UnavailableReason.notReportedByPlatform);
+    });
+
     test('sections missing from an old payload are Unavailable', () {
       final snap = withSections({});
       expect(unavailable(snap.frames), UnavailableReason.notReportedByPlatform);

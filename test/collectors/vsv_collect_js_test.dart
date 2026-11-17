@@ -100,6 +100,23 @@ void main() {
     expect(out['siteStorage'], {'ok': true, 'pending': true});
   });
 
+  test('capabilities say what the page can ask for', () async {
+    final out = await runCollector(
+        before: "var navigator = {mediaDevices: {getUserMedia: function() {}},"
+            " geolocation: {}};");
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['capabilities'],
+        {'ok': true, 'mediaDevices': true, 'geolocation': true});
+  });
+
+  test('capabilities are false when the APIs are absent', () async {
+    final out = await runCollector(
+        before: "var navigator = {mediaDevices: undefined};");
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['capabilities'],
+        {'ok': true, 'mediaDevices': false, 'geolocation': false});
+  });
+
   test('a missing API is an error for that field only', () async {
     final out = await runCollector(
         before: "window.__vsv_site = {done: true, usage: 10, quota: 100,"

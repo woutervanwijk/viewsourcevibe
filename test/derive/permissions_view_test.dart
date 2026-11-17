@@ -13,6 +13,8 @@ PageInspection page({
   List<FrameInfo>? frames,
   SiteStorage? storage,
   List<PermissionRequestEvent> requests = const [],
+  bool? mediaDevices,
+  bool? geolocation,
 }) {
   final snap = browserSnap(url: 'https://a.test/');
   final withExtras = BrowserSnapshot(
@@ -28,6 +30,8 @@ PageInspection page({
     frames: frames == null ? kFramesNotCollected : b(frames),
     frameCount: frames?.length ?? 0,
     siteStorage: storage == null ? kSiteStorageNotCollected : b(storage),
+    mediaDevices: mediaDevices == null ? kCapabilityNotCollected : b(mediaDevices),
+    geolocation: geolocation == null ? kCapabilityNotCollected : b(geolocation),
   );
   return inspection(
           server: serverSnap(url: 'https://a.test/', headers: headers),
@@ -39,6 +43,25 @@ PermissionsModel present(Observed<PermissionsModel> o) =>
     (o as Present<PermissionsModel>).value;
 
 void main() {
+  test('notes say when the browser cannot offer camera or location', () {
+    final m = present(derivePermissions(
+        page(mediaDevices: false, geolocation: false)));
+    expect(m.notes, contains(
+        'This browser does not offer camera or microphone to pages, so a page cannot ask for them here.'));
+    expect(m.notes, contains(
+        'This browser does not offer location to pages, so a page cannot ask for it here.'));
+  });
+
+  test('no capability note when offered or unknown', () {
+    for (final m in [
+      present(derivePermissions(page(mediaDevices: true, geolocation: true))),
+      present(derivePermissions(page())),
+    ]) {
+      expect(m.notes.where((n) => n.startsWith('This browser does not offer')),
+          isEmpty);
+    }
+  });
+
   test('declared features, powerful ones first', () {
     final m = present(derivePermissions(page(headers: {
       'permissions-policy': ['fullscreen=*, camera=(), geolocation=(self)']

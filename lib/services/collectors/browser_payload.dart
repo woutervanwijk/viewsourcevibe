@@ -109,6 +109,8 @@ BrowserSnapshot parseBrowserPayload(Object? raw, BrowserPlatform platform,
         ? (p['frames']['total'] as num).toInt()
         : 0,
     siteStorage: _parseSiteStorage(p['siteStorage']),
+    mediaDevices: _capability(p['capabilities'], 'mediaDevices'),
+    geolocation: _capability(p['capabilities'], 'geolocation'),
     snapshotTimeMs: _section(p['timing'], (m) {
       final n = m['now'];
       if (n is! num) throw const FormatException('timing.now missing');
@@ -569,6 +571,12 @@ List<FrameInfo> _parseFrames(Map<String, dynamic> m, Uri pageUrl) {
     ));
   }
   return out;
+}
+
+/// A missing or malformed flag is Unavailable, never false.
+Observed<bool> _capability(Object? sec, String key) {
+  final v = sec is Map && sec['ok'] == true ? sec[key] : null;
+  return v is bool ? _measured(v) : kCapabilityNotCollected;
 }
 
 Observed<SiteStorage> _parseSiteStorage(Object? sec) {
