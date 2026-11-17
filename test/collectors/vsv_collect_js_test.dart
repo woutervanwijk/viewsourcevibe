@@ -125,4 +125,31 @@ void main() {
     expect(s['sw']['ok'], isFalse);
     expect(s['usage'], isNull);
   });
+
+  test('a storage API that never answers is reported after 4 s', () async {
+    // caches.keys() hangs; the clock jumps 5 s once it has been called.
+    final out = await runCollector(
+        before: "var __real = Date.now, __skew = 0;"
+            " Date.now = function() { return __real() + __skew; };"
+            " var navigator = {};"
+            " var caches = {keys: function() { return {then: function() {"
+            " __skew = 5000; return {catch: function() {}}; }}; }};");
+    if (out == null) return markTestSkipped('node not installed');
+    final s = out['siteStorage'];
+    expect(s['pending'], isNull);
+    expect(s['caches'], {'ok': false, 'error': 'no answer within 4 s'});
+    expect(s['idb']['ok'], isFalse);
+    expect(s['usage'], isNull);
+  });
+
+  test('a synchronous throw from then() settles that field only', () async {
+    final out = await runCollector(
+        before: "var navigator = {};"
+            " var caches = {keys: function() { return {then: function() {"
+            " throw new Error('boom'); }}; }};",
+        probe: "window.__vsv_site.caches");
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['__probe']['ok'], isFalse);
+    expect(out['__probe']['error'], contains('boom'));
+  });
 }

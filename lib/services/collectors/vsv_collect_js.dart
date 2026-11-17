@@ -459,7 +459,7 @@ window.__vsv_collect = function(opts) {
   // start once per document and a later collect picks the results up.
   function startSiteStorage() {
     if (window.__vsv_site) return;
-    var site = window.__vsv_site = {done: false};
+    var site = window.__vsv_site = {done: false, started: Date.now()};
     var left = 4;
     function settle() { if (--left === 0) site.done = true; }
     function track(key, api, call, shape) {
@@ -470,13 +470,17 @@ window.__vsv_collect = function(opts) {
       if (!p || typeof p.then !== 'function') {
         site[key] = {ok: false, error: api + ' is not supported'}; settle(); return;
       }
-      p.then(function(v) {
-        try { site[key] = shape(v); }
-        catch (e) { site[key] = {ok: false, error: describe(e)}; }
-        settle();
-      }).catch(function(e) {
+      try {
+        p.then(function(v) {
+          try { site[key] = shape(v); }
+          catch (e) { site[key] = {ok: false, error: describe(e)}; }
+          settle();
+        }).catch(function(e) {
+          site[key] = {ok: false, error: describe(e)}; settle();
+        });
+      } catch (e) {
         site[key] = {ok: false, error: describe(e)}; settle();
-      });
+      }
     }
     var nav = typeof navigator !== 'undefined' ? navigator : {};
     site.usage = null; site.quota = null;
@@ -511,7 +515,15 @@ window.__vsv_collect = function(opts) {
   out.siteStorage = section(function() {
     startSiteStorage();
     var s = window.__vsv_site;
-    if (!s || !s.done) return {pending: true};
+    if (!s) return {pending: true};
+    if (!s.done) {
+      // One API that never answers must not keep the section pending.
+      if (!(Date.now() - s.started > 4000)) return {pending: true};
+      var late = ['idb', 'caches', 'sw'];
+      for (var i = 0; i < late.length; i++) {
+        if (!s[late[i]]) s[late[i]] = {ok: false, error: 'no answer within 4 s'};
+      }
+    }
     return {usage: s.usage, quota: s.quota, idb: s.idb, caches: s.caches, sw: s.sw};
   });
 
