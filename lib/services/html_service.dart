@@ -115,6 +115,7 @@ class HtmlService extends ChangeNotifier {
   /// Removes the browser's data for one site (long-press Reload); a seam
   /// for tests.
   final Future<void> Function(Uri url) _clearSiteData;
+
   /// Null: the default lookup on the per-navigation shared client.
   final ResourceSizeLookup? _sizeLookup;
   final FreshLoadMeasurer _freshMeasurer;
@@ -1483,7 +1484,10 @@ class HtmlService extends ChangeNotifier {
           // In low-resource mode the Browser WebView is paused once its tab
           // is hidden, but extraction evaluates JS in it — so pause only
           // after the extraction has finished.
-          reader.extractIfStale().whenComplete(_applyWebViewResourceMode).ignore();
+          reader
+              .extractIfStale()
+              .whenComplete(_applyWebViewResourceMode)
+              .ignore();
         } else {
           _applyWebViewResourceMode();
         }
@@ -4371,10 +4375,9 @@ Technical details: $message''';
 
   /// Our own download of a resource, measured like the browser's transfer
   /// size (compressed bytes plus headers); see [lookupTransferSize].
-  Future<int?> _lookupResourceSize(int gen, String url) => lookupTransferSize(
-      url,
-      userAgent: kServerUserAgent,
-      shared: _clientFor(gen));
+  Future<int?> _lookupResourceSize(int gen, String url) =>
+      lookupTransferSize(url,
+          userAgent: kServerUserAgent, shared: _clientFor(gen));
 
   /// The browser reported a URL change (history API / SPA route, redirect).
   /// The same document as the current navigation (R20) is nothing new; any
@@ -4598,28 +4601,42 @@ Technical details: $message''';
   /// load, for engines whose page cannot read its own status (WebKit).
   ({int gen, int status})? _browserHttpError;
 
-  /// The browser started loading a new main-frame document.
-  void onBrowserLoadStart() {
+  /// The browser started loading a new main-frame document ([url] when
+  /// known: an in-view navigation starts its generation only later, so the
+  /// load start is matched to the page by URL).
+  void onBrowserLoadStart([Uri? url]) {
     _browserHttpError = null;
     _loadStartGen = store.current.generation;
+    _loadStartUrl = url;
     _loadStartAt = DateTime.now();
   }
 
   int? _loadStartGen;
+  Uri? _loadStartUrl;
   DateTime? _loadStartAt;
 
-  /// The page asked for a native permission (the browser denied it).
-  void onBrowserPermissionRequest(String origin, List<String> resources) {
-    final gen = store.current.generation;
+  /// The page asked for a native permission (the browser denied it). Only
+  /// recorded when the WebView's main frame ([mainFrameUrl]) is the page
+  /// being inspected; a request from a page already left is dropped. The
+  /// request's own [origin] may differ (embedded frames).
+  void onBrowserPermissionRequest(
+      String origin, List<String> resources, Uri? mainFrameUrl) {
+    if (_disposed || mainFrameUrl == null || !_storeCovers(mainFrameUrl)) {
+      return;
+    }
     final start = _loadStartAt;
+    final startUrl = _loadStartUrl;
+    final startBelongs = start != null &&
+        (startUrl != null
+            ? _storeCovers(startUrl)
+            : _loadStartGen == store.current.generation);
     store.addPermissionRequest(
-        gen,
+        store.current.generation,
         PermissionRequestEvent(
           origin: origin,
           resources: resources,
-          sinceLoadStart: start != null && _loadStartGen == gen
-              ? DateTime.now().difference(start)
-              : Duration.zero,
+          sinceLoadStart:
+              startBelongs ? DateTime.now().difference(start) : Duration.zero,
         ));
   }
 

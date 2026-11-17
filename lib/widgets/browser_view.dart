@@ -225,6 +225,21 @@ class _BrowserViewState extends State<BrowserView> {
     }
   }
 
+  /// Records a (denied) permission request for the page showing now. Never
+  /// throws: the caller must always answer DENY.
+  Future<void> _recordPermission(InAppWebViewController controller,
+      String origin, List<String> resources) async {
+    try {
+      final mainFrame = await controller.getUrl();
+      if (!mounted) return;
+      Provider.of<HtmlService>(context, listen: false)
+          .onBrowserPermissionRequest(origin, resources,
+              mainFrame == null ? null : Uri.tryParse(mainFrame.toString()));
+    } catch (_) {
+      // Recording is best effort.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appSettings = context.watch<AppSettings>();
@@ -290,22 +305,21 @@ class _BrowserViewState extends State<BrowserView> {
       },
       // The app never grants a permission: deny, and record who asked.
       onPermissionRequest: (controller, request) async {
-        Provider.of<HtmlService>(context, listen: false)
-            .onBrowserPermissionRequest(request.origin.toString(),
-                permissionResourceNames(request.resources));
+        await _recordPermission(controller, request.origin.toString(),
+            permissionResourceNames(request.resources));
         return PermissionResponse(
             resources: request.resources,
             action: PermissionResponseAction.DENY);
       },
       onGeolocationPermissionsShowPrompt: (controller, origin) async {
-        Provider.of<HtmlService>(context, listen: false)
-            .onBrowserPermissionRequest(origin, const ['geolocation']);
+        await _recordPermission(controller, origin, const ['geolocation']);
         return GeolocationPermissionShowPromptResponse(
             origin: origin, allow: false, retain: false);
       },
       onLoadStart: (controller, url) {
         _lastSyncedUrl = null;
-        Provider.of<HtmlService>(context, listen: false).onBrowserLoadStart();
+        Provider.of<HtmlService>(context, listen: false).onBrowserLoadStart(
+            url == null ? null : Uri.tryParse(url.toString()));
       },
       onLoadStop: (controller, url) async {
         if (mounted && url != null) {
