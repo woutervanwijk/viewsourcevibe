@@ -168,6 +168,13 @@ class BatchRunner extends ChangeNotifier {
   /// Set when the run ended outside any site (e.g. no work directory).
   String? get error => _error;
 
+  /// Forgets the finished batch (hides the banner).
+  void dismiss() {
+    if (_running) return;
+    _rows.clear();
+    notifyListeners();
+  }
+
   void cancel() {
     if (_running) _cancelled = true;
   }
