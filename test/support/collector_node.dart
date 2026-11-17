@@ -56,3 +56,24 @@ Future<Map<String, dynamic>?> runCollector({
     dir.deleteSync(recursive: true);
   }
 }
+
+/// Runs [source] under Node and returns what it printed to stdout (trimmed).
+/// Returns null when Node is not installed.
+Future<String?> runJs(String source) async {
+  try {
+    await Process.run('node', ['--version']);
+  } on ProcessException {
+    return null;
+  }
+  final dir = Directory.systemTemp.createTempSync('vsv_js');
+  try {
+    final file = File('${dir.path}/run.js')..writeAsStringSync(source);
+    final r = await Process.run('node', [file.path]);
+    if (r.exitCode != 0) {
+      throw StateError('js run failed: ${r.stderr}');
+    }
+    return (r.stdout as String).trim();
+  } finally {
+    dir.deleteSync(recursive: true);
+  }
+}
