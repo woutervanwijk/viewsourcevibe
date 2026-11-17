@@ -16,6 +16,10 @@ class AboutScreen extends StatelessWidget {
       Icons.code,
       'Source viewer: HTML, CSS, JS, XML, JSON with syntax highlighting, search, word wrap and beautify'
     ),
+    (
+      Icons.dashboard_outlined,
+      'Structure: a wireframe of the rendered page, coloured by who owns each box'
+    ),
     (Icons.account_tree_outlined, 'DOM Tree explorer'),
     (Icons.chrome_reader_mode, 'Reader mode and RSS/Atom feeds'),
     (

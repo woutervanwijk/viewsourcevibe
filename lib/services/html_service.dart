@@ -52,6 +52,7 @@ import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
+import 'package:view_source_vibe/services/derive/structure_view.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
 import 'package:view_source_vibe/services/reader_service.dart';
@@ -901,6 +902,37 @@ class HtmlService extends ChangeNotifier {
       _cookiesView = deriveCookiesView(current);
     }
     return _cookiesView!;
+  }
+
+  Observed<StructureModel>? _structure;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<PageLayout> layout
+  })? _structureFor;
+
+  /// The Structure tab: the measured layout as a wireframe model, or why
+  /// there is none. Cached on the snapshots it reads, not on the
+  /// PageInspection object.
+  Observed<StructureModel> get structureView {
+    final current = store.current;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      layout: current.layout
+    );
+    if (_structure == null || _structureFor != key) {
+      _structureFor = key;
+      _structure = deriveStructure(current);
+    }
+    return _structure!;
+  }
+
+  /// 1-based line of the element with [id] in the Source tab's document;
+  /// null when the document is unknown or has no such id.
+  int? sourceLineOfId(String id) {
+    final text = sourceView.text;
+    return text is Present<String> ? lineOfId(text.value, id) : null;
   }
 
   Observed<TimelineModel>? _timelineModel;

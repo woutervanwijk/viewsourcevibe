@@ -58,6 +58,7 @@ Each page opens into a set of tabs:
 
 - **📱 Read**
   - **Source:** HTML, CSS, JS, XML and JSON with syntax highlighting, search, word wrap and line numbers.
+  - **Structure:** A wireframe of the rendered page, coloured by who owns each box (page, own frames, third parties, ads), with the heading outline.
   - **DOM Tree:** Navigate the document structure.
   - **Browser:** Built-in browser with tabs ("Surf & View Source"), plus Reader Mode and RSS/Atom feed support.
 

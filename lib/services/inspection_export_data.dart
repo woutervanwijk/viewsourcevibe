@@ -9,6 +9,7 @@ import 'derive/observed_text.dart' show notPresentAs;
 import 'derive/page_weight.dart';
 import 'derive/probe_general.dart';
 import 'derive/security_audit.dart';
+import 'derive/structure_view.dart';
 import 'observed_json.dart';
 
 /// The data files of an inspection package, built from the store's
@@ -257,6 +258,47 @@ class InspectionExportData {
       source: DataSource.browser,
     );
   }
+
+  /// analysis/structure.json
+  static Map<String, Object?> structure(Observed<StructureModel> o) =>
+      observedJson<StructureModel>(
+          o,
+          (m) => {
+                'viewport': {
+                  'w': m.layout.viewportWidth,
+                  'h': m.layout.viewportHeight
+                },
+                'page': {'w': m.layout.width, 'h': m.layout.height},
+                'totalBlocks': m.layout.totalBlocks,
+                'thirdPartyShare': m.thirdPartyShare,
+                'landmarks': m.landmarks,
+                'notes': m.notes,
+                'headings': [
+                  for (final h in m.headings) {'level': h.level, 'text': h.text}
+                ],
+                'blocks': [
+                  for (final s in m.blocks)
+                    {
+                      'tag': s.block.tag,
+                      'role': s.block.role,
+                      'id': s.block.id,
+                      'classes': s.block.classes,
+                      'x': s.block.x,
+                      'y': s.block.y,
+                      'w': s.block.width,
+                      'h': s.block.height,
+                      'depth': s.block.depth,
+                      'descendants': s.block.descendants,
+                      'kind': s.block.kind.name,
+                      'owner': s.owner.name,
+                      'service': s.service,
+                      'src': s.block.src,
+                      'fixed': s.block.fixed,
+                    }
+                ],
+              },
+          source: DataSource.browser,
+          provenance: Provenance.derived);
 
   /// analysis/page-weight.json
   static Map<String, Object?> pageWeight(PageInspection p) {

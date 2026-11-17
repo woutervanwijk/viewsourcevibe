@@ -219,11 +219,11 @@ void main() {
 
       await service.loadFile(_htmlUrlFile());
 
-      // Page: Browser, Metadata, Media, Services, Reader; Code: DOM Tree,
-      // Source.
+      // Page: Browser, Metadata, Media, Services, Reader; Code: Structure,
+      // DOM Tree, Source.
       expect(service.browserTabIndex, 0);
       expect(service.readerTabIndex, 4);
-      expect(service.sourceTabIndex, 6);
+      expect(service.sourceTabIndex, 7);
     });
 
     test('the layout does not depend on the browser-first setting', () async {
@@ -235,7 +235,7 @@ void main() {
 
       expect(service.browserTabIndex, 0);
       expect(service.readerTabIndex, 4);
-      expect(service.sourceTabIndex, 6);
+      expect(service.sourceTabIndex, 7);
     });
 
     test('non-HTML files have no Reader tab offset', () async {
