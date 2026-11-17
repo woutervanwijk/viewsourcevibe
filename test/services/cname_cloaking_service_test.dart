@@ -22,6 +22,15 @@ void main() {
     expect(r.aliases.single.tracker, 'Adobe Analytics');
   });
 
+  test('an alias for a hosting domain in a marketing entity is no finding',
+      () async {
+    final r = await findCloakedTrackers(['help.shop.test'],
+        pageHost: 'www.shop.test',
+        lookup: (h) async => ['shop.my.force.com']);
+    expect(r.checked, ['help.shop.test']);
+    expect(r.aliases, isEmpty);
+  });
+
   test('a failed lookup is listed as not checked, the rest still runs',
       () async {
     final r = await findCloakedTrackers(['a.shop.test', 'b.shop.test'],

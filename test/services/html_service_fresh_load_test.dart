@@ -45,8 +45,8 @@ void main() {
       serverFetcher: fetcher,
       browserLoader: FakeBrowserLoader(),
       metadataExtractor: (html, baseUrl, {headers}) async => {},
-      browserCollect: (url) async =>
-          payload(url: url, observer: [obs('https://a.test/app.js', tx: 1000)]),
+      browserCollect: (url) async => payload(
+          url: url, observer: [obs('https://a.test/app.js', tx: 1000)]),
       nativeCookies: (u) async => [],
       browserPlatform: BrowserPlatform.ios,
       browserPoll: NetworkQuietPolicy.off,
@@ -107,7 +107,8 @@ void main() {
     expect(page.differenceNote, contains('cookie or consent wall'));
   });
 
-  test('the live browser screenshot is taken once the page loaded', () async {
+  test('the live browser screenshot is taken once the page loaded',
+      () async {
     service = make(const NoFreshLoad(),
         screenshot: () async => Uint8List.fromList([9]));
     await load('https://a.test/');

@@ -41,6 +41,15 @@ typedef CloakingFinder = Future<CloakingResult> Function(
 Future<List<String>?> dohCnameLookup(String host) =>
     SovereigntyService.dnsQuery(host, 5);
 
+/// Categories whose services exist to follow visitors. Marketing and CRM
+/// entities also own hosting domains (force.com), so an alias for those says
+/// nothing about tracking.
+const Set<DetectionCategory> kCloakingTrackerCategories = {
+  DetectionCategory.advertising,
+  DetectionCategory.behavior,
+  DetectionCategory.analytics,
+};
+
 const int kCloakingMaxHosts = 20;
 const int kCloakingParallel = 4;
 
@@ -96,7 +105,7 @@ Future<CloakingResult> findCloakedTrackers(
     for (final t in targets) {
       if (sameSite(t, page)) continue;
       final e = entityForHost(t);
-      if (e != null && e.category.isTracking) {
+      if (e != null && kCloakingTrackerCategories.contains(e.category)) {
         aliases.add(CnameAlias(h, t, e.name));
         break;
       }
