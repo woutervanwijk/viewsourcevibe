@@ -105,12 +105,32 @@ void main() {
   });
 
   test('a frozen prototype does not break the page', () async {
+    final out = await runJs([
+      _fakeBrowser,
+      'Object.freeze(HTMLCanvasElement.prototype);',
+      vsvTechniquesJs,
+      'var c = new HTMLCanvasElement();'
+          'var res = c.toDataURL();'
+          'var g = new WebGLRenderingContext(); g.getParameter(37445);'
+          'var r = JSON.parse(window.__vsv_tech_report());'
+          'console.log(res + "|" + r.canvas.length + "|" + r.webgl.debugInfo);',
+    ].join('\n'));
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out.trim(), 'data:,x|0|true');
+  });
+
+  test('many text-drawing canvases that are never read do not hide a later one',
+      () async {
     final r = await report('''
-      var c = new HTMLCanvasElement();
-      window.__res = c.toDataURL();''',
-        before: 'Object.freeze(HTMLCanvasElement.prototype);');
+      for (var i = 0; i < 25; i++) {
+        var d = new HTMLCanvasElement(); var y = d.getContext('2d');
+        y.fillStyle = '#123'; y.fillText('chart label ' + i, 1, 1);
+      }
+      var c = new HTMLCanvasElement(); var x = c.getContext('2d');
+      x.fillStyle = '#f60'; x.fillText('Cwm fjordbank glyphs', 2, 15);
+      c.toDataURL();''');
     if (r == null) return markTestSkipped('node not installed');
-    expect(r['canvas'], isEmpty);
+    expect((r['canvas'] as List).single['chars'], greaterThanOrEqualTo(10));
   });
 
   test('nothing called gives an empty report', () async {

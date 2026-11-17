@@ -10,11 +10,14 @@
 /// returns a JSON string (see the plan for the shape).
 const String vsvTechniquesJs = r'''
 (function() {
+  try {
   if (window.__vsv_tech_report) return;
   var MAX_CANVAS = 20, MAX_PROMPTS = 20, MAX_SEEN = 100;
   var started = Date.now();
   var canvases = [];      // {el, w, h, chars, colors, reads, script}
-  var contexts = [];      // {ctx, el, fill}
+  var entries = [];       // fallback without WeakMap: {ctx, el, fill, chars, colors}
+  var byCtx = typeof WeakMap === 'function' ? new WeakMap() : null;
+  var byEl = byCtx ? new WeakMap() : null;
   var fonts = { measureCalls: 0, seen: {}, script: '' };
   var webgl = { debugInfo: false, script: '' };
   var audio = { offline: 0, oscillators: 0, rendered: 0, script: '' };
@@ -94,54 +97,65 @@ const String vsvTechniquesJs = r'''
   }
 
   // --- canvas ---
-  function ctxRecord(ctx) {
-    for (var i = 0; i < contexts.length; i++) if (contexts[i].ctx === ctx) return contexts[i];
+  // Text and colours are kept per context; a canvas record exists only once
+  // the canvas was read back, so unread chart canvases cannot use up the slots.
+  function ctxEntry(ctx) {
+    if (byCtx) return byCtx.get(ctx) || null;
+    for (var i = 0; i < entries.length; i++) if (entries[i].ctx === ctx) return entries[i];
     return null;
   }
-  function canvasRecord(el) {
-    for (var i = 0; i < canvases.length; i++) if (canvases[i].el === el) return canvases[i];
-    if (canvases.length >= MAX_CANVAS) return null;
-    var r = { el: el, w: 0, h: 0, chars: {}, colors: {}, reads: 0, script: '' };
-    canvases.push(r);
-    return r;
+  function elEntry(el) {
+    if (byEl) return byEl.get(el) || null;
+    for (var i = 0; i < entries.length; i++) if (entries[i].el === el) return entries[i];
+    return null;
+  }
+  function addEntry(ctx, el) {
+    var e = { ctx: ctx, el: el, fill: null, chars: {}, colors: {} };
+    if (byCtx) {
+      byCtx.set(ctx, e);
+      byEl.set(el, e);
+    } else if (entries.length < MAX_SEEN) {
+      entries.push(e);
+    }
   }
   function read(el) {
-    var r = canvasRecord(el);
-    if (!r) return;
+    var r = null;
+    for (var i = 0; i < canvases.length; i++) if (canvases[i].el === el) r = canvases[i];
+    if (!r) {
+      if (canvases.length >= MAX_CANVAS) return;
+      r = { el: el, w: 0, h: 0, reads: 0, script: '' };
+      canvases.push(r);
+    }
     r.reads++;
     r.w = el.width; r.h = el.height;
     if (!r.script) r.script = script();
   }
   function drewText(ctx, args) {
-    var cr = ctxRecord(ctx);
-    if (!cr) return;
-    var r = canvasRecord(cr.el);
-    if (!r) return;
+    var e = ctxEntry(ctx);
+    if (!e) return;
     var text = String(args[0]);
-    for (var i = 0; i < text.length; i++) r.chars[text.charAt(i)] = 1;
-    if (cr.fill !== null) r.colors[cr.fill] = 1;
+    for (var i = 0; i < text.length; i++) e.chars[text.charAt(i)] = 1;
+    if (e.fill !== null) e.colors[e.fill] = 1;
   }
   var canvasProto = proto('HTMLCanvasElement'), ctxProto = proto('CanvasRenderingContext2D');
   if (canvasProto) {
     wrap(canvasProto, 'getContext', null, function(el, args, ctx) {
-      if (args[0] === '2d' && ctx && !ctxRecord(ctx) && contexts.length < MAX_SEEN) {
-        contexts.push({ ctx: ctx, el: el, fill: null });
-      }
+      if (args[0] === '2d' && ctx && !ctxEntry(ctx)) addEntry(ctx, el);
     });
     wrap(canvasProto, 'toDataURL', function(el) { read(el); });
     wrap(canvasProto, 'toBlob', function(el) { read(el); });
   }
   if (ctxProto) {
     wrapSetter(ctxProto, 'fillStyle', function(ctx, v) {
-      var cr = ctxRecord(ctx);
-      if (cr) cr.fill = typeof v === 'string' ? v : null;
+      var e = ctxEntry(ctx);
+      if (e) e.fill = typeof v === 'string' ? v : null;
     });
     wrap(ctxProto, 'fillText', function(ctx, args) { drewText(ctx, args); });
     wrap(ctxProto, 'strokeText', function(ctx, args) { drewText(ctx, args); });
     wrap(ctxProto, 'getImageData', function(ctx, args) {
       if (!(args[2] >= 16 && args[3] >= 16)) return;
-      var cr = ctxRecord(ctx);
-      if (cr) read(cr.el);
+      var e = ctxEntry(ctx);
+      if (e) read(e.el);
     });
     wrap(ctxProto, 'measureText', function(ctx) {
       fonts.measureCalls++;
@@ -239,8 +253,9 @@ const String vsvTechniquesJs = r'''
     for (var i = 0; i < canvases.length; i++) {
       var c = canvases[i];
       if (c.reads > 0) {
-        out.push({ w: c.w, h: c.h, chars: Object.keys(c.chars).length,
-          colors: Object.keys(c.colors).length, reads: c.reads, script: c.script });
+        var e = elEntry(c.el);
+        out.push({ w: c.w, h: c.h, chars: e ? Object.keys(e.chars).length : 0,
+          colors: e ? Object.keys(e.colors).length : 0, reads: c.reads, script: c.script });
       }
     }
     return JSON.stringify({ v: 1, canvas: out,
@@ -250,5 +265,6 @@ const String vsvTechniquesJs = r'''
       enumerateDevices: counts.enumerateDevices, battery: counts.battery,
       clipboardRead: counts.clipboardRead, prompts: prompts });
   };
+  } catch (e) {}
 })();
 ''';
