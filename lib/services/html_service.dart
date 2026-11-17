@@ -225,17 +225,19 @@ class HtmlService extends ChangeNotifier {
   String? _sovereigntyError;
   int _sovereigntyWatchers = 0;
   bool _sovereigntyScheduled = false;
-
-  final CnameLookup _cnameLookup;
-  int _cloakingWatchers = 0;
-  bool _cloakingRunning = false;
-  int? _cloakingGen;
-  CloakingResult? _cloakingResult;
-  Observed<CloakingResult>? _cloakingPresent;
   String? _sovereigntyInputKey;
   Timer? _sovereigntyTimer;
   final Duration _sovereigntyDebounce;
   Observed<SovereigntyReport>? _sovereigntyPresent;
+
+  // CNAME cloaking check (see watchCloaking).
+  final CnameLookup _cnameLookup;
+  final CloakingFinder _cloakingFinder;
+  int _cloakingWatchers = 0;
+  bool _cloakingRunning = false;
+  int? _cloakingGen; // navigation the check was started for
+  int? _cloakingResultGen; // navigation the stored result belongs to
+  Observed<CloakingResult>? _cloakingState;
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
@@ -1017,8 +1019,6 @@ class HtmlService extends ChangeNotifier {
     if (watching) _scheduleSovereignty();
   }
 
-  /// The URL the analysis is about: where the browser is, else where the
-  /// app's own request ended, else what was asked for. From the store only.
   /// CNAME cloaking check of the current page: Pending until a view watches
   /// and the page has settled.
   Observed<CloakingResult> get cnameCloaking {
@@ -1027,16 +1027,11 @@ class HtmlService extends ChangeNotifier {
       return const Unavailable(UnavailableReason.notApplicable,
           'Load a URL to check its hostnames.');
     }
-    final result = _cloakingResult;
-    if (result == null || _cloakingGen != current.generation) {
+    final state = _cloakingState;
+    if (state == null || _cloakingResultGen != current.generation) {
       return const Pending();
     }
-    final cached = _cloakingPresent;
-    if (cached is Present<CloakingResult> && identical(cached.value, result)) {
-      return cached;
-    }
-    return _cloakingPresent = Present(result,
-        source: DataSource.server, provenance: Provenance.derived);
+    return state;
   }
 
   /// A view calls this when it appears (+1) and disappears (-1). The lookups
@@ -1067,19 +1062,27 @@ class HtmlService extends ChangeNotifier {
       final hosts = SovereigntyService.browserResources(store.current)
           .map((r) => Uri.tryParse(r.url)?.host ?? '')
           .where((h) => h.isNotEmpty);
-      final result = await findCloakedTrackers(hosts,
+      final result = await _cloakingFinder(hosts,
           pageHost: url.host, lookup: _cnameLookup);
       if (!_disposed && gen == store.current.generation) {
-        _cloakingResult = result;
+        _cloakingResultGen = gen;
+        _cloakingState = Present(result,
+            source: DataSource.server, provenance: Provenance.derived);
       }
     } catch (e) {
       debugPrint('CNAME cloaking check failed: $e');
+      if (!_disposed && gen == store.current.generation) {
+        _cloakingResultGen = gen;
+        _cloakingState = Failed('$e');
+      }
     } finally {
       _cloakingRunning = false;
       notifyListeners(); // also starts the check for a newer navigation
     }
   }
 
+  /// The URL the analysis is about: where the browser is, else where the
+  /// app's own request ended, else what was asked for. From the store only.
   Uri? get _sovereigntyUri {
     final current = store.current;
     final target = current.target;
@@ -1699,7 +1702,9 @@ class HtmlService extends ChangeNotifier {
     Duration lateCollectDelay = const Duration(seconds: 2),
     Duration spaSettleDelay = const Duration(milliseconds: 400),
     CnameLookup? cnameLookup,
+    CloakingFinder? cloakingFinder,
   })  : _cnameLookup = cnameLookup ?? dohCnameLookup,
+        _cloakingFinder = cloakingFinder ?? findCloakedTrackers,
         _sovereigntyDebounce = sovereigntyDebounce,
         _sovereigntyAnalyzer =
             sovereigntyAnalyzer ?? SovereigntyService.analyze,

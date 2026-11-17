@@ -31,6 +31,12 @@ class CloakingResult {
 /// CNAME targets of a host: null when the lookup failed, empty when it has none.
 typedef CnameLookup = Future<List<String>?> Function(String host);
 
+/// [findCloakedTrackers] without its tuning knobs (a seam for tests).
+typedef CloakingFinder = Future<CloakingResult> Function(
+    Iterable<String> resourceHosts,
+    {required String pageHost,
+    required CnameLookup lookup});
+
 /// The app's own DNS-over-HTTPS lookup of CNAME records.
 Future<List<String>?> dohCnameLookup(String host) =>
     SovereigntyService.dnsQuery(host, 5);

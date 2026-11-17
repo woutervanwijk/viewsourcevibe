@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/cname_cloaking_service.dart';
@@ -12,6 +14,8 @@ void main() {
   late InspectionStore store;
   late HtmlService service;
   late List<String> looked;
+  var hang = false;
+  var finderThrows = false;
 
   final page = fullPage().copyWith(
     browser: browser(browserSnapshot(
@@ -32,8 +36,13 @@ void main() {
       serverFetcher: SilentServerFetcher(),
       browserLoader: SilentBrowserLoader(),
       metadataExtractor: (html, baseUrl, {headers}) async => {},
+      cloakingFinder: (hosts, {required pageHost, required lookup}) {
+        if (finderThrows) throw StateError('boom');
+        return findCloakedTrackers(hosts, pageHost: pageHost, lookup: lookup);
+      },
       cnameLookup: (h) async {
         looked.add(h);
+        if (hang) return Completer<List<String>?>().future;
         return h.startsWith('metrics') ? ['x.sc.omtrdc.net'] : const [];
       },
     );
@@ -67,5 +76,24 @@ void main() {
     await pumpEventQueue();
     final state = service.cnameCloaking as Present<CloakingResult>;
     expect(state.value.aliases, hasLength(1));
+  });
+
+  test('the next page does not show the previous page result', () async {
+    seedStore(store, page);
+    service.watchCloaking(true);
+    await pumpEventQueue();
+    expect(service.cnameCloaking, isA<Present<CloakingResult>>());
+    hang = true;
+    seedStore(store, page);
+    await pumpEventQueue();
+    expect(service.cnameCloaking, isA<Pending<CloakingResult>>());
+  });
+
+  test('a check that throws is Failed, not Pending forever', () async {
+    finderThrows = true;
+    seedStore(store, page);
+    service.watchCloaking(true);
+    await pumpEventQueue();
+    expect(service.cnameCloaking, isA<Failed<CloakingResult>>());
   });
 }
