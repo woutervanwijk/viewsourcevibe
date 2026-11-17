@@ -70,7 +70,13 @@ class StructurePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final palette = StructurePalette(scheme);
+    canvas.clipRect(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, Paint()..color = scheme.surface);
+    canvas.drawRect(
+        Offset.zero & size,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..color = scheme.outlineVariant);
 
     final fill = Paint()..style = PaintingStyle.fill;
     final outline = Paint()

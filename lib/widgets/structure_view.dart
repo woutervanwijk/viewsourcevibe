@@ -82,6 +82,11 @@ class _StructureViewState extends State<StructureView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(model.measuredAt,
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
           for (final note in model.notes)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
@@ -147,15 +152,18 @@ class _StructureViewState extends State<StructureView> {
                   context,
                   blockAt(model, d.localPosition.dx / scale,
                       d.localPosition.dy / scale)),
-              child: CustomPaint(
-                key: const Key('structure-wireframe'),
-                size: Size(
-                    model.layout.width * scale, model.layout.height * scale),
-                painter: StructurePainter(
-                    model: model,
-                    scale: scale,
-                    coloring: _coloring,
-                    scheme: scheme),
+              child: Semantics(
+                label: 'Page wireframe, ${model.blocks.length} blocks',
+                child: CustomPaint(
+                  key: const Key('structure-wireframe'),
+                  size: Size(
+                      model.layout.width * scale, model.layout.height * scale),
+                  painter: StructurePainter(
+                      model: model,
+                      scale: scale,
+                      coloring: _coloring,
+                      scheme: scheme),
+                ),
               ),
             );
           }),

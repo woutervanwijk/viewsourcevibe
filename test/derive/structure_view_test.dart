@@ -179,6 +179,50 @@ void main() {
     expect(lineOfId('<p>', ''), isNull);
   });
 
+  test('a heading tag that is not h1..h6 does not throw', () {
+    final m = present(deriveStructure(pageWith(blocks: [
+      block('', kind: LayoutKind.heading),
+      heading('h2'),
+    ])));
+    expect(m.headings.map((h) => h.level), [1, 2]);
+  });
+
+  test('the measuring viewport is stated', () {
+    final m = present(deriveStructure(pageWith(w: 390)));
+    expect(m.measuredAt, 'Measured at 390\u00d7800');
+  });
+
+  test('a page with nothing to draw says so', () {
+    final m = present(deriveStructure(pageWith()));
+    expect(
+        m.notes,
+        contains('Nothing on this page is large or marked up enough to draw: '
+            'no landmarks, headings, frames, media or large blocks.'));
+    expect(present(deriveStructure(pageWith(blocks: [heading('h1')]))).notes
+        .join(), isNot(contains('Nothing on this page')));
+  });
+
+  test('a capped scan is noted', () {
+    final p = pageWith(blocks: [heading('h1')]);
+    final l = (p.layout as Present<PageLayout>).value;
+    final capped = p.copyWith(
+        layout: Present(
+            PageLayout(
+                viewportWidth: l.viewportWidth,
+                viewportHeight: l.viewportHeight,
+                width: l.width,
+                height: l.height,
+                totalBlocks: l.totalBlocks,
+                blocks: l.blocks,
+                scanCapped: true),
+            source: DataSource.browser));
+    expect(present(deriveStructure(capped)).notes, contains(
+        'Only the first 20000 elements were measured; landmark and '
+        'heading notes may be incomplete.'));
+    expect(present(deriveStructure(p)).notes.join(),
+        isNot(contains('20000')));
+  });
+
   test('a local file has no structure view', () {
     expect(deriveStructure(localFile()), isA<Unavailable<StructureModel>>());
   });

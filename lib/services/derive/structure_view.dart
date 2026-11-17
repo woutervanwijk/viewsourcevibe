@@ -45,6 +45,9 @@ class StructureModel {
   final List<String> landmarks;
   final List<String> notes;
 
+  /// Which viewport the layout was measured at.
+  final String measuredAt;
+
   /// 0..1 of the page area under third-party frames.
   final double thirdPartyShare;
 
@@ -54,6 +57,7 @@ class StructureModel {
     required this.headings,
     required this.landmarks,
     required this.notes,
+    required this.measuredAt,
     required this.thirdPartyShare,
   });
 }
@@ -170,6 +174,13 @@ StructureBlock _classify(LayoutBlock b, String pageUrl) {
       block: b, owner: owner, label: _labelOf(b), service: service);
 }
 
+final _headingTag = RegExp(r'^h([1-6])$');
+
+int _headingLevel(String tag) =>
+    int.parse(_headingTag.firstMatch(tag)?.group(1) ?? '1');
+
+String _n(double v) => v.round().toString();
+
 StructureModel _derive(PageLayout l, String pageUrl) {
   final all = [for (final b in l.blocks) _classify(b, pageUrl)];
 
@@ -181,7 +192,7 @@ StructureModel _derive(PageLayout l, String pageUrl) {
   final headings = <OutlineItem>[
     for (final b in l.blocks)
       if (b.kind == LayoutKind.heading)
-        OutlineItem(int.tryParse(b.tag.substring(1)) ?? 1, b.text),
+        OutlineItem(_headingLevel(b.tag), b.text),
   ];
 
   final found = <String>{
@@ -213,6 +224,12 @@ StructureModel _derive(PageLayout l, String pageUrl) {
   final notes = <String>[
     if (l.truncated)
       'Only the first ${l.blocks.length} of ${l.totalBlocks} blocks are drawn.',
+    if (l.scanCapped)
+      'Only the first 20000 elements were measured; landmark and heading '
+          'notes may be incomplete.',
+    if (l.totalBlocks == 0 && l.blocks.isEmpty)
+      'Nothing on this page is large or marked up enough to draw: no '
+          'landmarks, headings, frames, media or large blocks.',
     if (!landmarks.contains('main')) 'No main landmark.',
   ];
   final h1s = headings.where((h) => h.level == 1).length;
@@ -235,6 +252,8 @@ StructureModel _derive(PageLayout l, String pageUrl) {
     headings: headings,
     landmarks: landmarks,
     notes: notes,
+    measuredAt:
+        'Measured at ${_n(l.viewportWidth)}\u00d7${_n(l.viewportHeight)}',
     thirdPartyShare: share,
   );
 }
