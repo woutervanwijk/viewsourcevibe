@@ -18,6 +18,7 @@ import 'package:view_source_vibe/widgets/services_view.dart';
 import 'package:view_source_vibe/widgets/media_view.dart';
 import 'package:view_source_vibe/widgets/privacy_view.dart';
 import 'package:view_source_vibe/widgets/probe_views.dart';
+import 'package:view_source_vibe/widgets/permissions_view.dart';
 import 'package:view_source_vibe/widgets/request_timeline_view.dart';
 import 'package:view_source_vibe/widgets/sovereignty_view.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
@@ -428,6 +429,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           AppTab.privacy => page(tab, const PrivacyView()),
           AppTab.sovereignty => page(tab, const SovereigntyView()),
           AppTab.security => page(tab, const ProbeSecurityView()),
+          AppTab.permissions => page(tab, const PermissionsView()),
           AppTab.cookies => page(tab, const ProbeCookiesView()),
         },
     ];

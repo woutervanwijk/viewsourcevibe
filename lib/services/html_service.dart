@@ -39,6 +39,7 @@ import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/request_timeline.dart';
+import 'package:view_source_vibe/services/derive/permissions_view.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart';
 import 'package:view_source_vibe/services/collectors/fresh_load_measurer.dart';
 import 'package:view_source_vibe/services/collectors/transfer_size_lookup.dart';
@@ -881,6 +882,32 @@ class HtmlService extends ChangeNotifier {
       _security = deriveSecurity(current);
     }
     return _security!;
+  }
+
+  Observed<PermissionsModel>? _permissions;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server,
+    List<PermissionRequestEvent> requests
+  })? _permissionsFor;
+
+  /// The Permissions tab: declared policy, delegation to frames, requests
+  /// the app denied, what is stored. Cached on the inputs, not on the
+  /// PageInspection object.
+  Observed<PermissionsModel> get permissionsView {
+    final current = store.current;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      server: current.server,
+      requests: current.permissionRequests
+    );
+    if (_permissions == null || _permissionsFor != key) {
+      _permissionsFor = key;
+      _permissions = derivePermissions(current);
+    }
+    return _permissions!;
   }
 
   Observed<CookiesModel>? _cookiesView;

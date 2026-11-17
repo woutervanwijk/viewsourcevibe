@@ -44,6 +44,10 @@ class AboutScreen extends StatelessWidget {
       'Network: request timeline, headers, cookies, probe and security (incl. TLS)'
     ),
     (
+      Icons.admin_panel_settings_outlined,
+      'Permissions: what the page may use, hands to embedded frames and stores on your device'
+    ),
+    (
       Icons.folder_open,
       'Open local files, share URLs/files/text into the app, URL history'
     ),

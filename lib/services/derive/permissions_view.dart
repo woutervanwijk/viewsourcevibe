@@ -48,6 +48,9 @@ class PermissionsModel {
   final List<PermissionRequestEvent> requests;
   final Observed<SiteStorage> stored;
 
+  /// Local and session storage: counts and sizes only, never values.
+  final Observed<BrowserStorage> webStorage;
+
   /// Plain sentences for the top of the tab.
   final List<String> notes;
 
@@ -59,6 +62,7 @@ class PermissionsModel {
     required this.frameCount,
     required this.requests,
     required this.stored,
+    required this.webStorage,
     required this.notes,
   });
 }
@@ -224,6 +228,9 @@ Observed<PermissionsModel> derivePermissions(PageInspection p) {
         frameCount: browserSnap?.frameCount ?? 0,
         requests: p.permissionRequests,
         stored: stored,
+        webStorage: browserSnap?.storage ??
+            _carry<BrowserStorage>(
+                browser, 'the browser did not report web storage'),
         notes: notes,
       ),
       source: DataSource.browser,
