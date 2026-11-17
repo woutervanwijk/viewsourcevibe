@@ -13,20 +13,25 @@ class BatchBanner extends StatelessWidget {
     final String text;
     final List<Widget> actions;
     if (runner.running) {
-      final pending = runner.currentPending;
+      final phase = runner.phase == 'waiting'
+          ? 'waiting for ${runner.currentPending.join(', ')}'
+          : runner.phase;
       text = 'Batch ${runner.index + 1}/${runner.total}'
           ' · ${runner.currentUrl?.host ?? ''}'
-          ' · ${pending.isEmpty ? 'exporting' : 'waiting for ${pending.join(', ')}'}';
+          '${phase.isEmpty ? '' : ' · $phase'}';
       actions = [
         TextButton(onPressed: runner.cancel, child: const Text('Cancel'))
       ];
-    } else if (runner.rows.isNotEmpty) {
-      text = 'Batch done: ${runner.rows.length} site(s)';
+    } else if (runner.error != null || runner.rows.isNotEmpty) {
+      text = runner.error != null
+          ? 'Batch failed: ${runner.error}'
+          : 'Batch done: ${runner.rows.length} site(s)';
       actions = [
-        TextButton(
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const BatchResultsScreen())),
-            child: const Text('Results')),
+        if (runner.rows.isNotEmpty)
+          TextButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const BatchResultsScreen())),
+              child: const Text('Results')),
         TextButton(onPressed: runner.dismiss, child: const Text('Dismiss')),
       ];
     } else {

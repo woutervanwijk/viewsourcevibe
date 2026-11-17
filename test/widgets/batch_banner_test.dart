@@ -11,7 +11,9 @@ import '../support/fake_batch_target.dart';
 void main() {
   late Directory tmp;
   setUp(() => tmp = Directory.systemTemp.createTempSync('batch_banner_test'));
-  tearDown(() => tmp.deleteSync(recursive: true));
+  tearDown(() {
+    if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+  });
 
   Future<void> pumpBanner(WidgetTester tester, BatchRunner runner) =>
       tester.pumpWidget(ChangeNotifierProvider<BatchRunner>.value(
@@ -45,7 +47,8 @@ void main() {
       await tester.pump();
       expect(find.textContaining('Batch 2/3'), findsOneWidget);
       expect(find.textContaining('b.test'), findsOneWidget);
-      expect(find.textContaining('waiting for sovereignty'), findsOneWidget);
+      expect(find.text('Batch 2/3 · b.test · waiting for sovereignty'),
+          findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await done;
       await tester.pump();
@@ -55,6 +58,19 @@ void main() {
     expect(find.text('Results'), findsOneWidget);
     await tester.tap(find.text('Dismiss'));
     await tester.pump();
+    expect(find.textContaining('Batch'), findsNothing);
+  });
+
+  testWidgets('a run that failed says so and can be dismissed', (tester) async {
+    final runner = BatchRunner(FakeBatchTarget(),
+        workDir: () async => throw StateError('no disk'));
+    await pumpBanner(tester, runner);
+    await tester.runAsync(() => runner.run([Uri.parse('https://a.test/')]));
+    await tester.pump();
+    expect(find.text('Batch failed: Bad state: no disk'), findsOneWidget);
+    await tester.tap(find.text('Dismiss'));
+    await tester.pump();
+    expect(runner.error, isNull);
     expect(find.textContaining('Batch'), findsNothing);
   });
 }
