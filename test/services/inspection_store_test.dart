@@ -152,6 +152,29 @@ void main() {
         containsAll(['https://a.test/a.js', 'https://a.test/b.js']));
   });
 
+  test('a later poll keeps and compares the capability flags', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    const no = Present(false, source: DataSource.browser);
+    store.applyBrowser(
+        g,
+        _browser('https://a.test/', dom: '<p>a</p>')
+            .copyWith(mediaDevices: no, geolocation: no));
+    // A poll without the capabilities section must not wipe them.
+    store.applyBrowser(g, _browser('https://a.test/', dom: '<p>a</p>'));
+    var b = (store.current.browser as Present<BrowserSnapshot>).value;
+    expect(b.mediaDevices, isA<Present<bool>>());
+    expect(b.geolocation, isA<Present<bool>>());
+    // A capability-only change is not a no-op.
+    notifies = 0;
+    store.applyBrowser(
+        g,
+        _browser('https://a.test/', dom: '<p>a</p>').copyWith(
+            mediaDevices: const Present(true, source: DataSource.browser)));
+    b = (store.current.browser as Present<BrowserSnapshot>).value;
+    expect((b.mediaDevices as Present<bool>).value, isTrue);
+    expect(notifies, greaterThan(0));
+  });
+
   test('stale robots and failure are ignored', () {
     final genA = store.beginUrl(Uri.parse('https://a.test/'));
     store.beginUrl(Uri.parse('https://b.test/'));

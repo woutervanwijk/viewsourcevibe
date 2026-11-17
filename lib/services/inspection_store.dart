@@ -294,6 +294,8 @@ bool _sameBrowser(BrowserSnapshot a, BrowserSnapshot b) {
       sameObserved(a.frames, b.frames) &&
       a.frameCount == b.frameCount &&
       sameObserved(a.siteStorage, b.siteStorage) &&
+      sameObserved(a.mediaDevices, b.mediaDevices) &&
+      sameObserved(a.geolocation, b.geolocation) &&
       a.resourcesTruncated == b.resourcesTruncated &&
       a.resourcesDropped == b.resourcesDropped &&
       a.rawPayload == b.rawPayload;
@@ -323,6 +325,8 @@ BrowserSnapshot _merge(BrowserSnapshot old, BrowserSnapshot n) {
         ? old.frameCount
         : n.frameCount,
     siteStorage: _fresher(old.siteStorage, n.siteStorage),
+    mediaDevices: _fresher(old.mediaDevices, n.mediaDevices),
+    geolocation: _fresher(old.geolocation, n.geolocation),
     // Per document: the newest collect knows best (a reload after a
     // challenge page must not keep the challenge's 403).
     mainStatus: sameObserved(old.mainStatus, n.mainStatus)

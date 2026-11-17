@@ -394,7 +394,9 @@ class BrowserSnapshot {
 
   BrowserSnapshot copyWith(
           {Observed<List<BrowserCookie>>? cookies,
-          Observed<int>? mainStatus}) =>
+          Observed<int>? mainStatus,
+          Observed<bool>? mediaDevices,
+          Observed<bool>? geolocation}) =>
       BrowserSnapshot(
         url: url,
         platform: platform,
@@ -411,8 +413,8 @@ class BrowserSnapshot {
         frames: frames,
         frameCount: frameCount,
         siteStorage: siteStorage,
-        mediaDevices: mediaDevices,
-        geolocation: geolocation,
+        mediaDevices: mediaDevices ?? this.mediaDevices,
+        geolocation: geolocation ?? this.geolocation,
         rawPayload: rawPayload,
       );
 
