@@ -12,8 +12,8 @@ ContentWorld? collectorWorld(TargetPlatform platform) =>
         ? ContentWorld.world(name: 'vsv')
         : null;
 
-/// Bootstrap + collector + scroll-through + layout measurement as one document-start user script,
-/// in every frame. In an isolated world the fetch/XHR patch is skipped
+/// Bootstrap + collector + scroll-through + layout measurement as one
+/// document-start user script, in every frame. In an isolated world the fetch/XHR patch is skipped
 /// (`__vsv_isolated`): it would only patch the isolated copy of those objects.
 UserScript collectorUserScript(TargetPlatform platform) {
   final world = collectorWorld(platform);

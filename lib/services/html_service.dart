@@ -1505,6 +1505,12 @@ class HtmlService extends ChangeNotifier {
         triggerBrowserReload();
       }
 
+      // Structure tab: the page may have changed since it was measured.
+      if (index == tabIndexOf(AppTab.structure) &&
+          store.current.browserSettled) {
+        collectLayout().ignore();
+      }
+
       // Source tab without content yet: the server body may have arrived.
       if (index == sourceTabIndex) {
         _adoptServerBodyIfEmpty(store.current.generation).ignore();
@@ -4285,7 +4291,10 @@ Technical details: $message''';
               UnavailableReason.notApplicable, 'needs the browser'));
       return;
     }
-    store.applyLayout(gen, const Pending());
+    // A re-measure keeps the old drawing until the new result replaces it.
+    if (store.current.layout is! Present<PageLayout>) {
+      store.applyLayout(gen, const Pending());
+    }
     Observed<PageLayout> result;
     try {
       final raw = override != null
@@ -4560,6 +4569,7 @@ Technical details: $message''';
       store.markBrowserSettled(gen);
       return;
     }
+    store.applyLayout(gen, const Pending('waiting for the page to settle'));
     bool stale() => _disposed || gen != store.current.generation;
     final clock = Stopwatch()..start();
     var lastChange = Duration.zero;

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/app_tab.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
@@ -327,6 +328,72 @@ void main() {
       await service.syncWebViewState('https://a.test/');
       expect(service.browserDebugPayload, '{not json');
       expect(store.current.browser, isA<Failed<BrowserSnapshot>>());
+    });
+  });
+
+  group('structure layout timing', () {
+    const layoutJson = '{"v":1,"vw":1,"vh":1,"w":10,"h":20,"total":0,'
+        '"blocks":[{"k":"frame","x":0,"y":0,"w":5,"h":5,"d":1,"n":0}]}';
+
+    HtmlService makeWithLayout(NetworkQuietPolicy poll, List<String> calls) {
+      final s = HtmlService(
+        store: store,
+        serverFetcher: fetcher,
+        browserLoader: loader,
+        metadataExtractor: (html, baseUrl, {headers}) async => {'title': html},
+        browserCollect: (url) => collect(url),
+        layoutCollect: (url) async {
+          calls.add(url);
+          return layoutJson;
+        },
+        nativeCookies: (url) => native(url),
+        browserPlatform: BrowserPlatform.macos,
+        browserPoll: poll,
+        lateCollectDelay: const Duration(milliseconds: 10),
+        spaSettleDelay: Duration.zero,
+      );
+      s.setAppSettings(AppSettings()..useBrowserByDefault = true);
+      return s;
+    }
+
+    test('the tab says it waits while the page settles', () async {
+      service.dispose();
+      final calls = <String>[];
+      service = makeWithLayout(once(60), calls);
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      final l = store.current.layout as Pending;
+      expect(l.detail, 'waiting for the page to settle');
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await pumpEventQueue();
+      expect(calls, hasLength(1));
+    });
+
+    test('activating the Structure tab re-measures once settled', () async {
+      service.dispose();
+      final calls = <String>[];
+      service = makeWithLayout(once(20), calls);
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await pumpEventQueue();
+      expect(store.current.browserSettled, isTrue);
+      expect(calls, hasLength(1));
+      service.setActiveTabIndex(service.tabIndexOf(AppTab.structure));
+      await pumpEventQueue();
+      expect(calls, hasLength(2));
+    });
+
+    test('activating the Structure tab before settling does not measure',
+        () async {
+      service.dispose();
+      final calls = <String>[];
+      service = makeWithLayout(once(1000), calls);
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      service.setActiveTabIndex(service.tabIndexOf(AppTab.structure));
+      await pumpEventQueue();
+      expect(calls, isEmpty);
     });
   });
 

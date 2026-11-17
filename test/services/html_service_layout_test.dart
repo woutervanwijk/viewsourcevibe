@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_layout.dart';
@@ -23,7 +25,7 @@ void main() {
         store,
         (u) async =>
             '{"v":1,"vw":1,"vh":1,"w":10,"h":20,"total":0,"blocks":'
-            '[{"k":"frame","x":0,"y":0,"w":5,"h":5}]}');
+            '[{"k":"frame","x":0,"y":0,"w":5,"h":5,"d":1,"n":0}]}');
     await s.collectLayout();
     expect(store.current.layout, isA<Present<PageLayout>>());
     s.dispose();
@@ -58,6 +60,34 @@ void main() {
     await s.collectLayout();
     expect((store.current.layout as Unavailable<PageLayout>).detail,
         'not measured yet');
+    s.dispose();
+  });
+
+  const present1 = '{"v":1,"vw":1,"vh":1,"w":10,"h":20,"total":0,"blocks":'
+      '[{"k":"frame","x":0,"y":0,"w":5,"h":5,"d":1,"n":0}]}';
+
+  test('a re-measure keeps the old drawing instead of flashing Pending',
+      () async {
+    final store = InspectionStore()..beginUrl(Uri.parse('https://a.test/'));
+    final seen = <Type>[];
+    store.addListener(() => seen.add(store.current.layout.runtimeType));
+    final s = make(store, (u) async => present1);
+    await s.collectLayout();
+    seen.clear();
+    await s.collectLayout();
+    expect(seen.any((t) => t.toString().startsWith('Pending')), isFalse);
+    expect(store.current.layout, isA<Present<PageLayout>>());
+    s.dispose();
+  });
+
+  test('a first measure is Pending while it runs', () async {
+    final store = InspectionStore()..beginUrl(Uri.parse('https://a.test/'));
+    final gate = Completer<Object?>();
+    final s = make(store, (u) => gate.future);
+    final f = s.collectLayout();
+    expect(store.current.layout, isA<Pending<PageLayout>>());
+    gate.complete(present1);
+    await f;
     s.dispose();
   });
 }
