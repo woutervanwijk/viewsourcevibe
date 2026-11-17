@@ -166,4 +166,29 @@ void main() {
     expect(derivePermissions(const PageInspection.empty()),
         isA<Unavailable<PermissionsModel>>());
   });
+  test('allow="camera none" delegates nothing and raises no note', () {
+    final m = present(derivePermissions(page(frames: const [
+      FrameInfo(src: 'https://meet.other.test/x', allow: 'camera none'),
+    ])));
+    expect((m.delegations as Present<List<Delegation>>).value.single.features,
+        isEmpty);
+    expect(m.notes.where((n) => n.contains('third-party')), isEmpty);
+  });
+
+  test('9.96 s prints as 10 s', () {
+    final m = present(derivePermissions(page(requests: const [
+      PermissionRequestEvent(
+          origin: 'https://a.test',
+          resources: ['camera'],
+          sinceLoadStart: Duration(milliseconds: 9960)),
+    ])));
+    expect(m.notes.last,
+        'The page asked for camera 10 s after it started loading.');
+  });
+
+  test('unavailable detail is pinned', () {
+    final u = derivePermissions(localFile()) as Unavailable<PermissionsModel>;
+    expect(u.reason, UnavailableReason.notApplicable);
+    expect(u.detail, 'only for web pages');
+  });
 }

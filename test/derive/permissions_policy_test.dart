@@ -61,4 +61,14 @@ void main() {
     expect(p.features['usb']!.self, isTrue);
     expect(p.features['usb']!.src, isFalse);
   });
+  test('invalid tokens are reported and not counted', () {
+    for (final t in ['none', 'self', "'foo'"]) {
+      final p = parseFeaturePolicy('camera $t', iframeAllow: true);
+      expect(p.features['camera']!.none, isTrue, reason: t);
+      expect(p.invalid, ['camera: $t (invalid token)']);
+    }
+    final p = parseFeaturePolicy('camera self https://a.test');
+    expect(p.features['camera']!.origins, ['https://a.test']);
+    expect(p.features['camera']!.none, isFalse);
+  });
 }

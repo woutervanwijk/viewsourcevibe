@@ -5,7 +5,6 @@ import '../../models/inspection/permission_request.dart';
 import '../../models/inspection/server_snapshot.dart';
 import '../../utils/site.dart';
 import 'permissions_policy.dart';
-import 'probe_general.dart' show probeGate;
 
 /// One feature the page's own policy header speaks about.
 class DeclaredFeature {
@@ -95,13 +94,17 @@ String? _header(Map<String, List<String>> headers, String name) {
 }
 
 String _seconds(Duration d) {
-  final s = d.inMilliseconds / 1000;
-  return s < 10 ? '${s.toStringAsFixed(1)} s' : '${s.round()} s';
+  final tenths = (d.inMilliseconds / 100).round();
+  return tenths < 100
+      ? '${(tenths / 10).toStringAsFixed(1)} s'
+      : '${(tenths / 10).round()} s';
 }
 
 Observed<PermissionsModel> derivePermissions(PageInspection p) {
-  final gate = probeGate<PermissionsModel>(p);
-  if (gate != null) return gate;
+  if (p.target is! UrlTarget) {
+    return const Unavailable(
+        UnavailableReason.notApplicable, 'only for web pages');
+  }
 
   final server = p.server, browser = p.browser;
   final serverSnap = server is Present<ServerSnapshot> ? server.value : null;

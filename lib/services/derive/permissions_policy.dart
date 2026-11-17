@@ -183,7 +183,11 @@ ParsedPolicy parseFeaturePolicy(String value, {bool iframeAllow = false}) {
         case "'none'":
           break;
         default:
-          origins.add(t);
+          if (_origin.hasMatch(t)) {
+            origins.add(t);
+          } else {
+            invalid.add('$name: $t (invalid token)');
+          }
       }
     }
     _add(features, invalid, name,
