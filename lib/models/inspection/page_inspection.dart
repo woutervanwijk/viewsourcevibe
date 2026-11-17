@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'browser_snapshot.dart';
 import 'file_snapshot.dart';
 import 'observed.dart';
+import 'page_layout.dart';
 import 'server_snapshot.dart';
 
 /// [PageInspection.freshLoad] before the user asked for one.
@@ -12,6 +13,10 @@ const kFreshLoadNotMeasured = Unavailable<BrowserSnapshot>(
 /// No screenshot (yet) of a load.
 const kNoScreenshot =
     Unavailable<Uint8List>(UnavailableReason.notApplicable, 'no screenshot');
+
+/// [PageInspection.layout] before the browser measured it.
+const kLayoutNotMeasured =
+    Unavailable<PageLayout>(UnavailableReason.notApplicable, 'not measured yet');
 
 /// What is being inspected.
 sealed class InspectionTarget {
@@ -75,6 +80,9 @@ class PageInspection {
   final Observed<Uint8List> liveScreenshot;
   final Observed<Uint8List> freshScreenshot;
 
+  /// The boxes of the live page (Structure tab).
+  final Observed<PageLayout> layout;
+
   const PageInspection({
     required this.generation,
     required this.target,
@@ -90,6 +98,7 @@ class PageInspection {
     this.freshEstimates = const {},
     this.liveScreenshot = kNoScreenshot,
     this.freshScreenshot = kNoScreenshot,
+    this.layout = kLayoutNotMeasured,
   });
 
   const PageInspection.empty()
@@ -110,7 +119,8 @@ class PageInspection {
         freshLoad = kFreshLoadNotMeasured,
         freshEstimates = const {},
         liveScreenshot = kNoScreenshot,
-        freshScreenshot = kNoScreenshot;
+        freshScreenshot = kNoScreenshot,
+        layout = kLayoutNotMeasured;
 
   PageInspection copyWith({
     Observed<ServerSnapshot>? server,
@@ -125,6 +135,7 @@ class PageInspection {
     Map<String, Observed<int>>? freshEstimates,
     Observed<Uint8List>? liveScreenshot,
     Observed<Uint8List>? freshScreenshot,
+    Observed<PageLayout>? layout,
   }) =>
       PageInspection(
         generation: generation,
@@ -143,6 +154,7 @@ class PageInspection {
         freshEstimates: freshEstimates ?? this.freshEstimates,
         liveScreenshot: liveScreenshot ?? this.liveScreenshot,
         freshScreenshot: freshScreenshot ?? this.freshScreenshot,
+        layout: layout ?? this.layout,
       );
 
   bool _has(DataSource s) => switch (s) {

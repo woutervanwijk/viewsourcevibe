@@ -5,6 +5,7 @@ import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/page_layout.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/utils/text_decoding.dart';
@@ -510,5 +511,23 @@ void main() {
       expect(notifies, 0);
       expect(store.current.declaredMedia, isEmpty);
     });
+  });
+
+  test('a layout for an earlier navigation is dropped', () {
+    final store = InspectionStore();
+    final gen1 = store.beginUrl(Uri.parse('https://a.test/'));
+    store.beginUrl(Uri.parse('https://b.test/'));
+    store.applyLayout(
+        gen1,
+        const Present(
+            PageLayout(
+                viewportWidth: 1,
+                viewportHeight: 1,
+                width: 1,
+                height: 1,
+                totalBlocks: 0,
+                blocks: []),
+            source: DataSource.browser));
+    expect(store.current.layout, isA<Unavailable<PageLayout>>());
   });
 }

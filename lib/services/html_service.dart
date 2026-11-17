@@ -25,10 +25,12 @@ import 'package:xml/xml.dart' as xml;
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/page_layout.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/collector_world.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
+import 'package:view_source_vibe/services/collectors/layout_payload.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
@@ -105,6 +107,7 @@ class HtmlService extends ChangeNotifier {
   late final BrowserLoader _browserLoader;
   final MetadataExtractor _metadataExtractor;
   final BrowserCollect? _browserCollectOverride;
+  final BrowserCollect? _layoutCollectOverride;
   final NativeCookieReader _nativeCookies;
 
   /// Deletes every cookie (the "Always clean cookies" setting); a seam for
@@ -1618,6 +1621,7 @@ class HtmlService extends ChangeNotifier {
     SovereigntyAnalyzer? sovereigntyAnalyzer,
     Duration sovereigntyDebounce = const Duration(milliseconds: 500),
     BrowserCollect? browserCollect,
+    BrowserCollect? layoutCollect,
     NativeCookieReader? nativeCookies,
     ResourceSizeLookup? sizeLookup,
     Future<void> Function()? deleteAllCookies,
@@ -1636,6 +1640,7 @@ class HtmlService extends ChangeNotifier {
         _domTreeBuilder = domTreeBuilder,
         _domTreeIsolateThreshold = domTreeIsolateThreshold,
         _browserCollectOverride = browserCollect,
+        _layoutCollectOverride = layoutCollect,
         _nativeCookies = nativeCookies ?? _nativeCookiesFromManager,
         _deleteAllCookies = deleteAllCookies ??
             (() => CookieManager.instance().deleteAllCookies()),
@@ -4232,6 +4237,37 @@ Technical details: $message''';
     store.applyLiveScreenshot(gen, _screenshotOf(bytes));
   }
 
+  /// Measures the live page's boxes for the Structure tab. Dropped when the
+  /// user navigates meanwhile.
+  Future<void> collectLayout() async {
+    final target = store.current.target;
+    if (target is! UrlTarget) return;
+    final gen = store.current.generation;
+    bool stale() => _disposed || gen != store.current.generation;
+    final override = _layoutCollectOverride;
+    final controller = activeWebViewController;
+    if (override == null && controller == null) {
+      store.applyLayout(
+          gen,
+          const Unavailable(
+              UnavailableReason.notApplicable, 'needs the browser'));
+      return;
+    }
+    store.applyLayout(gen, const Pending());
+    Observed<PageLayout> result;
+    try {
+      final raw = override != null
+          ? await override(target.url.toString())
+          : await controller!.evaluateJavascript(
+              source: 'window.__vsv_layout && window.__vsv_layout()',
+              contentWorld: collectorWorld(defaultTargetPlatform));
+      result = parseLayoutPayload(raw, pageUrl: target.url);
+    } catch (e) {
+      result = Failed('Layout measurement failed: $e');
+    }
+    if (!stale()) store.applyLayout(gen, result);
+  }
+
   /// Loads the page once more like Lighthouse (empty cache, phone screen,
   /// quiet network) in an off-screen browser, then sizes what it could not
   /// see with the app's own lookups. Only on the user's request: it is a
@@ -4533,6 +4569,7 @@ Technical details: $message''';
           }
           store.markBrowserSettled(gen);
           _captureLiveScreenshot(gen).ignore();
+          collectLayout().ignore();
         } else {
           next();
         }
