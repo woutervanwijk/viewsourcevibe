@@ -21,7 +21,15 @@ const kWeightHeavy = 5 * 1024 * 1024;
 const kWeightNotable = 2 * 1024 * 1024;
 const kFrameShareNotable = 0.20;
 
-enum FindingSeverity { high, medium, low, info }
+enum FindingSeverity {
+  high('High'),
+  medium('Medium'),
+  low('Low'),
+  info('Info');
+
+  final String label;
+  const FindingSeverity(this.label);
+}
 
 class Finding {
   final String id;
