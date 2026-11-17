@@ -8,7 +8,21 @@ class FakeBatchTarget implements BatchTarget {
   /// Host -> polls it stays pending; -1 = forever.
   final pendingFor = <String, int>{};
   final failOpen = <String>{};
+
+  /// Hosts whose page did not load (server and browser both failed).
+  final notLoaded = <String>{};
+
+  /// Host -> why the app's own request failed.
+  final loadFailures = <String, String>{};
+
+  /// Hosts the browser leaves (the user navigated) before the export.
+  final navigatedAway = <String>{};
   void Function(Uri url)? onOpen;
+  void Function()? onCollectLate;
+  void Function()? onPackage;
+
+  /// Shown as the 'finalUrl' fact of the summary.
+  String? note;
   Uri? _current;
   final _polls = <String, int>{};
 
@@ -31,7 +45,10 @@ class FakeBatchTarget implements BatchTarget {
   }
 
   @override
-  void collectLate() => calls.add('collectLate');
+  void collectLate() {
+    calls.add('collectLate');
+    onCollectLate?.call();
+  }
 
   @override
   Future<void> clearSiteData(Uri url) async => calls.add('clear $url');
@@ -44,15 +61,26 @@ class FakeBatchTarget implements BatchTarget {
       calls.add('watchSovereignty $watching');
 
   @override
+  bool loaded() => !notLoaded.contains(_current!.host);
+
+  @override
+  String? loadFailure() => loadFailures[_current!.host];
+
+  @override
+  bool stillOn(Uri url) => _current == url && !navigatedAway.contains(url.host);
+
+  @override
   InspectionSummary summary() => InspectionSummary(
         [],
-        {for (final k in summaryFactKeys) k: null}..['url'] =
-            _current.toString(),
+        {for (final k in summaryFactKeys) k: null}
+          ..['url'] = _current.toString()
+          ..['finalUrl'] = note,
       );
 
   @override
   List<int> package() {
     calls.add('package $_current');
+    onPackage?.call();
     return ZipEncoder()
         .encode(Archive()..addFile(ArchiveFile.string('a', 'b')));
   }

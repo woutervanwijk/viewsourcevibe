@@ -6,17 +6,20 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/batch_summary.dart';
 import 'package:view_source_vibe/services/derive/inspection_summary.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_export_service.dart';
 import 'package:view_source_vibe/services/site_data_cleaner.dart' as cleaner;
 
-/// Unfinished analyses by name; empty when the page is ready to export.
+/// Unfinished analyses by name; empty when the page is ready to export. A
+/// finished detection scan that failed or checked nothing is not pending.
 List<String> pendingAnalyses(HtmlService s) => [
       if (s.isLoading) 'loading',
       if (!s.store.current.browserSettled) 'browserSettled',
-      if (!s.detectionsView.complete) 'detections',
+      if (s.detectionsView.scanning) 'detections',
       if (s.generalView is Pending) 'general',
       if (s.securityView is Pending) 'security',
       if (s.cookiesView is Pending) 'cookies',
@@ -80,6 +83,16 @@ abstract interface class BatchTarget {
   Future<void> clearSiteData(Uri url);
   Future<void> measureFreshLoad();
   void watchSovereignty(bool watching);
+
+  /// The app's own request or the browser got the page.
+  bool loaded();
+
+  /// Why the app's own request failed; null when it did not.
+  String? loadFailure();
+
+  /// The target still shows the page opened for [url] (the user did not
+  /// navigate elsewhere).
+  bool stillOn(Uri url);
   InspectionSummary summary();
   List<int> package();
 }
@@ -88,9 +101,16 @@ class HtmlServiceBatchTarget implements BatchTarget {
   final HtmlService service;
   HtmlServiceBatchTarget(this.service);
 
+  /// Store generation right after [open].
+  int? _generation;
+
   @override
-  Future<void> open(Uri url) =>
-      service.loadFromUrl(url.toString(), switchToTab: HtmlService.browserTab);
+  Future<void> open(Uri url) async {
+    _generation = null;
+    await service.loadFromUrl(url.toString(),
+        switchToTab: HtmlService.browserTab);
+    _generation = service.store.current.generation;
+  }
 
   @override
   List<String> pending() => pendingAnalyses(service);
@@ -106,6 +126,30 @@ class HtmlServiceBatchTarget implements BatchTarget {
 
   @override
   void watchSovereignty(bool watching) => service.watchSovereignty(watching);
+
+  @override
+  bool loaded() {
+    final p = service.store.current;
+    final server = p.server;
+    return (server is Present<ServerSnapshot> &&
+            server.value.hops.isNotEmpty) ||
+        p.browser is Present;
+  }
+
+  @override
+  String? loadFailure() => switch (service.store.current.server) {
+        Failed(:final error) => error,
+        _ => null,
+      };
+
+  @override
+  bool stillOn(Uri url) {
+    final p = service.store.current;
+    final target = p.target;
+    return p.generation == _generation &&
+        target is UrlTarget &&
+        HtmlService.sameUrl(target.url, url);
+  }
 
   @override
   InspectionSummary summary() => service.summary;
@@ -153,8 +197,10 @@ class BatchRunner extends ChangeNotifier {
   int _total = 0;
   Uri? _currentUrl;
   List<String> _currentPending = const [];
+  String _phase = '';
   String? _error;
   Directory? _dir;
+  String? _stamp;
   final List<BatchRow> _rows = [];
   final Set<String> _slugs = {};
 
@@ -163,6 +209,10 @@ class BatchRunner extends ChangeNotifier {
   int get total => _total;
   Uri? get currentUrl => _currentUrl;
   List<String> get currentPending => _currentPending;
+
+  /// Step of the current site: 'clearing', 'loading', 'waiting',
+  /// 'collecting', 'measuring' or 'exporting'.
+  String get phase => _phase;
   List<BatchRow> get rows => List.unmodifiable(_rows);
 
   /// Set when the run ended outside any site (e.g. no work directory).
@@ -172,6 +222,21 @@ class BatchRunner extends ChangeNotifier {
   void dismiss() {
     if (_running) return;
     _rows.clear();
+    _error = null;
+    _deleteWorkDir();
+    notifyListeners();
+  }
+
+  void _deleteWorkDir() {
+    final dir = _dir;
+    _dir = null;
+    try {
+      if (dir != null && dir.existsSync()) dir.deleteSync(recursive: true);
+    } catch (_) {}
+  }
+
+  void _setPhase(String phase) {
+    _phase = phase;
     notifyListeners();
   }
 
@@ -189,6 +254,12 @@ class BatchRunner extends ChangeNotifier {
     _slugs.clear();
     _index = 0;
     _total = urls.length;
+    _deleteWorkDir();
+    _stamp = DateTime.now()
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(RegExp(r'[^0-9]'), '')
+        .substring(0, 14);
     notifyListeners();
     try {
       _target.watchSovereignty(true);
@@ -213,6 +284,7 @@ class BatchRunner extends ChangeNotifier {
       _running = false;
       _currentUrl = null;
       _currentPending = const [];
+      _phase = '';
       notifyListeners();
     }
   }
@@ -230,32 +302,55 @@ class BatchRunner extends ChangeNotifier {
   Future<BatchRow?> _visit(Uri url, BatchOptions o, Directory dir) async {
     final slug = _uniqueSlug(url);
     try {
-      if (o.clearSiteData) await _target.clearSiteData(url);
+      if (o.clearSiteData) {
+        _setPhase('clearing');
+        await _target.clearSiteData(url);
+      }
+      _setPhase('loading');
       await _target.open(url);
       await Future<void>.delayed(_settle);
       final clock = Stopwatch()..start();
       var pending = _target.pending();
       while (pending.isNotEmpty && clock.elapsed < o.timeout && !_cancelled) {
         _currentPending = pending;
-        notifyListeners();
+        _setPhase('waiting');
         await Future<void>.delayed(_poll);
         pending = _target.pending();
       }
       if (_cancelled) return null;
+      _currentPending = const [];
+      _setPhase('collecting');
       await Future<void>.delayed(o.linger);
       _target.collectLate();
       await Future<void>.delayed(_lateWait);
       if (_cancelled) return null;
-      if (o.freshLoad) await _target.measureFreshLoad();
+      if (o.freshLoad) {
+        _setPhase('measuring');
+        await _target.measureFreshLoad();
+      }
+      _setPhase('exporting');
+      // Everything below up to the write is read at one moment, no await.
+      if (!_target.stillOn(url)) {
+        return BatchRow(
+            url: url,
+            slug: slug,
+            state: 'failed',
+            error: 'navigated away during the batch');
+      }
+      pending = _target.pending();
+      final loaded = _target.loaded();
+      final failure = loaded ? null : _target.loadFailure();
+      final summary = _target.summary();
       final bytes = _target.package();
       await File(path.join(dir.path, 'sites', '$slug.zip'))
           .writeAsBytes(bytes, flush: true);
       return BatchRow(
         url: url,
         slug: slug,
-        state: pending.isEmpty ? 'done' : 'timed out',
+        state: !loaded ? 'failed' : (pending.isEmpty ? 'done' : 'timed out'),
         pending: pending,
-        summary: _target.summary(),
+        error: loaded ? null : (failure ?? 'the site did not load'),
+        summary: summary,
       );
     } catch (e) {
       return BatchRow(
@@ -268,11 +363,8 @@ class BatchRunner extends ChangeNotifier {
     final dir = _dir;
     if (dir == null || _rows.isEmpty) return null;
     final now = DateTime.now().toUtc();
-    final stamp = now
-        .toIso8601String()
-        .replaceAll(RegExp(r'[^0-9]'), '')
-        .substring(0, 14);
-    final file = File(path.join(dir.path, 'viewsourcevibe-batch-$stamp.zip'));
+    // One name per run: a repeated export overwrites it.
+    final file = File(path.join(dir.path, 'viewsourcevibe-batch-$_stamp.zip'));
     final rows = List.of(_rows);
     final encoder = ZipFileEncoder()..create(file.path);
     try {

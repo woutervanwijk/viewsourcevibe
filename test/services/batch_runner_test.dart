@@ -1,17 +1,26 @@
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/batch_runner.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/inspection_store.dart';
 import '../support/fake_batch_target.dart';
+import 'html_service_lifecycle_test.dart'
+    show FakeServerFetcher, FakeBrowserLoader, okSnapshot;
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tmp;
   const fast =
       BatchOptions(timeout: Duration(milliseconds: 50), linger: Duration.zero);
 
   setUp(() => tmp = Directory.systemTemp.createTempSync('batch_runner_test'));
-  tearDown(() => tmp.deleteSync(recursive: true));
+  tearDown(() {
+    if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+  });
 
   BatchRunner runner(FakeBatchTarget t) => BatchRunner(t,
       poll: const Duration(milliseconds: 1),
@@ -115,6 +124,146 @@ void main() {
     expect(r.running, isFalse);
     expect(r.error, contains('no disk'));
     expect(t.calls.last, 'watchSovereignty false');
+  });
+
+  test('the row summary is the one of the exported package', () async {
+    final t = FakeBatchTarget()..note = 'at export';
+    // The page changes right after the export (e.g. a late request).
+    t.onPackage = () => Future(() => t.note = 'later');
+    final r = runner(t);
+    await r.run([Uri.parse('https://a.test/')], options: fast);
+    expect(r.rows.single.summary!.facts['finalUrl'], 'at export');
+  });
+
+  test('state and pending are those at the moment of export', () async {
+    final t = FakeBatchTarget()..pendingFor['late.test'] = -1;
+    // Settles after the timeout, during the late collect.
+    t.onCollectLate = () => t.pendingFor['late.test'] = 0;
+    final r = runner(t);
+    await r.run([Uri.parse('https://late.test/')], options: fast);
+    expect(r.rows.single.state, 'done');
+    expect(r.rows.single.pending, isEmpty);
+  });
+
+  test('a site that did not load is failed, not clean', () async {
+    final t = FakeBatchTarget()..notLoaded.add('dead.test');
+    final r = runner(t);
+    await r.run([Uri.parse('https://dead.test/')], options: fast);
+    expect(r.rows.single.state, 'failed');
+    expect(r.rows.single.error, 'the site did not load');
+    expect(r.rows.single.summary, isNotNull);
+  });
+
+  test('a site that did not load names the server failure', () async {
+    final t = FakeBatchTarget()
+      ..notLoaded.add('dead.test')
+      ..loadFailures['dead.test'] = 'Failed host lookup';
+    final r = runner(t);
+    await r.run([Uri.parse('https://dead.test/')], options: fast);
+    expect(r.rows.single.state, 'failed');
+    expect(r.rows.single.error, 'Failed host lookup');
+  });
+
+  test('navigating away during a site fails that row', () async {
+    final t = FakeBatchTarget()..navigatedAway.add('a.test');
+    final r = runner(t);
+    await r.run([Uri.parse('https://a.test/'), Uri.parse('https://b.test/')],
+        options: fast);
+    expect(r.rows.map((x) => x.state), ['failed', 'done']);
+    expect(r.rows.first.error, 'navigated away during the batch');
+    expect(r.rows.first.summary, isNull);
+    expect(t.calls, isNot(contains('package https://a.test/')));
+  });
+
+  test('a new run and dismiss remove the previous work directory', () async {
+    final dirs = <Directory>[];
+    final t = FakeBatchTarget();
+    final r = BatchRunner(t,
+        poll: const Duration(milliseconds: 1),
+        settle: Duration.zero,
+        lateWait: Duration.zero,
+        workDir: () async =>
+            (dirs..add(Directory('${tmp.path}/run${dirs.length}'))).last);
+    await r.run([Uri.parse('https://a.test/')], options: fast);
+    final zip1 = await r.writeZip();
+    final zip2 = await r.writeZip();
+    expect(zip2!.path, zip1!.path);
+    expect(zip1.path, matches(RegExp(r'viewsourcevibe-batch-\d{14}\.zip$')));
+    expect(dirs[0].listSync().whereType<File>(), hasLength(1));
+    await r.run([Uri.parse('https://b.test/')], options: fast);
+    expect(dirs[0].existsSync(), isFalse);
+    expect(dirs[1].existsSync(), isTrue);
+    r.dismiss();
+    expect(dirs[1].existsSync(), isFalse);
+  });
+
+  test('a finished scan that failed or checked nothing is not pending',
+      () async {
+    final print = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {}; // the scan failure
+    addTearDown(() => debugPrint = print);
+    final fetcher = FakeServerFetcher();
+    final service = HtmlService(
+      store: InspectionStore(),
+      detectionScanner: (texts) async => throw StateError('scan failed'),
+      serverFetcher: fetcher,
+      browserLoader: FakeBrowserLoader(),
+      metadataExtractor: (html, baseUrl, {headers}) async => {},
+    )..setAppSettings(AppSettings()..useBrowserByDefault = false);
+    addTearDown(service.dispose);
+    final load = service.loadUrl('https://dead.test/');
+    await pumpEventQueue();
+    fetcher.pending.single.completeError(const SocketException('no host'));
+    await load.then((_) {}, onError: (_) {});
+    service.detections;
+    await pumpEventQueue();
+    expect(service.detectionsView.scanning, isFalse);
+    expect(service.detectionsView.complete, isFalse);
+    expect(pendingAnalyses(service), isNot(contains('detections')));
+  });
+
+  group('HtmlServiceBatchTarget', () {
+    late FakeServerFetcher fetcher;
+    late HtmlService service;
+    late HtmlServiceBatchTarget target;
+    setUp(() {
+      fetcher = FakeServerFetcher();
+      service = HtmlService(
+        store: InspectionStore(),
+        detectionScanner: (texts) async => [],
+        serverFetcher: fetcher,
+        browserLoader: FakeBrowserLoader(),
+        metadataExtractor: (html, baseUrl, {headers}) async => {},
+      )..setAppSettings(AppSettings()..useBrowserByDefault = false);
+      target = HtmlServiceBatchTarget(service);
+    });
+    tearDown(() => service.dispose());
+
+    test('a dead URL is not loaded and names the failure', () async {
+      final url = Uri.parse('https://dead.test/');
+      final open = target.open(url);
+      await pumpEventQueue();
+      fetcher.pending.single
+          .completeError(const SocketException('Failed host lookup'));
+      await open.then((_) {}, onError: (_) {});
+      expect(target.loaded(), isFalse);
+      expect(target.loadFailure(), contains('Failed host lookup'));
+    });
+
+    test('a page loaded by the app is loaded and still on its URL', () async {
+      final url = Uri.parse('https://a.test/');
+      final open = target.open(url);
+      await pumpEventQueue();
+      fetcher.pending.single.complete(okSnapshot('https://a.test/', '<p>'));
+      await open;
+      expect(target.loaded(), isTrue);
+      expect(target.stillOn(url), isTrue);
+      final other = service.loadUrl('https://b.test/');
+      await pumpEventQueue();
+      fetcher.pending.last.complete(okSnapshot('https://b.test/', '<p>'));
+      await other;
+      expect(target.stillOn(url), isFalse);
+    });
   });
 
   test('parseBatchInput', () {
