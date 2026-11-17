@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/technique_signals.dart';
+import 'package:view_source_vibe/services/cname_cloaking_service.dart';
 import 'package:view_source_vibe/services/derive/techniques.dart';
 import 'package:view_source_vibe/services/metadata_parser.dart';
 
@@ -328,6 +329,129 @@ void main() {
           judge('<script src="https://c.test/a.js" integrity="sha256-x"></script>'),
           isNull);
       expect(findMissingIntegrity(const {}), isNull);
+    });
+  });
+
+  group('deriveTechniques', () {
+    const id = 'a1b2c3d4e5f6a7b8c9';
+    final pageWithSharedId = inspection(
+        browser: browserSnap(
+            url: 'https://shop.test/',
+            cookies: [cookie('_uid', value: id)],
+            resources: [
+              res('https://sync.ads-a.test/p?u=$id'),
+              res('https://px.ads-b.test/m/$id'),
+            ]));
+
+    test('without a fresh load the call checks say so, data checks still run',
+        () {
+      final m = deriveTechniques(pageWithSharedId,
+          cloaking: const Pending(), metadata: null);
+      expect(m.callChecksNote, 'Run a fresh load to check');
+      expect(m.callChecksCanRun, isTrue);
+      expect(m.findings.map((f) => f.id), ['id-sharing']);
+    });
+
+    test('unsupported platform: note without a button, data checks still run',
+        () {
+      final m = deriveTechniques(
+          pageWithSharedId.copyWith(
+              freshTechniques: const Unavailable(
+                  UnavailableReason.unsupportedPlatform,
+                  'Not supported on this platform')),
+          cloaking: const Pending(),
+          metadata: null);
+      expect(m.callChecksNote, 'Not supported on this platform');
+      expect(m.callChecksCanRun, isFalse);
+      expect(m.findings.map((f) => f.id), ['id-sharing']);
+    });
+
+    test('a running fresh load has a note and no button', () {
+      final m = deriveTechniques(
+          pageWithSharedId.copyWith(freshTechniques: const Pending()),
+          cloaking: const Pending(),
+          metadata: null);
+      expect(m.callChecksNote, isNotNull);
+      expect(m.callChecksCanRun, isFalse);
+    });
+
+    test('a failed fresh load can be run again', () {
+      final m = deriveTechniques(
+          pageWithSharedId.copyWith(freshTechniques: const Failed('boom')),
+          cloaking: const Pending(),
+          metadata: null);
+      expect(m.callChecksNote, contains('boom'));
+      expect(m.callChecksCanRun, isTrue);
+    });
+
+    test('a local file cannot run a fresh load', () {
+      final m = deriveTechniques(inspection(file: fileSnap('<html></html>')),
+          cloaking: const Unavailable(UnavailableReason.notApplicable),
+          metadata: const {});
+      expect(m.callChecksCanRun, isFalse);
+    });
+
+    test('findings are ordered by severity, then rule order', () {
+      final m = deriveTechniques(
+          pageWithSharedId.copyWith(
+              freshTechniques: Present(
+                  signals(battery: 1, clipboardRead: 1, distinctFonts: 60),
+                  source: DataSource.browser)),
+          cloaking: const Pending(),
+          metadata: {
+            'subresourceIntegrity': {
+              'thirdParty': 1,
+              'without': ['https://cdn.one.test/a.js']
+            }
+          });
+      expect(m.callChecksNote, isNull);
+      expect(m.findings.map((f) => f.id),
+          ['clipboard-read', 'font-probing', 'id-sharing', 'battery', 'no-sri']);
+    });
+
+    test('cloaked hostnames are findings; failed lookups are not checked', () {
+      final m = deriveTechniques(pageWithSharedId,
+          cloaking: Present(const CloakingResult(
+              aliases: [
+                CnameAlias(
+                    'metrics.shop.test', 'shop.sc.omtrdc.net', 'Adobe')
+              ],
+              checked: ['metrics.shop.test'],
+              notChecked: ['x.shop.test']),
+              source: DataSource.server),
+          metadata: null);
+      expect(m.findings.map((f) => f.id), contains('cname-cloaking'));
+      final f = m.findings.firstWhere((f) => f.id == 'cname-cloaking');
+      expect(f.title, contains('metrics.shop.test'));
+      expect(f.detail, contains('shop.sc.omtrdc.net'));
+      expect(m.notChecked, ['x.shop.test']);
+    });
+
+    test('a failed cloaking check is listed, not silently clean', () {
+      final m = deriveTechniques(pageWithSharedId,
+          cloaking: const Failed('dns down'), metadata: null);
+      expect(m.cloakingNote, contains('dns down'));
+    });
+
+    test('complete only when every check ran', () {
+      final ran = pageWithSharedId.copyWith(
+          freshTechniques:
+              Present(signals(), source: DataSource.browser));
+      expect(
+          deriveTechniques(ran,
+                  cloaking: const Present(CloakingResult(), source: DataSource.server), metadata: const {})
+              .complete,
+          isTrue);
+      expect(
+          deriveTechniques(ran,
+                  cloaking: const Pending(), metadata: const {})
+              .complete,
+          isFalse);
+      expect(
+          deriveTechniques(pageWithSharedId,
+                  cloaking: const Present(CloakingResult(), source: DataSource.server), metadata: const {})
+              .complete,
+          isFalse);
     });
   });
 }

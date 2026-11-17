@@ -7,6 +7,7 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/technique_signals.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/observed_text.dart';
@@ -179,6 +180,15 @@ class InspectionExportService {
       'checked': detections.sources.line,
       'value': [for (final d in detections.detections) d.toMap()],
     });
+    final techniques = htmlService.techniquesView;
+    final techniquesJson = unlessBlocked({
+      // Whether the fresh-load checks ran, not their raw counts.
+      'callChecks': observedJson<TechniqueSignals>(
+          p.freshTechniques, (_) => 'measured',
+          source: DataSource.browser),
+      'findings': [for (final f in techniques.findings) f.toJson()],
+      'notChecked': techniques.notChecked,
+    });
     final sovereigntyJson = observedJson(sovereignty, (r) => r.toJson(),
         source: DataSource.server, provenance: Provenance.derived);
 
@@ -219,6 +229,7 @@ class InspectionExportService {
     addJson('network/redirects.json', redirectsJson);
     addJson('network/timeline.json', timelineJson);
     addJson('analysis/sovereignty.json', sovereigntyJson);
+    addJson('analysis/techniques.json', techniquesJson);
 
     addJson('analysis/metadata.json', metadataJson);
     addJson('analysis/detections.json', detectionsJson);

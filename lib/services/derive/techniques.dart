@@ -1,7 +1,9 @@
 import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';
+import '../../models/inspection/page_inspection.dart';
 import '../../models/inspection/technique_signals.dart';
 import '../../utils/site.dart';
+import '../cname_cloaking_service.dart';
 
 // Thresholds. Canvas and font numbers follow the detection heuristics of
 // Englehardt and Narayanan, "Online Tracking: A 1-million-site Measurement
@@ -45,6 +47,11 @@ class TechniqueFinding {
     this.source = DataSource.browser,
   });
 
+  /// Hosts of [scripts] (a plain host stays as it is), without repeats.
+  List<String> get hosts => {
+        for (final u in scripts) _hostOf(u)
+      }.toList();
+
   Map<String, Object?> toJson() => {
         'id': id,
         'severity': severity.name,
@@ -53,6 +60,11 @@ class TechniqueFinding {
         'scripts': scripts,
         'source': source.name,
       };
+}
+
+String _hostOf(String url) {
+  final host = Uri.tryParse(url)?.host ?? '';
+  return host.isEmpty ? url : host;
 }
 
 List<String> _scripts(Iterable<String> urls) => {
@@ -238,5 +250,120 @@ TechniqueFinding? findMissingIntegrity(Map<String, dynamic> metadata) {
         'have no integrity check',
     detail: 'Files loaded from ${hosts.take(kListedItems).join(', ')} are '
         'not checked against a hash, so a changed file would run unnoticed.',
+  );
+}
+
+/// What the Privacy tab shows about suspicious techniques.
+class TechniquesModel {
+  /// High first, then in rule order.
+  final List<TechniqueFinding> findings;
+
+  /// Why the call-based checks have no result (not measured, running,
+  /// unsupported, failed); null when they ran.
+  final String? callChecksNote;
+
+  /// Whether the 'Run fresh load' button is offered.
+  final bool callChecksCanRun;
+
+  /// Hosts whose DNS lookup failed.
+  final List<String> notChecked;
+
+  /// Why the hostname (CNAME) check has no result yet; null when it ran or
+  /// does not apply.
+  final String? cloakingNote;
+
+  /// Every check ran: "no findings" then means none were seen.
+  final bool complete;
+
+  const TechniquesModel({
+    required this.findings,
+    required this.callChecksNote,
+    required this.callChecksCanRun,
+    required this.notChecked,
+    required this.cloakingNote,
+    required this.complete,
+  });
+}
+
+TechniquesModel deriveTechniques(PageInspection p,
+    {required Observed<CloakingResult> cloaking,
+    Map<String, dynamic>? metadata}) {
+  final findings = <TechniqueFinding>[];
+  final isUrl = p.target is UrlTarget;
+
+  final calls = p.freshTechniques;
+  String? callNote;
+  var canRun = false;
+  switch (calls) {
+    case Present<TechniqueSignals>(value: final signals):
+      findings.addAll(judgeSignals(signals));
+    case Pending<TechniqueSignals>():
+      callNote = 'Fresh load running';
+    case Unavailable<TechniqueSignals>(
+        reason: final r,
+        detail: final d
+      ):
+      callNote = d.isNotEmpty ? d : unavailableMessage(r, d);
+      canRun = isUrl && r != UnavailableReason.unsupportedPlatform;
+    case Failed<TechniqueSignals>(error: final e):
+      callNote = e;
+      canRun = isUrl;
+  }
+  if (!isUrl && callNote != null) {
+    callNote = 'A fresh load needs a web address';
+    canRun = false;
+  }
+
+  final browser = p.browser;
+  if (browser is Present<BrowserSnapshot>) {
+    findings.addAll(findSharedIdentifiers(browser.value));
+  }
+
+  var notChecked = const <String>[];
+  String? cloakingNote;
+  switch (cloaking) {
+    case Present<CloakingResult>(value: final r):
+      notChecked = r.notChecked;
+      for (final a in r.aliases) {
+        findings.add(TechniqueFinding(
+          id: 'cname-cloaking',
+          severity: TechniqueSeverity.medium,
+          title: '${a.host} is an alias for ${a.tracker}',
+          detail: 'The name ${a.host} looks like part of this site but its '
+              'DNS record points to ${a.target}, which belongs to a tracker. '
+              'Blockers that look at hostnames would miss it.',
+          scripts: [a.host],
+          source: DataSource.server,
+        ));
+      }
+    case Pending<CloakingResult>():
+      cloakingNote = 'Checking hostnames';
+    case Unavailable<CloakingResult>(reason: final r, detail: final d):
+      // A local file has no hostnames: nothing to check.
+      if (r != UnavailableReason.notApplicable) {
+        cloakingNote = d.isNotEmpty ? d : unavailableMessage(r, d);
+      }
+    case Failed<CloakingResult>(error: final e):
+      cloakingNote = 'Hostname check failed: $e';
+  }
+
+  final sri = metadata == null ? null : findMissingIntegrity(metadata);
+  if (sri != null) findings.add(sri);
+
+  // Stable: high before medium before low, rule order within a severity.
+  final ordered = [
+    for (final sev in TechniqueSeverity.values)
+      ...findings.where((f) => f.severity == sev)
+  ];
+  return TechniquesModel(
+    findings: ordered,
+    callChecksNote: callNote,
+    callChecksCanRun: canRun,
+    notChecked: notChecked,
+    cloakingNote: cloakingNote,
+    complete: callNote == null &&
+        cloakingNote == null &&
+        notChecked.isEmpty &&
+        metadata != null,
   );
 }

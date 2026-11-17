@@ -98,6 +98,28 @@ void main() {
       expect(report, contains('unknown'));
     });
 
+    test('techniques.json: status of the call checks and the findings',
+        () async {
+      final htmlService = HtmlService();
+      await htmlService.loadFile(HtmlFile(
+        name: 'example.html',
+        path: 'https://example.com',
+        content: '<html></html>',
+        lastModified: DateTime.utc(2026, 4, 29),
+        size: 13,
+        isUrl: true,
+      ));
+      final bytes = InspectionExportService().buildPackageBytes(htmlService);
+      final archive = ZipDecoder().decodeBytes(bytes);
+      final text =
+          utf8.decode(archive.findFile('analysis/techniques.json')!.readBytes()!);
+      final json = jsonDecode(text) as Map<String, dynamic>;
+      expect(json['callChecks']['status'], 'unavailable');
+      expect(json['callChecks']['detail'], 'Run a fresh load to check');
+      expect(json['findings'], isEmpty);
+      expect(json['notChecked'], isEmpty);
+    });
+
     test('no debug payload without a browser sync', () async {
       final htmlService = HtmlService();
       addTearDown(htmlService.dispose);

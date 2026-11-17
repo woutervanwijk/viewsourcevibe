@@ -47,6 +47,7 @@ import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
+import 'package:view_source_vibe/services/derive/techniques.dart';
 import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
@@ -1032,6 +1033,33 @@ class HtmlService extends ChangeNotifier {
       return const Pending();
     }
     return state;
+  }
+
+  TechniquesModel? _techniquesView;
+  PageInspection? _techniquesViewFor;
+  Observed<MetadataModel>? _techniquesViewMetadata;
+  Observed<CloakingResult>? _techniquesViewCloaking;
+
+  /// The Privacy tab's suspicious techniques (see [deriveTechniques]); cached
+  /// until the inspection, the metadata or the cloaking check changes.
+  TechniquesModel get techniquesView {
+    final current = store.current;
+    final metadata = metadataState;
+    final cloaking = cnameCloaking;
+    if (_techniquesView == null ||
+        !identical(_techniquesViewFor, current) ||
+        !identical(_techniquesViewMetadata, metadata) ||
+        !identical(_techniquesViewCloaking, cloaking)) {
+      _techniquesViewFor = current;
+      _techniquesViewMetadata = metadata;
+      _techniquesViewCloaking = cloaking;
+      _techniquesView = deriveTechniques(current,
+          cloaking: cloaking,
+          metadata: metadata is Present<MetadataModel>
+              ? metadata.value.data
+              : null);
+    }
+    return _techniquesView!;
   }
 
   /// A view calls this when it appears (+1) and disappears (-1). The lookups
