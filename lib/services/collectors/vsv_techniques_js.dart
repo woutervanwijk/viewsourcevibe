@@ -12,13 +12,13 @@ const String vsvTechniquesJs = r'''
 (function() {
   try {
   if (window.__vsv_tech_report) return;
-  var MAX_CANVAS = 20, MAX_PROMPTS = 20, MAX_SEEN = 100;
+  var MAX_CANVAS = 20, MAX_PROMPTS = 20, MAX_SEEN = 100, MAX_FONTS = 500;
   var started = Date.now();
   var canvases = [];      // {el, w, h, chars, colors, reads, script}
   var entries = [];       // fallback without WeakMap: {ctx, el, fill, chars, colors}
   var byCtx = typeof WeakMap === 'function' ? new WeakMap() : null;
   var byEl = byCtx ? new WeakMap() : null;
-  var fonts = { measureCalls: 0, seen: {}, script: '' };
+  var fonts = { measureCalls: 0, seen: {}, seenCount: 0, script: '' };
   var webgl = { debugInfo: false, script: '' };
   var audio = { offline: 0, oscillators: 0, rendered: 0, script: '' };
   var rtc = { connections: 0, dataChannels: 0, offers: 0, getUserMedia: 0, script: '' };
@@ -26,12 +26,17 @@ const String vsvTechniquesJs = r'''
   var prompts = [];
   var offlineSeen = [], rtcSeen = [];
 
+  // The first frame with an http(s) URL is the code that made the call. When
+  // that is the page itself (inline script) there is no separate file to name.
   function script() {
     try {
       var lines = String(new Error().stack || '').split('\n');
       for (var i = 0; i < lines.length; i++) {
         var m = /(https?:\/\/[^\s)]+?)(?::\d+){0,2}\)?\s*$/.exec(lines[i]);
-        if (m && m[1] !== String(location.href)) return m[1].slice(0, 300);
+        if (m) {
+          if (m[1].split('#')[0] === String(location.href).split('#')[0]) return '';
+          return m[1].slice(0, 300);
+        }
       }
     } catch (e) {}
     return '';
@@ -119,6 +124,7 @@ const String vsvTechniquesJs = r'''
     }
   }
   function read(el) {
+    if (el.width < 16 || el.height < 16) return;
     var r = null;
     for (var i = 0; i < canvases.length; i++) if (canvases[i].el === el) r = canvases[i];
     if (!r) {
@@ -134,8 +140,21 @@ const String vsvTechniquesJs = r'''
     var e = ctxEntry(ctx);
     if (!e) return;
     var text = String(args[0]);
-    for (var i = 0; i < text.length; i++) e.chars[text.charAt(i)] = 1;
+    // Emoji support checks (WordPress and others) draw surrogate pairs, joiners
+    // and variation selectors and read them back; those are not counted.
+    for (var i = 0; i < text.length; i++) {
+      var code = text.charCodeAt(i);
+      if ((code >= 0xD800 && code <= 0xDFFF) || (code >= 0x2000 && code <= 0x206F) ||
+          (code >= 0xFE00 && code <= 0xFE0F)) continue;
+      e.chars[text.charAt(i)] = 1;
+    }
     if (e.fill !== null) e.colors[e.fill] = 1;
+  }
+  // The font family list of a CSS font string: style, variant, weight, size and
+  // line height dropped, so "12px Arial" and "13px Arial" are one font.
+  function fontFamily(f) {
+    var m = /(?:^|\s)(?:[0-9.]+(?:px|pt|em|rem|%|ex|ch|vw|vh|vmin|vmax|cm|mm|in|pc|q)|xx-small|x-small|small|medium|large|x-large|xx-large|xxx-large|smaller|larger)(?:\/\S+)?\s+(.+)$/i.exec(f);
+    return String(m ? m[1] : f).toLowerCase().replace(/\s+/g, ' ');
   }
   var canvasProto = proto('HTMLCanvasElement'), ctxProto = proto('CanvasRenderingContext2D');
   if (canvasProto) {
@@ -159,7 +178,11 @@ const String vsvTechniquesJs = r'''
     });
     wrap(ctxProto, 'measureText', function(ctx) {
       fonts.measureCalls++;
-      fonts.seen[String(ctx.font)] = 1;
+      var fam = fontFamily(String(ctx.font));
+      if (!Object.prototype.hasOwnProperty.call(fonts.seen, fam) && fonts.seenCount < MAX_FONTS) {
+        fonts.seen[fam] = 1;
+        fonts.seenCount++;
+      }
       if (!fonts.script) fonts.script = script();
     });
   }
@@ -259,7 +282,7 @@ const String vsvTechniquesJs = r'''
       }
     }
     return JSON.stringify({ v: 1, canvas: out,
-      fonts: { measureCalls: fonts.measureCalls, distinctFonts: Object.keys(fonts.seen).length,
+      fonts: { measureCalls: fonts.measureCalls, distinctFonts: fonts.seenCount,
         script: fonts.script },
       webgl: webgl, audio: audio, rtc: rtc,
       enumerateDevices: counts.enumerateDevices, battery: counts.battery,

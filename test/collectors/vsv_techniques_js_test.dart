@@ -133,6 +133,71 @@ void main() {
     expect((r['canvas'] as List).single['chars'], greaterThanOrEqualTo(10));
   });
 
+  test('emoji support checks are not a canvas fingerprint', () async {
+    final r = await report(r"""
+      var strings = ['🏳️‍⚧️', '🇨🇭',
+        '🏳️‍🌈', '👋🏻', 'a​b⁠'];
+      var c = new HTMLCanvasElement(); var x = c.getContext('2d');
+      x.fillStyle = '#fff'; x.fillStyle = '#000';
+      for (var i = 0; i < strings.length; i++) x.fillText(strings[i], 0, 0);
+      c.toDataURL();""");
+    if (r == null) return markTestSkipped('node not installed');
+    // Only U+26A7, a and b count: surrogates, joiners and selectors do not.
+    expect((r['canvas'] as List).single['chars'], 3);
+  });
+
+  test('fonts are counted by family, not by size or style', () async {
+    final r = await report(r"""
+      var x = new HTMLCanvasElement().getContext('2d');
+      var fonts = ['12px Arial', '13px Arial', 'bold 14px/20px Arial',
+        'italic small-caps 700 12px "Times New Roman", serif', '12px Courier'];
+      for (var i = 0; i < fonts.length; i++) { x.font = fonts[i]; x.measureText('m'); }""");
+    if (r == null) return markTestSkipped('node not installed');
+    expect(r['fonts']['measureCalls'], 5);
+    expect(r['fonts']['distinctFonts'], 3);
+  });
+
+  test('the number of remembered fonts is capped', () async {
+    final r = await report(r"""
+      var x = new HTMLCanvasElement().getContext('2d');
+      for (var i = 0; i < 800; i++) { x.font = '12px f' + i; x.measureText('m'); }""");
+    if (r == null) return markTestSkipped('node not installed');
+    expect(r['fonts']['distinctFonts'], 500);
+  });
+
+  test('the first http frame names the script; the page itself is none',
+      () async {
+    const fakeError = r"""
+      var __stack = '';
+      Error = function() { this.stack = __stack; };
+""";
+    Future<String> scriptFor(String stack) async {
+      final r = await report("""
+        __stack = ${jsonEncode(stack)};
+        Notification.requestPermission();""", before: fakeError);
+      return (r!['prompts'] as List).single['script'] as String;
+    }
+
+    if (await report('') == null) return markTestSkipped('node not installed');
+    expect(
+        await scriptFor('Error\n at a (https://cdn.fp.test/fp.js:3:4)\n'
+            ' at b (https://example.com/:1:1)'),
+        'https://cdn.fp.test/fp.js');
+    expect(
+        await scriptFor('Error\n at a (https://example.com/#top:3:4)\n'
+            ' at b (https://cdn.fp.test/fp.js:1:1)'),
+        '');
+  });
+
+  test('a canvas smaller than 16 px read back is not recorded', () async {
+    final r = await report(r"""
+      var c = new HTMLCanvasElement(); c.width = 8; c.height = 8;
+      c.getContext('2d').fillText('Cwm fjordbank glyphs', 0, 0);
+      c.toDataURL();""");
+    if (r == null) return markTestSkipped('node not installed');
+    expect(r['canvas'], isEmpty);
+  });
+
   test('nothing called gives an empty report', () async {
     final r = await report('');
     if (r == null) return markTestSkipped('node not installed');
