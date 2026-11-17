@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/technique_signals.dart';
 import 'package:view_source_vibe/services/derive/techniques.dart';
+import 'package:view_source_vibe/services/metadata_parser.dart';
+
+import 'fixtures.dart';
 
 TechniqueSignals signals({
   List<CanvasRead> canvas = const [],
@@ -223,5 +226,108 @@ void main() {
   test('a report with the wrong shape fails instead of reading as clean', () {
     expect(parseTechniqueReport('[1,2]'), isA<Failed<TechniqueSignals>>());
     expect(parseTechniqueReport(42), isA<Failed<TechniqueSignals>>());
+  });
+
+  group('shared identifiers', () {
+    const id = 'a1b2c3d4e5f6a7b8c9';
+
+    test('an identifier sent to two other parties is reported, without its value',
+        () {
+      final f = findSharedIdentifiers(browserSnap(
+          url: 'https://shop.test/',
+          cookies: [cookie('_uid', value: id)],
+          resources: [
+            res('https://sync.ads-a.test/p?u=$id'),
+            res('https://px.ads-b.test/m/$id'),
+            res('https://shop.test/api?u=$id'),
+          ]));
+      expect(f.single.id, 'id-sharing');
+      expect(f.single.severity, TechniqueSeverity.medium);
+      expect(f.single.title,
+          'The identifier in cookie _uid is sent to 2 other parties');
+      expect(f.single.scripts, ['ads-a.test', 'ads-b.test']);
+      expect('${f.single.toJson()}'.contains(id), isFalse,
+          reason: 'a finding repeated a cookie value');
+    });
+
+    test('a url-encoded value is found too', () {
+      const raw = 'abc def+ghi/jklmno=pq';
+      final enc = Uri.encodeComponent(raw);
+      final f = findSharedIdentifiers(browserSnap(
+          url: 'https://shop.test/',
+          cookies: [cookie('sid', value: raw)],
+          resources: [
+            res('https://a.one.test/p?u=$enc'),
+            res('https://b.two.test/p?u=$enc'),
+          ]));
+      expect(f.single.scripts, ['one.test', 'two.test']);
+    });
+
+    test('short and common values are never identifiers', () {
+      for (final v in ['1', 'true', 'en', '1731628800', 'aaaaaaaaaaaaaaaaaaaa']) {
+        final f = findSharedIdentifiers(browserSnap(
+            url: 'https://shop.test/',
+            cookies: [cookie('c', value: v)],
+            resources: [
+              res('https://a.one.test/p?u=$v'),
+              res('https://b.two.test/p?u=$v'),
+            ]));
+        expect(f, isEmpty, reason: 'a short or common value was reported');
+      }
+    });
+
+    test('one other party is not sharing', () {
+      final f = findSharedIdentifiers(browserSnap(
+          url: 'https://shop.test/',
+          cookies: [cookie('_uid', value: id)],
+          resources: [res('https://sync.ads-a.test/p?u=$id')]));
+      expect(f, isEmpty);
+    });
+
+    test('no cookies or resources observed gives no findings', () {
+      expect(findSharedIdentifiers(browserSnap(cookies: null)), isEmpty);
+      expect(findSharedIdentifiers(browserSnap(resources: null)), isEmpty);
+    });
+  });
+
+  group('missing integrity', () {
+    TechniqueFinding? judge(String html) => findMissingIntegrity(
+        extractMetadataSync(html, 'https://shop.test/page'));
+
+    test('is counted on third-party files only', () {
+      const html = '''
+<html><head>
+<script src="/own.js"></script>
+<script src="https://cdn.one.test/a.js" integrity="sha384-abc" crossorigin></script>
+<script src="https://cdn.one.test/b.js"></script>
+<link rel="stylesheet" href="https://cdn.two.test/c.css">
+</head></html>''';
+      final m = extractMetadataSync(html, 'https://shop.test/page');
+      expect(m['subresourceIntegrity'], {
+        'thirdParty': 3,
+        'without': [
+          'https://cdn.one.test/b.js',
+          'https://cdn.two.test/c.css',
+        ],
+      });
+      final f = findMissingIntegrity(m)!;
+      expect(f.id, 'no-sri');
+      expect(f.severity, TechniqueSeverity.low);
+      expect(f.title,
+          '2 of 3 third-party scripts and stylesheets have no integrity check');
+      expect(f.detail, contains('cdn.one.test'));
+    });
+
+    test('a sibling subdomain is the same site', () {
+      expect(
+          judge('<script src="https://static.shop.test/a.js"></script>'), isNull);
+    });
+
+    test('nothing without integrity gives no finding', () {
+      expect(
+          judge('<script src="https://c.test/a.js" integrity="sha256-x"></script>'),
+          isNull);
+      expect(findMissingIntegrity(const {}), isNull);
+    });
   });
 }

@@ -1,5 +1,7 @@
+import '../../models/inspection/browser_snapshot.dart';
 import '../../models/inspection/observed.dart';
 import '../../models/inspection/technique_signals.dart';
+import '../../utils/site.dart';
 
 // Thresholds. Canvas and font numbers follow the detection heuristics of
 // Englehardt and Narayanan, "Online Tracking: A 1-million-site Measurement
@@ -11,6 +13,15 @@ const int kCanvasMinSide = 16;
 const int kCanvasMinChars = 10;
 const int kCanvasMinColors = 2;
 const int kFontProbeMinFonts = 50;
+
+// Shared identifiers: this app's own choices. A cookie value counts as an
+// identifier only when it is long and varied enough not to be a flag, a
+// language, a timestamp or a counter.
+const int kIdMinLength = 16;
+const int kIdMinDistinctChars = 8;
+const int kIdMinParties = 2;
+const int kIdMaxFindings = 10;
+const int kListedItems = 5;
 
 enum TechniqueSeverity { high, medium, low }
 
@@ -154,4 +165,78 @@ List<TechniqueFinding> judgeSignals(TechniqueSignals s) {
     ));
   }
   return out;
+}
+
+/// Cookies whose value shows up in requests to other registrable domains.
+/// Values are compared in memory only: no finding holds a value or part of one.
+List<TechniqueFinding> findSharedIdentifiers(BrowserSnapshot b) {
+  final cookies = b.cookies;
+  final resources = b.resources;
+  if (cookies is! Present<List<BrowserCookie>> ||
+      resources is! Present<List<ResourceEntry>>) {
+    return const [];
+  }
+  final page = registrableDomain(b.url.host);
+  // Each request to another site: its registrable domain and url.
+  final requests = <(String, String)>[];
+  for (final r in resources.value) {
+    final host = Uri.tryParse(r.url)?.host ?? '';
+    if (host.isEmpty) continue;
+    final domain = registrableDomain(host);
+    if (domain != page) requests.add((domain, r.url));
+  }
+  final out = <TechniqueFinding>[];
+  final seen = <String>{};
+  for (final c in cookies.value) {
+    if (out.length >= kIdMaxFindings) break;
+    final v = c.value;
+    if (v.length < kIdMinLength ||
+        v.split('').toSet().length < kIdMinDistinctChars ||
+        !seen.add(c.name)) {
+      continue;
+    }
+    final encoded = Uri.encodeComponent(v);
+    final domains = {
+      for (final (domain, url) in requests)
+        if (url.contains(v) || url.contains(encoded)) domain
+    }.toList()
+      ..sort();
+    if (domains.length < kIdMinParties) continue;
+    final listed = domains.take(kListedItems).toList();
+    out.add(TechniqueFinding(
+      id: 'id-sharing',
+      severity: TechniqueSeverity.medium,
+      title: 'The identifier in cookie ${c.name} is sent to '
+          '${domains.length} other parties',
+      detail: 'The value of this cookie appears in requests to '
+          '${listed.join(', ')}'
+          '${domains.length > listed.length ? ' and more' : ''}. '
+          'That can let them recognise the same visitor.',
+      scripts: listed,
+    ));
+  }
+  return out;
+}
+
+/// Third-party scripts and stylesheets without an integrity attribute, from
+/// `metadata['subresourceIntegrity']`.
+TechniqueFinding? findMissingIntegrity(Map<String, dynamic> metadata) {
+  final sri = metadata['subresourceIntegrity'];
+  if (sri is! Map) return null;
+  final without = sri['without'];
+  final total = sri['thirdParty'];
+  if (without is! List || without.isEmpty || total is! int) return null;
+  final hosts = <String>{};
+  for (final u in without) {
+    final h = Uri.tryParse('$u')?.host ?? '';
+    if (h.isNotEmpty) hosts.add(h);
+  }
+  return TechniqueFinding(
+    id: 'no-sri',
+    severity: TechniqueSeverity.low,
+    title: '${without.length} of $total third-party scripts and stylesheets '
+        'have no integrity check',
+    detail: 'Files loaded from ${hosts.take(kListedItems).join(', ')} are '
+        'not checked against a hash, so a changed file would run unnoticed.',
+  );
 }
