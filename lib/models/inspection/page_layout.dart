@@ -37,6 +37,9 @@ class PageLayout {
   final int totalBlocks;
   final List<LayoutBlock> blocks;
 
+  /// The page had more elements than the script scanned.
+  final bool scanCapped;
+
   bool get truncated => totalBlocks > blocks.length;
 
   const PageLayout({
@@ -46,5 +49,6 @@ class PageLayout {
     required this.height,
     required this.totalBlocks,
     required this.blocks,
+    this.scanCapped = false,
   });
 }

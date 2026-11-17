@@ -8,7 +8,8 @@ const _noLayout = Unavailable<PageLayout>(
 
 /// Parses the JSON string returned by `__vsv_layout()`. A non-String result
 /// is [Unavailable]; an unparsable one [Failed]; a page without layout
-/// (`empty`, or no boxes at all) is [Unavailable] with a reason.
+/// (`empty`, or a zero-size document) is [Unavailable] with a reason. A page
+/// with a size but no qualifying boxes is [Present] with no blocks.
 Observed<PageLayout> parseLayoutPayload(Object? raw, {required Uri pageUrl}) {
   if (raw is! String) {
     return Unavailable(UnavailableReason.unsupportedPlatform,
@@ -28,18 +29,20 @@ Observed<PageLayout> parseLayoutPayload(Object? raw, {required Uri pageUrl}) {
     }
     final total = _int(m['total']) ?? blocks.length;
     final width = _num(m['w']), height = _num(m['h']);
-    if (width == null || height == null) {
-      return const Failed('layout payload has no document size');
+    final vw = _num(m['vw']), vh = _num(m['vh']);
+    if (width == null || height == null || vw == null || vh == null) {
+      return const Failed('layout payload has no document or viewport size');
     }
-    if (total == 0 && blocks.isEmpty) return _noLayout;
+    if (width <= 0 || height <= 0) return _noLayout;
     return Present(
         PageLayout(
-          viewportWidth: _num(m['vw']) ?? 0,
-          viewportHeight: _num(m['vh']) ?? 0,
+          viewportWidth: vw,
+          viewportHeight: vh,
           width: width,
           height: height,
           totalBlocks: total,
           blocks: blocks,
+          scanCapped: m['scanCapped'] == 1 || m['scanCapped'] == true,
         ),
         source: DataSource.browser);
   } catch (e) {
@@ -63,7 +66,14 @@ LayoutBlock? _block(Map b, Uri pageUrl) {
   };
   final x = _num(b['x']), y = _num(b['y']);
   final w = _num(b['w']), h = _num(b['h']);
-  if (kind == null || x == null || y == null || w == null || h == null) {
+  final depth = _int(b['d']), descendants = _int(b['n']);
+  if (kind == null ||
+      x == null ||
+      y == null ||
+      w == null ||
+      h == null ||
+      depth == null ||
+      descendants == null) {
     return null;
   }
   var src = _str(b['s']);
@@ -83,8 +93,8 @@ LayoutBlock? _block(Map b, Uri pageUrl) {
     y: y,
     width: w,
     height: h,
-    depth: _int(b['d']) ?? 0,
-    descendants: _int(b['n']) ?? 0,
+    depth: depth,
+    descendants: descendants,
     kind: kind,
     fixed: b['f'] == 1 || b['f'] == true,
   );

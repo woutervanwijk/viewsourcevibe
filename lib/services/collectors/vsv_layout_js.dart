@@ -3,10 +3,13 @@
 // or writes to the page. Keep this ES5-ish (no arrow functions, no let/const).
 
 /// Defines `window.__vsv_layout()`, which returns a JSON string:
-/// `{v, vw, vh, w, h, total, blocks: [{t, r, i, c, x, y, w, h, d, n, k, s,
+/// `{v, vw, vh, w, h, total, scanCapped, blocks: [{t, r, i, c, x, y, w, h, d, n, k, s,
 /// f, tx}]}` with coordinates in page space, or `{v: 1, empty: true}` when the
 /// document has no layout. `blocks` holds the first 400 qualifying elements
-/// in document order; `total` counts all of them.
+/// in document order; `total` counts all of them. `h` grows to the lowest
+/// block (a page whose body scrolls); blocks right of the document width
+/// (carousel slides) are skipped; `scanCapped` is 1 when the page had more
+/// elements than were scanned.
 const String vsvLayoutJs = r'''
 (function() {
   var MAX_BLOCKS = 400, MAX_SCAN = 20000, MAX_DEPTH = 12;
@@ -56,6 +59,7 @@ const String vsvLayoutJs = r'''
       if (rect.width < 1 || rect.height < 1) continue;
       var x = rect.left + sx, y = rect.top + sy;
       if (x + rect.width <= 0 || y + rect.height <= 0) continue;
+      if (x >= docW) continue;
       var role = el.getAttribute('role') || '';
       var kind = kindOf(tag, role, rect.width, rect.height, vArea);
       if (!kind) continue;
@@ -68,6 +72,7 @@ const String vsvLayoutJs = r'''
       var cs = getComputedStyle(el);
       if (cs.visibility === 'hidden') continue;
       total++;
+      if (y + rect.height > docH) docH = Math.ceil(y + rect.height);
       if (blocks.length >= MAX_BLOCKS) continue;
       blocks.push({
         t: tag, r: role,
@@ -84,7 +89,7 @@ const String vsvLayoutJs = r'''
       });
     }
     return JSON.stringify({v: 1, vw: vw, vh: vh, w: docW, h: docH,
-      total: total, blocks: blocks});
+      total: total, scanCapped: all.length > MAX_SCAN ? 1 : 0, blocks: blocks});
   };
 })();
 ''';
