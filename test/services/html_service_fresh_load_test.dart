@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/technique_signals.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/collectors/fresh_load_measurer.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
@@ -44,8 +45,8 @@ void main() {
       serverFetcher: fetcher,
       browserLoader: FakeBrowserLoader(),
       metadataExtractor: (html, baseUrl, {headers}) async => {},
-      browserCollect: (url) async => payload(
-          url: url, observer: [obs('https://a.test/app.js', tx: 1000)]),
+      browserCollect: (url) async =>
+          payload(url: url, observer: [obs('https://a.test/app.js', tx: 1000)]),
       nativeCookies: (u) async => [],
       browserPlatform: BrowserPlatform.ios,
       browserPoll: NetworkQuietPolicy.off,
@@ -106,8 +107,7 @@ void main() {
     expect(page.differenceNote, contains('cookie or consent wall'));
   });
 
-  test('the live browser screenshot is taken once the page loaded',
-      () async {
+  test('the live browser screenshot is taken once the page loaded', () async {
     service = make(const NoFreshLoad(),
         screenshot: () async => Uint8List.fromList([9]));
     await load('https://a.test/');
@@ -156,5 +156,48 @@ void main() {
     final f = store.current.freshLoad;
     expect(f, isA<Unavailable<BrowserSnapshot>>());
     expect((f as Unavailable).reason, UnavailableReason.unsupportedPlatform);
+  });
+
+  test('the fresh load stores the technique signals', () async {
+    final m = FakeMeasurer((url) async => FreshLoadRaw(
+        payload(
+            url: '$url', observer: [obs('https://a.test/app.js', tx: 1000)]),
+        techniques: '{"v":1,"canvas":[],"fonts":{"measureCalls":0,'
+            '"distinctFonts":0},"clipboardRead":1}'));
+    service = make(m);
+    await load('https://a.test/');
+    await service.measureFreshLoad();
+    final t = store.current.freshTechniques;
+    expect(t, isA<Present<TechniqueSignals>>());
+    expect((t as Present<TechniqueSignals>).value.clipboardRead, 1);
+  });
+
+  test('before a fresh load the signals are unavailable with the hint',
+      () async {
+    service = make(const NoFreshLoad());
+    await load('https://a.test/');
+    final t = store.current.freshTechniques as Unavailable<TechniqueSignals>;
+    expect(t.reason, UnavailableReason.notApplicable);
+    expect(t.detail, 'Run a fresh load to check');
+  });
+
+  test('pending while the load runs, unsupported where there is no browser',
+      () async {
+    final gate = Completer<FreshLoadRaw>();
+    service = make(FakeMeasurer((_) => gate.future));
+    await load('https://a.test/');
+    final run = service.measureFreshLoad();
+    await pumpEventQueue();
+    expect(store.current.freshTechniques, isA<Pending<TechniqueSignals>>());
+    gate.completeError(StateError('offline'));
+    await run;
+    expect(store.current.freshTechniques, isA<Failed<TechniqueSignals>>());
+    service.dispose();
+    store = InspectionStore();
+    service = make(const NoFreshLoad());
+    await load('https://a.test/');
+    await service.measureFreshLoad();
+    expect((store.current.freshTechniques as Unavailable).reason,
+        UnavailableReason.unsupportedPlatform);
   });
 }

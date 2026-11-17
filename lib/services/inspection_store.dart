@@ -8,6 +8,7 @@ import '../models/inspection/file_snapshot.dart';
 import '../models/inspection/observed.dart';
 import '../models/inspection/page_inspection.dart';
 import '../models/inspection/server_snapshot.dart';
+import '../models/inspection/technique_signals.dart';
 import 'collectors/browser_payload.dart';
 
 /// The central reactive data point. Every navigation gets a new generation;
@@ -156,13 +157,27 @@ class InspectionStore extends ChangeNotifier {
   /// result and screenshot. A new result drops the lookups and screenshot of
   /// the previous one.
   void applyFreshLoad(int gen, Observed<BrowserSnapshot> result,
-      {Observed<Uint8List> screenshot = kNoScreenshot}) {
+      {Observed<Uint8List> screenshot = kNoScreenshot,
+      Observed<TechniqueSignals>? techniques}) {
     if (!_accepts(gen)) return;
     _set(_current.copyWith(
         freshLoad: result,
+        freshTechniques: techniques ?? _techniquesFor(result),
         freshEstimates: const {},
         freshScreenshot: screenshot));
   }
+
+  /// No signals given: Pending while the load runs, Unavailable where there
+  /// is no headless browser, otherwise "run a fresh load".
+  Observed<TechniqueSignals> _techniquesFor(Observed<BrowserSnapshot> r) =>
+      switch (r) {
+        Pending() => const Pending(),
+        Unavailable(reason: UnavailableReason.unsupportedPlatform) =>
+          const Unavailable(UnavailableReason.unsupportedPlatform,
+              'Not supported on this platform'),
+        Failed(error: final e) => Failed(e),
+        _ => kTechniquesNotMeasured,
+      };
 
   /// A screenshot of the live browser; a missing one never replaces a
   /// screenshot already there.

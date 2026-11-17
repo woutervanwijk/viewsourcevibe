@@ -33,6 +33,7 @@ import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
+import 'package:view_source_vibe/models/inspection/technique_signals.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
@@ -4279,7 +4280,8 @@ Technical details: $message''';
       return;
     }
     store.applyFreshLoad(gen, Present(snapshot, source: DataSource.browser),
-        screenshot: _screenshotOf(raw.screenshot));
+        screenshot: _screenshotOf(raw.screenshot),
+        techniques: parseTechniqueReport(raw.techniques));
 
     // Hidden sizes, like the live load (shared lookup cache per page).
     final urls = estimateTargetsOf(store.current.freshLoad, const {},

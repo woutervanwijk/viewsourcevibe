@@ -4,6 +4,7 @@ import 'browser_snapshot.dart';
 import 'file_snapshot.dart';
 import 'observed.dart';
 import 'server_snapshot.dart';
+import 'technique_signals.dart';
 
 /// [PageInspection.freshLoad] before the user asked for one.
 const kFreshLoadNotMeasured = Unavailable<BrowserSnapshot>(
@@ -67,6 +68,10 @@ class PageInspection {
   /// screen, wait for a quiet network), only when the user asks for it.
   final Observed<BrowserSnapshot> freshLoad;
 
+  /// What the page called during the fresh load (fingerprinting and similar).
+  /// Only the fresh load is instrumented, never the live browser.
+  final Observed<TechniqueSignals> freshTechniques;
+
   /// The app's own size lookups for [freshLoad] (see [resourceEstimates]).
   final Map<String, Observed<int>> freshEstimates;
 
@@ -87,6 +92,7 @@ class PageInspection {
     this.primaryDocumentPreference,
     this.browserSettled = false,
     this.freshLoad = kFreshLoadNotMeasured,
+    this.freshTechniques = kTechniquesNotMeasured,
     this.freshEstimates = const {},
     this.liveScreenshot = kNoScreenshot,
     this.freshScreenshot = kNoScreenshot,
@@ -108,6 +114,7 @@ class PageInspection {
         primaryDocumentPreference = null,
         browserSettled = false,
         freshLoad = kFreshLoadNotMeasured,
+        freshTechniques = kTechniquesNotMeasured,
         freshEstimates = const {},
         liveScreenshot = kNoScreenshot,
         freshScreenshot = kNoScreenshot;
@@ -122,6 +129,7 @@ class PageInspection {
     Object? primaryDocumentPreference = _keep,
     bool? browserSettled,
     Observed<BrowserSnapshot>? freshLoad,
+    Observed<TechniqueSignals>? freshTechniques,
     Map<String, Observed<int>>? freshEstimates,
     Observed<Uint8List>? liveScreenshot,
     Observed<Uint8List>? freshScreenshot,
@@ -140,6 +148,7 @@ class PageInspection {
             : primaryDocumentPreference as DataSource?,
         browserSettled: browserSettled ?? this.browserSettled,
         freshLoad: freshLoad ?? this.freshLoad,
+        freshTechniques: freshTechniques ?? this.freshTechniques,
         freshEstimates: freshEstimates ?? this.freshEstimates,
         liveScreenshot: liveScreenshot ?? this.liveScreenshot,
         freshScreenshot: freshScreenshot ?? this.freshScreenshot,
