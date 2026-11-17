@@ -25,6 +25,7 @@ import 'package:xml/xml.dart' as xml;
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/permission_request.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/collector_world.dart';
@@ -4598,7 +4599,29 @@ Technical details: $message''';
   ({int gen, int status})? _browserHttpError;
 
   /// The browser started loading a new main-frame document.
-  void onBrowserLoadStart() => _browserHttpError = null;
+  void onBrowserLoadStart() {
+    _browserHttpError = null;
+    _loadStartGen = store.current.generation;
+    _loadStartAt = DateTime.now();
+  }
+
+  int? _loadStartGen;
+  DateTime? _loadStartAt;
+
+  /// The page asked for a native permission (the browser denied it).
+  void onBrowserPermissionRequest(String origin, List<String> resources) {
+    final gen = store.current.generation;
+    final start = _loadStartAt;
+    store.addPermissionRequest(
+        gen,
+        PermissionRequestEvent(
+          origin: origin,
+          resources: resources,
+          sinceLoadStart: start != null && _loadStartGen == gen
+              ? DateTime.now().difference(start)
+              : Duration.zero,
+        ));
+  }
 
   /// The WebView received an HTTP error for the main frame.
   void onBrowserMainFrameHttpError(int status) =>

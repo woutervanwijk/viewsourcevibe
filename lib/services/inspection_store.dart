@@ -7,6 +7,7 @@ import '../models/inspection/browser_snapshot.dart';
 import '../models/inspection/file_snapshot.dart';
 import '../models/inspection/observed.dart';
 import '../models/inspection/page_inspection.dart';
+import '../models/inspection/permission_request.dart';
 import '../models/inspection/server_snapshot.dart';
 import 'collectors/browser_payload.dart';
 
@@ -144,6 +145,16 @@ class InspectionStore extends ChangeNotifier {
     if (!_accepts(gen)) return;
     if (listEquals(_current.declaredMedia, urls)) return;
     _set(_current.copyWith(declaredMedia: urls));
+  }
+
+  static const _maxPermissionRequests = 50;
+
+  /// A denied native permission request, kept for the page that asked only.
+  void addPermissionRequest(int gen, PermissionRequestEvent e) {
+    if (!_accepts(gen)) return;
+    if (_current.permissionRequests.length >= _maxPermissionRequests) return;
+    _set(_current
+        .copyWith(permissionRequests: [..._current.permissionRequests, e]));
   }
 
   /// The live load stopped requesting (see [PageInspection.browserSettled]).

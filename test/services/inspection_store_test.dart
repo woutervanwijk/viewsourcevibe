@@ -5,6 +5,7 @@ import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/permission_request.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/utils/text_decoding.dart';
@@ -558,6 +559,32 @@ void main() {
           g, _browser('https://a.test/', frames: fr(), siteStorage: storage(1)));
       expect(identical(store.current.browser, before), isTrue);
       expect(notifies, n);
+    });
+  });
+
+  group('permission requests', () {
+    PermissionRequestEvent ev(String origin, List<String> r) =>
+        PermissionRequestEvent(
+            origin: origin, resources: r, sinceLoadStart: Duration.zero);
+
+    test('a permission request is kept for its own page only', () {
+      final store = InspectionStore();
+      final gen = store.beginUrl(Uri.parse('https://a.test/'));
+      store.addPermissionRequest(gen, ev('https://a.test', ['camera']));
+      expect(store.current.permissionRequests.single.resources, ['camera']);
+      final next = store.beginUrl(Uri.parse('https://b.test/'));
+      store.addPermissionRequest(gen, ev('https://a.test', ['microphone']));
+      expect(store.current.permissionRequests, isEmpty);
+      expect(next, isNot(gen));
+    });
+
+    test('at most 50 requests are kept', () {
+      final store = InspectionStore();
+      final gen = store.beginUrl(Uri.parse('https://a.test/'));
+      for (var i = 0; i < 60; i++) {
+        store.addPermissionRequest(gen, ev('https://a.test', ['camera']));
+      }
+      expect(store.current.permissionRequests.length, 50);
     });
   });
 }

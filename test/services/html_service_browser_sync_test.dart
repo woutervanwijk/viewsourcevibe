@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart'
+    show PermissionResourceType;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
@@ -12,6 +14,7 @@ import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/derive/cookies.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/services/permission_resources.dart';
 
 import 'html_service_lifecycle_test.dart'
     show
@@ -897,6 +900,49 @@ void main() {
       await loadAndAnswer('https://b.test/');
       await service.syncWebViewState('https://b.test/');
       expect(browserOf(service).mainStatus, isA<Unavailable<int>>());
+    });
+  });
+
+  group('permission requests', () {
+    test('a request is recorded for the current page', () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserLoadStart();
+      service.onBrowserPermissionRequest(
+          'https://a.test', ['camera', 'microphone']);
+      final r = store.current.permissionRequests.single;
+      expect(r.origin, 'https://a.test');
+      expect(r.resources, ['camera', 'microphone']);
+      expect(r.sinceLoadStart, greaterThanOrEqualTo(Duration.zero));
+    });
+
+    test('without a load start the time is zero', () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserPermissionRequest('https://a.test', ['geolocation']);
+      expect(store.current.permissionRequests.single.sinceLoadStart,
+          Duration.zero);
+    });
+
+    test('a request after navigation goes to the new page, not the old', () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserPermissionRequest('https://a.test', ['camera']);
+      await loadAndAnswer('https://b.test/');
+      expect(store.current.permissionRequests, isEmpty);
+    });
+  });
+
+  group('permission resource names', () {
+    test('camera, microphone, both, geolocation and others', () {
+      expect(permissionResourceNames([PermissionResourceType.CAMERA]),
+          ['camera']);
+      expect(permissionResourceNames([PermissionResourceType.MICROPHONE]),
+          ['microphone']);
+      expect(
+          permissionResourceNames([PermissionResourceType.CAMERA_AND_MICROPHONE]),
+          ['camera', 'microphone']);
+      expect(permissionResourceNames([PermissionResourceType.GEOLOCATION]),
+          ['geolocation']);
+      expect(permissionResourceNames([PermissionResourceType.NOTIFICATIONS]),
+          ['notifications']);
     });
   });
 }

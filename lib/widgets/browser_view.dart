@@ -10,6 +10,7 @@ import 'package:view_source_vibe/services/collectors/collector_world.dart';
 import 'package:view_source_vibe/services/collectors/frame_relay.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/navigation_policy.dart';
+import 'package:view_source_vibe/services/permission_resources.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
 import 'package:view_source_vibe/utils/low_resource_webview.dart';
 import 'package:view_source_vibe/widgets/scroll_through_banner.dart';
@@ -286,6 +287,21 @@ class _BrowserViewState extends State<BrowserView> {
             (htmlService.isWebViewLoading && htmlService.useBrowserByDefault)) {
           _loadContent();
         }
+      },
+      // The app never grants a permission: deny, and record who asked.
+      onPermissionRequest: (controller, request) async {
+        Provider.of<HtmlService>(context, listen: false)
+            .onBrowserPermissionRequest(request.origin.toString(),
+                permissionResourceNames(request.resources));
+        return PermissionResponse(
+            resources: request.resources,
+            action: PermissionResponseAction.DENY);
+      },
+      onGeolocationPermissionsShowPrompt: (controller, origin) async {
+        Provider.of<HtmlService>(context, listen: false)
+            .onBrowserPermissionRequest(origin, const ['geolocation']);
+        return GeolocationPermissionShowPromptResponse(
+            origin: origin, allow: false, retain: false);
       },
       onLoadStart: (controller, url) {
         _lastSyncedUrl = null;
