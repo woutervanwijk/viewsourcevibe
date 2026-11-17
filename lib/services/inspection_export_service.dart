@@ -8,6 +8,7 @@ import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
+import 'package:view_source_vibe/services/derive/inspection_summary.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/observed_text.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
@@ -182,11 +183,14 @@ class InspectionExportService {
     final sovereigntyJson = observedJson(sovereignty, (r) => r.toJson(),
         source: DataSource.server, provenance: Provenance.derived);
 
+    final summary = htmlService.summary;
+
     addJson('manifest.json', manifest);
     addString(
       'report.html',
       _buildHtmlReport(
         manifest: manifest,
+        summary: summary,
         general: general,
         security: security,
         cookies: cookies,
@@ -219,6 +223,7 @@ class InspectionExportService {
     addJson('network/redirects.json', redirectsJson);
     addJson('network/timeline.json', timelineJson);
     addJson('analysis/sovereignty.json', sovereigntyJson);
+    addJson('analysis/summary.json', summary.toJson());
 
     addJson('analysis/metadata.json', metadataJson);
     addJson('analysis/detections.json', detectionsJson);
@@ -349,6 +354,7 @@ class InspectionExportService {
 
   static String _buildHtmlReport({
     required Map<String, dynamic> manifest,
+    required InspectionSummary summary,
     required Observed<GeneralModel> general,
     required Observed<SecurityModel> security,
     required Observed<CookiesModel> cookies,
@@ -522,6 +528,15 @@ class InspectionExportService {
     ${_metricCard('Last modified', observedText(source['lastModified']))}
     ${_metricCard('App request status', status == null ? unknownText(general) : _obs(status, (s) => s.finalStatusText))}
   </section>
+
+  <h2>Key findings</h2>
+  ${summary.findings.isEmpty ? '<div class="card muted">No findings from the checks that ran.</div>' : _table([
+          for (final f in summary.findings)
+            [
+              '${f.severity.name[0].toUpperCase()}${f.severity.name.substring(1)}',
+              f.title
+            ]
+        ], ['Severity', 'Finding'])}
 
   <h2>Included Files</h2>
   <div class="card">

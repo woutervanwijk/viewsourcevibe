@@ -36,6 +36,7 @@ import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
+import 'package:view_source_vibe/services/derive/inspection_summary.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/request_timeline.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart';
@@ -823,6 +824,18 @@ class HtmlService extends ChangeNotifier {
     }
     return _divergences!;
   }
+
+  /// The key findings and facts of the current inspection. Not cached.
+  InspectionSummary get summary => deriveSummary(SummaryInputs(
+        inspection: store.current,
+        general: generalView,
+        security: securityView,
+        cookies: cookiesView,
+        detections: detectionsView,
+        sovereignty: sovereigntyState,
+        blockPage: blockPage,
+        divergences: divergences,
+      ));
 
   Observed<GeneralModel>? _general;
   ({
