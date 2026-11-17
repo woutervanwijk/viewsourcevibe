@@ -21,6 +21,27 @@ XMLHttpRequest.prototype.send = function() {};
 var setTimeout = function() { return 0; };
 ''';
 
+/// Runs [source] under Node and returns its stdout. Returns null when Node is
+/// not installed.
+Future<String?> runJs(String source) async {
+  try {
+    await Process.run('node', ['--version']);
+  } on ProcessException {
+    return null;
+  }
+  final dir = Directory.systemTemp.createTempSync('vsv_collector');
+  try {
+    final file = File('${dir.path}/run.js')..writeAsStringSync(source);
+    final r = await Process.run('node', [file.path]);
+    if (r.exitCode != 0) {
+      throw StateError('collector run failed: ${r.stderr}');
+    }
+    return r.stdout as String;
+  } finally {
+    dir.deleteSync(recursive: true);
+  }
+}
+
 /// Runs the collector JS under Node with browser stubs and returns the decoded
 /// result of `window.__vsv_collect(opts)`, plus the value of [probe] under
 /// `__probe`. Returns null when Node is not installed.
@@ -30,29 +51,14 @@ Future<Map<String, dynamic>?> runCollector({
   String opts = '{dom: false}',
   String probe = 'null',
 }) async {
-  try {
-    await Process.run('node', ['--version']);
-  } on ProcessException {
-    return null;
-  }
-  final dir = Directory.systemTemp.createTempSync('vsv_collector');
-  try {
-    final file = File('${dir.path}/run.js');
-    file.writeAsStringSync([
-      _stubs,
-      before,
-      vsvResourceBootstrapJs,
-      vsvCollectJs,
-      after,
-      'var o = JSON.parse(window.__vsv_collect($opts)); '
-          'o.__probe = ($probe); console.log(JSON.stringify(o));',
-    ].join('\n'));
-    final r = await Process.run('node', [file.path]);
-    if (r.exitCode != 0) {
-      throw StateError('collector run failed: ${r.stderr}');
-    }
-    return jsonDecode(r.stdout as String) as Map<String, dynamic>;
-  } finally {
-    dir.deleteSync(recursive: true);
-  }
+  final out = await runJs([
+    _stubs,
+    before,
+    vsvResourceBootstrapJs,
+    vsvCollectJs,
+    after,
+    'var o = JSON.parse(window.__vsv_collect($opts)); '
+        'o.__probe = ($probe); console.log(JSON.stringify(o));',
+  ].join('\n'));
+  return out == null ? null : jsonDecode(out) as Map<String, dynamic>;
 }
