@@ -280,6 +280,9 @@ bool _sameBrowser(BrowserSnapshot a, BrowserSnapshot b) {
       sameObserved(a.navigation, b.navigation) &&
       sameObserved(a.snapshotTimeMs, b.snapshotTimeMs) &&
       sameObserved(a.mainStatus, b.mainStatus) &&
+      sameObserved(a.frames, b.frames) &&
+      a.frameCount == b.frameCount &&
+      sameObserved(a.siteStorage, b.siteStorage) &&
       a.resourcesTruncated == b.resourcesTruncated &&
       a.resourcesDropped == b.resourcesDropped &&
       a.rawPayload == b.rawPayload;
@@ -304,6 +307,11 @@ BrowserSnapshot _merge(BrowserSnapshot old, BrowserSnapshot n) {
     storage: _fresher(old.storage, n.storage),
     navigation: _fresher(old.navigation, n.navigation),
     snapshotTimeMs: _fresher(old.snapshotTimeMs, n.snapshotTimeMs),
+    frames: _fresher(old.frames, n.frames),
+    frameCount: old.frames is Present && n.frames is! Present
+        ? old.frameCount
+        : n.frameCount,
+    siteStorage: _fresher(old.siteStorage, n.siteStorage),
     // Per document: the newest collect knows best (a reload after a
     // challenge page must not keep the challenge's 403).
     mainStatus: sameObserved(old.mainStatus, n.mainStatus)

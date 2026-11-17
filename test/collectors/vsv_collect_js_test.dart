@@ -62,4 +62,67 @@ void main() {
     expect(local['bytes'], 3 + 15); // 'a'+'é' = 1+2, 'tok'+'secret-token' = 3+12
     expect(local['items'][0], {'k': 'tok', 'b': 15});
   });
+
+  test('iframe attributes are collected, capped at 200', () async {
+    final out = await runCollector(
+        before: "var fr = []; for (var i = 0; i < 250; i++)"
+            " fr.push({src: 'https://f.test/' + i, getAttribute: function(n) {"
+            " return n === 'src' ? this.src"
+            " : n === 'allow' ? 'camera' : null; }});"
+            "document.getElementsByTagName = function(t) {"
+            " return t === 'iframe' ? fr : []; };");
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['frames']['total'], 250);
+    expect(out['frames']['items'], hasLength(200));
+    expect(out['frames']['items'][0],
+        {'src': 'https://f.test/0', 'allow': 'camera', 'sandbox': null});
+  });
+
+  test('an empty sandbox attribute stays empty, a missing one is null',
+      () async {
+    final out = await runCollector(
+        before: "var fr = [{getAttribute: function(n) {"
+            " return n === 'sandbox' ? '' : null; }}];"
+            "document.getElementsByTagName = function(t) {"
+            " return t === 'iframe' ? fr : []; };");
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['frames']['items'].single,
+        {'src': '', 'allow': '', 'sandbox': ''});
+  });
+
+  test('site storage is pending until the promises settle', () async {
+    // A promise that never settles; the other three APIs are absent.
+    final out = await runCollector(
+        before: "var navigator = {storage: {estimate:"
+            " function() { return {then: function() {"
+            " return {catch: function() {}}; }}; }}};");
+    if (out == null) return markTestSkipped('node not installed');
+    expect(out['siteStorage'], {'ok': true, 'pending': true});
+  });
+
+  test('a missing API is an error for that field only', () async {
+    final out = await runCollector(
+        before: "window.__vsv_site = {done: true, usage: 10, quota: 100,"
+            " idb: {ok: false, error: 'indexedDB.databases is not supported'},"
+            " caches: {ok: true, names: ['v1']}, sw: {ok: true, items: []}};");
+    if (out == null) return markTestSkipped('node not installed');
+    final s = out['siteStorage'];
+    expect(s['idb']['ok'], isFalse);
+    expect(s['caches']['names'], ['v1']);
+    expect(s['usage'], 10);
+  });
+
+  test('site storage lookups that are absent are recorded per field',
+      () async {
+    // Node has none of navigator.storage / indexedDB / caches here.
+    final out = await runCollector(
+        before: "var navigator = {};",
+        probe: "window.__vsv_site");
+    if (out == null) return markTestSkipped('node not installed');
+    final s = out['siteStorage'];
+    expect(s['idb'],
+        {'ok': false, 'error': 'indexedDB.databases is not supported'});
+    expect(s['sw']['ok'], isFalse);
+    expect(s['usage'], isNull);
+  });
 }
