@@ -16,7 +16,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:view_source_vibe/main.dart' as app;
-import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/batch_runner.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_export_service.dart';
 
@@ -39,17 +39,6 @@ const _restoreKeys = [
   'last_file_is_url',
   'input_text',
 ];
-
-/// What is still unfinished, by name; empty when the page is ready.
-List<String> _pending(HtmlService s) => [
-      if (s.isLoading) 'loading',
-      if (!s.store.current.browserSettled) 'browserSettled',
-      if (!s.detectionsView.complete) 'detections',
-      if (s.generalView is Pending) 'general',
-      if (s.securityView is Pending) 'security',
-      if (s.cookiesView is Pending) 'cookies',
-      if (s.sovereigntyState is Pending) 'sovereignty',
-    ];
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -100,11 +89,11 @@ void main() {
         // Give the load a moment to start before polling for "done".
         await tester.pump(const Duration(seconds: 2));
         while (clock.elapsed < _timeout) {
-          pending = _pending(html);
+          pending = pendingAnalyses(html);
           if (pending.isEmpty) break;
           await tester.pump(const Duration(milliseconds: 500));
         }
-        pending = _pending(html);
+        pending = pendingAnalyses(html);
         if (_linger > 0) {
           await tester.pump(Duration(seconds: _linger));
           // Collect once more (as when the page reports new resources) so

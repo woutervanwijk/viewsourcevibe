@@ -323,7 +323,7 @@ class InspectionExportService {
   }
 
   static String _packageFilename(String source) {
-    final slug = _slugFor(source);
+    final slug = inspectionSlug(source);
     final stamp = DateTime.now()
         .toUtc()
         .toIso8601String()
@@ -781,20 +781,21 @@ class InspectionExportService {
     return const JsonEncoder.withIndent('  ').convert(_jsonSafe(value));
   }
 
-  static String _slugFor(String value) {
-    final candidate = Uri.tryParse(value);
-    final source = candidate?.host.isNotEmpty == true
-        ? candidate!.host + candidate.path
-        : path.basename(value);
-    final slug = source
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
-    if (slug.isEmpty) return 'inspection';
-    return slug.length > 64 ? slug.substring(0, 64) : slug;
-  }
-
   static String _escape(Object? value) {
     return const HtmlEscape().convert(value?.toString() ?? '');
   }
+}
+
+/// File-name-safe slug (`[a-z0-9-]`) for a URL or file name.
+String inspectionSlug(String value) {
+  final candidate = Uri.tryParse(value);
+  final source = candidate?.host.isNotEmpty == true
+      ? candidate!.host + candidate.path
+      : path.basename(value);
+  final slug = source
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  if (slug.isEmpty) return 'inspection';
+  return slug.length > 64 ? slug.substring(0, 64) : slug;
 }
