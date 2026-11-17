@@ -102,4 +102,10 @@ void main() {
     await show(tester, fullPage().copyWith(layout: const Pending()));
     expect(find.text('Measuring the page…'), findsOneWidget);
   });
+
+  testWidgets('a page still loading says it waits', (tester) async {
+    await show(tester,
+        fullPage().copyWith(layout: const Pending('waiting for the page to settle')));
+    expect(find.text('waiting for the page to settle'), findsOneWidget);
+  });
 }

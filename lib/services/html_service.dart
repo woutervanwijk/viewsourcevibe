@@ -4569,7 +4569,9 @@ Technical details: $message''';
       store.markBrowserSettled(gen);
       return;
     }
-    store.applyLayout(gen, const Pending('waiting for the page to settle'));
+    if (store.current.layout is! Present) {
+      store.applyLayout(gen, const Pending('waiting for the page to settle'));
+    }
     bool stale() => _disposed || gen != store.current.generation;
     final clock = Stopwatch()..start();
     var lastChange = Duration.zero;

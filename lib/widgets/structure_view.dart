@@ -27,13 +27,13 @@ class _StructureViewState extends State<StructureView> {
     final hasBrowser = context
         .select<HtmlService, bool>((s) => s.store.current.target is UrlTarget);
     return switch (state) {
-      Pending<StructureModel>() => Center(
+      Pending<StructureModel>(:final detail) => Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const CircularProgressIndicator(),
               const SizedBox(height: 12),
-              Text('Measuring the page…',
+              Text(detail ?? 'Measuring the page…',
                   style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
