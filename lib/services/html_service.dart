@@ -1029,10 +1029,13 @@ class HtmlService extends ChangeNotifier {
           'Load a URL to check its hostnames.');
     }
     final browser = current.browser;
-    if (browser is Unavailable<BrowserSnapshot> ||
-        browser is Failed<BrowserSnapshot>) {
+    if (browser is Unavailable<BrowserSnapshot> &&
+        browser.reason != UnavailableReason.notApplicable) {
       return const Unavailable(
           UnavailableReason.blockedByPlatform, 'Needs the in-app browser');
+    }
+    if (browser is Failed<BrowserSnapshot>) {
+      return const Failed('the browser did not report this page');
     }
     if (browser is Present<BrowserSnapshot> &&
         browser.value.url.scheme != 'http' &&

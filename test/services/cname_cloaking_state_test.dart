@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/cname_cloaking_service.dart';
 import 'package:view_source_vibe/services/html_service.dart';
@@ -97,14 +98,38 @@ void main() {
     expect(service.cnameCloaking, isA<Failed<CloakingResult>>());
   });
 
-  test('no in-app browser result: says so instead of checking forever',
-      () async {
-    seedStore(store, page.copyWith(browser: const Failed('no webview')));
+  test('no in-app browser: says so instead of checking forever', () async {
+    seedStore(
+        store,
+        page.copyWith(
+            browser: const Unavailable(
+                UnavailableReason.unsupportedPlatform, 'no webview')));
     service.watchCloaking(true);
     await pumpEventQueue();
     final state = service.cnameCloaking as Unavailable<CloakingResult>;
     expect(state.detail, 'Needs the in-app browser');
     expect(looked, isEmpty);
+  });
+
+  test('a failed browser read is Failed, not "needs the browser"', () async {
+    seedStore(store, page.copyWith(browser: const Failed('no webview')));
+    service.watchCloaking(true);
+    await pumpEventQueue();
+    expect(service.cnameCloaking, isA<Failed<CloakingResult>>());
+    expect(looked, isEmpty);
+  });
+
+  test('a browser not loaded yet keeps the check pending', () async {
+    for (final b in const <Observed<BrowserSnapshot>>[
+      Pending(),
+      Unavailable(UnavailableReason.notApplicable, 'nothing loaded'),
+    ]) {
+      seedStore(store, page.copyWith(browser: b));
+      service.watchCloaking(true);
+      await pumpEventQueue();
+      expect(service.cnameCloaking, isA<Pending<CloakingResult>>());
+      service.watchCloaking(false);
+    }
   });
 
   test('a page that is not http(s) has no hostnames to check', () async {
