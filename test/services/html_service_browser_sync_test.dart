@@ -908,19 +908,31 @@ void main() {
       await loadAndAnswer('https://a.test/');
       service.onBrowserLoadStart();
       service.onBrowserPermissionRequest('https://a.test',
-          ['camera', 'microphone'], Uri.parse('https://a.test/'));
+          ['camera', 'microphone'], Uri.parse('https://a.test/'),
+          loadSeq: service.loadStartSeq);
       final r = store.current.permissionRequests.single;
       expect(r.origin, 'https://a.test');
       expect(r.resources, ['camera', 'microphone']);
       expect(r.sinceLoadStart, greaterThanOrEqualTo(Duration.zero));
     });
 
-    test('without a load start the time is zero', () async {
+    test('a request that waited for getUrl across a load start is dropped',
+        () async {
+      await loadAndAnswer('https://a.test/');
+      final seq = service.loadStartSeq; // read at native-callback entry
+      service.onBrowserLoadStart(Uri.parse('https://a.test/')); // reload
+      service.onBrowserPermissionRequest(
+          'https://a.test', ['camera'], Uri.parse('https://a.test/'),
+          loadSeq: seq);
+      expect(store.current.permissionRequests, isEmpty);
+    });
+
+    test('without a load start the time is unknown', () async {
       await loadAndAnswer('https://a.test/');
       service.onBrowserPermissionRequest(
-          'https://a.test', ['geolocation'], Uri.parse('https://a.test/'));
-      expect(store.current.permissionRequests.single.sinceLoadStart,
-          Duration.zero);
+          'https://a.test', ['geolocation'], Uri.parse('https://a.test/'),
+          loadSeq: service.loadStartSeq);
+      expect(store.current.permissionRequests.single.sinceLoadStart, isNull);
     });
 
     test(
@@ -928,27 +940,30 @@ void main() {
         () async {
       await loadAndAnswer('https://a.test/');
       service.onBrowserPermissionRequest(
-          'https://a.test', ['camera'], Uri.parse('https://a.test/'));
+          'https://a.test', ['camera'], Uri.parse('https://a.test/'),
+          loadSeq: service.loadStartSeq);
       await loadAndAnswer('https://b.test/');
       expect(store.current.permissionRequests, isEmpty);
       service.onBrowserPermissionRequest(
-          'https://a.test', ['camera'], Uri.parse('https://a.test/'));
+          'https://a.test', ['camera'], Uri.parse('https://a.test/'),
+          loadSeq: service.loadStartSeq);
       expect(store.current.permissionRequests, isEmpty);
       // A third-party frame on page B: origin differs, main frame is B.
       service.onBrowserPermissionRequest(
-          'https://maps.test', ['geolocation'], Uri.parse('https://b.test/'));
+          'https://maps.test', ['geolocation'], Uri.parse('https://b.test/'),
+          loadSeq: service.loadStartSeq);
       expect(
           store.current.permissionRequests.single.origin, 'https://maps.test');
     });
 
-    test('a load start of the previous page gives zero', () async {
+    test('a load start of the previous page gives unknown', () async {
       await loadAndAnswer('https://a.test/');
       service.onBrowserLoadStart(Uri.parse('https://a.test/'));
       await loadAndAnswer('https://b.test/');
       service.onBrowserPermissionRequest(
-          'https://b.test', ['camera'], Uri.parse('https://b.test/'));
-      expect(store.current.permissionRequests.single.sinceLoadStart,
-          Duration.zero);
+          'https://b.test', ['camera'], Uri.parse('https://b.test/'),
+          loadSeq: service.loadStartSeq);
+      expect(store.current.permissionRequests.single.sinceLoadStart, isNull);
     });
   });
 

@@ -6,6 +6,7 @@ import 'package:view_source_vibe/services/derive/observed_text.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/permissions_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/utils/format_utils.dart';
 import 'package:view_source_vibe/widgets/observed_value.dart';
 import 'package:view_source_vibe/widgets/section_box.dart';
 
@@ -118,9 +119,13 @@ class PermissionsView extends StatelessWidget {
     }
     if (d.value.isEmpty) {
       return SectionBox(children: [
-        _pad(Text(m.frameCount == 0
-            ? 'The page has no embedded frames.'
-            : 'None of the ${m.frameCount} embedded frames got an allow attribute.')),
+        _pad(Text(switch (m.frameCount) {
+          Present<int>(:final value) when value == 0 =>
+            'The page has no embedded frames.',
+          Present<int>(:final value) =>
+            'None of the $value embedded frames got an allow attribute.',
+          _ => 'None of the embedded frames got an allow attribute.',
+        })),
       ]);
     }
     return SectionBox(children: [
@@ -158,32 +163,23 @@ class PermissionsView extends StatelessWidget {
         ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     return SectionBox(children: [
       _pad(Text('Denied by this app', style: muted)),
-      if (m.requests.isEmpty) _pad(const Text('No requests while loading.')),
+      if (m.requests.isEmpty) _pad(const Text('No requests.')),
       for (final r in m.requests)
         _line(r.resources.join(', '),
-            Text('${r.origin}, ${_seconds(r.sinceLoadStart)}')),
+            Text('${r.origin}, ${formatSinceLoadStart(r.sinceLoadStart)}')),
     ]);
-  }
-
-  String _seconds(Duration d) {
-    final tenths = (d.inMilliseconds / 100).round();
-    return tenths < 100
-        ? '${(tenths / 10).toStringAsFixed(1)} s'
-        : '${(tenths / 10).round()} s';
   }
 
   Widget _stored(PermissionsModel m) {
     final s = m.stored;
     String size(Observed<int> o) =>
-        presentOrUnknown(o, (v) => formatDownloadSize(v)!);
+        presentOrUnknown(o, FormatUtils.formatBytes);
     String names(Observed<List<String>> o) =>
         presentOrUnknown(o, (v) => v.isEmpty ? 'none' : v.join(', '));
     return SectionBox(children: [
       if (s is Present<SiteStorage>) ...[
-        _line(
-            'Used',
-            Text(
-                '${size(s.value.usageBytes)} of ${size(s.value.quotaBytes)} used')),
+        _line('Used',
+            Text('${size(s.value.usageBytes)} of ${size(s.value.quotaBytes)}')),
         _line('IndexedDB', Text(names(s.value.indexedDbNames))),
         _line('Caches', Text(names(s.value.cacheNames))),
         _line(

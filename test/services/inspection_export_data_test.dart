@@ -257,5 +257,7 @@ void main() {
     // exported, only counts, sizes and names.
     expect(text, isNot(contains('topItems')));
     expect(text, isNot(contains('"v"')));
+    expect(text, isNot(contains('secret-token-key')));
+    expect(text, isNot(contains('987654')));
   });
 }

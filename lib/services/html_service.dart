@@ -4636,7 +4636,14 @@ Technical details: $message''';
     _loadStartGen = store.current.generation;
     _loadStartUrl = url;
     _loadStartAt = DateTime.now();
+    _loadStartSeq++;
   }
+
+  /// Counts main-frame load starts. A native callback reads it on entry and
+  /// hands it back with the request, so a request that waited (for the
+  /// WebView's URL) across a navigation or reload is dropped.
+  int get loadStartSeq => _loadStartSeq;
+  int _loadStartSeq = 0;
 
   int? _loadStartGen;
   Uri? _loadStartUrl;
@@ -4647,8 +4654,12 @@ Technical details: $message''';
   /// being inspected; a request from a page already left is dropped. The
   /// request's own [origin] may differ (embedded frames).
   void onBrowserPermissionRequest(
-      String origin, List<String> resources, Uri? mainFrameUrl) {
-    if (_disposed || mainFrameUrl == null || !_storeCovers(mainFrameUrl)) {
+      String origin, List<String> resources, Uri? mainFrameUrl,
+      {required int loadSeq}) {
+    if (_disposed ||
+        loadSeq != _loadStartSeq ||
+        mainFrameUrl == null ||
+        !_storeCovers(mainFrameUrl)) {
       return;
     }
     final start = _loadStartAt;
@@ -4663,7 +4674,7 @@ Technical details: $message''';
           origin: origin,
           resources: resources,
           sinceLoadStart:
-              startBelongs ? DateTime.now().difference(start) : Duration.zero,
+              startBelongs ? DateTime.now().difference(start) : null,
         ));
   }
 

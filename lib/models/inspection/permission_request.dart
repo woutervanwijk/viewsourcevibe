@@ -7,8 +7,8 @@ class PermissionRequestEvent {
   /// Lower-case names: 'camera', 'microphone', 'geolocation', ...
   final List<String> resources;
 
-  /// Time since the last main-frame load start (zero when none was seen).
-  final Duration sinceLoadStart;
+  /// Time since the last main-frame load start; null when none was seen.
+  final Duration? sinceLoadStart;
 
   const PermissionRequestEvent({
     required this.origin,

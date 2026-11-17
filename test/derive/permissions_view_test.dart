@@ -105,7 +105,7 @@ void main() {
     expect(d[2].frameHost, '');
     expect(d[2].thirdParty, isFalse);
     expect(d[2].sandboxed, isTrue);
-    expect(m.frameCount, 4);
+    expect((m.frameCount as Present<int>).value, 4);
     expect(m.notes,
         contains('1 third-party frame(s) may use: camera, microphone'));
   });
@@ -184,6 +184,33 @@ void main() {
     ])));
     expect(m.notes.last,
         'The page asked for camera 10 s after it started loading.');
+  });
+
+  test('an unknown load start says so', () {
+    final m = present(derivePermissions(page(requests: const [
+      PermissionRequestEvent(
+          origin: 'https://a.test',
+          resources: ['camera'],
+          sinceLoadStart: null),
+    ])));
+    expect(m.notes.last,
+        'The page asked for camera (time since load start unknown).');
+    expect(formatSinceLoadStart(null), 'time unknown');
+  });
+
+  test('frames not reported: the count is unknown, not 0', () {
+    final m = present(derivePermissions(page()));
+    expect(m.frameCount, isA<Unavailable<int>>());
+  });
+
+  test('several Feature-Policy headers are parsed one by one', () {
+    final m = present(derivePermissions(page(headers: {
+      'feature-policy': ["camera 'none'", "geolocation 'none'; microphone 'self'"]
+    })));
+    expect(m.invalidDeclarations, isEmpty);
+    final d = (m.declared as Present<List<DeclaredFeature>>).value;
+    expect(d.map((f) => '${f.feature}: ${f.allowed}'),
+        ['camera: nobody', 'microphone: this site', 'geolocation: nobody']);
   });
 
   test('unavailable detail is pinned', () {

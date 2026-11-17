@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
@@ -225,16 +226,20 @@ class _BrowserViewState extends State<BrowserView> {
     }
   }
 
+  int _loadStartSeq() =>
+      Provider.of<HtmlService>(context, listen: false).loadStartSeq;
+
   /// Records a (denied) permission request for the page showing now. Never
   /// throws: the caller must always answer DENY.
   Future<void> _recordPermission(InAppWebViewController controller,
-      String origin, List<String> resources) async {
+      int loadSeq, String origin, List<String> resources) async {
     try {
       final mainFrame = await controller.getUrl();
       if (!mounted) return;
       Provider.of<HtmlService>(context, listen: false)
           .onBrowserPermissionRequest(origin, resources,
-              mainFrame == null ? null : Uri.tryParse(mainFrame.toString()));
+              mainFrame == null ? null : Uri.tryParse(mainFrame.toString()),
+              loadSeq: loadSeq);
     } catch (_) {
       // Recording is best effort.
     }
@@ -305,14 +310,17 @@ class _BrowserViewState extends State<BrowserView> {
       },
       // The app never grants a permission: deny, and record who asked.
       onPermissionRequest: (controller, request) async {
-        await _recordPermission(controller, request.origin.toString(),
-            permissionResourceNames(request.resources));
+        // Answer at once; recording must not delay the page (or the answer).
+        unawaited(_recordPermission(controller, _loadStartSeq(),
+            request.origin.toString(),
+            permissionResourceNames(request.resources)));
         return PermissionResponse(
             resources: request.resources,
             action: PermissionResponseAction.DENY);
       },
       onGeolocationPermissionsShowPrompt: (controller, origin) async {
-        await _recordPermission(controller, origin, const ['geolocation']);
+        unawaited(_recordPermission(
+            controller, _loadStartSeq(), origin, const ['geolocation']));
         return GeolocationPermissionShowPromptResponse(
             origin: origin, allow: false, retain: false);
       },

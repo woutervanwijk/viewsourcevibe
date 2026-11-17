@@ -387,13 +387,13 @@ class InspectionExportData {
             source: DataSource.browser,
             provenance: Provenance.derived,
           ),
-          'frameCount': m.frameCount,
+          'frameCount': observedPlain(m.frameCount, source: DataSource.browser),
           'requests': [
             for (final r in m.requests)
               {
                 'origin': r.origin,
                 'resources': r.resources,
-                'sinceLoadStartMs': r.sinceLoadStart.inMilliseconds,
+                'sinceLoadStartMs': r.sinceLoadStart?.inMilliseconds,
               },
           ],
           'stored': observedJson(

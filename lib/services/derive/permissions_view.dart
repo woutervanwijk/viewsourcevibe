@@ -44,7 +44,8 @@ class PermissionsModel {
 
   /// Only frames with an allow attribute.
   final Observed<List<Delegation>> delegations;
-  final int frameCount;
+  /// How many iframes the page has; unknown when the browser reported none.
+  final Observed<int> frameCount;
   final List<PermissionRequestEvent> requests;
   final Observed<SiteStorage> stored;
 
@@ -97,7 +98,10 @@ String? _header(Map<String, List<String>> headers, String name) {
   return headers[name]?.join(', ');
 }
 
-String _seconds(Duration d) {
+/// '2.3 s' / '12 s' after the load start; 'time unknown' when no load start
+/// was seen. Rounded to tenths below 10 s, whole seconds above.
+String formatSinceLoadStart(Duration? d) {
+  if (d == null) return 'time unknown';
   final tenths = (d.inMilliseconds / 100).round();
   return tenths < 100
       ? '${(tenths / 10).toStringAsFixed(1)} s'
@@ -145,9 +149,15 @@ Observed<PermissionsModel> derivePermissions(PageInspection p) {
       legacyOnly = pp == null;
       final features = <String, Allowlist>{};
       if (fp != null) {
-        final parsed = parseFeaturePolicy(fp);
-        features.addAll(parsed.features);
-        invalid = [...parsed.invalid];
+        // Each header value on its own (a ',' is not a separator here);
+        // for a feature named twice the first header wins.
+        for (final value in headers['feature-policy']!) {
+          final parsed = parseFeaturePolicy(value);
+          for (final e in parsed.features.entries) {
+            features.putIfAbsent(e.key, () => e.value);
+          }
+          invalid = [...invalid, ...parsed.invalid];
+        }
       }
       if (pp != null) {
         final parsed = parsePermissionsPolicy(pp);
@@ -209,7 +219,9 @@ Observed<PermissionsModel> derivePermissions(PageInspection p) {
   }
   for (final r in p.permissionRequests) {
     notes.add(
-        'The page asked for ${r.resources.join(', ')} ${_seconds(r.sinceLoadStart)} after it started loading.');
+        r.sinceLoadStart == null
+            ? 'The page asked for ${r.resources.join(', ')} (time since load start unknown).'
+            : 'The page asked for ${r.resources.join(', ')} ${formatSinceLoadStart(r.sinceLoadStart)} after it started loading.');
   }
   if (stored is Present<SiteStorage>) {
     final sw = stored.value.serviceWorkers;
@@ -225,7 +237,10 @@ Observed<PermissionsModel> derivePermissions(PageInspection p) {
         invalidDeclarations: invalid,
         legacyHeaderOnly: legacyOnly,
         delegations: delegations,
-        frameCount: browserSnap?.frameCount ?? 0,
+        frameCount: frames is Present<List<FrameInfo>>
+            ? Present(browserSnap!.frameCount,
+                source: DataSource.browser, provenance: Provenance.derived)
+            : _carry<int>(frames ?? browser, 'the browser did not report frames'),
         requests: p.permissionRequests,
         stored: stored,
         webStorage: browserSnap?.storage ??

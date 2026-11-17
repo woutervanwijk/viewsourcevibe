@@ -7,6 +7,7 @@ import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/widgets/permissions_view.dart';
 
 import '../derive/fixtures.dart' show inspection, serverSnap, browserSnap, b;
+import '../fixtures/inspection/local_file.dart';
 import '../fixtures/inspection/pump.dart';
 
 PageInspection pageWith({
@@ -24,7 +25,10 @@ PageInspection pageWith({
     resources: snap.resources,
     cookies: snap.cookies,
     storage: b(BrowserStorage(
-      local: b(StorageArea(count: 3, bytes: b(120), topItems: const [])),
+      local: b(StorageArea(
+          count: 3,
+          bytes: b(120),
+          topItems: const [StorageItem('secret-token-key', 987654)])),
       session: b(StorageArea(count: 0, bytes: b(0), topItems: const [])),
     )),
     navigation: snap.navigation,
@@ -102,13 +106,20 @@ void main() {
     expect(find.textContaining('keyval-store'), findsOneWidget);
     expect(find.textContaining('workbox-precache'), findsOneWidget);
     expect(find.textContaining('https://a.test/'), findsWidgets);
-    expect(find.textContaining('2 KB of 10,240 KB used'), findsOneWidget);
+    expect(find.textContaining('2.0 KB of 10.0 MB'), findsOneWidget);
   });
 
   testWidgets('no header: the reason is shown, not an empty box',
       (tester) async {
     await pumpPermissions(tester, pageWithoutPolicy);
     expect(find.textContaining('Not reported by the server'), findsOneWidget);
-    expect(find.text('No requests while loading.'), findsOneWidget);
+    expect(find.text('No requests.'), findsOneWidget);
+  });
+
+  testWidgets('a local file says the tab is only for web pages',
+      (tester) async {
+    await pumpPermissions(tester, localFile());
+    expect(find.textContaining('only for web pages'), findsOneWidget);
+    expect(find.text('Allowed by the site'), findsNothing);
   });
 }
