@@ -133,8 +133,22 @@ const String vsvResourceBootstrapJs = r'''
     try {
       var origin = '';
       try { origin = location.origin; } catch (e) {}
-      window.top.postMessage({__vsv_frame: 1, fo: origin,
-          to: performance.timeOrigin || null, e: out, d: dout}, '*');
+      var report = {__vsv_frame: 1, fo: origin,
+          to: performance.timeOrigin || null, e: out, d: dout};
+      // Through the native bridge when there is one: the embedding page
+      // cannot read the report; any frame can still inject entries.
+      // postMessage is the fallback, also when the call rejects.
+      var b = window.flutter_inappwebview;
+      if (b && typeof b.callHandler === 'function') {
+        var r = b.callHandler('vsvFrame', report);
+        if (r && typeof r.catch === 'function') {
+          r.catch(function() {
+            try { window.top.postMessage(report, '*'); } catch (e) {}
+          });
+        }
+      } else {
+        window.top.postMessage(report, '*');
+      }
     } catch (e) {}
   }
   // Top frame: an image served from the memory cache creates no timing
@@ -147,36 +161,43 @@ const String vsvResourceBootstrapJs = r'''
       }, true);
     } catch (e) {}
   }
-  // Top frame: take what the iframes post. Only messages of this shape from
-  // another window; the entries are page-provided data, like the timings.
+  // Top frame: take what the iframes report. The app calls __vsv_frameIn
+  // (bridge path); the message listener feeds the postMessage fallback. The
+  // entries are page-provided data, like the timings.
+  function frameIn(d) {
+    try {
+      if (!d || d.__vsv_frame !== 1) return;
+      if (!d.e || typeof d.e.length !== 'number') return;
+      var shift = (typeof d.to === 'number' && performance.timeOrigin)
+          ? d.to - performance.timeOrigin : null;
+      var fo = typeof d.fo === 'string' ? d.fo.slice(0, 200) : '';
+      for (var i = 0; i < d.e.length && i < MAX; i++) {
+        var x = d.e[i];
+        if (!x || typeof x.n !== 'string' || skip(x.n)) continue;
+        var st = num(x.st);
+        store(x.n, {it: typeof x.it === 'string' ? x.it : '',
+            st: st === null ? null : (shift === null ? null : st + shift),
+            du: num(x.du), tx: num(x.tx), enc: num(x.enc), dec: num(x.dec),
+            fr: 1, fo: fo});
+      }
+      // URLs the iframe's own buffer dropped.
+      var dl = d.d;
+      if (dl && typeof dl.length === 'number') {
+        for (var j = 0; j < dl.length && j < DROP_MAX; j++) {
+          var y = dl[j];
+          if (!y || typeof y.n !== 'string' || skip(y.n)) continue;
+          noteDropped(y.n, typeof y.it === 'string' ? y.it : '', fo);
+        }
+      }
+    } catch (e) {}
+  }
   if (isTop) {
+    window.__vsv_frameIn = frameIn;
     try {
       window.addEventListener('message', function(ev) {
         try {
-          var d = ev.data;
-          if (!d || d.__vsv_frame !== 1 || ev.source === window) return;
-          if (!d.e || typeof d.e.length !== 'number') return;
-          var shift = (typeof d.to === 'number' && performance.timeOrigin)
-              ? d.to - performance.timeOrigin : null;
-          var fo = typeof d.fo === 'string' ? d.fo.slice(0, 200) : '';
-          for (var i = 0; i < d.e.length && i < MAX; i++) {
-            var x = d.e[i];
-            if (!x || typeof x.n !== 'string' || skip(x.n)) continue;
-            var st = num(x.st);
-            store(x.n, {it: typeof x.it === 'string' ? x.it : '',
-                st: st === null ? null : (shift === null ? null : st + shift),
-                du: num(x.du), tx: num(x.tx), enc: num(x.enc), dec: num(x.dec),
-                fr: 1, fo: fo});
-          }
-          // URLs the iframe's own buffer dropped.
-          var dl = d.d;
-          if (dl && typeof dl.length === 'number') {
-            for (var j = 0; j < dl.length && j < DROP_MAX; j++) {
-              var y = dl[j];
-              if (!y || typeof y.n !== 'string' || skip(y.n)) continue;
-              noteDropped(y.n, typeof y.it === 'string' ? y.it : '', fo);
-            }
-          }
+          if (ev.data && ev.source === window) return;
+          frameIn(ev.data);
         } catch (e) {}
       });
     } catch (e) {}
@@ -199,7 +220,7 @@ const String vsvResourceBootstrapJs = r'''
   }
   try {
     var origFetch = window.fetch;
-    if (isTop && typeof origFetch === 'function') {
+    if (!window.__vsv_isolated && isTop && typeof origFetch === 'function') {
       window.fetch = function(input, init) {
         var url = typeof input === 'string' ? input :
             (input && input.url) ? input.url : String(input);
@@ -214,7 +235,7 @@ const String vsvResourceBootstrapJs = r'''
       };
     }
   } catch (e) {}
-  if (isTop) try {
+  if (!window.__vsv_isolated && isTop) try {
     var xhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(m, u) {
       this.__vsvUrl = u;
@@ -244,10 +265,13 @@ const String vsvResourceBootstrapJs = r'''
 const String vsvCollectJs = r'''
 window.__vsv_collect = function(opts) {
   opts = opts || {};
-  var STORAGE_MAX_ITEMS = 500;
+  var STORAGE_TOP_ITEMS = 50;
   function describe(e) {
     try { return (e && e.name ? e.name + ': ' + e.message : String(e)); }
     catch (x) { return 'unknown error'; }
+  }
+  function skip(name) {
+    return !name || name.indexOf('data:') === 0 || name.indexOf('blob:') === 0;
   }
   function section(fn) {
     try { var v = fn(); v.ok = true; return v; }
@@ -307,8 +331,6 @@ window.__vsv_collect = function(opts) {
     res.shadowRoots = shadows;
     return res;
   });
-
-  function num(v) { return typeof v === 'number' ? v : null; }
 
   out.resources = section(function() {
     var observer = [];
@@ -372,6 +394,8 @@ window.__vsv_collect = function(opts) {
     };
   });
 
+  function num(v) { return typeof v === 'number' ? v : null; }
+
   out.navigation = section(function() {
     var nav = performance.getEntriesByType('navigation')[0];
     if (!nav) throw new Error('no navigation timing entry');
@@ -380,21 +404,34 @@ window.__vsv_collect = function(opts) {
       domContentLoaded: nav.domContentLoadedEventEnd, loadEnd: nav.loadEventEnd,
       protocol: nav.nextHopProtocol || null,
       // HTTP status of the document (absent where the engine lacks it).
-      status: typeof nav.responseStatus === 'number' ? nav.responseStatus : null
+      status: typeof nav.responseStatus === 'number' ? nav.responseStatus : null,
+      // Document sizes: transferred, encoded (compressed) and decoded body.
+      tx: num(nav.transferSize), enc: num(nav.encodedBodySize),
+      dec: num(nav.decodedBodySize)
     };
   });
 
+  function utf8len(s) {
+    try { return new TextEncoder().encode(s).length; } catch (e) {}
+    try { return unescape(encodeURIComponent(s)).length; } catch (e) {}
+    return s.length;
+  }
+  // Sizes are computed here: the values never cross the JS bridge.
   function area(which) {
     try {
       var s = window[which];
       var count = s.length;
       var items = [];
-      var n = Math.min(count, STORAGE_MAX_ITEMS);
-      for (var i = 0; i < n; i++) {
+      var bytes = 0;
+      for (var i = 0; i < count; i++) {
         var k = s.key(i);
-        items.push({k: k, v: s.getItem(k) || ''});
+        var b = utf8len(String(k)) + utf8len(String(s.getItem(k) || ''));
+        bytes += b;
+        items.push({k: k, b: b});
       }
-      return {ok: true, count: count, items: items, truncated: count > n};
+      items.sort(function(x, y) { return y.b - x.b; });
+      return {ok: true, count: count, bytes: bytes,
+        items: items.slice(0, STORAGE_TOP_ITEMS)};
     } catch (e) {
       return {ok: false, error: describe(e)};
     }

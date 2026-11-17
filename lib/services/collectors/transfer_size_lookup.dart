@@ -28,14 +28,24 @@ Future<int?> lookupTransferSize(
   int limit = 50 * 1024 * 1024,
   Duration timeout = const Duration(seconds: 15),
   HttpClient Function()? client,
+  // A client owned by the caller, reused across lookups and left open. The
+  // caller sets autoUncompress = false on it. Every response is drained or
+  // its request aborted, so no pooled connection leaks.
+  HttpClient? shared,
 }) async {
-  final http = (client ?? HttpClient.new)()
-    ..autoUncompress = false
-    ..connectionTimeout = timeout;
+  if (client != null && shared != null) {
+    throw ArgumentError('pass either client or shared, not both');
+  }
+  final http = shared ??
+      ((client ?? HttpClient.new)()
+        ..autoUncompress = false
+        ..connectionTimeout = timeout);
+  HttpClientRequest? pending;
   try {
     // HEAD first: content-length plus the HEAD response's own headers.
     try {
       final head = await http.headUrl(Uri.parse(url)).timeout(timeout);
+      pending = head;
       head.headers
         ..set(HttpHeaders.userAgentHeader, userAgent)
         ..set(HttpHeaders.acceptHeader,
@@ -43,6 +53,8 @@ Future<int?> lookupTransferSize(
         ..set(HttpHeaders.acceptEncodingHeader, 'gzip, deflate, br');
       final res = await head.close().timeout(timeout);
       final cl = res.contentLength;
+      // Release the connection whatever happens next.
+      await res.drain<void>().timeout(timeout);
       if (res.statusCode >= 200 && res.statusCode < 400 && cl > 0) {
         if (cl > limit) throw SizeLimitExceeded(limit);
         return cl + _headerBytes(res);
@@ -53,8 +65,10 @@ Future<int?> lookupTransferSize(
       rethrow;
     } catch (_) {
       // HEAD unsupported or the request failed: measure with a GET below.
+      pending?.abort();
     }
     final request = await http.getUrl(Uri.parse(url)).timeout(timeout);
+    pending = request;
     request.headers
       ..set(HttpHeaders.userAgentHeader, userAgent)
       ..set(HttpHeaders.acceptHeader,
@@ -62,7 +76,7 @@ Future<int?> lookupTransferSize(
       ..set(HttpHeaders.acceptEncodingHeader, 'gzip, deflate, br');
     final response = await request.close().timeout(timeout);
     if (response.statusCode < 200 || response.statusCode >= 400) {
-      response.listen((_) {}).cancel();
+      await response.listen((_) {}).cancel();
       return null;
     }
     var body = 0;
@@ -87,8 +101,11 @@ Future<int?> lookupTransferSize(
     await done.future.timeout(timeout * 2);
     if (body == 0) return null;
     return body + _headerBytes(response);
+  } catch (_) {
+    pending?.abort();
+    rethrow;
   } finally {
-    http.close(force: true);
+    if (shared == null) http.close(force: true);
   }
 }
 

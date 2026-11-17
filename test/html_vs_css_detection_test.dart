@@ -1,11 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/utils/descriptive_filename.dart';
 
 void main() {
   group('HTML vs CSS detection tests', () {
     test('HTML files should not be detected as CSS', () async {
-      final htmlService = HtmlService();
-
       // Test various HTML files that were previously misdetected as CSS
       final htmlExamples = [
         {
@@ -47,7 +45,7 @@ void main() {
 
         print('  Testing: $name');
 
-        final result = htmlService.generateDescriptiveFilename(
+        final result = generateDescriptiveFilename(
             Uri.parse('https://example.com/test.html'), content);
 
         print('    Result: $result');
@@ -62,8 +60,6 @@ void main() {
     });
 
     test('Pure CSS files should still be detected correctly', () async {
-      final htmlService = HtmlService();
-
       // Test pure CSS content
       final cssExamples = [
         {
@@ -103,7 +99,7 @@ void main() {
 
         print('  Testing: $name');
 
-        final result = htmlService.generateDescriptiveFilename(
+        final result = generateDescriptiveFilename(
             Uri.parse('https://example.com/test.css'), content);
 
         print('    Result: $result');
@@ -118,8 +114,6 @@ void main() {
     });
 
     test('Mixed content should be detected correctly', () async {
-      final htmlService = HtmlService();
-
       // Test files with mixed HTML/CSS/JS content
       final mixedExamples = [
         {
@@ -172,8 +166,7 @@ void main() {
         final testUri = expected == 'CSS'
             ? Uri.parse('https://example.com/test.css')
             : Uri.parse('https://example.com/test.html');
-        final result =
-            htmlService.generateDescriptiveFilename(testUri, content);
+        final result = generateDescriptiveFilename(testUri, content);
 
         print('    Result: $result');
 
@@ -192,8 +185,6 @@ void main() {
     });
 
     test('Edge cases that previously caused misdetection', () async {
-      final htmlService = HtmlService();
-
       // Specific edge cases that might have caused issues
       final edgeCases = [
         {
@@ -233,8 +224,7 @@ void main() {
         final testUri = expected == 'CSS'
             ? Uri.parse('https://example.com/test.css')
             : Uri.parse('https://example.com/test.html');
-        final result =
-            htmlService.generateDescriptiveFilename(testUri, content);
+        final result = generateDescriptiveFilename(testUri, content);
 
         print('    Result: $result');
 
@@ -253,14 +243,12 @@ void main() {
     });
 
     test('Detection priority verification', () async {
-      final htmlService = HtmlService();
-
       print('🔍 Testing detection priority (HTML > CSS > JS):');
 
       // HTML should always win over CSS
       final htmlWithCssLikeContent =
           '<html><body><div style="color: red;">Text</div></body></html>';
-      final htmlResult = htmlService.generateDescriptiveFilename(
+      final htmlResult = generateDescriptiveFilename(
           Uri.parse('https://example.com/test.html'), htmlWithCssLikeContent);
 
       // With the new filename generation, it should preserve the .html extension
@@ -271,7 +259,7 @@ void main() {
       // CSS should win over JS when both are present but no HTML
       final cssWithJsLikeContent = 'body { margin: 0; } const x = 5;';
       // This is a bit ambiguous, but CSS patterns should take precedence
-      final cssResult = htmlService.generateDescriptiveFilename(
+      final cssResult = generateDescriptiveFilename(
           Uri.parse('https://example.com/test.css'), cssWithJsLikeContent);
 
       // This might be CSS or something else, but shouldn't be HTML

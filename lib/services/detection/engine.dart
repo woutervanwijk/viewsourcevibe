@@ -1,12 +1,23 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:view_source_vibe/models/detection_evidence.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/services/detection/catalog.dart';
+import 'package:view_source_vibe/utils/site.dart';
 
 export 'package:view_source_vibe/services/detection/catalog.dart';
 
 // One detection engine for every tab. The page source is scanned once (in the
 // metadata isolate, see [scanSource]); requests and cookies, which arrive
 // later from the browser, are merged in with [detect].
+
+enum DetectionConfidence {
+  high('High'),
+  medium('Medium'),
+  low('Low');
+
+  final String label;
+  const DetectionConfidence(this.label);
+}
 
 class Detection {
   final Entity entity;
@@ -29,16 +40,25 @@ class Detection {
 
   Detection(this.entity);
 
-  /// How certain the detection is (0–100), with the strongest signal.
-  (int, String) get confidence {
+  /// How certain the detection is, with the strongest signal.
+  (DetectionConfidence, String) get confidence {
     if (evidence.any((e) => e.kind == EvidenceKind.header)) {
-      return (92, 'Response header');
+      return (DetectionConfidence.high, 'Response header');
     }
-    if (requests > 0) return (90, 'Loaded by the page');
-    if (version != null) return (88, 'Version in a generator tag or file name');
-    if (cookies.isNotEmpty) return (82, 'Cookie set on this site');
-    if (inSource) return (72, 'Found in the page source');
-    return (40, 'Connection hint only');
+    if (requests > 0) return (DetectionConfidence.high, 'Loaded by the page');
+    if (version != null) {
+      return (
+        DetectionConfidence.high,
+        'Version in a generator tag or file name'
+      );
+    }
+    if (cookies.isNotEmpty) {
+      return (DetectionConfidence.medium, 'Cookie set on this site');
+    }
+    if (inSource) {
+      return (DetectionConfidence.medium, 'Found in the page source');
+    }
+    return (DetectionConfidence.low, 'Connection hint only');
   }
 
   String get name => entity.name;
@@ -104,12 +124,6 @@ String _hostOf(String url) {
       '';
 }
 
-bool _sameSite(String host, String pageHost) =>
-    pageHost.isNotEmpty &&
-    (host == pageHost ||
-        host.endsWith('.$pageHost') ||
-        pageHost.endsWith('.$host'));
-
 /// A literal prefix every match of [pattern] must contain, or null. Sound:
 /// leading anchors/boundaries are skipped, escapes are unescaped, and a
 /// quantifier right after the run makes its last char optional (trimmed).
@@ -164,6 +178,25 @@ final _cookieRules = [
     for (final c in e.cookies) (e, c),
 ];
 
+// Header rules; a null regex (empty pattern) means the header is present.
+final _headerRules = [
+  for (final e in catalog)
+    for (final h in e.headers.entries)
+      (
+        e,
+        h.key,
+        h.value.isEmpty ? null : RegExp(h.value, caseSensitive: false)
+      ),
+];
+
+final _beaconRules = [
+  for (final e in catalog)
+    for (final b in e.beacons) (e, RegExp(b)),
+];
+
+/// Whether [url] matches a `beacons` pattern of any catalogue entity.
+bool isBeaconUrl(String url) => _beaconRules.any((r) => r.$2.hasMatch(url));
+
 /// Entities for a URL: specific URL patterns (gtag.js?id=AW- is Ads, not
 /// Tag Manager) win over the host; same-site hosts only match patterns.
 /// A technology pattern (jquery.min.js) does not hide who serves the file,
@@ -173,11 +206,14 @@ List<Entity> _entitiesForUrl(String url, String host, String pageHost) {
   // is far cheaper than running every regex (big news pages have hundreds of
   // URLs, e.g. inside inline JSON).
   final byPattern = _compiled
-      .where((c) =>
-          c.$3 != null ? url.contains(c.$3!) && c.$2.hasMatch(url) : c.$2.hasMatch(url))
+      .where((c) => c.$3 != null
+          ? url.contains(c.$3!) && c.$2.hasMatch(url)
+          : c.$2.hasMatch(url))
       .firstOrNull
       ?.$1;
-  final byHost = _sameSite(host, pageHost) ? null : entityForHost(host);
+  final byHost = pageHost.isNotEmpty && sameSite(host, pageHost)
+      ? null
+      : entityForHost(host);
   return [
     if (byPattern != null) byPattern,
     if (byHost != null &&
@@ -192,7 +228,9 @@ List<Entity> _entitiesForUrl(String url, String host, String pageHost) {
 List<Entity> externalServicesForUrl(String url, String pageUrl) {
   final host = _hostOf(url);
   final pageHost = _hostOf(pageUrl);
-  if (host.isEmpty || _sameSite(host, pageHost)) return const [];
+  if (host.isEmpty || (pageHost.isNotEmpty && sameSite(host, pageHost))) {
+    return const [];
+  }
   final own = pageHost.isEmpty ? null : entityForHost(pageHost);
   return [
     for (final e in _entitiesForUrl(url, host, pageHost))
@@ -219,15 +257,25 @@ bool _usedInScript(String html, int start, String path) {
 }
 
 /// The service whose first-party cookie this is, from the catalogue.
-Entity? entityForCookie(String name) {
-  for (final (e, rule) in _cookieRules) {
-    if (rule.endsWith('*')
-        ? name.startsWith(rule.substring(0, rule.length - 1))
-        : name == rule) {
-      return e;
+Entity? entityForCookie(String name) => longestCookieRule(name, _cookieRules);
+
+/// The entity of the longest rule matching [name]; an exact rule beats a
+/// prefix rule (`_ga` beats `_ga*`).
+@visibleForTesting
+Entity? longestCookieRule(String name, List<(Entity, String)> rules) {
+  Entity? best;
+  var bestScore = -1;
+  for (final (e, rule) in rules) {
+    final prefix = rule.endsWith('*');
+    final literal = prefix ? rule.substring(0, rule.length - 1) : rule;
+    if (prefix ? !name.startsWith(literal) : name != rule) continue;
+    final score = literal.length * 2 + (prefix ? 0 : 1);
+    if (score > bestScore) {
+      best = e;
+      bestScore = score;
     }
   }
-  return null;
+  return best;
 }
 
 // ── Page source context ────────────────────────────────────────────────────
@@ -320,19 +368,17 @@ List<Detection> scanSource({
   final h = {
     for (final e in (headers ?? const {}).entries) e.key.toLowerCase(): e.value
   };
-  for (final e in catalog) {
-    e.headers.forEach((name, regex) {
-      final value = h[name];
-      if (value == null) return;
-      final m = RegExp(regex, caseSensitive: false).firstMatch(value);
-      if (regex.isNotEmpty && m == null) return;
-      final d = hit(e)
-        ..inSource = true
-        ..add(DetectionEvidence(
-            EvidenceKind.header, 'Response header ${_headerName(name)}',
-            detail: '${_headerName(name)}: $value'));
-      if (m != null && m.groupCount > 0) d.version ??= m[1];
-    });
+  for (final (e, name, regex) in _headerRules) {
+    final value = h[name];
+    if (value == null) continue;
+    final m = regex?.firstMatch(value);
+    if (regex != null && m == null) continue;
+    final d = hit(e)
+      ..inSource = true
+      ..add(DetectionEvidence(
+          EvidenceKind.header, 'Response header ${_headerName(name)}',
+          detail: '${_headerName(name)}: $value'));
+    if (m != null && m.groupCount > 0) d.version ??= m[1];
   }
   if (html.isEmpty) return found.values.toList();
 
@@ -511,7 +557,7 @@ List<Detection> detect({
     for (final e in requestEntitiesCache.putIfAbsent(
         url, () => _entitiesForUrl(url, host, pageHost))) {
       final index = !scanForEvidence || html.isEmpty ? -1 : html.indexOf(url);
-      final ping = e.beacons.any((b) => RegExp(b).hasMatch(url));
+      final ping = _beaconRules.any((r) => r.$1 == e && r.$2.hasMatch(url));
       final d = hit(e)
         ..requests += 1
         ..pings += ping ? 1 : 0
@@ -533,7 +579,9 @@ List<Detection> detect({
         .replaceFirst(RegExp(r'^\.'), '')
         .toLowerCase();
     var e = entityForCookie(name);
-    if (e == null && domain.isNotEmpty && !_sameSite(domain, pageHost)) {
+    if (e == null &&
+        domain.isNotEmpty &&
+        !(pageHost.isNotEmpty && sameSite(domain, pageHost))) {
       e = entityForHost(domain);
     }
     final category = _cookieCategories[cookie['category']];

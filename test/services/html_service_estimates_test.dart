@@ -153,7 +153,8 @@ void main() {
     expect(est['https://cdn.test/a.js'], isA<Failed<int>>());
     expect(est['https://cdn.test/b.js'], isA<Unavailable<int>>());
     final m = (service.pageSize as Present<PageSizeModel>).value;
-    expect(m.weight.estimatedTransfer, isNull);
+    // Only the server document (14 B) is estimated; the lookups failed.
+    expect(m.weight.estimatedTransfer, 14);
     expect(m.weight.missingCount, 2);
   });
 

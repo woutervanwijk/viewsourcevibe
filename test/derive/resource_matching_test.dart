@@ -72,4 +72,46 @@ void main() {
     expect(queryWithoutCacheBusters(Uri.parse('https://a/x?b=2&v=9&a=1')),
         'a=1&b=2');
   });
+
+  group('ResourceSizeIndex', () {
+    Map<String, dynamic> e(String name, int tx) => {
+          'name': name,
+          'transfer': tx,
+          'decoded': tx * 3,
+          'initiatorType': 'script'
+        };
+
+    test('the same filename on another host is not a match', () {
+      final i = ResourceSizeIndex([e('https://b.test/y/logo.png', 900)]);
+      expect(i.find('https://a.test/x/logo.png'), isNull);
+    });
+    test('the same filename in another directory is not a match for a script',
+        () {
+      final i = ResourceSizeIndex([e('https://a.test/b/index.js', 900)]);
+      expect(i.find('https://a.test/a/index.js'), isNull);
+    });
+    test('a size variant of an image is an estimate that names its source', () {
+      final i = ResourceSizeIndex([
+        {
+          ...e('https://img.test/w_400/photo-1.jpg', 700),
+          'initiatorType': 'img'
+        }
+      ]);
+      final s = i.find('https://img.test/w_1200/photo-1.jpg')!;
+      expect(s['transfer'], 700);
+      expect(s['estimated'], isTrue);
+      expect(s['variantOf'], 'https://img.test/w_400/photo-1.jpg');
+    });
+    test('exact and cache-buster matches are not estimates', () {
+      final i = ResourceSizeIndex([e('https://a.test/app.js?v=2', 500)]);
+      expect(i.find('https://a.test/app.js?v=1'),
+          {'transfer': 500, 'decoded': 1500});
+    });
+    test('data URIs are sized by their own bytes', () {
+      expect(
+          ResourceSizeIndex(const [])
+              .find('data:image/gif;base64,AAAA')!['transfer'],
+          26);
+    });
+  });
 }

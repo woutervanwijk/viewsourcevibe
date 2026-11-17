@@ -248,6 +248,9 @@ bool get _isDesktopPlatform {
 }
 
 void main() async {
+  // Release builds log nothing.
+  if (kReleaseMode) debugPrint = (String? message, {int? wrapWidth}) {};
+
   // Initialize Flutter binding before any async operations
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -262,6 +265,17 @@ void main() async {
       'contributors, https://github.com/jkwakman/Open-Cookie-Database. '
       'Changes: converted to Dart source, categories mapped to this '
       "app's categories, entries added and overridden.\n\n$text",
+    );
+  });
+
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle
+        .loadString('assets/licenses/public-suffix-list-LICENSE.txt');
+    yield LicenseEntryWithLineBreaks(
+      ['Public Suffix List'],
+      'The same-site rules (lib/utils/public_suffix.g.dart) are derived from '
+      'the Public Suffix List, https://publicsuffix.org/. Changes: converted '
+      'to Dart source.\n\n$text',
     );
   });
 

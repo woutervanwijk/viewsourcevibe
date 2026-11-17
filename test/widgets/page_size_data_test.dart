@@ -74,14 +74,15 @@ void main() {
       // Download size first, decoded next to it.
       expect(m.rows.first.size, 4096);
       expect(m.rows.first.sizeLabel, '4 KB');
-      expect(m.lighthouseNote, 'Verdict (this load): good (≤ 2,667 KB)');
+      expect(m.lighthouseNote, 'Verdict (this load): good (≤ 2,667 KB); includes estimates');
       expect(m.missingNote, isNull);
     });
 
     test('iOS: unknown sizes are counted and explained, never 0', () {
       final m = (derivePageSize(iosPartial()) as Present<PageSizeModel>).value;
       expect(m.weight.transferLowerBound, isTrue);
-      expect(m.weight.transferPrefix, '≥ ');
+      // The server document is only estimated: no browser size for it.
+      expect(m.weight.transferPrefix, '≥ ≈ ');
       expect(m.rowsWithoutSize, 1);
       expect(m.missingNote, contains('1 resource without size'));
       expect(m.missingNote, contains('cross-origin'));
@@ -99,7 +100,7 @@ void main() {
       expect(own.size, 2048);
       // A lower bound under the threshold only says "at least".
       expect(m.lighthouseNote,
-          'Verdict (this load): good (≤ 2,667 KB); the real total may be higher');
+          'Verdict (this load): good (≤ 2,667 KB); the real total may be higher, includes estimates');
     });
 
     test('sizeless rows sort last', () {
@@ -269,7 +270,7 @@ void main() {
 
     testWidgets('(b) iOS: lower bound, explained, no 0 KB', (tester) async {
       await show(tester, iosPartial());
-      expect(find.text('≥ 7 KB'), findsOneWidget);
+      expect(find.text('≥ ≈ 7 KB'), findsOneWidget);
       expect(find.text('≥ 2 KB'), findsOneWidget);
       expect(find.textContaining('1 resource without size'), findsOneWidget);
       expect(find.textContaining('size unknown'), findsWidgets);

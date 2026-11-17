@@ -27,6 +27,81 @@ BrowserSnapshot parse(String name, BrowserPlatform p, String page) =>
     parseBrowserPayload(fixture(name), p, pageUrl: Uri.parse(page));
 
 void main() {
+  BrowserSnapshot navPayload(Map<String, Object?> sizes) => parseBrowserPayload(
+      jsonEncode({
+        'v': 1,
+        'url': 'https://a.test/',
+        'contentType': 'text/html',
+        'navigation': {
+          'ok': true,
+          'responseStart': 10,
+          'domInteractive': 20,
+          'domContentLoaded': 30,
+          'loadEnd': 40,
+          'protocol': 'h2',
+          'status': 200,
+          ...sizes,
+        },
+      }),
+      BrowserPlatform.macos,
+      pageUrl: Uri.parse('https://a.test/'));
+
+  test('navigation entry gives the document sizes', () {
+    final nav =
+        present(navPayload({'tx': 5300, 'enc': 5000, 'dec': 20000}).navigation);
+    expect(present(nav.documentTransfer), 5300);
+    expect(present(nav.documentDecoded), 20000);
+  });
+
+  test('a cached document counts its encoded size, marked derived', () {
+    final nav =
+        present(navPayload({'tx': 0, 'enc': 5000, 'dec': 20000}).navigation);
+    final t = nav.documentTransfer as Present<int>;
+    expect(t.value, 5000);
+    expect(t.provenance, Provenance.derived);
+  });
+
+  test('all-zero or absent sizes are Unavailable, never 0', () {
+    for (final sizes in [
+      {'tx': 0, 'enc': 0, 'dec': 0},
+      <String, Object?>{},
+    ]) {
+      final nav = present(navPayload(sizes).navigation);
+      expect(nav.documentTransfer, isA<Unavailable<int>>());
+      expect(nav.documentDecoded, isA<Unavailable<int>>());
+    }
+  });
+
+  test('macos_basic.json (no navigation sizes) still parses', () {
+    final s = parse('macos_basic.json', BrowserPlatform.macos,
+        'https://example.com/index.html');
+    final nav = present(s.navigation);
+    expect(nav.documentTransfer, isA<Unavailable<int>>());
+  });
+
+  test('a malformed resource name never fails the resources section', () {
+    final s = parseBrowserPayload(
+        jsonEncode({
+          'v': 1,
+          'url': 'https://a.test/',
+          'contentType': 'text/html',
+          'resources': {
+            'ok': true,
+            'bootstrap': true,
+            'observer': [
+              {'n': 'http://[bad', 'it': 'script', 'tx': 10, 'enc': 9, 'dec': 20},
+              {'n': 'https://a.test/ok.js', 'it': 'script', 'tx': 5, 'enc': 4, 'dec': 8},
+              {'n': 'http://[bad2', 'it': 'script', 'tx': 0, 'enc': 0, 'dec': 0},
+            ],
+            'patch': [],
+            'shown': [],
+          },
+        }),
+        BrowserPlatform.macos,
+        pageUrl: Uri.parse('https://a.test/'));
+    expect(present(byUrl(s, 'https://a.test/ok.js').transfer), 5);
+  });
+
   test('every fixture is marked synthetic with a note', () {
     final dir = Directory('test/fixtures/browser');
     final files = dir.listSync().whereType<File>().toList();
@@ -333,6 +408,32 @@ void main() {
     final x = byUrl(s, 'https://example.com/other.json');
     expect(x.source, ResourceSource.patch);
     expect(x.type, 'xhr');
+  });
+
+  test('new storage shape: bytes and top items come from the page', () {
+    final s = parseBrowserPayload(
+        jsonEncode({
+          'v': 1,
+          'url': 'https://a.test/',
+          'contentType': 'text/html',
+          'storage': {
+            'local': {
+              'ok': true,
+              'count': 600,
+              'bytes': 9000,
+              'items': [
+                {'k': 'x', 'b': 800}
+              ],
+            },
+            'session': {'ok': false, 'error': 'x'},
+          },
+        }),
+        BrowserPlatform.macos,
+        pageUrl: Uri.parse('https://a.test/'));
+    final area = present(present(s.storage).local);
+    expect(area.count, 600);
+    expect(present(area.bytes), 9000);
+    expect(area.topItems.single, const StorageItem('x', 800));
   });
 
   test('storage SecurityError fails only that area', () {

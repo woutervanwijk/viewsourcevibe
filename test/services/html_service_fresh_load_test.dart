@@ -93,8 +93,9 @@ void main() {
     expect(m.policy, NetworkQuietPolicy.fresh);
     final page = (service.pageSize as Present<PageSizeModel>).value;
     final fresh = (page.fresh as Present<PageSizeModel>).value;
-    // 1000 + 9000 measured + 40000 own lookup (+ the server document).
-    expect(fresh.weight.estimatedTransfer, 40000);
+    // 1000 + 9000 measured + 40000 own lookup; the server document (14 B)
+    // is an estimate too.
+    expect(fresh.weight.estimatedTransfer, 40014);
     expect(fresh.weight.measuredTransfer, greaterThanOrEqualTo(10000));
     expect(page.lighthouseNote, startsWith('Verdict (fresh load)'));
     // The live load is untouched.

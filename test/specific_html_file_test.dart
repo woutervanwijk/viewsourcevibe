@@ -1,12 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/utils/descriptive_filename.dart';
 
 void main() {
   group('Specific HTML file detection test', () {
-    
     test('Complex HTML file with CSS should be detected as HTML', () async {
-      final htmlService = HtmlService();
-      
       // The specific HTML file that was being misdetected
       const complexHtml = '''<!DOCTYPE html>
 <html lang='nl'>
@@ -248,27 +245,24 @@ void main() {
 </div>
 </body>
 </html>''';
-      
+
       print('🔍 Testing complex HTML file with extensive CSS:');
-      
-      final result = htmlService.generateDescriptiveFilename(
-          Uri.parse('https://example.com/privacy.html'),
-          complexHtml
-      );
-      
+
+      final result = generateDescriptiveFilename(
+          Uri.parse('https://example.com/privacy.html'), complexHtml);
+
       print('  Result: $result');
-      
+
       // This should be detected as HTML, not CSS
       // With the new filename generation, it should have a proper .html extension
       expect(result, endsWith('.html'));
       expect(result, isNot(contains('CSS')));
-      
+
       print('  ✅ Complex HTML file correctly detected as HTML');
     });
-    
-    test('HTML detection should prioritize HTML tags over CSS content', () async {
-      final htmlService = HtmlService();
-      
+
+    test('HTML detection should prioritize HTML tags over CSS content',
+        () async {
       // Test that HTML tags take priority even with lots of CSS
       const htmlWithLotsOfCss = '''<!DOCTYPE html>
 <html>
@@ -285,21 +279,19 @@ void main() {
     <div class="container">Content</div>
 </body>
 </html>''';
-      
+
       print('🔍 Testing HTML with extensive CSS content:');
-      
-      final result = htmlService.generateDescriptiveFilename(
-          Uri.parse('https://example.com/test.html'),
-          htmlWithLotsOfCss
-      );
-      
+
+      final result = generateDescriptiveFilename(
+          Uri.parse('https://example.com/test.html'), htmlWithLotsOfCss);
+
       print('  Result: $result');
-      
+
       // Should still be detected as HTML
       // With the new filename generation, it should preserve the .html extension
       expect(result, endsWith('.html'));
       expect(result, isNot(contains('CSS')));
-      
+
       print('  ✅ HTML tags take priority over CSS content');
     });
   });

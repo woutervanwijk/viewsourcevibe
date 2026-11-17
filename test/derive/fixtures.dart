@@ -63,6 +63,7 @@ BrowserSnapshot browserSnap({
   String contentType = 'text/html',
   bool truncated = false,
   int? mainStatus,
+  NavigationTiming? navigation,
 }) =>
     BrowserSnapshot(
       url: Uri.parse(url),
@@ -80,8 +81,9 @@ BrowserSnapshot browserSnap({
           : b(cookies),
       storage:
           const Unavailable<BrowserStorage>(UnavailableReason.notApplicable),
-      navigation:
-          const Unavailable<NavigationTiming>(UnavailableReason.notApplicable),
+      navigation: navigation == null
+          ? const Unavailable<NavigationTiming>(UnavailableReason.notApplicable)
+          : b(navigation),
       snapshotTimeMs: b(1000.0),
       mainStatus: mainStatus == null
           ? BrowserSnapshot.mainStatusNotReported

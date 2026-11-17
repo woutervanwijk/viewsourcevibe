@@ -113,7 +113,7 @@ void main() {
       expect(own['transfer']['value'], 2048);
       final weight = json(a, 'analysis/page-weight.json');
       expect(weight['value']['transferLowerBound'], isTrue);
-      expect(weight['value']['transferEstimated'], isFalse);
+      expect(weight['value']['transferEstimated'], isTrue);
       expect(weight['value']['decodedLowerBound'], isTrue);
       expect(weight['value'].containsKey('isPartial'), isFalse);
     });

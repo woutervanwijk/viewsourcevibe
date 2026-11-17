@@ -17,7 +17,9 @@ const _typeFilters = <(String?, String)>[
   (null, 'All'),
   ('script', 'External JS'),
   ('style', 'CSS Files'),
-  ('image', 'Images/Media'),
+  ('image', 'Images'),
+  ('media', 'Video & audio'),
+  ('font', 'Fonts'),
   ('document', 'HTML/Content'),
   ('other', 'Misc. Resources'),
 ];
@@ -482,7 +484,7 @@ class _PageSizeViewState extends State<PageSizeView>
               context,
               '${active.declaredNote!}.',
             ),
-          if (weight.documentSource != null)
+          if (weight.documentSource == DataSource.server)
             _note(context,
                 'The page document is counted from the server response.',
                 italic: false),
@@ -490,7 +492,9 @@ class _PageSizeViewState extends State<PageSizeView>
           for (final (key, label) in const [
             ('scripts', 'External JS'),
             ('css', 'CSS Files'),
-            ('images', 'Images/Media'),
+            ('images', 'Images'),
+            ('media', 'Video & audio'),
+            ('fonts', 'Fonts'),
             ('html', 'HTML/Content'),
             ('other', 'Misc. Resources'),
             ('thirdPartyFrames', 'Third-party iframes (ads, embeds)'),
@@ -723,6 +727,8 @@ class _PageSizeViewState extends State<PageSizeView>
         'script' => Icons.javascript,
         'style' => Icons.style_outlined,
         'image' => Icons.image_outlined,
+        'media' => Icons.movie_outlined,
+        'font' => Icons.font_download_outlined,
         'document' => Icons.description_outlined,
         _ => Icons.insert_drive_file_outlined,
       };

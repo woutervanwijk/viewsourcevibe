@@ -1,0 +1,10 @@
+Public Suffix List (PSL)
+source:  https://publicsuffix.org/list/public_suffix_list.dat
+file:    public_suffix_list.dat
+date:    2026-11-16
+VERSION: 2026-11-15_20-28-43_UTC
+COMMIT:  fd22c6c8b3fd7e854c1eff2194cfd4ebc9854b88
+license: MPL-2.0
+The list is vendored unmodified. Regenerate lib/utils/public_suffix.g.dart with:
+  dart run tool/gen_public_suffix.dart
+To update: replace the .dat with a newer download, update this file, regenerate.

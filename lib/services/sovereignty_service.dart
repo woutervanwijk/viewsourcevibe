@@ -9,6 +9,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
+import 'package:view_source_vibe/utils/site.dart' as site;
 import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/page_weight.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart'
@@ -408,6 +409,9 @@ class HostInfo {
   String? asnCountry; // where the network operator is registered
   HostingProvider? provider; // known company, with its parent's HQ
 
+  /// On an anycast CDN: the GeoLite country is not where the visitor is served.
+  bool anycast = false;
+
   HostInfo(this.host);
 
   /// Whose law applies: the known company's HQ, else the country where the
@@ -434,6 +438,7 @@ class HostInfo {
         'ipCountry': ipCountry,
         'asnCountry': asnCountry,
         'region': regionOf(ipCountry),
+        'anycast': anycast,
         'provider': provider?.name,
         'providerCountry': provider?.country,
         'controlCountry': controlCountry,
@@ -819,7 +824,13 @@ class SovereigntyService {
   }) {
     const p = Pillar.residency;
     final main = hosts.isEmpty ? null : hosts.first;
-    final located = hosts.where((h) => h.ipCountry != null).toList();
+    final located =
+        hosts.where((h) => h.ipCountry != null && !h.anycast).toList();
+    final anycastCount = hosts.where((h) => h.anycast).length;
+    final anycastNote = anycastCount > 0
+        ? '; $anycastCount host(s) on an anycast CDN '
+            '(location depends on the visitor)'
+        : '';
     final total = located.fold<int>(0, (a, h) => a + h.requests);
     int requestsWhere(Relation r) => located
         .where((h) => relationTo(h.ipCountry, home) == r)
@@ -873,11 +884,11 @@ class SovereigntyService {
                     ? CheckStatus.warn
                     : CheckStatus.fail,
         total == 0
-            ? 'No server locations known$truncated'
+            ? 'No server locations known$truncated$anycastNote'
             : '${(own * 100).round()}% in $homeLabel'
                 '${adequate > 0 ? ', ${(adequate * 100).round()}% in adequate countries' : ''}'
                 ' (of $total located requests; ${(locatedShare * 100).round()}% of all requests located)'
-                '$truncated',
+                '$truncated$anycastNote',
         weight: 2,
       ),
       SovereigntyCheck(
@@ -1421,23 +1432,44 @@ class SovereigntyService {
     }
     // The network operator (ASN holder) outranks the hostname.
     info.provider = matchProvider([info.asnHolder, info.host]);
+    info.anycast = info.provider?.edge == true;
   }
 
   static Future<Map<String, dynamic>?> _getJson(String url) =>
       _ripeGate.run(() => _fetchJson(url));
 
-  static Future<Map<String, dynamic>?> _fetchJson(String url) async {
-    final client = HttpClient()..connectionTimeout = _timeout;
+  // One client for all RIPEstat calls so connections are reused.
+  static HttpClient? _ripeClient;
+  static HttpClient get _ripeHttp => _ripeClient ??= HttpClient()
+    ..connectionTimeout = _timeout
+    ..idleTimeout = const Duration(seconds: 15);
+
+  /// RIPEstat asks regular API users to identify themselves with `sourceapp`.
+  @visibleForTesting
+  static String ripeUrl(String call, String resource) =>
+      'https://stat.ripe.net/data/$call/data.json'
+      '?resource=$resource&sourceapp=viewsourcevibe';
+
+  static Future<Map<String, dynamic>?> _fetchJson(String url) =>
+      fetchJsonWith(_ripeHttp, url);
+
+  /// GET [url] as JSON on [client]. Every response is drained or the request
+  /// aborted, so a pooled connection is never left busy.
+  @visibleForTesting
+  static Future<Map<String, dynamic>?> fetchJsonWith(
+      HttpClient client, String url) async {
+    HttpClientRequest? req;
     try {
-      final req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
+      req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
       final res = await req.close().timeout(_timeout);
-      if (res.statusCode != 200) return null;
       final body = await res.transform(utf8.decoder).join().timeout(_timeout);
+      if (res.statusCode != 200) return null;
       return jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
+      try {
+        req?.abort();
+      } catch (_) {}
       return null;
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -1445,7 +1477,7 @@ class SovereigntyService {
     final cached = _asnCache[ip];
     if (cached != null) return cached;
     final json = await _getJson(
-      'https://stat.ripe.net/data/prefix-overview/data.json?resource=$ip',
+      ripeUrl('prefix-overview', ip),
     );
     final asns = (json?['data']?['asns'] as List?) ?? const [];
     final first = asns.isEmpty ? null : asns.first as Map;
@@ -1463,7 +1495,7 @@ class SovereigntyService {
   static Future<String?> _asnCountryFor(int asn) async {
     if (_asnCountryCache.containsKey(asn)) return _asnCountryCache[asn];
     final json = await _getJson(
-      'https://stat.ripe.net/data/rir-stats-country/data.json?resource=AS$asn',
+      ripeUrl('rir-stats-country', 'AS$asn'),
     );
     final located = (json?['data']?['located_resources'] as List?) ?? const [];
     final country =
@@ -1475,7 +1507,7 @@ class SovereigntyService {
   static Future<String?> _countryFor(String ip) async {
     if (_countryCache.containsKey(ip)) return _countryCache[ip];
     final json = await _getJson(
-      'https://stat.ripe.net/data/maxmind-geo-lite/data.json?resource=$ip',
+      ripeUrl('maxmind-geo-lite', ip),
     );
     final located = (json?['data']?['located_resources'] as List?) ?? const [];
     String? country;
@@ -1488,52 +1520,8 @@ class SovereigntyService {
     return country;
   }
 
-  /// Multi-label public suffixes that are common enough to matter here. This
-  /// is a PSL-lite, NOT the full Public Suffix List: an unlisted suffix is
-  /// treated as a single label (so `x.example.co.id` gives `co.id`).
-  static const _publicSuffixes = {
-    'co.uk', 'ac.uk', 'gov.uk', 'org.uk',
-    'com.au', 'net.au', 'org.au',
-    'co.nz',
-    'co.jp', 'ne.jp', 'or.jp',
-    'com.br', 'com.cn', 'com.tr', 'co.za',
-    // Hosting platforms where every customer gets a subdomain.
-    'github.io', 'gitlab.io', 'netlify.app', 'vercel.app', 'pages.dev',
-    'herokuapp.com', 'azurewebsites.net', 'cloudfront.net', 'blogspot.com',
-    'appspot.com', 'web.app', 'firebaseapp.com',
-    'amazonaws.com', 's3.amazonaws.com', 'elasticbeanstalk.com',
-  };
-
-  /// Registrable domain: the public suffix (from [_publicSuffixes], else the
-  /// generic `{co,com,org,gov,…}.<ccTLD>` pattern, else the last
-  /// label) plus one label. `foo.github.io` stays `foo.github.io`; an IP
-  /// address is returned unchanged; the result is lowercase.
-  static String registrableDomain(String host) {
-    final h = host.toLowerCase();
-    if (h.contains(':') || RegExp(r'^\d+(\.\d+){3}$').hasMatch(h)) return h;
-    final parts = h.split('.');
-    if (parts.length <= 2) return h;
-    const genericSld = {
-      'co', 'com', 'org', 'net', 'gov', 'ac', 'edu', 'go', 'or', 'ne', 'gob', //
-      'gouv', 'asso', 'nhs', 'me', 'ltd', 'plc', 'sch', 'mil', 'nic', 'gv',
-      'gen',
-    };
-    // Longest listed suffix wins (s3.amazonaws.com before amazonaws.com).
-    var take = 2;
-    for (var n = 3; n >= 2; n--) {
-      if (parts.length > n &&
-          _publicSuffixes.contains(parts.sublist(parts.length - n).join('.'))) {
-        take = n + 1;
-        break;
-      }
-    }
-    if (take == 2 &&
-        genericSld.contains(parts[parts.length - 2]) &&
-        parts.last.length == 2) {
-      take = 3;
-    }
-    return parts.sublist(parts.length - take).join('.');
-  }
+  /// Registrable domain from the Public Suffix List (see `utils/site.dart`).
+  static String registrableDomain(String host) => site.registrableDomain(host);
 
   // DoH resolvers that speak HTTP/1.1 (dart:io has no HTTP/2; Quad9 needs it).
   // European first, US fallback only when it is unreachable.

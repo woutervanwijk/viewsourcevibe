@@ -178,7 +178,7 @@ void main() {
       expect(imgLabel(s), '3 KB');
     });
 
-    test('a srcset variant the browser measured sizes the DOM src (no ≈)',
+    test('a srcset variant the browser measured sizes the DOM src as an estimate',
         () async {
       fetcher = FakeServerFetcher();
       store = InspectionStore();
@@ -206,9 +206,9 @@ void main() {
       await s.syncWebViewState(url);
       await pumpEventQueue();
 
-      // Same host + same last path segment = the same image: the measured
-      // size shows, not an estimate.
-      expect(imgLabel(s), '2,400 KB');
+      // Same host + same last path segment = probably the same image: the
+      // measured variant's size shows, marked as an estimate.
+      expect(imgLabel(s), '≈ 2,400 KB');
     });
 
     test('an own size lookup updates both tabs, marked as an estimate',

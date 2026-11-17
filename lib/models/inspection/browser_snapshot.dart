@@ -198,12 +198,20 @@ class NavigationTiming {
   final Observed<double> domContentLoaded;
   final Observed<double> loadEvent;
   final Observed<String> protocol;
+
+  /// Size of the HTML document as the browser downloaded / decoded it.
+  final Observed<int> documentTransfer;
+  final Observed<int> documentDecoded;
   const NavigationTiming({
     required this.timeToFirstByte,
     required this.domInteractive,
     required this.domContentLoaded,
     required this.loadEvent,
     required this.protocol,
+    this.documentTransfer =
+        const Unavailable(UnavailableReason.notReportedByPlatform),
+    this.documentDecoded =
+        const Unavailable(UnavailableReason.notReportedByPlatform),
   });
 
   @override
@@ -213,11 +221,13 @@ class NavigationTiming {
       sameObserved(other.domInteractive, domInteractive) &&
       sameObserved(other.domContentLoaded, domContentLoaded) &&
       sameObserved(other.loadEvent, loadEvent) &&
-      sameObserved(other.protocol, protocol);
+      sameObserved(other.protocol, protocol) &&
+      sameObserved(other.documentTransfer, documentTransfer) &&
+      sameObserved(other.documentDecoded, documentDecoded);
 
   @override
-  int get hashCode => Object.hash(
-      timeToFirstByte, domInteractive, domContentLoaded, loadEvent, protocol);
+  int get hashCode => Object.hash(timeToFirstByte, domInteractive,
+      domContentLoaded, loadEvent, protocol, documentTransfer, documentDecoded);
 }
 
 /// Everything the WebView told us about the current page, one section each.

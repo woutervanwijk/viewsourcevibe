@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
@@ -116,6 +118,60 @@ void main() {
       expect(report.regionShare(byControl: false)['EU/EEA'], 0.75);
       expect(report.regionShare(byControl: false)['North America'], 0.25);
       expect(report.relationShare()[Relation.foreign], 0.25);
+    });
+  });
+
+  group('RIPEstat and anycast', () {
+    test('RIPEstat URLs name the app', () {
+      expect(
+          SovereigntyService.ripeUrl('prefix-overview', '1.2.3.4'),
+          'https://stat.ripe.net/data/prefix-overview/data.json'
+          '?resource=1.2.3.4&sourceapp=viewsourcevibe');
+    });
+
+    test('a non-200 response is drained so the shared client stays usable',
+        () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      var calls = 0;
+      server.listen((req) async {
+        calls++;
+        if (calls == 1) {
+          req.response.statusCode = 429;
+          req.response.write('slow down' * 1000);
+        } else {
+          req.response.write(jsonEncode({'ok': true}));
+        }
+        await req.response.close();
+      });
+      final client = HttpClient()..maxConnectionsPerHost = 1;
+      addTearDown(() async {
+        client.close(force: true);
+        await server.close(force: true);
+      });
+      final url = 'http://127.0.0.1:${server.port}/x';
+      expect(await SovereigntyService.fetchJsonWith(client, url), isNull);
+      expect(await SovereigntyService.fetchJsonWith(client, url), {'ok': true});
+    });
+
+    test('anycast hosts do not count as located', () {
+      final checks = SovereigntyService.residencyChecks([
+        HostInfo('a.nl')
+          ..requests = 3
+          ..ipCountry = 'NL',
+        HostInfo('cdn.example')
+          ..requests = 5
+          ..ipCountry = 'US'
+          ..anycast = true,
+      ], null, eu);
+      final c = checks.firstWhere(
+          (c) => c.title == 'Requests served from the site\'s jurisdiction');
+      expect(c.evidence, contains('100% in'));
+      expect(c.evidence, contains('of 3 located requests'));
+      expect(
+          c.evidence,
+          contains(
+              '1 host(s) on an anycast CDN (location depends on the visitor)'));
+      expect(HostInfo('x').toJson()['anycast'], false);
     });
   });
 

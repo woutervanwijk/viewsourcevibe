@@ -46,22 +46,22 @@ class CertificateSecurityService {
       builder: (dialogContext) {
         final subject = cert != null ? _certificateSubject(cert) : '';
         return AlertDialog(
-          title: const Text('Onveilig certificaat'),
+          title: const Text('Untrusted certificate'),
           content: Text(
-            'De server "$host" presenteerde een certificaat dat niet wordt '
-            'vertrouwd door dit apparaat.\n\n'
+            'The server "$host" presented a certificate this device does not '
+            'trust.\n\n'
             '${subject.isNotEmpty ? '$subject\n\n' : ''}'
-            'Wil je dit onveilige certificaat accepteren voor "$host" '
-            'gedurende de rest van deze sessie?',
+            'Accept this certificate for "$host" for the rest of this '
+            'session?',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Annuleren'),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Accepteren (alleen deze sessie)'),
+              child: const Text('Accept (this session only)'),
             ),
           ],
         );
@@ -106,7 +106,7 @@ class CertificateSecurityService {
 
   static String _certificateSubject(X509Certificate cert) {
     try {
-      return 'Certificaat: ${cert.subject}';
+      return 'Certificate: ${cert.subject}';
     } catch (_) {
       return '';
     }

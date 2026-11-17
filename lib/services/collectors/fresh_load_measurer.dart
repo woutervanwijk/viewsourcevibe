@@ -3,11 +3,13 @@ import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/widgets.dart' show Size;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../derive/network_quiet.dart';
-import 'vsv_collect_js.dart';
+import 'collector_world.dart';
+import 'frame_relay.dart';
 
 /// Loads a page once more, apart from the live browser, the way Lighthouse
 /// does: empty cache, phone-sized screen, waiting until the network is
@@ -86,12 +88,13 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
         userAgent: Platform.isMacOS ? _phoneUserAgent : null,
       ),
       initialUserScripts: UnmodifiableListView<UserScript>([
-        UserScript(
-          source: '$vsvResourceBootstrapJs\n$vsvCollectJs\n$vsvScrollThroughJs',
-          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
-          forMainFrameOnly: false,
-        ),
+        collectorUserScript(defaultTargetPlatform),
       ]),
+      onWebViewCreated: (controller) {
+        controller.addJavaScriptHandler(
+            handlerName: 'vsvFrame',
+            callback: (args) => relayFrameReport(controller, args));
+      },
       onLoadStop: (_, __) {
         if (!loaded.isCompleted) loaded.complete();
       },
@@ -105,16 +108,18 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
     try {
       await loaded.future.timeout(policy.max);
       final controller = view.webViewController!;
+      final world = collectorWorld(defaultTargetPlatform);
 
       /// Waits until the resource signature is quiet (or [budget] is spent).
       Future<void> waitQuiet(Duration budget) async {
-        var signature =
-            await controller.evaluateJavascript(source: _signatureJs);
+        var signature = await controller.evaluateJavascript(
+            source: _signatureJs, contentWorld: world);
         var lastChange = clock.elapsed;
         while (clock.elapsed < budget &&
             clock.elapsed - lastChange < policy.quiet) {
           await Future<void>.delayed(policy.interval);
-          final s = await controller.evaluateJavascript(source: _signatureJs);
+          final s = await controller.evaluateJavascript(
+              source: _signatureJs, contentWorld: world);
           if (s != signature) {
             signature = s;
             lastChange = clock.elapsed;
@@ -130,12 +135,13 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
       try {
         await controller.evaluateJavascript(
             source:
-                'window.__vsv_scrollThrough && window.__vsv_scrollThrough(false)');
+                'window.__vsv_scrollThrough && window.__vsv_scrollThrough(false)',
+            contentWorld: world);
       } catch (_) {}
       await waitQuiet(clock.elapsed + _scrollSettleBudget);
 
       final payload = await controller.evaluateJavascript(
-          source: 'window.__vsv_collect()');
+          source: 'window.__vsv_collect()', contentWorld: world);
       Uint8List? shot;
       try {
         shot = await controller.takeScreenshot(

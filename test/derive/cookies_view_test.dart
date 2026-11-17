@@ -186,6 +186,14 @@ void main() {
       expect(lookalike.thirdPartyish, isTrue);
     });
 
+    test('a public suffix is not the own site', () {
+      final r = one('m=1; Domain=github.io; Secure; SameSite=Lax',
+              url: 'https://a.github.io/')
+          .rows
+          .single;
+      expect(r.thirdPartyish, isTrue);
+    });
+
     test('missing SameSite is not weak, SameSite=None is (K3)', () {
       final none = one('a=1; Secure; HttpOnly');
       expect(none.rows.single.weakSameSite, isFalse);

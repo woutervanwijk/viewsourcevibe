@@ -102,7 +102,7 @@ BrowserSnapshot parseBrowserPayload(Object? raw, BrowserPlatform platform,
     resourcesDropped: dropped,
     cookies: _section(p['cookies'], _parseJsCookies),
     storage: _parseStorage(p['storage']),
-    navigation: _section(p['navigation'], (m) => _parseNavigation(m)),
+    navigation: _section(p['navigation'], (m) => _parseNavigation(m, _isWebPage(effectiveUrl))),
     mainStatus: parseMainStatus(p['navigation']),
     snapshotTimeMs: _section(p['timing'], (m) {
       final n = m['now'];
@@ -292,23 +292,23 @@ const _shownImageDetail = 'shown on the page, but the browser reported no '
 
 const _droppedDetail = 'not collected: the collector buffer was full';
 
-ResourceEntry _observerEntry(
-    Map e, String url, BrowserPlatform platform, Uri pageUrl) {
-  // null = the browser did not report the field (never coerced to 0).
-  int? n(Object? v) => v is num ? v.toInt() : null;
-  final tx = n(e['tx']), enc = n(e['enc']), dec = n(e['dec']);
-  final type = '${e['it'] ?? ''}';
+/// Size rules shared by resource entries and the document's navigation
+/// entry. `null` = the browser did not report the field.
+({Observed<int> transfer, Observed<int> decoded, bool fromCache}) _sizesFrom(
+    int? tx, int? enc, int? dec,
+    {required bool webPage,
+    required bool Function() sameOrigin,
+    required bool webKitImage}) {
   const missing = Unavailable<int>(UnavailableReason.notReportedByPlatform,
       'field not reported by this browser');
-
   Observed<int> transfer;
   Observed<int> decoded;
   var fromCache = false;
   final allZero = tx == 0 && enc == 0 && dec == 0;
-  if (!_isWebPage(pageUrl)) {
+  if (!webPage) {
     transfer = _noOwnSizes;
     decoded = _noOwnSizes;
-  } else if (allZero && !_sameOrigin(Uri.parse(url), pageUrl)) {
+  } else if (allZero && !sameOrigin()) {
     transfer = const Unavailable(
         UnavailableReason.blockedByPlatform, _crossOriginZero);
     decoded = const Unavailable(
@@ -335,13 +335,28 @@ ResourceEntry _observerEntry(
     }
     if (dec == null) {
       decoded = missing;
-    } else if (platform.isWebKit && _isImage(type, url)) {
+    } else if (webKitImage) {
       decoded = const Unavailable(UnavailableReason.notReportedByPlatform,
           'WebKit reports decoded image pixel buffer');
     } else {
       decoded = _measured(dec);
     }
   }
+  return (transfer: transfer, decoded: decoded, fromCache: fromCache);
+}
+
+ResourceEntry _observerEntry(
+    Map e, String url, BrowserPlatform platform, Uri pageUrl) {
+  // null = the browser did not report the field (never coerced to 0).
+  int? n(Object? v) => v is num ? v.toInt() : null;
+  final tx = n(e['tx']), enc = n(e['enc']), dec = n(e['dec']);
+  final type = '${e['it'] ?? ''}';
+  final sizes = _sizesFrom(tx, enc, dec,
+      webPage: _isWebPage(pageUrl),
+      sameOrigin: () => _sameOrigin(Uri.parse(url), pageUrl),
+      webKitImage: platform.isWebKit && _isImage(type, url));
+  final transfer = sizes.transfer, decoded = sizes.decoded;
+  final fromCache = sizes.fromCache;
   return ResourceEntry(
     url: url,
     type: type,
@@ -441,7 +456,7 @@ Observed<int> parseMainStatus(Object? navigation) {
       na, 'this browser does not expose the HTTP status to the page');
 }
 
-NavigationTiming _parseNavigation(Map<String, dynamic> m) {
+NavigationTiming _parseNavigation(Map<String, dynamic> m, bool webPage) {
   Observed<double> t(Object? v) {
     if (v is! num) {
       return const Unavailable(UnavailableReason.notReportedByPlatform);
@@ -449,6 +464,10 @@ NavigationTiming _parseNavigation(Map<String, dynamic> m) {
     // 0 means the milestone has not happened yet (or is not reported).
     return v > 0 ? _measured(v.toDouble()) : const Pending();
   }
+
+  int? n(Object? v) => v is num ? v.toInt() : null;
+  final sizes = _sizesFrom(n(m['tx']), n(m['enc']), n(m['dec']),
+      webPage: webPage, sameOrigin: () => true, webKitImage: false);
 
   final proto = m['protocol'];
   return NavigationTiming(
@@ -459,6 +478,8 @@ NavigationTiming _parseNavigation(Map<String, dynamic> m) {
     protocol: proto is String && proto.isNotEmpty
         ? _measured(proto)
         : const Unavailable(UnavailableReason.notReportedByPlatform),
+    documentTransfer: sizes.transfer,
+    documentDecoded: sizes.decoded,
   );
 }
 
@@ -496,19 +517,23 @@ Observed<StorageArea> _parseArea(Object? a) {
     final items = <StorageItem>[];
     var bytes = 0;
     for (final i in (a['items'] as List? ?? const [])) {
-      final k = '${i['k']}', v = '${i['v'] ?? ''}';
-      final b = utf8.encode(k).length + utf8.encode(v).length;
+      final k = '${i['k']}';
+      // New shape: the page sends sizes (`b`). Old fixtures send values (`v`).
+      final b = i['b'] is num
+          ? (i['b'] as num).toInt()
+          : utf8.encode(k).length + utf8.encode('${i['v'] ?? ''}').length;
       bytes += b;
       items.add(StorageItem(k, b));
     }
     items.sort((x, y) => y.bytes.compareTo(x.bytes));
-    final truncated = a['truncated'] == true;
+    final pageBytes = a['bytes'];
+    final truncated = pageBytes is! num && a['truncated'] == true;
     return _measured(StorageArea(
       count: (a['count'] as num?)?.toInt() ?? items.length,
       bytes: truncated
           ? const Unavailable(UnavailableReason.exceedsLimit,
               'only the first items were sent; total size not known')
-          : _measured(bytes),
+          : _measured(pageBytes is num ? pageBytes.toInt() : bytes),
       topItems: items.take(10).toList(),
     ));
   } catch (e) {

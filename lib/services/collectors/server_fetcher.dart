@@ -4,13 +4,14 @@ import 'dart:typed_data';
 
 import '../../models/inspection/observed.dart';
 import '../../models/inspection/server_snapshot.dart';
+import '../../utils/app_version.dart';
 import '../../utils/text_decoding.dart';
 import '../certificate_security_service.dart';
 import '../probe_service.dart';
 
 /// The User-Agent of every direct fetch: honest about being this app.
 const kServerUserAgent =
-    'ViewSourceVibe/2.0.0 (+https://github.com/woutervanwijk/viewsourcevibe)';
+    'ViewSourceVibe/$kAppVersion (+https://github.com/woutervanwijk/viewsourcevibe)';
 
 /// Curl-like direct fetch of a URL, independent of any WebView.
 abstract class ServerFetcher {

@@ -7,11 +7,11 @@ import 'package:view_source_vibe/services/site_data_cleaner.dart' as site_data;
 import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
 import 'dart:async';
-import 'dart:convert';
+import 'dart:io' show HttpClient;
 import 'package:view_source_vibe/utils/code_beautifier.dart';
+import 'package:view_source_vibe/utils/descriptive_filename.dart';
 import 'package:view_source_vibe/utils/font_url.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
-import 'package:view_source_vibe/services/probe_service.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
@@ -27,6 +27,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
+import 'package:view_source_vibe/services/collectors/collector_world.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
 import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
@@ -113,7 +114,8 @@ class HtmlService extends ChangeNotifier {
   /// Removes the browser's data for one site (long-press Reload); a seam
   /// for tests.
   final Future<void> Function(Uri url) _clearSiteData;
-  final ResourceSizeLookup _sizeLookup;
+  /// Null: the default lookup on the per-navigation shared client.
+  final ResourceSizeLookup? _sizeLookup;
   final FreshLoadMeasurer _freshMeasurer;
   final BrowserScreenshot? _browserScreenshotOverride;
   final BrowserPlatform _platform;
@@ -199,7 +201,6 @@ class HtmlService extends ChangeNotifier {
   ScrollController? _activeHorizontalScrollController;
   Timer? _disposalTimer;
   final List<dynamic> _disposalQueue = [];
-  Timer? _highlightDebounceTimer;
 
   // Search state
   bool _isSearchEnabled = false;
@@ -1639,7 +1640,7 @@ class HtmlService extends ChangeNotifier {
         _deleteAllCookies = deleteAllCookies ??
             (() => CookieManager.instance().deleteAllCookies()),
         _clearSiteData = clearSiteData ?? site_data.clearSiteData,
-        _sizeLookup = sizeLookup ?? _lookupResourceSize,
+        _sizeLookup = sizeLookup,
         _browserScreenshotOverride = browserScreenshot,
         _freshMeasurer = freshLoadMeasurer ??
             (HeadlessFreshLoadMeasurer.supported
@@ -2380,6 +2381,8 @@ Technical details: $message''';
   @override
   void dispose() {
     _disposed = true;
+    _lookupClient?.close(force: true);
+    _lookupClient = null;
     _cancelBrowserRefreshes();
     _sovereigntyTimer?.cancel();
     webViewLoadingProgressNotifier.dispose();
@@ -2579,106 +2582,6 @@ Technical details: $message''';
     } catch (e) {
       debugPrint('❌ Error saving app state: $e');
     }
-  }
-
-  /// Generate a descriptive filename for URLs without clear filenames
-  /// Uses domain name, path segments, and content type to create meaningful names
-  String generateDescriptiveFilename(Uri uri, String content) {
-    // Extract domain name (remove www. if present)
-    String domain = uri.host;
-    if (domain.startsWith('www.')) {
-      domain = domain.substring(4);
-    }
-
-    // Clean domain name for fallback use
-    String humanDomain = domain;
-    final domainParts = domain.split('.');
-    if (domainParts.length >= 2) {
-      final commonTlds = {
-        'com',
-        'org',
-        'net',
-        'io',
-        'co',
-        'dev',
-        'app',
-        'tech',
-        'info',
-        'me',
-        'tv',
-      };
-      if (!commonTlds.contains(domainParts[domainParts.length - 1])) {
-        humanDomain = domainParts.sublist(0, domainParts.length - 1).join(' ');
-      } else {
-        humanDomain = domainParts[domainParts.length - 2];
-      }
-    }
-    // Capitalize first letter
-    humanDomain = humanDomain.isNotEmpty
-        ? humanDomain[0].toUpperCase() + humanDomain.substring(1)
-        : 'index';
-
-    // Extract meaningful path segments
-    final pathSegments = uri.pathSegments
-        .where(
-          (segment) =>
-              segment.isNotEmpty &&
-              !segment.startsWith('_') &&
-              segment != 'index' &&
-              segment != 'home',
-        )
-        .toList();
-
-    String baseFilename;
-    if (pathSegments.isNotEmpty) {
-      baseFilename = pathSegments.last;
-    } else {
-      baseFilename = humanDomain;
-    }
-
-    // Clean up characters but preserve dots for extensions
-    baseFilename = baseFilename
-        .replaceAll(RegExp(r'[^a-zA-Z0-9\-_.]'), '-')
-        .replaceAll(RegExp(r'-+'), '-')
-        .replaceAll(RegExp(r'^-|-$'), '');
-
-    if (baseFilename.isEmpty) return humanDomain;
-
-    // Check for "proper" extensions we want to preserve
-    final baseLower = baseFilename.toLowerCase();
-    final knownExtensions = {
-      '.html',
-      '.htm',
-      '.xhtml',
-      '.css',
-      '.js',
-      '.json',
-      '.xml',
-      '.yaml',
-      '.yml',
-      '.md',
-      '.txt',
-      '.py',
-      '.java',
-      '.dart',
-      '.php',
-      '.rb',
-      '.swift',
-      '.go',
-      '.rs',
-      '.sql',
-      '.atom',
-      '.rss',
-      '.rdf',
-    };
-
-    if (knownExtensions.any((ext) => baseLower.endsWith(ext))) {
-      return baseFilename;
-    }
-
-    // If it's a domain-like name without extension, return it as is
-    // detectFileTypeAndGenerateFilename will handle adding extensions if needed
-    return baseFilename;
   }
 
   /// Detect file type and generate appropriate filename using robust detection
@@ -3552,10 +3455,6 @@ Technical details: $message''';
     );
   }
 
-  /// The server source is always fetched with the page, so there is nothing
-  /// to load: this returns what the store has (null while unknown).
-  Future<String?> loadServerSourceForDiff() async => serverSource;
-
   /// Makes sure the server side of [url] is being inspected and returns the
   /// legacy probe map ({} while unknown). A page the current navigation
   /// already covers (same URL, a hop of its chain, or a fetch still running)
@@ -3611,483 +3510,6 @@ Technical details: $message''';
     }
 
     return null;
-  }
-
-  String getLanguageForExtension(String extension) {
-    final ext = extension.toLowerCase();
-
-    // Comprehensive language mapping for common file extensions
-    // Prioritize HTML detection and make it more accurate
-    switch (ext) {
-      // Web Development - HTML first with better handling
-      case 'html':
-      case 'htm':
-      case 'xhtml':
-        return 'html'; // Use 'html' mode if available, otherwise fall back to 'xml'
-      case 'css':
-        return 'css';
-      case 'js':
-      case 'javascript':
-      case 'mjs':
-      case 'cjs':
-        return 'javascript';
-      case 'ts':
-      case 'typescript':
-        return 'typescript';
-      case 'jsx':
-      case 'tsx':
-        return 'javascript'; // JSX/TSX use JavaScript highlighting
-      case 'json':
-        return 'json';
-      case 'json5':
-        return 'json';
-      case 'xml':
-      case 'xsd':
-      case 'xsl':
-      case 'svg':
-      case 'rss':
-      case 'atom':
-        return 'xml';
-      case 'yaml':
-      case 'yml':
-        return 'yaml';
-      case 'vue':
-        return 'vue';
-      case 'svelte':
-        return 'html'; // Svelte files use HTML highlighting
-
-      // Markup & Documentation
-      case 'md':
-      case 'markdown':
-        return 'markdown';
-      case 'txt':
-      case 'text':
-        return 'plaintext';
-      case 'adoc':
-      case 'asciidoc':
-        return 'asciidoc';
-
-      // Programming Languages
-      case 'dart':
-        return 'dart';
-      case 'py':
-      case 'python':
-        return 'python';
-      case 'java':
-        return 'java';
-      case 'kt':
-      case 'kts':
-        return 'kotlin';
-      case 'swift':
-        return 'swift';
-      case 'go':
-        return 'go';
-      case 'rs':
-      case 'rust':
-        return 'rust';
-      case 'php':
-        return 'php';
-      case 'rb':
-      case 'ruby':
-        return 'ruby';
-      case 'cpp':
-      case 'cc':
-      case 'cxx':
-      case 'c++':
-      case 'h':
-      case 'hpp':
-      case 'hxx':
-        return 'cpp';
-      case 'c':
-        return 'c';
-      case 'cs':
-        return 'csharp';
-      case 'scala':
-        return 'scala';
-      case 'hs':
-      case 'haskell':
-        return 'haskell';
-      case 'lua':
-        return 'lua';
-      case 'pl':
-      case 'perl':
-        return 'perl';
-      case 'r':
-        return 'r';
-      case 'sh':
-      case 'bash':
-      case 'zsh':
-      case 'fish':
-        return 'bash';
-      case 'ps1':
-      case 'psm1':
-        return 'powershell';
-
-      // Configuration & Data
-      case 'ini':
-      case 'conf':
-      case 'config':
-        return 'ini';
-      case 'properties':
-        return 'properties';
-      case 'toml':
-        return 'toml';
-      case 'sql':
-        return 'sql';
-      case 'graphql':
-      case 'gql':
-        return 'graphql';
-      case 'dockerfile':
-        return 'dockerfile';
-      case 'makefile':
-      case 'mk':
-        return 'makefile';
-      case 'cmake':
-        return 'cmake';
-      case 'gn':
-        return 'gn';
-
-      // Styling & Preprocessors
-      case 'scss':
-      case 'sass':
-        return 'scss';
-      case 'less':
-        return 'less';
-      case 'styl':
-      case 'stylus':
-        return 'stylus';
-
-      // Other Common Formats
-      case 'diff':
-      case 'patch':
-        return 'diff';
-      case 'gitignore':
-      case 'ignore':
-        return 'gitignore';
-      case 'editorconfig':
-        return 'ini';
-
-      // Additional re_highlight supported languages
-      case '1c':
-        return '1c';
-      case 'abnf':
-        return 'abnf';
-      case 'accesslog':
-        return 'accesslog';
-      case 'actionscript':
-        return 'actionscript';
-      case 'ada':
-        return 'ada';
-      case 'angelscript':
-        return 'angelscript';
-      case 'apache':
-        return 'apache';
-      case 'applescript':
-        return 'applescript';
-      case 'arcade':
-        return 'arcade';
-      case 'arduino':
-        return 'arduino';
-      case 'armasm':
-        return 'armasm';
-      case 'aspectj':
-        return 'aspectj';
-      case 'autohotkey':
-        return 'autohotkey';
-      case 'autoit':
-        return 'autoit';
-      case 'avrasm':
-        return 'avrasm';
-      case 'awk':
-        return 'awk';
-      case 'axapta':
-        return 'axapta';
-      case 'basic':
-        return 'basic';
-      case 'bnf':
-        return 'bnf';
-      case 'brainfuck':
-        return 'brainfuck';
-      case 'cal':
-        return 'cal';
-      case 'capnproto':
-        return 'capnproto';
-      case 'ceylon':
-        return 'ceylon';
-      case 'clean':
-        return 'clean';
-      case 'coq':
-        return 'coq';
-      case 'cos':
-        return 'cos';
-      case 'crmsh':
-        return 'crmsh';
-      case 'csp':
-        return 'csp';
-      case 'd':
-        return 'd';
-      case 'delphi':
-      case 'pas':
-        return 'delphi';
-      case 'django':
-        return 'django';
-      case 'dns':
-        return 'dns';
-      case 'dos':
-        return 'dos';
-      case 'dsconfig':
-        return 'dsconfig';
-      case 'dts':
-        return 'dts';
-      case 'dust':
-        return 'dust';
-      case 'ebnf':
-        return 'ebnf';
-      case 'erb':
-        return 'erb';
-      case 'excel':
-      case 'xls':
-      case 'xlsx':
-        return 'excel';
-      case 'fix':
-        return 'fix';
-      case 'flix':
-        return 'flix';
-      case 'fortran':
-      case 'f':
-      case 'f77':
-      case 'f90':
-      case 'f95':
-        return 'fortran';
-      case 'gams':
-        return 'gams';
-      case 'gauss':
-        return 'gauss';
-      case 'gcode':
-        return 'gcode';
-      case 'gherkin':
-        return 'gherkin';
-      case 'glsl':
-        return 'glsl';
-      case 'gml':
-        return 'gml';
-      case 'golo':
-        return 'golo';
-      case 'gradle':
-        return 'gradle';
-      case 'groovy':
-        return 'groovy';
-      case 'haml':
-        return 'haml';
-      case 'handlebars':
-      case 'hbs':
-        return 'handlebars';
-      case 'hsp':
-        return 'hsp';
-      case 'http':
-        return 'http';
-      case 'hy':
-        return 'hy';
-      case 'inform7':
-        return 'inform7';
-      case 'irpf90':
-        return 'irpf90';
-      case 'isbl':
-        return 'isbl';
-      case 'jboss-cli':
-        return 'jboss-cli';
-      case 'julia':
-      case 'jl':
-        return 'julia';
-      case 'lasso':
-        return 'lasso';
-      case 'latex':
-      case 'tex':
-        return 'latex';
-      case 'ldif':
-        return 'ldif';
-      case 'leaf':
-        return 'leaf';
-      case 'lisp':
-      case 'lsp':
-        return 'lisp';
-      case 'livescript':
-        return 'livescript';
-      case 'llvm':
-        return 'llvm';
-      case 'lsl':
-        return 'lsl';
-      case 'mathematica':
-      case 'nb':
-        return 'mathematica';
-      case 'matlab':
-      case 'm':
-        return 'matlab';
-      case 'maxima':
-        return 'maxima';
-      case 'mel':
-        return 'mel';
-      case 'mercury':
-        return 'mercury';
-      case 'mipsasm':
-        return 'mipsasm';
-      case 'mizar':
-        return 'mizar';
-      case 'mojolicious':
-        return 'mojolicious';
-      case 'monkey':
-        return 'monkey';
-      case 'moonscript':
-        return 'moonscript';
-      case 'n1ql':
-        return 'n1ql';
-      case 'nestedtext':
-        return 'nestedtext';
-      case 'nginx':
-        return 'nginx';
-      case 'nim':
-        return 'nim';
-      case 'nix':
-        return 'nix';
-      case 'nsis':
-        return 'nsis';
-      case 'objectivec':
-      case 'mm':
-        return 'objectivec';
-      case 'ocaml':
-      case 'ml':
-      case 'mli':
-        return 'ocaml';
-      case 'openscad':
-      case 'scad':
-        return 'openscad';
-      case 'oxygene':
-        return 'oxygene';
-      case 'parser3':
-        return 'parser3';
-      case 'pf':
-        return 'pf';
-      case 'pgsql':
-        return 'pgsql';
-      case 'php-template':
-        return 'php-template';
-      case 'pony':
-        return 'pony';
-      case 'processing':
-        return 'processing';
-      case 'profile':
-        return 'profile';
-      case 'prolog':
-        return 'prolog';
-      case 'protobuf':
-      case 'proto':
-        return 'protobuf';
-      case 'puppet':
-      case 'pp':
-        return 'puppet';
-      case 'purebasic':
-      case 'pb':
-        return 'purebasic';
-      case 'python-repl':
-        return 'python-repl';
-      case 'q':
-        return 'q';
-      case 'qml':
-        return 'qml';
-      case 'reasonml':
-      case 're':
-        return 'reasonml';
-      case 'rib':
-        return 'rib';
-      case 'roboconf':
-        return 'roboconf';
-      case 'routeros':
-        return 'routeros';
-      case 'rsl':
-        return 'rsl';
-      case 'ruleslanguage':
-        return 'ruleslanguage';
-      case 'sas':
-        return 'sas';
-      case 'scheme':
-      case 'scm':
-      case 'ss':
-        return 'scheme';
-      case 'scilab':
-      case 'sci':
-        return 'scilab';
-      case 'smali':
-        return 'smali';
-      case 'smalltalk':
-      case 'st':
-        return 'smalltalk';
-      case 'sml':
-        return 'sml';
-      case 'sqf':
-        return 'sqf';
-      case 'stan':
-        return 'stan';
-      case 'stata':
-      case 'do':
-      case 'ado':
-        return 'stata';
-      case 'step21':
-      case 'stp':
-        return 'step21';
-      case 'subunit':
-        return 'subunit';
-      case 'taggerscript':
-        return 'taggerscript';
-      case 'tap':
-        return 'tap';
-      case 'tcl':
-        return 'tcl';
-      case 'thrift':
-        return 'thrift';
-      case 'tp':
-        return 'tp';
-      case 'twig':
-        return 'twig';
-      case 'vala':
-      case 'vapi':
-        return 'vala';
-      case 'vbnet':
-      case 'vb':
-        return 'vbnet';
-      case 'vbscript':
-      case 'vbs':
-        return 'vbscript';
-      case 'vbscript-html':
-        return 'vbscript-html';
-      case 'verilog':
-      case 'v':
-        return 'verilog';
-      case 'vhdl':
-      case 'vhd':
-        return 'vhdl';
-      case 'vim':
-      case 'vimrc':
-        return 'vim';
-      case 'wren':
-        return 'wren';
-      case 'x86asm':
-      case 'asm':
-        return 'x86asm';
-      case 'xl':
-        return 'xl';
-      case 'xquery':
-      case 'xq':
-      case 'xql':
-      case 'xqy':
-        return 'xquery';
-      case 'zephir':
-      case 'zep':
-        return 'zephir';
-
-      // Default fallback - try to detect from content
-      default:
-        return 'plaintext'; // Changed from 'xml' to 'plaintext' for better fallback
-    }
   }
 
   /// The main entry point to build an editor for this service.
@@ -4241,11 +3663,6 @@ Technical details: $message''';
         ),
       ),
     );
-  }
-
-  /// Cancels highlighting
-  void cancelPendingHighlight() {
-    _highlightDebounceTimer?.cancel();
   }
 
   /// Reset the editor cache
@@ -4444,176 +3861,27 @@ Technical details: $message''';
     return out.toList();
   }
 
-  /// The size of a timeline entry for the metadata lists; null when the
-  /// browser reported none. Images are judged by their transfer size: WebKit's
-  /// decoded size for them is the pixel buffer, so it is not reported.
-  static Map<String, dynamic>? _sizeOf(Map match) {
-    final tx = match['transfer'] as int?;
-    final dec = match['decoded'] as int?;
-    if (tx == null && dec == null) {
-      final why = match['transferNote'] ?? match['decodedNote'];
-      return {
-        'transfer': null,
-        'decoded': null,
-        if (why != null) 'unknownReason': '$why',
-      };
-    }
-    if (dec == null) {
-      final isImage = match['initiatorType'] == 'img' ||
-          match['initiatorType'] == 'image' ||
-          ProbeService.categorizeResource('${match['name']}', '') == 'image';
-      if (isImage) {
-        return {'transfer': tx, 'decoded': tx, 'decodedFromTransfer': true};
-      }
-    }
-    return {'transfer': tx, 'decoded': dec};
-  }
-
   /// Matches extracted metadata links with performance resource data to find sizes
   void _enrichMetadataWithSizes(String baseUrl) {
     if (_pageMetadata == null) return;
 
     final timeline = resourceTimelineData;
 
-    // Index the timeline once per call, first entry wins (as firstWhere did).
-    // Each lookup below used to be a full scan with Uri.parse per candidate,
-    // and metadata lists hold dozens of links against hundreds of resources.
-    final byExact = <String, Map<String, dynamic>>{};
-    final byNormalized = <String, Map<String, dynamic>>{};
-    final byResourceKey = <String, Map<String, dynamic>>{};
-    final byFileQuery = <String, Map<String, dynamic>>{};
-    final byImageVariant = <String, Map<String, dynamic>>{};
-    for (final r in timeline) {
-      final name = r['name']?.toString();
-      if (name == null || name.isEmpty) continue;
-      byExact.putIfAbsent(name, () => r);
-      final u = Uri.tryParse(name);
-      if (u == null) continue;
-      final host = u.host.toLowerCase();
-      var normPath = u.path;
-      if (normPath.endsWith('/') && normPath.length > 1) {
-        normPath = normPath.substring(0, normPath.length - 1);
-      }
-      // areUrlsEqual: host (case-insensitive), path w/o trailing slash, query.
-      byNormalized.putIfAbsent('$host|$normPath|${u.query}', () => r);
-      // sameResourceModuloCacheBusters: host, raw path, query w/o cache-busters.
-      byResourceKey.putIfAbsent(
-          '$host|${u.path}|${queryWithoutCacheBusters(u)}', () => r);
-      // Filename suffix + query modulo cache-busters.
-      byFileQuery.putIfAbsent(
-          '${u.path.split('/').last}|${queryWithoutCacheBusters(u)}', () => r);
-      // Same image modulo srcset variant; only entries with a measured size.
-      final parts = u.path.split('/').where((p) => p.isNotEmpty).toList();
-      final last = parts.isEmpty ? '' : parts.last.toLowerCase();
-      if (last.isNotEmpty && r['transfer'] is int) {
-        byImageVariant.putIfAbsent('$host|$last', () => r);
-      }
-    }
+    final index = ResourceSizeIndex(timeline);
 
-    // Helper to find size using the indexed tiers, same order as before.
-    Map<String, dynamic>? findSize(String? src) {
-      if (src == null || src.isEmpty) return null;
-
-      // Tier 0: Data URIs / inline SVGs — size is the content itself
-      if (src.startsWith('data:') || src.startsWith('<svg')) {
-        final bytes = utf8.encode(src).length;
-        return {'transfer': bytes, 'decoded': bytes};
+    // Merge external lists into the main lists so they are unified for display
+    for (final (main, external) in const [
+      ('cssLinks', 'externalCssLinks'),
+      ('jsLinks', 'externalJsLinks'),
+      ('iframeLinks', 'externalIframeLinks'),
+    ]) {
+      final extList = _pageMetadata![external];
+      if (extList == null || (extList as List).isEmpty) continue;
+      final local = (_pageMetadata![main] ??= <dynamic>[]) as List<dynamic>;
+      for (final ext in extList) {
+        if (!local.contains(ext)) local.add(ext);
       }
-
-      if (timeline.isEmpty) return null;
-
-      // Tier 1: Exact string match
-      final exact = byExact[src];
-      if (exact != null) return _sizeOf(exact);
-
-      final u = Uri.tryParse(src);
-      if (u == null) return null;
-      final host = u.host.toLowerCase();
-
-      // Tier 2: URL-normalised match (handles trailing slashes, case)
-      var normPath = u.path;
-      if (normPath.endsWith('/') && normPath.length > 1) {
-        normPath = normPath.substring(0, normPath.length - 1);
-      }
-      final normalized = byNormalized['$host|$normPath|${u.query}'];
-      if (normalized != null) return _sizeOf(normalized);
-
-      // Tier 3: Same host+path, query equal modulo cache-busters (CDN
-      // versioning like ?v=2 still matches). Content-changing params such as
-      // image resize options (?width=112 vs ?width=264 or none) must NOT
-      // match: they serve different bytes (e.g. thumbnail vs full original).
-      if (u.path.length > 3) {
-        final byCb =
-            byResourceKey['$host|${u.path}|${queryWithoutCacheBusters(u)}'];
-        if (byCb != null) return _sizeOf(byCb);
-      }
-
-      // Tier 4: Strict filename suffix match, same query modulo cache-busters.
-      // Requires the filename to be preceded by '/' so "chunk.js"
-      // does NOT match "vendor-chunk.js"
-      final fileName = u.path.split('/').last;
-      if (fileName.length > 4) {
-        final byFq = byFileQuery['$fileName|${queryWithoutCacheBusters(u)}'];
-        if (byFq != null) return _sizeOf(byFq);
-      }
-
-      // Tier 5: same image, different srcset variant (same host + same last
-      // path segment), only when the browser measured that variant.
-      final parts = u.path.split('/').where((p) => p.isNotEmpty).toList();
-      final last = parts.isEmpty ? '' : parts.last.toLowerCase();
-      if (last.isNotEmpty) {
-        final img = byImageVariant['$host|$last'];
-        if (img != null) return _sizeOf(img);
-      }
-
-      return null;
-    }
-
-    // Merge External lists into main lists so they are unified for display
-    if (_pageMetadata!['externalCssLinks'] != null &&
-        (_pageMetadata!['externalCssLinks'] as List).isNotEmpty) {
-      if (_pageMetadata!['cssLinks'] == null) {
-        _pageMetadata!['cssLinks'] = [];
-      }
-      final List<dynamic> local = _pageMetadata!['cssLinks'];
-      final List<dynamic> external = _pageMetadata!['externalCssLinks'];
-      // merge unique
-      for (var ext in external) {
-        if (!local.contains(ext)) {
-          local.add(ext);
-        }
-      }
-      _pageMetadata!.remove('externalCssLinks'); // clean up
-    }
-
-    if (_pageMetadata!['externalJsLinks'] != null &&
-        (_pageMetadata!['externalJsLinks'] as List).isNotEmpty) {
-      if (_pageMetadata!['jsLinks'] == null) {
-        _pageMetadata!['jsLinks'] = [];
-      }
-      final List<dynamic> local = _pageMetadata!['jsLinks'];
-      final List<dynamic> external = _pageMetadata!['externalJsLinks'];
-      for (var ext in external) {
-        if (!local.contains(ext)) {
-          local.add(ext);
-        }
-      }
-      _pageMetadata!.remove('externalJsLinks');
-    }
-
-    if (_pageMetadata!['externalIframeLinks'] != null &&
-        (_pageMetadata!['externalIframeLinks'] as List).isNotEmpty) {
-      if (_pageMetadata!['iframeLinks'] == null) {
-        _pageMetadata!['iframeLinks'] = [];
-      }
-      final List<dynamic> local = _pageMetadata!['iframeLinks'];
-      final List<dynamic> external = _pageMetadata!['externalIframeLinks'];
-      for (var ext in external) {
-        if (!local.contains(ext)) {
-          local.add(ext);
-        }
-      }
-      _pageMetadata!.remove('externalIframeLinks');
+      _pageMetadata!.remove(external);
     }
 
     // Enrich Images
@@ -4626,7 +3894,7 @@ Technical details: $message''';
           final Map<String, dynamic> safeImg = Map<String, dynamic>.from(
             images[i],
           );
-          final size = findSize(safeImg['src']);
+          final size = index.find(safeImg['src']);
           if (size != null) {
             safeImg['size'] = size;
             images[i] = safeImg; // Update the list with the safe map
@@ -4645,7 +3913,7 @@ Technical details: $message''';
       for (int i = 0; i < links.length; i++) {
         var css = links[i];
         final String href = css is Map ? (css['href'] ?? '') : css.toString();
-        final size = findSize(href);
+        final size = index.find(href);
         if (size != null) {
           if (css is Map) {
             css['size'] = size;
@@ -4665,7 +3933,7 @@ Technical details: $message''';
       for (int i = 0; i < links.length; i++) {
         var js = links[i];
         final String src = js is Map ? (js['src'] ?? '') : js.toString();
-        final size = findSize(src);
+        final size = index.find(src);
         if (size != null) {
           if (js is Map) {
             js['size'] = size;
@@ -4686,7 +3954,7 @@ Technical details: $message''';
           final Map<String, dynamic> safeVid = Map<String, dynamic>.from(
             videos[i],
           );
-          final size = findSize(safeVid['src']);
+          final size = index.find(safeVid['src']);
           if (size != null) {
             safeVid['size'] = size;
             videos[i] = safeVid;
@@ -4764,7 +4032,24 @@ Technical details: $message''';
       _sizeCache.clear();
       _sizeCacheGen = gen;
     }
-    return _sizeCache.putIfAbsent(url, () => _sizeLookup(url));
+    return _sizeCache.putIfAbsent(
+        url, () => (_sizeLookup ?? (u) => _lookupResourceSize(gen, u))(url));
+  }
+
+  // One client per navigation generation for the default size lookups, so up
+  // to 400 lookups share connections instead of a TLS handshake each.
+  HttpClient? _lookupClient;
+  int? _lookupClientGen;
+
+  HttpClient _clientFor(int gen) {
+    if (_lookupClientGen != gen) {
+      _lookupClient?.close(force: true);
+      _lookupClient = null;
+    }
+    _lookupClientGen = gen;
+    return _lookupClient ??= (HttpClient()
+      ..autoUncompress = false
+      ..connectionTimeout = const Duration(seconds: 15));
   }
 
   /// Own requests for the sizes the browser could not report (metadata items
@@ -5074,7 +4359,8 @@ Technical details: $message''';
     return controller.evaluateJavascript(
         source: dom
             ? 'window.__vsv_collect()'
-            : 'window.__vsv_collect({dom: false})');
+            : 'window.__vsv_collect({dom: false})',
+        contentWorld: collectorWorld(defaultTargetPlatform));
   }
 
   static Future<List<Map>> _nativeCookiesFromManager(String url) async {
@@ -5084,8 +4370,10 @@ Technical details: $message''';
 
   /// Our own download of a resource, measured like the browser's transfer
   /// size (compressed bytes plus headers); see [lookupTransferSize].
-  static Future<int?> _lookupResourceSize(String url) =>
-      lookupTransferSize(url, userAgent: kServerUserAgent);
+  Future<int?> _lookupResourceSize(int gen, String url) => lookupTransferSize(
+      url,
+      userAgent: kServerUserAgent,
+      shared: _clientFor(gen));
 
   /// The browser reported a URL change (history API / SPA route, redirect).
   /// The same document as the current navigation (R20) is nothing new; any
@@ -5263,7 +4551,8 @@ Technical details: $message''';
     try {
       await c.evaluateJavascript(
           source:
-              'window.__vsv_scrollThrough && window.__vsv_scrollThrough(true)');
+              'window.__vsv_scrollThrough && window.__vsv_scrollThrough(true)',
+          contentWorld: collectorWorld(defaultTargetPlatform));
     } catch (_) {}
   }
 
