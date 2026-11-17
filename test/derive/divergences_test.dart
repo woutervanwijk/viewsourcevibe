@@ -59,6 +59,21 @@ void main() {
         isEmpty);
   });
 
+  test('an empty root path and "/" are the same page', () {
+    expect(
+        deriveDivergences(inspection(
+            server: serverSnap(url: 'https://example.com'),
+            browser: browserSnap(url: 'https://example.com/'))),
+        isEmpty);
+    expect(
+        deriveDivergences(inspection(
+            server: serverSnap(url: 'https://example.com'),
+            browser: browserSnap(url: 'https://www.example.com/')))
+            .single
+            .kind,
+        DivergenceKind.redirectHost);
+  });
+
   test('www <-> non-www is a low-severity redirect-host divergence', () {
     final d = deriveDivergences(inspection(
         server: serverSnap(url: 'https://a.test/page'),
