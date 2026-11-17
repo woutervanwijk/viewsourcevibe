@@ -135,12 +135,17 @@ const String vsvResourceBootstrapJs = r'''
       try { origin = location.origin; } catch (e) {}
       var report = {__vsv_frame: 1, fo: origin,
           to: performance.timeOrigin || null, e: out, d: dout};
-      // Through the native bridge when there is one: the embedding page can
-      // neither read nor forge that. postMessage is the fallback.
+      // Through the native bridge when there is one: the embedding page
+      // cannot read the report; any frame can still inject entries.
+      // postMessage is the fallback, also when the call rejects.
       var b = window.flutter_inappwebview;
       if (b && typeof b.callHandler === 'function') {
         var r = b.callHandler('vsvFrame', report);
-        if (r && typeof r.catch === 'function') r.catch(function() {});
+        if (r && typeof r.catch === 'function') {
+          r.catch(function() {
+            try { window.top.postMessage(report, '*'); } catch (e) {}
+          });
+        }
       } else {
         window.top.postMessage(report, '*');
       }

@@ -294,7 +294,11 @@ PageWeight? derivePageWeightOf(BrowserSnapshot b,
     html.addTransfer(navTransfer.value);
     measured = (measured ?? 0) + navTransfer.value;
     final navDecoded = (nav as Present<NavigationTiming>).value.documentDecoded;
-    if (navDecoded is Present<int>) html.addDecoded(navDecoded.value);
+    if (navDecoded is Present<int>) {
+      html.addDecoded(navDecoded.value);
+    } else {
+      decodedGap = true;
+    }
     documentSource = DataSource.browser;
   } else if (server is Present<ServerSnapshot>) {
     final body = server.value.body;

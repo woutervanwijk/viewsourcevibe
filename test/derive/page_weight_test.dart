@@ -85,6 +85,14 @@ void main() {
     expect(w.transferEstimated, isFalse);
   });
 
+  test('document transfer known but decoded unknown: decoded is a lower bound',
+      () {
+    final w = derivePageWeight(inspection(
+        browser: browserSnap(navigation: nav(tx: b(5300)), resources: [])))!;
+    expect(w.decodedLowerBound, isTrue);
+    expect(w.transferLowerBound, isFalse);
+  });
+
   test('without browser sizes the server body counts as an estimate', () {
     final w = derivePageWeight(inspection(
         server: serverSnap(body: 'x' * 9999),

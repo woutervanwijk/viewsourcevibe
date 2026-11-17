@@ -33,6 +33,8 @@ The plans in `docs/superpowers/plans/2026-11-15-*.md` implement this document. I
 | S6 | `debugPrint` also prints in release builds; there are 250 calls. The deep-link handler logs the full shared text. | `lib/main.dart:100` |
 | S7 | RIPEstat calls carry no `sourceapp` parameter (their usage rules ask for one, as I recall; check their docs). | `sovereignty_service.dart:1448` |
 
+Follow-up 2026-11-17 (S2): reading is fixed, because frames now report through the native bridge when it exists. Forging remains possible: the plugin injects the bridge into every frame, and the `message` listener still accepts postMessage from any frame. Impact: a skewed page weight or host list only.
+
 ## Q — Structure, performance, slop
 
 | ID | Finding | Where |

@@ -7,6 +7,7 @@ import '../../models/inspection/observed.dart';
 import '../../models/inspection/page_inspection.dart';
 import '../../models/inspection/server_snapshot.dart';
 import '../../utils/cookie_utils.dart';
+import '../../utils/site.dart';
 import 'cookies.dart';
 import 'header_insights.dart' show InsightTone;
 import 'observed_text.dart';
@@ -128,9 +129,6 @@ String? _bare(String? d) {
   return l.startsWith('.') ? l.substring(1) : l;
 }
 
-bool _related(String a, String b) =>
-    a == b || a.endsWith('.$b') || b.endsWith('.$a');
-
 /// The page's final URL: server's when known, else the browser's.
 Uri? _pageUrl(PageInspection p) {
   final s = p.server;
@@ -156,7 +154,7 @@ CookieRow _row(CookieInfo c, Uri? page, DateTime now) {
   final thirdParty = host != null &&
       host.isNotEmpty &&
       cookieHost != null &&
-      !_related(cookieHost, host);
+      !sameSite(cookieHost, host);
   var expires = c.expires ?? (fromServer ? 'session' : 'unknown');
   final exp = DateTime.tryParse(expires);
   if (exp != null && exp.isBefore(now)) expires = '$expires (expired)';
