@@ -3,6 +3,7 @@ import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/technique_signals.dart';
 import 'package:view_source_vibe/services/cname_cloaking_service.dart';
+import 'package:view_source_vibe/services/collectors/fresh_load_measurer.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/widgets/privacy_view.dart';
@@ -16,7 +17,8 @@ void main() {
   late HtmlService service;
 
   Future<void> show(WidgetTester tester, PageInspection p,
-      {Observed<TechniqueSignals>? techniques}) async {
+      {Observed<TechniqueSignals>? techniques,
+      FreshLoadMeasurer? freshLoadMeasurer}) async {
     store = seedStore(InspectionStore(), p);
     if (techniques != null) {
       store.applyFreshLoad(store.current.generation,
@@ -28,6 +30,7 @@ void main() {
       serverFetcher: SilentServerFetcher(),
       browserLoader: SilentBrowserLoader(),
       metadataExtractor: (html, baseUrl, {headers}) async => {},
+      freshLoadMeasurer: freshLoadMeasurer,
       cloakingFinder: (hosts, {required pageHost, required lookup}) async =>
           const CloakingResult(),
     );
@@ -46,6 +49,13 @@ void main() {
     expect(find.text('Run a fresh load to check'), findsOneWidget);
     expect(find.text('Run fresh load'), findsOneWidget);
     expect(find.textContaining('No suspicious techniques'), findsNothing);
+  });
+
+  testWidgets('a platform without a fresh load says so from the start',
+      (tester) async {
+    await show(tester, trackerPage(), freshLoadMeasurer: const NoFreshLoad());
+    expect(find.text('Not supported on this platform'), findsOneWidget);
+    expect(find.text('Run fresh load'), findsNothing);
   });
 
   testWidgets('unsupported platform: says so, no button', (tester) async {

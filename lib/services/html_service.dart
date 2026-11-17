@@ -27,6 +27,7 @@ import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/technique_signals.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/collector_world.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
@@ -34,7 +35,6 @@ import 'package:view_source_vibe/services/collectors/server_fetcher.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/detections.dart';
 import 'package:view_source_vibe/services/derive/detections_view.dart';
-import 'package:view_source_vibe/models/inspection/technique_signals.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
@@ -1028,12 +1028,27 @@ class HtmlService extends ChangeNotifier {
       return const Unavailable(UnavailableReason.notApplicable,
           'Load a URL to check its hostnames.');
     }
+    final browser = current.browser;
+    if (browser is Unavailable<BrowserSnapshot> ||
+        browser is Failed<BrowserSnapshot>) {
+      return const Unavailable(
+          UnavailableReason.blockedByPlatform, 'Needs the in-app browser');
+    }
+    if (browser is Present<BrowserSnapshot> &&
+        browser.value.url.scheme != 'http' &&
+        browser.value.url.scheme != 'https') {
+      return const Unavailable(UnavailableReason.notApplicable,
+          'Only web pages have hostnames to check.');
+    }
     final state = _cloakingState;
     if (state == null || _cloakingResultGen != current.generation) {
       return const Pending();
     }
     return state;
   }
+
+  /// Whether this platform can load a page apart from the live browser.
+  bool get freshLoadSupported => _freshMeasurer is! NoFreshLoad;
 
   TechniquesModel? _techniquesView;
   PageInspection? _techniquesViewFor;
@@ -1055,6 +1070,7 @@ class HtmlService extends ChangeNotifier {
       _techniquesViewCloaking = cloaking;
       _techniquesView = deriveTechniques(current,
           cloaking: cloaking,
+          freshLoadSupported: freshLoadSupported,
           metadata: metadata is Present<MetadataModel>
               ? metadata.value.data
               : null);

@@ -96,4 +96,26 @@ void main() {
     await pumpEventQueue();
     expect(service.cnameCloaking, isA<Failed<CloakingResult>>());
   });
+
+  test('no in-app browser result: says so instead of checking forever',
+      () async {
+    seedStore(store, page.copyWith(browser: const Failed('no webview')));
+    service.watchCloaking(true);
+    await pumpEventQueue();
+    final state = service.cnameCloaking as Unavailable<CloakingResult>;
+    expect(state.detail, 'Needs the in-app browser');
+    expect(looked, isEmpty);
+  });
+
+  test('a page that is not http(s) has no hostnames to check', () async {
+    seedStore(
+        store,
+        page.copyWith(
+            browser: browser(browserSnapshot(
+                url: 'about:blank', dom: fullPageDomHtml, resources: []))));
+    service.watchCloaking(true);
+    await pumpEventQueue();
+    final state = service.cnameCloaking as Unavailable<CloakingResult>;
+    expect(state.reason, UnavailableReason.notApplicable);
+  });
 }

@@ -118,6 +118,8 @@ void main() {
       expect(json['callChecks']['detail'], 'Run a fresh load to check');
       expect(json['findings'], isEmpty);
       expect(json['notChecked'], isEmpty);
+      expect(json['hostnameCheck']['status'], isA<String>());
+      expect(json['complete'], isFalse);
     });
 
     test('no debug payload without a browser sync', () async {

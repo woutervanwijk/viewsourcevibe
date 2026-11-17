@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import 'observed.dart';
 
 /// [PageInspection.freshTechniques] before a fresh load was asked for. Not
@@ -74,6 +76,8 @@ class TechniqueSignals {
   });
 }
 
+const _kReportUnreadable = 'The technique report could not be read';
+
 int _int(Object? v) => v is num ? v.toInt() : 0;
 String _str(Object? v) => v is String ? v : '';
 Map<String, Object?> _map(Object? v) =>
@@ -90,7 +94,8 @@ Observed<TechniqueSignals> parseTechniqueReport(Object? raw) {
   try {
     final decoded = raw is String ? jsonDecode(raw) : raw;
     if (decoded is! Map) {
-      return const Failed('The technique report had an unexpected shape');
+      debugPrint('Technique report had an unexpected shape');
+      return const Failed(_kReportUnreadable);
     }
     final r = decoded.cast<String, Object?>();
     final fonts = _map(r['fonts']);
@@ -146,6 +151,7 @@ Observed<TechniqueSignals> parseTechniqueReport(Object? raw) {
         ),
         source: DataSource.browser);
   } catch (e) {
-    return Failed('The technique report could not be read: $e');
+    debugPrint('Technique report could not be read: $e');
+    return const Failed(_kReportUnreadable);
   }
 }

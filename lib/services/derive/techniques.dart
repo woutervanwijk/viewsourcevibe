@@ -9,8 +9,9 @@ import '../cname_cloaking_service.dart';
 // Englehardt and Narayanan, "Online Tracking: A 1-million-site Measurement
 // and Analysis" (ACM CCS 2016), section 6.1 (canvas: at least 16x16 px, text
 // with two colours or ten distinct characters, read back) and section 6.2
-// (fonts: at least 50 distinct font values measured). The rest are this
-// app's own choices.
+// (fonts: at least 50 distinct font property values measured). The rest are
+// this app's own choices; in particular the instrumentation counts font
+// families, not whole font strings, so a size change is not a new font.
 const int kCanvasMinSide = 16;
 const int kCanvasMinChars = 10;
 const int kCanvasMinColors = 2;
@@ -24,6 +25,29 @@ const int kIdMinDistinctChars = 8;
 const int kIdMinParties = 2;
 const int kIdMaxFindings = 10;
 const int kListedItems = 5;
+const int kIdNameMaxLength = 40;
+
+// Cookies that hold a consent string. These are meant to be passed to other
+// parties (IAB TCF `euconsent-v2` / `addtl_consent`, IAB US Privacy
+// `usprivacy`, OneTrust `OptanonConsent` / `OptanonAlertBoxClosed`, Cookiebot
+// `CookieConsent`, Didomi `didomi_token`, the `__cmp` family of consent
+// platform cookies), so seeing one in requests to several parties is expected,
+// not an identifier being shared. Matched on the lower-case name prefix.
+const List<String> kConsentCookiePrefixes = [
+  'euconsent',
+  'addtl_consent',
+  'optanonconsent',
+  'optanonalertboxclosed',
+  'cookieconsent',
+  'didomi_token',
+  'usprivacy',
+  '__cmp',
+];
+
+bool _isConsentCookie(String name) {
+  final n = name.toLowerCase();
+  return kConsentCookiePrefixes.any(n.startsWith);
+}
 
 enum TechniqueSeverity { high, medium, low }
 
@@ -92,7 +116,8 @@ List<TechniqueFinding> judgeSignals(TechniqueSignals s) {
       title: 'Reads back a canvas it drew text on (canvas fingerprinting)',
       detail: 'The page drew text on a canvas and read the pixels back. '
           'Rendering differs slightly between devices, so this can tell '
-          'visitors apart. Charts and image editors do not draw text this way.',
+          'visitors apart. Charts and image editors rarely read back a canvas they '
+          'drew text on.',
       scripts: _scripts(fp.map((c) => c.script)),
     ));
   }
@@ -165,8 +190,14 @@ List<TechniqueFinding> judgeSignals(TechniqueSignals s) {
       detail: 'The page tried to read what you copied last.',
     ));
   }
+  // One finding per kind of prompt: the earliest call.
+  final firstPrompt = <String, PromptCall>{};
   for (final p in s.prompts) {
     if (p.userActive != false) continue;
+    final seen = firstPrompt[p.api];
+    if (seen == null || p.at < seen.at) firstPrompt[p.api] = p;
+  }
+  for (final p in firstPrompt.values) {
     out.add(TechniqueFinding(
       id: 'prompt-on-load',
       severity: TechniqueSeverity.medium,
@@ -202,9 +233,10 @@ List<TechniqueFinding> findSharedIdentifiers(BrowserSnapshot b) {
   for (final c in cookies.value) {
     if (out.length >= kIdMaxFindings) break;
     final v = c.value;
-    if (v.length < kIdMinLength ||
+    if (_isConsentCookie(c.name) ||
+        v.length < kIdMinLength ||
         v.split('').toSet().length < kIdMinDistinctChars ||
-        !seen.add(c.name)) {
+        !seen.add(v)) {
       continue;
     }
     final encoded = Uri.encodeComponent(v);
@@ -215,10 +247,13 @@ List<TechniqueFinding> findSharedIdentifiers(BrowserSnapshot b) {
       ..sort();
     if (domains.length < kIdMinParties) continue;
     final listed = domains.take(kListedItems).toList();
+    final name = c.name.length > kIdNameMaxLength
+        ? '${c.name.substring(0, kIdNameMaxLength)}…'
+        : c.name;
     out.add(TechniqueFinding(
       id: 'id-sharing',
       severity: TechniqueSeverity.medium,
-      title: 'The identifier in cookie ${c.name} is sent to '
+      title: 'The identifier in cookie $name is sent to '
           '${domains.length} other parties',
       detail: 'The value of this cookie appears in requests to '
           '${listed.join(', ')}'
@@ -275,6 +310,10 @@ class TechniquesModel {
   /// Every check ran: "no findings" then means none were seen.
   final bool complete;
 
+  /// Why the shared-identifier check could not run; null when it ran or does
+  /// not apply.
+  final String? sharedIdsNote;
+
   const TechniquesModel({
     required this.findings,
     required this.callChecksNote,
@@ -282,12 +321,14 @@ class TechniquesModel {
     required this.notChecked,
     required this.cloakingNote,
     required this.complete,
+    this.sharedIdsNote,
   });
 }
 
 TechniquesModel deriveTechniques(PageInspection p,
     {required Observed<CloakingResult> cloaking,
-    Map<String, dynamic>? metadata}) {
+    Map<String, dynamic>? metadata,
+    bool freshLoadSupported = true}) {
   final findings = <TechniqueFinding>[];
   final isUrl = p.target is UrlTarget;
 
@@ -305,6 +346,11 @@ TechniquesModel deriveTechniques(PageInspection p,
       ):
       callNote = d.isNotEmpty ? d : unavailableMessage(r, d);
       canRun = isUrl && r != UnavailableReason.unsupportedPlatform;
+      if (!freshLoadSupported) {
+        callNote =
+            unavailableMessage(UnavailableReason.unsupportedPlatform, '');
+        canRun = false;
+      }
     case Failed<TechniqueSignals>(error: final e):
       callNote = e;
       canRun = isUrl;
@@ -315,8 +361,20 @@ TechniquesModel deriveTechniques(PageInspection p,
   }
 
   final browser = p.browser;
+  String? sharedIdsNote;
+  var sharedIdsChecked = false;
   if (browser is Present<BrowserSnapshot>) {
     findings.addAll(findSharedIdentifiers(browser.value));
+    if (browser.value.cookies is! Present<List<BrowserCookie>>) {
+      sharedIdsNote = 'Cookies not available: shared identifiers not checked.';
+    } else if (browser.value.resources is! Present<List<ResourceEntry>>) {
+      sharedIdsNote = 'Requests not available: shared identifiers not checked.';
+    } else {
+      sharedIdsChecked = true;
+    }
+  } else if (isUrl) {
+    sharedIdsNote = 'Browser data not available: '
+        'shared identifiers not checked.';
   }
 
   var notChecked = const <String>[];
@@ -361,7 +419,9 @@ TechniquesModel deriveTechniques(PageInspection p,
     callChecksCanRun: canRun,
     notChecked: notChecked,
     cloakingNote: cloakingNote,
+    sharedIdsNote: sharedIdsNote,
     complete: callNote == null &&
+        sharedIdsChecked &&
         cloakingNote == null &&
         notChecked.isEmpty &&
         metadata != null,

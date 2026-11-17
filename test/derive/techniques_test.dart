@@ -167,6 +167,34 @@ void main() {
         isEmpty);
   });
 
+  test('the same prompt asked for twice is one finding, the earliest', () {
+    PromptCall p(String api, int ms, String script) => PromptCall(
+        api: api,
+        at: Duration(milliseconds: ms),
+        userActive: false,
+        script: script);
+    final f = judgeSignals(signals(prompts: [
+      p('geolocation', 3000, 'https://b.test/b.js'),
+      p('geolocation', 1000, 'https://a.test/a.js'),
+      p('notifications', 2000, ''),
+    ]));
+    expect(f.length, 2);
+    final geo = f.firstWhere((e) => e.title.contains('geolocation'));
+    expect(geo.title, contains('1 s after loading'));
+    expect(geo.scripts, ['https://a.test/a.js']);
+  });
+
+  test('canvas text does not claim charts never draw text', () {
+    final f = judgeSignals(signals(canvas: [
+      const CanvasRead(
+          width: 300, height: 150, chars: 34, colors: 2, reads: 1, script: '')
+    ]));
+    expect(
+        f.single.detail,
+        contains('Charts and image editors rarely read back a canvas they '
+            'drew text on.'));
+  });
+
   test('toJson carries no more than the finding', () {
     final j = judgeSignals(signals(clipboardRead: 1)).single.toJson();
     expect(j['id'], 'clipboard-read');
@@ -176,6 +204,8 @@ void main() {
   test('report parsing', () {
     expect(parseTechniqueReport(null), isA<Unavailable<TechniqueSignals>>());
     expect(parseTechniqueReport('not json'), isA<Failed<TechniqueSignals>>());
+    expect((parseTechniqueReport('not json') as Failed).error,
+        'The technique report could not be read');
     final r = parseTechniqueReport(jsonEncode({
       'v': 1,
       'canvas': [
@@ -275,6 +305,65 @@ void main() {
             ]));
         expect(f, isEmpty, reason: 'a short or common value was reported');
       }
+    });
+
+    test('consent strings are not identifiers', () {
+      for (final n in [
+        'euconsent-v2',
+        'addtl_consent',
+        'OptanonConsent',
+        'OptanonAlertBoxClosed',
+        'CookieConsent',
+        'didomi_token',
+        'usprivacy',
+        '__cmpconsent15',
+      ]) {
+        final f = findSharedIdentifiers(browserSnap(
+            url: 'https://shop.test/',
+            cookies: [cookie(n, value: id)],
+            resources: [
+              res('https://a.one.test/p?u=$id'),
+              res('https://b.two.test/p?u=$id'),
+            ]));
+        expect(f.isEmpty, isTrue, reason: '$n was reported');
+      }
+    });
+
+    test('the same value in two cookies is one finding', () {
+      final f = findSharedIdentifiers(browserSnap(
+          url: 'https://shop.test/',
+          cookies: [cookie('_a', value: id), cookie('_b', value: id)],
+          resources: [
+            res('https://a.one.test/p?u=$id'),
+            res('https://b.two.test/p?u=$id'),
+          ]));
+      expect(f.length, 1);
+    });
+
+    test('two cookies with one name and different values are two findings',
+        () {
+      const other = 'z9y8x7w6v5u4t3s2r1';
+      final f = findSharedIdentifiers(browserSnap(
+          url: 'https://shop.test/',
+          cookies: [cookie('_a', value: id), cookie('_a', value: other)],
+          resources: [
+            res('https://a.one.test/p?u=$id&v=$other'),
+            res('https://b.two.test/p?u=$id&v=$other'),
+          ]));
+      expect(f.length, 2);
+    });
+
+    test('a long cookie name is cut in the title', () {
+      final name = 'n' * 60;
+      final f = findSharedIdentifiers(browserSnap(
+          url: 'https://shop.test/',
+          cookies: [cookie(name, value: id)],
+          resources: [
+            res('https://a.one.test/p?u=$id'),
+            res('https://b.two.test/p?u=$id'),
+          ]));
+      expect(f.single.title.contains('${'n' * 40}…'), isTrue);
+      expect(f.single.title.contains('n' * 41), isFalse);
     });
 
     test('one other party is not sharing', () {
@@ -431,6 +520,43 @@ void main() {
       final m = deriveTechniques(pageWithSharedId,
           cloaking: const Failed('dns down'), metadata: null);
       expect(m.cloakingNote, contains('dns down'));
+    });
+
+    test('without cookies the shared identifiers are not checked, not clean',
+        () {
+      final p = inspection(
+              browser: browserSnap(url: 'https://shop.test/', cookies: null))
+          .copyWith(
+              freshTechniques: Present(signals(), source: DataSource.browser));
+      final m = deriveTechniques(p,
+          cloaking: const Present(CloakingResult(), source: DataSource.server),
+          metadata: const {});
+      expect(m.sharedIdsNote,
+          'Cookies not available: shared identifiers not checked.');
+      expect(m.complete, isFalse);
+    });
+
+    test('not supported here: the note says so, no button', () {
+      final m = deriveTechniques(pageWithSharedId,
+          cloaking: const Pending(),
+          metadata: null,
+          freshLoadSupported: false);
+      expect(m.callChecksNote, 'Not supported on this platform');
+      expect(m.callChecksCanRun, isFalse);
+      expect(m.findings.map((f) => f.id), ['id-sharing']);
+    });
+
+    test('a measured load is shown even where a fresh load is unsupported',
+        () {
+      final m = deriveTechniques(
+          pageWithSharedId.copyWith(
+              freshTechniques:
+                  Present(signals(battery: 1), source: DataSource.browser)),
+          cloaking: const Pending(),
+          metadata: null,
+          freshLoadSupported: false);
+      expect(m.callChecksNote, isNull);
+      expect(m.findings.map((f) => f.id), contains('battery'));
     });
 
     test('complete only when every check ran', () {

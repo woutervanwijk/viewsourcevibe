@@ -66,6 +66,8 @@ class _TechniquesSectionState extends State<TechniquesSection> {
                 ),
             ],
           ),
+        if (model.sharedIdsNote != null)
+          Text(model.sharedIdsNote!, style: muted),
         if (model.cloakingNote != null) Text(model.cloakingNote!, style: muted),
         if (model.notChecked.isNotEmpty)
           Text('Not checked (lookup failed): ${model.notChecked.join(', ')}',
