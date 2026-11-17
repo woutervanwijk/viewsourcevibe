@@ -208,6 +208,21 @@ void main() {
       expect(SovereigntyService.parseDnsRecords(data, 15), isEmpty);
     });
 
+    test('CNAME answers (type 5) are lower-case host names without the dot',
+        () {
+      // metrics.shop.test CNAME Shop.SC.Omtrdc.net.
+      final data = Uint8List.fromList([
+        0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0,
+        7, 109, 101, 116, 114, 105, 99, 115, 4, 115, 104, 111, 112, 4, 116,
+        101, 115, 116, 0, 0, 5, 0, 1, // question
+        0xC0, 0x0C, 0, 5, 0, 1, 0, 0, 0, 60, 0, 0x14, // answer header
+        4, 83, 104, 111, 112, 2, 83, 67, 6, 79, 109, 116, 114, 100, 99, 3,
+        110, 101, 116, 0,
+      ]);
+      expect(SovereigntyService.parseDnsRecords(data, 5),
+          ['shop.sc.omtrdc.net']);
+    });
+
     test('tolerates garbage', () {
       expect(SovereigntyService.parseDnsRecords(Uint8List(3), 2), isEmpty);
     });

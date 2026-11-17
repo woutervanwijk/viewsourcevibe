@@ -1,0 +1,71 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/services/cname_cloaking_service.dart';
+import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/inspection_store.dart';
+
+import '../fixtures/inspection/builders.dart';
+import '../fixtures/inspection/full_page.dart';
+import '../fixtures/inspection/pump.dart';
+
+void main() {
+  late InspectionStore store;
+  late HtmlService service;
+  late List<String> looked;
+
+  final page = fullPage().copyWith(
+    browser: browser(browserSnapshot(
+      url: 'https://www.example.com/',
+      dom: fullPageDomHtml,
+      resources: [
+        resource('https://metrics.example.com/s.js', 'script'),
+        resource('https://static.example.com/a.css', 'css'),
+      ],
+    )),
+  );
+
+  setUp(() {
+    store = InspectionStore();
+    looked = [];
+    service = HtmlService(
+      store: store,
+      serverFetcher: SilentServerFetcher(),
+      browserLoader: SilentBrowserLoader(),
+      metadataExtractor: (html, baseUrl, {headers}) async => {},
+      cnameLookup: (h) async {
+        looked.add(h);
+        return h.startsWith('metrics') ? ['x.sc.omtrdc.net'] : const [];
+      },
+    );
+  });
+  tearDown(() => service.dispose());
+
+  test('no lookup while no view watches', () async {
+    seedStore(store, page);
+    await pumpEventQueue();
+    expect(looked, isEmpty);
+    expect(service.cnameCloaking, isA<Pending<CloakingResult>>());
+  });
+
+  test('watched and settled: one lookup run, a Present result', () async {
+    seedStore(store, page);
+    service.watchCloaking(true);
+    await pumpEventQueue();
+    final state = service.cnameCloaking as Present<CloakingResult>;
+    expect(state.value.aliases.single.host, 'metrics.example.com');
+    expect(looked.toSet(), {'metrics.example.com', 'static.example.com'});
+    final n = looked.length;
+    store.applyRobots(store.current.generation, const Pending());
+    await pumpEventQueue();
+    expect(looked.length, n);
+  });
+
+  test('a result for a page we navigated away from is dropped', () async {
+    seedStore(store, page);
+    service.watchCloaking(true);
+    seedStore(store, page); // new generation before the lookups answer
+    await pumpEventQueue();
+    final state = service.cnameCloaking as Present<CloakingResult>;
+    expect(state.value.aliases, hasLength(1));
+  });
+}

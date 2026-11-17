@@ -705,7 +705,9 @@ class SovereigntyService {
 
     final domain = registrableDomain(mainHost);
     Future<List<String>?> dnsQuery(String name, int type) =>
-        domain.isEmpty ? Future.value(null) : _dnsQuery(name, type);
+        domain.isEmpty
+            ? Future.value(null)
+            : SovereigntyService.dnsQuery(name, type);
     final lookups = await Future.wait([
       dnsQuery(domain, 2), // NS
       dnsQuery(domain, 15), // MX
@@ -1532,7 +1534,8 @@ class SovereigntyService {
 
   /// DNS-over-HTTPS (RFC 8484 wire format).
   /// Returns parsed records (see [parseDnsRecords]), null on failure.
-  static Future<List<String>?> _dnsQuery(String domain, int type) async {
+  /// Public so other analyses (CNAME cloaking) reuse the same resolvers.
+  static Future<List<String>?> dnsQuery(String domain, int type) async {
     final dns =
         base64Url.encode(buildDnsQuery(domain, type)).replaceAll('=', '');
     for (final resolver in _dohResolvers) {
@@ -1640,6 +1643,7 @@ class SovereigntyService {
           16 => _txt(d.sublist(rdata, rdata + rdlen)),
           257 => _caa(d.sublist(rdata, rdata + rdlen)),
           43 => 'key tag ${u16(rdata)}',
+          5 => readName(rdata).$1.toLowerCase(),
           _ => readName(rdata).$1,
         });
       }

@@ -14,6 +14,7 @@ import 'package:view_source_vibe/utils/font_url.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
+import 'package:view_source_vibe/services/cname_cloaking_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -224,6 +225,13 @@ class HtmlService extends ChangeNotifier {
   String? _sovereigntyError;
   int _sovereigntyWatchers = 0;
   bool _sovereigntyScheduled = false;
+
+  final CnameLookup _cnameLookup;
+  int _cloakingWatchers = 0;
+  bool _cloakingRunning = false;
+  int? _cloakingGen;
+  CloakingResult? _cloakingResult;
+  Observed<CloakingResult>? _cloakingPresent;
   String? _sovereigntyInputKey;
   Timer? _sovereigntyTimer;
   final Duration _sovereigntyDebounce;
@@ -1011,6 +1019,67 @@ class HtmlService extends ChangeNotifier {
 
   /// The URL the analysis is about: where the browser is, else where the
   /// app's own request ended, else what was asked for. From the store only.
+  /// CNAME cloaking check of the current page: Pending until a view watches
+  /// and the page has settled.
+  Observed<CloakingResult> get cnameCloaking {
+    final current = store.current;
+    if (current.target is! UrlTarget) {
+      return const Unavailable(UnavailableReason.notApplicable,
+          'Load a URL to check its hostnames.');
+    }
+    final result = _cloakingResult;
+    if (result == null || _cloakingGen != current.generation) {
+      return const Pending();
+    }
+    final cached = _cloakingPresent;
+    if (cached is Present<CloakingResult> && identical(cached.value, result)) {
+      return cached;
+    }
+    return _cloakingPresent = Present(result,
+        source: DataSource.server, provenance: Provenance.derived);
+  }
+
+  /// A view calls this when it appears (+1) and disappears (-1). The lookups
+  /// run once per navigation, after the page settled, only while watched.
+  void watchCloaking(bool watching) {
+    _cloakingWatchers =
+        (_cloakingWatchers + (watching ? 1 : -1)).clamp(0, 1 << 20);
+    if (watching) _scheduleCloaking();
+  }
+
+  void _scheduleCloaking() {
+    if (_disposed || _cloakingWatchers == 0 || _cloakingRunning) return;
+    final current = store.current;
+    final b = current.browser;
+    if (!current.browserSettled ||
+        b is! Present<BrowserSnapshot> ||
+        _cloakingGen == current.generation ||
+        (b.value.url.scheme != 'http' && b.value.url.scheme != 'https')) {
+      return;
+    }
+    _cloakingRunning = true;
+    _cloakingGen = current.generation;
+    scheduleMicrotask(() => _runCloaking(current.generation, b.value.url));
+  }
+
+  Future<void> _runCloaking(int gen, Uri url) async {
+    try {
+      final hosts = SovereigntyService.browserResources(store.current)
+          .map((r) => Uri.tryParse(r.url)?.host ?? '')
+          .where((h) => h.isNotEmpty);
+      final result = await findCloakedTrackers(hosts,
+          pageHost: url.host, lookup: _cnameLookup);
+      if (!_disposed && gen == store.current.generation) {
+        _cloakingResult = result;
+      }
+    } catch (e) {
+      debugPrint('CNAME cloaking check failed: $e');
+    } finally {
+      _cloakingRunning = false;
+      notifyListeners(); // also starts the check for a newer navigation
+    }
+  }
+
   Uri? get _sovereigntyUri {
     final current = store.current;
     final target = current.target;
@@ -1629,7 +1698,9 @@ class HtmlService extends ChangeNotifier {
     NetworkQuietPolicy browserPoll = NetworkQuietPolicy.live,
     Duration lateCollectDelay = const Duration(seconds: 2),
     Duration spaSettleDelay = const Duration(milliseconds: 400),
-  })  : _sovereigntyDebounce = sovereigntyDebounce,
+    CnameLookup? cnameLookup,
+  })  : _cnameLookup = cnameLookup ?? dohCnameLookup,
+        _sovereigntyDebounce = sovereigntyDebounce,
         _sovereigntyAnalyzer =
             sovereigntyAnalyzer ?? SovereigntyService.analyze,
         _detectionScanner = detectionScanner,
@@ -2377,6 +2448,7 @@ Technical details: $message''';
     if (_disposed) return;
     super.notifyListeners();
     _scheduleSovereignty();
+    _scheduleCloaking();
   }
 
   @override
