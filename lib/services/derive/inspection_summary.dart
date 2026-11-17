@@ -139,6 +139,7 @@ InspectionSummary deriveSummary(SummaryInputs i) {
         };
 
   final findings = <Finding>[
+    ..._notLoaded(p),
     ..._blockPage(i.blockPage),
     ..._invalidCertAccepted(server),
     ..._noHttps(finalUrl ?? browser?.url),
@@ -192,6 +193,17 @@ InspectionSummary deriveSummary(SummaryInputs i) {
   return InspectionSummary(findings, facts);
 }
 
+bool _missing(Observed<Object?> o) => o is Failed || o is Unavailable;
+
+/// Neither the app's own request nor the browser got the page.
+List<Finding> _notLoaded(PageInspection p) =>
+    p.target is UrlTarget && _missing(p.server) && _missing(p.browser)
+        ? [
+            Finding('not-loaded', FindingSeverity.high, 'The page did not load',
+                tab: AppTab.probe.tag)
+          ]
+        : const [];
+
 List<Finding> _blockPage(BlockPage? b) => b == null
     ? const []
     : [
@@ -243,7 +255,7 @@ List<Finding> _preConsent(
   if (n == 0) return const [];
   return [
     Finding('pre-consent', FindingSeverity.high,
-        'Tracking before consent: $n tracker(s) active while ${consent.name} is present',
+        '$n tracker(s) active while ${consent.name} is present',
         tab: AppTab.privacy.tag)
   ];
 }
@@ -264,7 +276,7 @@ List<Finding> _adCookies(bool blocked, CookiesModel? c) =>
     !blocked && c != null && c.advertisingCount > 0
         ? [
             Finding('ad-cookies', FindingSeverity.medium,
-                '${c.advertisingCount} advertising cookie(s) set without a consent choice',
+                '${c.advertisingCount} advertising cookie(s) set',
                 tab: AppTab.cookies.tag)
           ]
         : const [];

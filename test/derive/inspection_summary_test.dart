@@ -15,6 +15,7 @@ import '../fixtures/inspection/bot_blocked.dart';
 import '../fixtures/inspection/builders.dart';
 import '../fixtures/inspection/full_page.dart';
 import '../fixtures/inspection/trackers.dart';
+import 'fixtures.dart';
 
 SummaryInputs inputsFor(
   PageInspection p, {
@@ -90,8 +91,34 @@ void main() {
     ]));
     final f = s.findings.firstWhere((f) => f.id == 'pre-consent');
     expect(f.severity, FindingSeverity.high);
-    expect(f.title, contains('Cookiebot'));
+    expect(f.title, '1 tracker(s) active while Cookiebot is present');
     expect(s.facts['consentTool'], 'Cookiebot');
+  });
+
+  test('advertising cookies are counted, not judged', () {
+    const url = 'https://ads.test/';
+    final s = deriveSummary(inputsFor(inspection(
+        server: serverSnap(
+            url: url, setCookies: ['_fbp=1; Secure', '_gcl_au=1; Secure']),
+        browser: browserSnap(url: url, cookies: const []))));
+    final f = s.findings.firstWhere((f) => f.id == 'ad-cookies');
+    expect(f.severity, FindingSeverity.medium);
+    expect(f.title, '2 advertising cookie(s) set');
+  });
+
+  test('a page that did not load is a high finding', () {
+    final s = deriveSummary(inputsFor(PageInspection(
+      generation: 1,
+      target: UrlTarget(Uri.parse('https://dead.test/')),
+      server: const Failed('Failed host lookup'),
+      browser: const Unavailable(UnavailableReason.notApplicable, 'none'),
+      file: const Unavailable(UnavailableReason.notApplicable),
+    )));
+    final f = s.findings.first;
+    expect(f.id, 'not-loaded');
+    expect(f.severity, FindingSeverity.high);
+    expect(f.title, 'The page did not load');
+    expect(f.tab, 'probe');
   });
 
   test('a block page hides content findings', () {

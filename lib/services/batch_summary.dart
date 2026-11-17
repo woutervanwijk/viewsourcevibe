@@ -10,14 +10,14 @@ class BatchRow {
   /// Also the package name: `sites/<slug>.zip`.
   final String slug;
 
-  /// 'done' | 'timed out' | 'failed' | 'cancelled'
+  /// 'done' | 'timed out' | 'failed'
   final String state;
 
   /// Analyses unfinished at export.
   final List<String> pending;
   final String? error;
 
-  /// Null when nothing was exported.
+  /// Null when nothing was exported (then there is no package).
   final InspectionSummary? summary;
 
   const BatchRow({
@@ -46,7 +46,7 @@ Map<String, Object?> batchSummaryJson(List<BatchRow> rows,
           {
             'url': r.url.toString(),
             'slug': r.slug,
-            'package': r.package,
+            'package': r.summary == null ? null : r.package,
             'state': r.state,
             'pending': r.pending,
             'error': r.error,
@@ -70,7 +70,7 @@ String csvCell(Object? value) {
 String batchSummaryCsv(List<BatchRow> rows) {
   final lines = <String>[
     [
-      'url', 'state', 'pending', 'error', ...summaryFactKeys, //
+      'requestedUrl', 'state', 'pending', 'error', ...summaryFactKeys, //
       for (var i = 1; i <= 5; i++) 'finding$i',
     ].join(','),
   ];
@@ -112,8 +112,11 @@ String batchSummaryHtml(List<BatchRow> rows, {required DateTime exportedAt}) {
     final pending = r.pending.isEmpty
         ? ''
         : '<div class="muted">Unfinished: ${e(r.pending.join(', '))}</div>';
+    final site = s == null
+        ? e(r.url)
+        : '<a href="${e(r.package)}">${e(r.url)}</a>';
     body.writeln('<tr>'
-        '<td><a href="${e(r.package)}">${e(r.url)}</a></td>'
+        '<td>$site</td>'
         '<td>${e(r.state)}$pending</td>'
         '<td>$findings</td>'
         '</tr>');

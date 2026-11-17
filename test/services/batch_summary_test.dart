@@ -37,7 +37,7 @@ void main() {
     final lines = csv.trimRight().split('\r\n');
     expect(lines, hasLength(3));
     expect(lines.first,
-        startsWith('url,state,pending,error,url,finalUrl,status,'));
+        startsWith('requestedUrl,state,pending,error,url,finalUrl,status,'));
     expect(
         lines.first, endsWith('finding1,finding2,finding3,finding4,finding5'));
     expect(lines[1], contains('High: Something'));
@@ -69,9 +69,11 @@ void main() {
     final json = batchSummaryJson([failed], exportedAt: at);
     final site = (json['sites'] as List).single as Map;
     expect(site['summary'], isNull);
-    expect(site['package'], 'sites/c.test.zip');
+    expect(site['package'], isNull);
     expect(json['unknownIs'], 'null');
     final html = batchSummaryHtml([failed], exportedAt: at);
     expect(html, contains('&lt;b&gt;timeout&lt;/b&gt;'));
+    expect(html, isNot(contains('<a href')));
+    expect(html, contains('https://c.test/'));
   });
 }
