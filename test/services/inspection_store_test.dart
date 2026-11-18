@@ -5,6 +5,7 @@ import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/permission_request.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/utils/text_decoding.dart';
@@ -49,7 +50,9 @@ BrowserSnapshot _browser(String url,
         {String? dom,
         List<ResourceEntry>? resources,
         bool truncated = false,
-        int dropped = 0}) =>
+        int dropped = 0,
+        Observed<List<FrameInfo>>? frames,
+        Observed<SiteStorage>? siteStorage}) =>
     BrowserSnapshot(
       url: Uri.parse(url),
       platform: BrowserPlatform.macos,
@@ -66,6 +69,8 @@ BrowserSnapshot _browser(String url,
       snapshotTimeMs: const Present(10.0, source: DataSource.browser),
       resourcesTruncated: truncated,
       resourcesDropped: dropped,
+      frames: frames ?? kFramesNotCollected,
+      siteStorage: siteStorage ?? kSiteStorageNotCollected,
     );
 
 FileSnapshot _file() => FileSnapshot(
@@ -145,6 +150,29 @@ void main() {
             .value
             .map((r) => r.url),
         containsAll(['https://a.test/a.js', 'https://a.test/b.js']));
+  });
+
+  test('a later poll keeps and compares the capability flags', () {
+    final g = store.beginUrl(Uri.parse('https://a.test/'));
+    const no = Present(false, source: DataSource.browser);
+    store.applyBrowser(
+        g,
+        _browser('https://a.test/', dom: '<p>a</p>')
+            .copyWith(mediaDevices: no, geolocation: no));
+    // A poll without the capabilities section must not wipe them.
+    store.applyBrowser(g, _browser('https://a.test/', dom: '<p>a</p>'));
+    var b = (store.current.browser as Present<BrowserSnapshot>).value;
+    expect(b.mediaDevices, isA<Present<bool>>());
+    expect(b.geolocation, isA<Present<bool>>());
+    // A capability-only change is not a no-op.
+    notifies = 0;
+    store.applyBrowser(
+        g,
+        _browser('https://a.test/', dom: '<p>a</p>').copyWith(
+            mediaDevices: const Present(true, source: DataSource.browser)));
+    b = (store.current.browser as Present<BrowserSnapshot>).value;
+    expect((b.mediaDevices as Present<bool>).value, isTrue);
+    expect(notifies, greaterThan(0));
   });
 
   test('stale robots and failure are ignored', () {
@@ -509,6 +537,77 @@ void main() {
       store.applyDeclaredMedia(g, ['https://img.a.test/c.gif']);
       expect(notifies, 0);
       expect(store.current.declaredMedia, isEmpty);
+    });
+  });
+
+  group('frames and site storage', () {
+    const gone = Unavailable<SiteStorage>(
+        UnavailableReason.notReportedByPlatform, 'not collected');
+    Observed<SiteStorage> storage(int usage) => Present(
+        SiteStorage(
+          usageBytes: Present(usage, source: DataSource.browser),
+          quotaBytes: const Unavailable(UnavailableReason.notReportedByPlatform),
+          indexedDbNames: const Present(['a'], source: DataSource.browser),
+          cacheNames: const Unavailable(UnavailableReason.notReportedByPlatform),
+          serviceWorkers:
+              const Unavailable(UnavailableReason.notReportedByPlatform),
+        ),
+        source: DataSource.browser);
+    Observed<SiteStorage> current() =>
+        (store.current.browser as Present<BrowserSnapshot>).value.siteStorage;
+
+    test('a later poll without site storage keeps the earlier result', () {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      store.applyBrowser(g, _browser('https://a.test/', siteStorage: storage(1)));
+      store.applyBrowser(
+          g,
+          _browser('https://a.test/',
+              dom: '<p>', siteStorage: const Pending<SiteStorage>()));
+      expect((current() as Present<SiteStorage>).value.usageBytes,
+          isA<Present<int>>());
+      store.applyBrowser(g, _browser('https://a.test/', dom: '<p>', siteStorage: gone));
+      expect(current(), isA<Present<SiteStorage>>());
+    });
+
+    test('equal frames and storage keep identity, no notification', () {
+      final g = store.beginUrl(Uri.parse('https://a.test/'));
+      Observed<List<FrameInfo>> fr() => Present([
+            const FrameInfo(src: 'https://f.test/', allow: 'camera'),
+          ], source: DataSource.browser);
+      store.applyBrowser(
+          g, _browser('https://a.test/', frames: fr(), siteStorage: storage(1)));
+      final before = store.current.browser;
+      final n = notifies;
+      store.applyBrowser(
+          g, _browser('https://a.test/', frames: fr(), siteStorage: storage(1)));
+      expect(identical(store.current.browser, before), isTrue);
+      expect(notifies, n);
+    });
+  });
+
+  group('permission requests', () {
+    PermissionRequestEvent ev(String origin, List<String> r) =>
+        PermissionRequestEvent(
+            origin: origin, resources: r, sinceLoadStart: Duration.zero);
+
+    test('a permission request is kept for its own page only', () {
+      final store = InspectionStore();
+      final gen = store.beginUrl(Uri.parse('https://a.test/'));
+      store.addPermissionRequest(gen, ev('https://a.test', ['camera']));
+      expect(store.current.permissionRequests.single.resources, ['camera']);
+      final next = store.beginUrl(Uri.parse('https://b.test/'));
+      store.addPermissionRequest(gen, ev('https://a.test', ['microphone']));
+      expect(store.current.permissionRequests, isEmpty);
+      expect(next, isNot(gen));
+    });
+
+    test('at most 50 requests are kept', () {
+      final store = InspectionStore();
+      final gen = store.beginUrl(Uri.parse('https://a.test/'));
+      for (var i = 0; i < 60; i++) {
+        store.addPermissionRequest(gen, ev('https://a.test', ['camera']));
+      }
+      expect(store.current.permissionRequests.length, 50);
     });
   });
 }

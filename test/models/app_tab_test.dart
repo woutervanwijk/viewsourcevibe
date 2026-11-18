@@ -15,7 +15,7 @@ void main() {
         'Browser', 'Metadata', 'Media', 'Services', 'Reader', //
         'DOM Tree', 'Source', //
         'Size', 'Headers', 'Timeline', 'Probe', //
-        'Privacy', 'Sovereignty', 'Security', 'Cookies',
+        'Privacy', 'Sovereignty', 'Security', 'Permissions', 'Cookies',
       ]);
       // Groups are contiguous, so each group's chips are one run of pages.
       final groups = tabs.map((t) => t.group).toList();

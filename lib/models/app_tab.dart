@@ -28,6 +28,8 @@ enum AppTab {
   privacy(TabGroup.trust, 'Privacy', Icons.privacy_tip_outlined, 'privacy'),
   sovereignty(TabGroup.trust, 'Sovereignty', Icons.public, 'sovereignty'),
   security(TabGroup.trust, 'Security', Icons.security, 'security'),
+  permissions(TabGroup.trust, 'Permissions',
+      Icons.admin_panel_settings_outlined, 'permissions'),
   cookies(TabGroup.trust, 'Cookies', Icons.cookie_outlined, 'cookies');
 
   final TabGroup group;
@@ -66,6 +68,7 @@ List<AppTab> visibleTabsFor({
           AppTab.probe ||
           AppTab.sovereignty ||
           AppTab.security ||
+          AppTab.permissions ||
           AppTab.cookies =>
             server,
         })

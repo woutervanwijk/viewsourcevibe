@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,7 @@ import 'package:view_source_vibe/services/collectors/collector_world.dart';
 import 'package:view_source_vibe/services/collectors/frame_relay.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/navigation_policy.dart';
+import 'package:view_source_vibe/services/permission_resources.dart';
 import 'package:view_source_vibe/services/rss_template_service.dart';
 import 'package:view_source_vibe/utils/low_resource_webview.dart';
 import 'package:view_source_vibe/widgets/scroll_through_banner.dart';
@@ -224,6 +226,25 @@ class _BrowserViewState extends State<BrowserView> {
     }
   }
 
+  int _loadStartSeq() =>
+      Provider.of<HtmlService>(context, listen: false).loadStartSeq;
+
+  /// Records a (denied) permission request for the page showing now. Never
+  /// throws: the caller must always answer DENY.
+  Future<void> _recordPermission(InAppWebViewController controller,
+      int loadSeq, String origin, List<String> resources) async {
+    try {
+      final mainFrame = await controller.getUrl();
+      if (!mounted) return;
+      Provider.of<HtmlService>(context, listen: false)
+          .onBrowserPermissionRequest(origin, resources,
+              mainFrame == null ? null : Uri.tryParse(mainFrame.toString()),
+              loadSeq: loadSeq);
+    } catch (_) {
+      // Recording is best effort.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appSettings = context.watch<AppSettings>();
@@ -287,9 +308,26 @@ class _BrowserViewState extends State<BrowserView> {
           _loadContent();
         }
       },
+      // The app never grants a permission: deny, and record who asked.
+      onPermissionRequest: (controller, request) async {
+        // Answer at once; recording must not delay the page (or the answer).
+        unawaited(_recordPermission(controller, _loadStartSeq(),
+            request.origin.toString(),
+            permissionResourceNames(request.resources)));
+        return PermissionResponse(
+            resources: request.resources,
+            action: PermissionResponseAction.DENY);
+      },
+      onGeolocationPermissionsShowPrompt: (controller, origin) async {
+        unawaited(_recordPermission(
+            controller, _loadStartSeq(), origin, const ['geolocation']));
+        return GeolocationPermissionShowPromptResponse(
+            origin: origin, allow: false, retain: false);
+      },
       onLoadStart: (controller, url) {
         _lastSyncedUrl = null;
-        Provider.of<HtmlService>(context, listen: false).onBrowserLoadStart();
+        Provider.of<HtmlService>(context, listen: false).onBrowserLoadStart(
+            url == null ? null : Uri.tryParse(url.toString()));
       },
       onLoadStop: (controller, url) async {
         if (mounted && url != null) {

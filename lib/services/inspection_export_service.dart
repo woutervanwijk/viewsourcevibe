@@ -230,6 +230,8 @@ class InspectionExportService {
     addJson('analysis/detections.json', detectionsJson);
     addJson('analysis/security-scorecard.json', scorecardJson);
     addJson('analysis/certificate.json', certificateJson);
+    addJson('analysis/permissions.json',
+        InspectionExportData.permissions(htmlService.permissionsView));
     addJson('analysis/robots-sitemap.json', robotsJson);
     addJson(
         'analysis/structured-data.json',
