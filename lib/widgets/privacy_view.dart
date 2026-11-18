@@ -7,6 +7,7 @@ import 'package:view_source_vibe/models/detection_evidence.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/widgets/service_logo.dart';
 import 'package:view_source_vibe/widgets/evidence_view.dart';
+import 'package:view_source_vibe/widgets/techniques_section.dart';
 
 /// Who is tracking you on this page: the tracking categories of
 /// [HtmlService.detections], with logos.
@@ -42,11 +43,25 @@ class PrivacyView extends StatelessWidget {
     final others = seesVisit(view.detections);
 
     if (hits.isEmpty && others.isEmpty) {
-      return DetectionEmptyState(
-        view: view,
-        icon: Icons.verified_user_outlined,
-        noneTitle: 'No Trackers Detected',
-        noneText: 'No known trackers found on this page.',
+      return Scrollbar(
+        child: SingleChildScrollView(
+          primary: true,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DetectionEmptyState(
+                view: view,
+                icon: Icons.verified_user_outlined,
+                noneTitle: 'No Trackers Detected',
+                noneText: 'No known trackers found on this page.',
+              ),
+              const SizedBox(height: 24),
+              const TechniquesSection(),
+              const SizedBox(height: 80),
+            ],
+          ),
+        ),
       );
     }
 
@@ -111,6 +126,8 @@ class PrivacyView extends StatelessWidget {
               const SizedBox(height: 8),
               ...others.map((d) => _TrackerTile(hit: d)),
             ],
+            const SizedBox(height: 32),
+            const TechniquesSection(),
             const SizedBox(height: 24),
             DetectionNote(view: view),
             const SizedBox(height: 80),

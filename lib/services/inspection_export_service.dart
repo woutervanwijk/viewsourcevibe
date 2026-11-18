@@ -7,6 +7,8 @@ import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/models/inspection/technique_signals.dart';
+import 'package:view_source_vibe/services/cname_cloaking_service.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
 import 'package:view_source_vibe/services/derive/inspection_summary.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
@@ -181,6 +183,20 @@ class InspectionExportService {
       'checked': detections.sources.line,
       'value': [for (final d in detections.detections) d.toMap()],
     });
+    final techniques = htmlService.techniquesView;
+    final techniquesJson = unlessBlocked({
+      // Whether the fresh-load checks ran, not their raw counts.
+      'callChecks': observedJson<TechniqueSignals>(
+          p.freshTechniques, (_) => 'measured',
+          source: DataSource.browser),
+      // Whether the hostname check ran; the hosts are in `findings` only.
+      'hostnameCheck': observedJson<CloakingResult>(
+          htmlService.cnameCloaking, (_) => 'checked',
+          source: DataSource.server),
+      'findings': [for (final f in techniques.findings) f.toJson()],
+      'notChecked': techniques.notChecked,
+      'complete': techniques.complete,
+    });
     final structureJson = unlessBlocked(
         InspectionExportData.structure(htmlService.structureView));
     final sovereigntyJson = observedJson(sovereignty, (r) => r.toJson(),
@@ -226,6 +242,7 @@ class InspectionExportService {
     addJson('network/redirects.json', redirectsJson);
     addJson('network/timeline.json', timelineJson);
     addJson('analysis/sovereignty.json', sovereigntyJson);
+    addJson('analysis/techniques.json', techniquesJson);
     addJson('analysis/summary.json', summary.toJson());
 
     addJson('analysis/metadata.json', metadataJson);

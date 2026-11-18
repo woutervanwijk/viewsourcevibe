@@ -10,6 +10,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../derive/network_quiet.dart';
 import 'collector_world.dart';
 import 'frame_relay.dart';
+import 'vsv_techniques_js.dart';
 
 /// Loads a page once more, apart from the live browser, the way Lighthouse
 /// does: empty cache, phone-sized screen, waiting until the network is
@@ -24,7 +25,11 @@ class FreshLoadRaw {
 
   /// Small JPEG; null when the platform gave none.
   final Uint8List? screenshot;
-  const FreshLoadRaw(this.payload, {this.screenshot});
+
+  /// What `window.__vsv_tech_report()` returned (a JSON string); null when
+  /// the script did not run or the call failed.
+  final Object? techniques;
+  const FreshLoadRaw(this.payload, {this.screenshot, this.techniques});
 }
 
 /// Thumbnail settings for screenshots of a load (small JPEG).
@@ -89,6 +94,12 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
       ),
       initialUserScripts: UnmodifiableListView<UserScript>([
         collectorUserScript(defaultTargetPlatform),
+        // Page world: it has to see the page's own calls. Fresh load only.
+        UserScript(
+          source: vsvTechniquesJs,
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          forMainFrameOnly: true,
+        ),
       ]),
       onWebViewCreated: (controller) {
         controller.addJavaScriptHandler(
@@ -140,6 +151,13 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
       } catch (_) {}
       await waitQuiet(clock.elapsed + _scrollSettleBudget);
 
+      Object? techniques;
+      try {
+        techniques = await controller.evaluateJavascript(
+            source: 'window.__vsv_tech_report && window.__vsv_tech_report()');
+      } catch (_) {
+        // No report is said as unavailable, never as clean.
+      }
       final payload = await controller.evaluateJavascript(
           source: 'window.__vsv_collect()', contentWorld: world);
       Uint8List? shot;
@@ -149,7 +167,7 @@ class HeadlessFreshLoadMeasurer implements FreshLoadMeasurer {
       } catch (_) {
         // No screenshot is fine: the sizes are what was measured.
       }
-      return FreshLoadRaw(payload, screenshot: shot);
+      return FreshLoadRaw(payload, screenshot: shot, techniques: techniques);
     } finally {
       await view.dispose();
     }

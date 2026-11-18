@@ -14,6 +14,7 @@ import 'package:view_source_vibe/utils/font_url.dart';
 import 'package:view_source_vibe/services/source_viewer_editor.dart';
 import 'package:view_source_vibe/services/jurisdiction.dart';
 import 'package:view_source_vibe/services/sovereignty_service.dart';
+import 'package:view_source_vibe/services/cname_cloaking_service.dart';
 import 'package:view_source_vibe/services/file_type_detector.dart';
 import 'package:view_source_vibe/services/app_state_service.dart';
 import 'package:view_source_vibe/models/settings.dart';
@@ -28,6 +29,7 @@ import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/page_layout.dart';
 import 'package:view_source_vibe/models/inspection/permission_request.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
+import 'package:view_source_vibe/models/inspection/technique_signals.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/collector_world.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
@@ -50,6 +52,7 @@ import 'package:view_source_vibe/services/derive/media.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/services/derive/metadata.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
+import 'package:view_source_vibe/services/derive/techniques.dart';
 import 'package:view_source_vibe/services/derive/estimate_targets.dart';
 import 'package:view_source_vibe/services/derive/page_size.dart';
 import 'package:view_source_vibe/services/derive/dom_tree.dart';
@@ -235,6 +238,15 @@ class HtmlService extends ChangeNotifier {
   Timer? _sovereigntyTimer;
   final Duration _sovereigntyDebounce;
   Observed<SovereigntyReport>? _sovereigntyPresent;
+
+  // CNAME cloaking check (see watchCloaking).
+  final CnameLookup _cnameLookup;
+  final CloakingFinder _cloakingFinder;
+  int _cloakingWatchers = 0;
+  bool _cloakingRunning = false;
+  int? _cloakingGen; // navigation the check was started for
+  int? _cloakingResultGen; // navigation the stored result belongs to
+  Observed<CloakingResult>? _cloakingState;
 
   // Metadata state
   Map<String, dynamic>? _pageMetadata;
@@ -1085,6 +1097,114 @@ class HtmlService extends ChangeNotifier {
     if (watching) _scheduleSovereignty();
   }
 
+  /// CNAME cloaking check of the current page: Pending until a view watches
+  /// and the page has settled.
+  Observed<CloakingResult> get cnameCloaking {
+    final current = store.current;
+    if (current.target is! UrlTarget) {
+      return const Unavailable(UnavailableReason.notApplicable,
+          'Load a URL to check its hostnames.');
+    }
+    final browser = current.browser;
+    if (browser is Unavailable<BrowserSnapshot> &&
+        browser.reason != UnavailableReason.notApplicable) {
+      return const Unavailable(
+          UnavailableReason.blockedByPlatform, 'Needs the in-app browser');
+    }
+    if (browser is Failed<BrowserSnapshot>) {
+      return const Failed('the browser did not report this page');
+    }
+    if (browser is Present<BrowserSnapshot> &&
+        browser.value.url.scheme != 'http' &&
+        browser.value.url.scheme != 'https') {
+      return const Unavailable(UnavailableReason.notApplicable,
+          'Only web pages have hostnames to check.');
+    }
+    final state = _cloakingState;
+    if (state == null || _cloakingResultGen != current.generation) {
+      return const Pending();
+    }
+    return state;
+  }
+
+  /// Whether this platform can load a page apart from the live browser.
+  bool get freshLoadSupported => _freshMeasurer is! NoFreshLoad;
+
+  TechniquesModel? _techniquesView;
+  PageInspection? _techniquesViewFor;
+  Observed<MetadataModel>? _techniquesViewMetadata;
+  Observed<CloakingResult>? _techniquesViewCloaking;
+
+  /// The Privacy tab's suspicious techniques (see [deriveTechniques]); cached
+  /// until the inspection, the metadata or the cloaking check changes.
+  TechniquesModel get techniquesView {
+    final current = store.current;
+    final metadata = metadataState;
+    final cloaking = cnameCloaking;
+    if (_techniquesView == null ||
+        !identical(_techniquesViewFor, current) ||
+        !identical(_techniquesViewMetadata, metadata) ||
+        !identical(_techniquesViewCloaking, cloaking)) {
+      _techniquesViewFor = current;
+      _techniquesViewMetadata = metadata;
+      _techniquesViewCloaking = cloaking;
+      _techniquesView = deriveTechniques(current,
+          cloaking: cloaking,
+          freshLoadSupported: freshLoadSupported,
+          metadata: metadata is Present<MetadataModel>
+              ? metadata.value.data
+              : null);
+    }
+    return _techniquesView!;
+  }
+
+  /// A view calls this when it appears (+1) and disappears (-1). The lookups
+  /// run once per navigation, after the page settled, only while watched.
+  void watchCloaking(bool watching) {
+    _cloakingWatchers =
+        (_cloakingWatchers + (watching ? 1 : -1)).clamp(0, 1 << 20);
+    if (watching) _scheduleCloaking();
+  }
+
+  void _scheduleCloaking() {
+    if (_disposed || _cloakingWatchers == 0 || _cloakingRunning) return;
+    final current = store.current;
+    final b = current.browser;
+    if (!current.browserSettled ||
+        b is! Present<BrowserSnapshot> ||
+        _cloakingGen == current.generation ||
+        (b.value.url.scheme != 'http' && b.value.url.scheme != 'https')) {
+      return;
+    }
+    _cloakingRunning = true;
+    _cloakingGen = current.generation;
+    scheduleMicrotask(() => _runCloaking(current.generation, b.value.url));
+  }
+
+  Future<void> _runCloaking(int gen, Uri url) async {
+    try {
+      final hosts = SovereigntyService.browserResources(store.current)
+          .map((r) => Uri.tryParse(r.url)?.host ?? '')
+          .where((h) => h.isNotEmpty);
+      final result = await _cloakingFinder(hosts,
+          pageHost: url.host, lookup: _cnameLookup);
+      if (!_disposed && gen == store.current.generation) {
+        _cloakingResultGen = gen;
+        _cloakingState = Present(result,
+            source: DataSource.server, provenance: Provenance.derived);
+      }
+    } catch (e) {
+      debugPrint('CNAME cloaking check failed: $e');
+      if (!_disposed && gen == store.current.generation) {
+        _cloakingResultGen = gen;
+        _cloakingState = Failed('$e');
+      }
+    } finally {
+      _cloakingRunning = false;
+      notifyListeners(); // also starts the check for a newer navigation
+    }
+  }
+
   /// The URL the analysis is about: where the browser is, else where the
   /// app's own request ended, else what was asked for. From the store only.
   Uri? get _sovereigntyUri {
@@ -1715,7 +1835,11 @@ class HtmlService extends ChangeNotifier {
     NetworkQuietPolicy browserPoll = NetworkQuietPolicy.live,
     Duration lateCollectDelay = const Duration(seconds: 2),
     Duration spaSettleDelay = const Duration(milliseconds: 400),
-  })  : _sovereigntyDebounce = sovereigntyDebounce,
+    CnameLookup? cnameLookup,
+    CloakingFinder? cloakingFinder,
+  })  : _cnameLookup = cnameLookup ?? dohCnameLookup,
+        _cloakingFinder = cloakingFinder ?? findCloakedTrackers,
+        _sovereigntyDebounce = sovereigntyDebounce,
         _sovereigntyAnalyzer =
             sovereigntyAnalyzer ?? SovereigntyService.analyze,
         _detectionScanner = detectionScanner,
@@ -2464,6 +2588,7 @@ Technical details: $message''';
     if (_disposed) return;
     super.notifyListeners();
     _scheduleSovereignty();
+    _scheduleCloaking();
   }
 
   @override
@@ -4401,7 +4526,8 @@ Technical details: $message''';
       return;
     }
     store.applyFreshLoad(gen, Present(snapshot, source: DataSource.browser),
-        screenshot: _screenshotOf(raw.screenshot));
+        screenshot: _screenshotOf(raw.screenshot),
+        techniques: parseTechniqueReport(raw.techniques));
 
     // Hidden sizes, like the live load (shared lookup cache per page).
     final urls = estimateTargetsOf(store.current.freshLoad, const {},

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
 import 'package:xml/xml.dart' as xml;
+import 'package:view_source_vibe/utils/site.dart';
 
 /// Extract metadata from the file content. Service/tracker detection is not
 /// part of it (see derive/detections.dart); [headers] is kept for callers.
@@ -43,6 +44,10 @@ Map<String, dynamic> _extractMetadataInternal(Map<String, dynamic> args) {
       'videos': <Map<String, dynamic>>[],
     },
     'article': <String, dynamic>{},
+    'subresourceIntegrity': <String, dynamic>{
+      'thirdParty': 0,
+      'without': <String>[],
+    },
   };
 
   // Determine if we should use HTML or XML parser
@@ -242,6 +247,8 @@ void _extractFromHtml(
       }
     }
   }
+
+  _collectIntegrity(doc, metadata, baseUrl);
 
   // Scripts
   final scripts = doc.querySelectorAll('script[src]');
@@ -572,6 +579,44 @@ void _processJsonLdObject(
   } catch (e) {
     debugPrint('Error processing JSON-LD object: $e');
   }
+}
+
+/// Third-party `<script src>` and `<link rel=stylesheet>` (host not the same
+/// site as the page), and those among them with no `integrity` attribute.
+void _collectIntegrity(
+    dom.Document doc, Map<String, dynamic> metadata, String baseUrl) {
+  final pageHost = Uri.tryParse(baseUrl)?.host ?? '';
+  var thirdParty = 0;
+  final without = <String>[];
+  for (final e in doc.querySelectorAll('script[src], link[href]')) {
+    final isScript = e.localName == 'script';
+    if (!isScript &&
+        !(e.attributes['rel'] ?? '')
+            .toLowerCase()
+            .split(RegExp(r'\s+'))
+            .contains('stylesheet')) {
+      continue;
+    }
+    final raw = e.attributes[isScript ? 'src' : 'href'];
+    if (raw == null || raw.isEmpty) continue;
+    final url = _resolveUrl(raw, baseUrl);
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        !(uri.scheme == 'http' || uri.scheme == 'https') ||
+        uri.host.isEmpty ||
+        sameSite(uri.host, pageHost)) {
+      continue;
+    }
+    thirdParty++;
+    if ((e.attributes['integrity'] ?? '').trim().isEmpty &&
+        without.length < 100) {
+      without.add(url);
+    }
+  }
+  metadata['subresourceIntegrity'] = {
+    'thirdParty': thirdParty,
+    'without': without,
+  };
 }
 
 bool _isLocalResource(String url, String baseUrl) {
