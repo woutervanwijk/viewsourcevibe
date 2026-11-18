@@ -7,6 +7,7 @@ import '../models/inspection/browser_snapshot.dart';
 import '../models/inspection/file_snapshot.dart';
 import '../models/inspection/observed.dart';
 import '../models/inspection/page_inspection.dart';
+import '../models/inspection/page_layout.dart';
 import '../models/inspection/permission_request.dart';
 import '../models/inspection/server_snapshot.dart';
 import '../models/inspection/technique_signals.dart';
@@ -199,6 +200,12 @@ class InspectionStore extends ChangeNotifier {
       return;
     }
     _set(_current.copyWith(liveScreenshot: shot));
+  }
+
+  /// The measured layout of the live page.
+  void applyLayout(int gen, Observed<PageLayout> layout) {
+    if (!_accepts(gen)) return;
+    _set(_current.copyWith(layout: layout));
   }
 
   /// Own size lookups for the fresh load, merged like [applyEstimates].

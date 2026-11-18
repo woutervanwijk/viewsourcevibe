@@ -12,6 +12,8 @@ All notable, user-facing changes to View Source Vibe are documented here.
 - Settings → Behavior: **Load lazy content** (off by default) scrolls the page once after it loads — and back to the top — so lazy images and embeds are actually fetched and measured; a banner above the Browser tab shows while this happens. Plus **Disable browser cache** and **Always clean cookies**.
 - Settings → Behavior: **Low resource mode** (off by default) for older devices. The Browser and Reader tabs each run their own WebView, and both stay alive at once; in this mode the WebView of a hidden tab is paused (and its media stopped) until its tab is selected again, media in the Browser tab only plays after a tap, Android marks hidden pages as waived renderer priority so the system can reclaim their memory, and both WebViews are suspended while the app is in the background.
 
+- **Structure** tab (web pages in the browser): a wireframe of the rendered page in page proportions, coloured by owner (page, own frame, third party, advertising, social) or by element kind, with the heading outline. Tap a box for its size, owner and source line.
+
 ### Improved
 - **Size** tab: download size first (Lighthouse-style total byte weight), cache hits counted, and resources that load late (lazy content, ads after scrolling) included. While "Load lazy content" is off, a note explains that totals may be underestimated because lazy resources were never fetched.
 - Keyboard shortcuts (Cmd/Ctrl+L focuses the location bar, Cmd/Ctrl+arrow keys switch tabs) and mouse-wheel tab switching on desktop.

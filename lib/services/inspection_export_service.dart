@@ -197,6 +197,8 @@ class InspectionExportService {
       'notChecked': techniques.notChecked,
       'complete': techniques.complete,
     });
+    final structureJson = unlessBlocked(
+        InspectionExportData.structure(htmlService.structureView));
     final sovereigntyJson = observedJson(sovereignty, (r) => r.toJson(),
         source: DataSource.server, provenance: Provenance.derived);
 
@@ -256,6 +258,7 @@ class InspectionExportService {
             metadata, (m) => m.data['structuredData'] ?? const [],
             source: DataSource.browser)));
     addJson('analysis/page-weight.json', weightJson);
+    addJson('analysis/structure.json', structureJson);
 
     // The raw collector payload of the last sync, so real-device fixtures can
     // be recorded later. Cookie and storage values are redacted (R22).
