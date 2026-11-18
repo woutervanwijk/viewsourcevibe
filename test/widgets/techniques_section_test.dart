@@ -44,7 +44,10 @@ void main() {
 
   testWidgets('the section offers the fresh load when it has not run',
       (tester) async {
-    await show(tester, trackerPage());
+    // Explicit supported measurer: the default is NoFreshLoad on platforms
+    // without a headless WebView (e.g. Linux CI), where this state cannot occur.
+    await show(tester, trackerPage(),
+        freshLoadMeasurer: const HeadlessFreshLoadMeasurer());
     expect(find.text('Techniques'), findsOneWidget);
     expect(find.text('Run a fresh load to check'), findsOneWidget);
     expect(find.text('Run fresh load'), findsOneWidget);
