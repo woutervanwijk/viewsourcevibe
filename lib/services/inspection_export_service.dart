@@ -8,6 +8,7 @@ import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/services/derive/cookies_view.dart';
+import 'package:view_source_vibe/services/derive/inspection_summary.dart';
 import 'package:view_source_vibe/services/derive/metadata_view.dart';
 import 'package:view_source_vibe/services/derive/observed_text.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
@@ -18,6 +19,7 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/detection/engine.dart';
 import 'package:view_source_vibe/services/inspection_export_data.dart';
 import 'package:view_source_vibe/services/observed_json.dart';
+import 'package:view_source_vibe/services/report_css.dart';
 import 'package:view_source_vibe/utils/line_diff.dart';
 
 class InspectionExportService {
@@ -182,11 +184,14 @@ class InspectionExportService {
     final sovereigntyJson = observedJson(sovereignty, (r) => r.toJson(),
         source: DataSource.server, provenance: Provenance.derived);
 
+    final summary = htmlService.summary;
+
     addJson('manifest.json', manifest);
     addString(
       'report.html',
       _buildHtmlReport(
         manifest: manifest,
+        summary: summary,
         general: general,
         security: security,
         cookies: cookies,
@@ -219,6 +224,7 @@ class InspectionExportService {
     addJson('network/redirects.json', redirectsJson);
     addJson('network/timeline.json', timelineJson);
     addJson('analysis/sovereignty.json', sovereigntyJson);
+    addJson('analysis/summary.json', summary.toJson());
 
     addJson('analysis/metadata.json', metadataJson);
     addJson('analysis/detections.json', detectionsJson);
@@ -317,7 +323,7 @@ class InspectionExportService {
   }
 
   static String _packageFilename(String source) {
-    final slug = _slugFor(source);
+    final slug = inspectionSlug(source);
     final stamp = DateTime.now()
         .toUtc()
         .toIso8601String()
@@ -349,6 +355,7 @@ class InspectionExportService {
 
   static String _buildHtmlReport({
     required Map<String, dynamic> manifest,
+    required InspectionSummary summary,
     required Observed<GeneralModel> general,
     required Observed<SecurityModel> security,
     required Observed<CookiesModel> cookies,
@@ -523,6 +530,15 @@ class InspectionExportService {
     ${_metricCard('App request status', status == null ? unknownText(general) : _obs(status, (s) => s.finalStatusText))}
   </section>
 
+  <h2>Key findings</h2>
+  ${summary.findings.isEmpty ? '<div class="card muted">No findings from the checks that ran.</div>' : _table([
+          for (final f in summary.findings)
+            [
+              f.severity.label,
+              f.title
+            ]
+        ], ['Severity', 'Finding'])}
+
   <h2>Included Files</h2>
   <div class="card">
     ${_pill('manifest.json')}
@@ -608,31 +624,8 @@ class InspectionExportService {
 </main>
 </body>
 </html>'''
-        .replaceFirst('CSS_PLACEHOLDER', _reportCss);
+        .replaceFirst('CSS_PLACEHOLDER', reportCss);
   }
-
-  static const _reportCss = r'''<style>
-    body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1f2937; background: #f8fafc; }
-    main { max-width: 1040px; margin: 0 auto; padding: 32px 20px 48px; }
-    h1 { margin: 0 0 6px; font-size: 28px; }
-    h2 { margin: 28px 0 12px; font-size: 18px; }
-    h3 { margin: 18px 0 10px; font-size: 15px; }
-    a { color: #0369a1; }
-    .muted { color: #64748b; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-    .card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; }
-    .label { display: block; color: #64748b; font-size: 12px; }
-    .value { font-weight: 650; overflow-wrap: anywhere; }
-    table { width: 100%; border-collapse: collapse; background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-    th { background: #eef2f7; font-size: 12px; color: #475569; }
-    tr:last-child td { border-bottom: 0; }
-    code { background: #e2e8f0; padding: 2px 5px; border-radius: 4px; }
-    .pill { display: inline-block; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 999px; margin: 2px 4px 2px 0; background: #fff; }
-    details { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
-    summary { cursor: pointer; font-weight: 650; }
-    pre { overflow: auto; white-space: pre-wrap; word-break: break-word; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 12px; }
-  </style>''';
 
   static List<List<String>> _metadataSummary(Map<String, dynamic> metadata) {
     const keys = [
@@ -788,20 +781,21 @@ class InspectionExportService {
     return const JsonEncoder.withIndent('  ').convert(_jsonSafe(value));
   }
 
-  static String _slugFor(String value) {
-    final candidate = Uri.tryParse(value);
-    final source = candidate?.host.isNotEmpty == true
-        ? candidate!.host + candidate.path
-        : path.basename(value);
-    final slug = source
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
-    if (slug.isEmpty) return 'inspection';
-    return slug.length > 64 ? slug.substring(0, 64) : slug;
-  }
-
   static String _escape(Object? value) {
     return const HtmlEscape().convert(value?.toString() ?? '');
   }
+}
+
+/// File-name-safe slug (`[a-z0-9-]`) for a URL or file name.
+String inspectionSlug(String value) {
+  final candidate = Uri.tryParse(value);
+  final source = candidate?.host.isNotEmpty == true
+      ? candidate!.host + candidate.path
+      : path.basename(value);
+  final slug = source
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  if (slug.isEmpty) return 'inspection';
+  return slug.length > 64 ? slug.substring(0, 64) : slug;
 }

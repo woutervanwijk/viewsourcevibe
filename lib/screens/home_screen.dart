@@ -10,6 +10,7 @@ import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/models/app_tab.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/widgets/source_viewer.dart';
+import 'package:view_source_vibe/widgets/batch_banner.dart';
 import 'package:view_source_vibe/widgets/toolbar.dart';
 import 'package:view_source_vibe/widgets/url_input.dart';
 import 'package:view_source_vibe/widgets/metadata_view.dart';
@@ -537,6 +538,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   UrlInput(key: urlInputKey),
+                  const BatchBanner(),
                   _buildTabGroupBar(context),
                   const Divider(height: 1),
                   Expanded(

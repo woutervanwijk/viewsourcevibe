@@ -1,3 +1,4 @@
+import 'package:view_source_vibe/services/batch_runner.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/screens/home_screen.dart';
@@ -19,6 +20,8 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => htmlService),
+            ChangeNotifierProvider(
+                create: (_) => BatchRunner(HtmlServiceBatchTarget(htmlService))),
             ChangeNotifierProvider(create: (_) => ReaderService(htmlService)),
             ChangeNotifierProvider(create: (_) => settings),
           ],
@@ -57,6 +60,8 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => htmlService),
+            ChangeNotifierProvider(
+                create: (_) => BatchRunner(HtmlServiceBatchTarget(htmlService))),
             ChangeNotifierProvider(create: (_) => ReaderService(htmlService)),
             ChangeNotifierProvider(create: (_) => settings),
           ],
