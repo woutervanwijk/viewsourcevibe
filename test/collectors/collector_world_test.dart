@@ -8,6 +8,7 @@ void main() {
     final s = collectorUserScript(TargetPlatform.iOS);
     expect(s.contentWorld.name, 'vsv');
     expect(s.source, startsWith('window.__vsv_isolated = true;'));
+    expect(s.source, contains('window.__vsv_layout'));
     expect(collectorWorld(TargetPlatform.macOS)?.name, 'vsv');
   });
 

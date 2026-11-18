@@ -9,6 +9,8 @@ import 'package:view_source_vibe/services/derive/inspection_summary.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/inspection_export_service.dart';
+import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_layout.dart';
 import 'fixtures/inspection/builders.dart' as fx;
 
 void main() {
@@ -187,6 +189,69 @@ void main() {
           .decode(archive.findFile('debug/browser-payload.json')!.readBytes()!);
       expect(text, isNot(contains('hunter2')));
       expect(text, contains('24'));
+    });
+
+    test('the export has the structure', () {
+      final store = InspectionStore();
+      final gen = store.beginUrl(Uri.parse('https://example.com/'));
+      store.applyLayout(
+          gen,
+          const Present(
+              PageLayout(
+                  viewportWidth: 400,
+                  viewportHeight: 800,
+                  width: 400,
+                  height: 1200,
+                  totalBlocks: 2,
+                  blocks: [
+                    LayoutBlock(
+                        tag: 'header',
+                        role: '',
+                        id: 'top',
+                        classes: 'bar',
+                        src: '',
+                        text: '',
+                        x: 0,
+                        y: 0,
+                        width: 400,
+                        height: 80,
+                        depth: 1,
+                        descendants: 4,
+                        kind: LayoutKind.landmark,
+                        fixed: false),
+                    LayoutBlock(
+                        tag: 'h1',
+                        role: '',
+                        id: '',
+                        classes: '',
+                        src: '',
+                        text: 'Hello',
+                        x: 0,
+                        y: 100,
+                        width: 400,
+                        height: 30,
+                        depth: 2,
+                        descendants: 0,
+                        kind: LayoutKind.heading,
+                        fixed: false),
+                  ]),
+              source: DataSource.browser));
+      final htmlService = HtmlService(store: store);
+      addTearDown(htmlService.dispose);
+      final archive = ZipDecoder().decodeBytes(
+          InspectionExportService().buildPackageBytes(htmlService));
+      final json = jsonDecode(utf8.decode(
+              archive.findFile('analysis/structure.json')!.readBytes()!))
+          as Map<String, dynamic>;
+      expect(json['status'], 'present');
+      final v = json['value'] as Map<String, dynamic>;
+      expect(v['page'], {'w': 400.0, 'h': 1200.0});
+      expect(v['totalBlocks'], 2);
+      expect((v['blocks'] as List).first['tag'], 'header');
+      expect((v['blocks'] as List).first['owner'], 'page');
+      expect(v['headings'], [
+        {'level': 1, 'text': 'Hello'}
+      ]);
     });
 
     group('source/diff.patch', () {

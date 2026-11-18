@@ -19,6 +19,7 @@ enum AppTab {
   media(TabGroup.page, 'Media', Icons.perm_media_outlined, 'media'),
   services(TabGroup.page, 'Services', Icons.layers_outlined, 'services'),
   reader(TabGroup.page, 'Reader', Icons.chrome_reader_mode, 'reader'),
+  structure(TabGroup.code, 'Structure', Icons.dashboard_outlined, 'structure'),
   domTree(TabGroup.code, 'DOM Tree', Icons.account_tree_outlined, 'dom-tree'),
   source(TabGroup.code, 'Source', Icons.code, 'source'),
   size(TabGroup.network, 'Size', Icons.scale_outlined, 'page-size'),
@@ -61,6 +62,7 @@ List<AppTab> visibleTabsFor({
           AppTab.privacy =>
             metadata,
           AppTab.reader => isHtml,
+          AppTab.structure => browser && isHtml,
           AppTab.domTree => isHtmlOrXml,
           AppTab.source => true,
           AppTab.headers ||

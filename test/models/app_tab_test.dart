@@ -13,7 +13,7 @@ void main() {
           server: true);
       expect(tabs.map((t) => t.label), [
         'Browser', 'Metadata', 'Media', 'Services', 'Reader', //
-        'DOM Tree', 'Source', //
+        'Structure', 'DOM Tree', 'Source', //
         'Size', 'Headers', 'Timeline', 'Probe', //
         'Privacy', 'Sovereignty', 'Security', 'Permissions', 'Cookies',
       ]);

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'browser_snapshot.dart';
 import 'file_snapshot.dart';
 import 'observed.dart';
+import 'page_layout.dart';
 import 'permission_request.dart';
 import 'server_snapshot.dart';
 
@@ -13,6 +14,10 @@ const kFreshLoadNotMeasured = Unavailable<BrowserSnapshot>(
 /// No screenshot (yet) of a load.
 const kNoScreenshot =
     Unavailable<Uint8List>(UnavailableReason.notApplicable, 'no screenshot');
+
+/// [PageInspection.layout] before the browser measured it.
+const kLayoutNotMeasured =
+    Unavailable<PageLayout>(UnavailableReason.notApplicable, 'not measured yet');
 
 /// What is being inspected.
 sealed class InspectionTarget {
@@ -76,6 +81,9 @@ class PageInspection {
   final Observed<Uint8List> liveScreenshot;
   final Observed<Uint8List> freshScreenshot;
 
+  /// The boxes of the live page (Structure tab).
+  final Observed<PageLayout> layout;
+
   /// Native permission requests the page made (all denied), oldest first.
   final List<PermissionRequestEvent> permissionRequests;
 
@@ -94,6 +102,7 @@ class PageInspection {
     this.freshEstimates = const {},
     this.liveScreenshot = kNoScreenshot,
     this.freshScreenshot = kNoScreenshot,
+    this.layout = kLayoutNotMeasured,
     this.permissionRequests = const [],
   });
 
@@ -116,6 +125,7 @@ class PageInspection {
         freshEstimates = const {},
         liveScreenshot = kNoScreenshot,
         freshScreenshot = kNoScreenshot,
+        layout = kLayoutNotMeasured,
         permissionRequests = const [];
 
   PageInspection copyWith({
@@ -131,6 +141,7 @@ class PageInspection {
     Map<String, Observed<int>>? freshEstimates,
     Observed<Uint8List>? liveScreenshot,
     Observed<Uint8List>? freshScreenshot,
+    Observed<PageLayout>? layout,
     List<PermissionRequestEvent>? permissionRequests,
   }) =>
       PageInspection(
@@ -150,6 +161,7 @@ class PageInspection {
         freshEstimates: freshEstimates ?? this.freshEstimates,
         liveScreenshot: liveScreenshot ?? this.liveScreenshot,
         freshScreenshot: freshScreenshot ?? this.freshScreenshot,
+        layout: layout ?? this.layout,
         permissionRequests: permissionRequests ?? this.permissionRequests,
       );
 
