@@ -8,6 +8,7 @@ import 'package:re_highlight/re_highlight.dart';
 import 'package:re_editor/re_editor.dart';
 import 'dart:async';
 import 'dart:io' show HttpClient;
+import 'dart:ui' as ui;
 import 'package:view_source_vibe/utils/code_beautifier.dart';
 import 'package:view_source_vibe/utils/descriptive_filename.dart';
 import 'package:view_source_vibe/utils/font_url.dart';
@@ -59,6 +60,7 @@ import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/resource_matching.dart';
 import 'package:view_source_vibe/services/derive/source_view.dart';
 import 'package:view_source_vibe/services/derive/structure_view.dart';
+import 'package:view_source_vibe/services/screenshot_stitch.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/legacy_browser_adapter.dart';
 import 'package:view_source_vibe/services/reader_service.dart';
@@ -463,16 +465,21 @@ class HtmlService extends ChangeNotifier {
   static const viewerTab = -1;
   static const sourceTab = -2;
   static const browserTab = -3;
+  static const domTreeTab = -4;
 
   int resolveTabRequest(int index) => switch (index) {
         viewerTab => viewerTabIndex,
         sourceTab => sourceTabIndex,
         browserTab => browserTabIndex >= 0 ? browserTabIndex : sourceTabIndex,
+        domTreeTab => domTreeTabIndex >= 0 ? domTreeTabIndex : sourceTabIndex,
         _ => index,
       };
 
   /// Reader tab index (-1 when not shown; only HTML pages have it).
   int get readerTabIndex => tabIndexOf(AppTab.reader);
+
+  /// DOM tree tab index (-1 when not shown; only HTML/XML pages have it).
+  int get domTreeTabIndex => tabIndexOf(AppTab.domTree);
 
   /// Source tab index; Source is always shown.
   int get sourceTabIndex => tabIndexOf(AppTab.source);
@@ -987,6 +994,25 @@ class HtmlService extends ChangeNotifier {
   int? sourceLineOfId(String id) {
     final text = sourceView.text;
     return text is Present<String> ? lineOfId(text.value, id) : null;
+  }
+
+  /// 1-based line of [s]'s opening tag in the Source tab's document: by id
+  /// when it has one, else by tag/classes plus its occurrence in document
+  /// order. Null when the document is unknown or has no matching tag.
+  int? sourceLineOfBlock(StructureBlock s) {
+    final text = sourceView.text;
+    if (text is! Present<String>) return null;
+    final b = s.block;
+    if (b.id.isNotEmpty) {
+      final byId = lineOfId(text.value, b.id);
+      if (byId != null) return byId;
+    }
+    final layout = store.current.layout;
+    final blocks =
+        layout is Present<PageLayout> ? layout.value.blocks : const <LayoutBlock>[];
+    return lineOfSignature(text.value,
+        tag: b.tag, id: b.id, classes: b.classes,
+        occurrence: occurrenceOfBlock(blocks, b));
   }
 
   Observed<TimelineModel>? _timelineModel;
@@ -1646,6 +1672,49 @@ class HtmlService extends ChangeNotifier {
     SourceViewerEditor.pendingRevealLine = line;
     _isBeautifyEnabled = false;
     _requestedTabIndex = HtmlService.sourceTab;
+    notifyListeners();
+  }
+
+  /// Switches to the Source tab without selecting a line.
+  void showSourceTab() {
+    _requestedTabIndex = HtmlService.sourceTab;
+    notifyListeners();
+  }
+
+  DomReveal? _pendingDomReveal;
+
+  /// The node the DOM tree tab should expand and scroll to when it next
+  /// builds; null when there is no pending reveal.
+  DomReveal? get pendingDomReveal => _pendingDomReveal;
+
+  /// Switches to the DOM tree tab and scrolls to the node matching [r].
+  void revealDomSignature(DomReveal r) {
+    _pendingDomReveal = r;
+    _requestedTabIndex = HtmlService.domTreeTab;
+    notifyListeners();
+  }
+
+  /// Switches to the DOM tree tab and scrolls to the element [s] represents,
+  /// matched by tag/id/classes (most elements have no id).
+  void revealDomBlock(StructureBlock s) {
+    final layout = store.current.layout;
+    final blocks = layout is Present<PageLayout> ? layout.value.blocks : const <LayoutBlock>[];
+    revealDomSignature(DomReveal(
+      tag: s.block.tag,
+      id: s.block.id,
+      classes: s.block.classes,
+      occurrence: occurrenceOfBlock(blocks, s.block),
+    ));
+  }
+
+  /// Switches to the DOM tree tab and scrolls to the element with [id].
+  void revealDomNode(String id) =>
+      revealDomSignature(DomReveal(tag: '', id: id, classes: '', occurrence: 0));
+
+  /// The DOM tree tab handled the pending reveal.
+  void consumeDomReveal() {
+    if (_pendingDomReveal == null) return;
+    _pendingDomReveal = null;
     notifyListeners();
   }
 
@@ -4445,6 +4514,67 @@ Technical details: $message''';
     store.applyLiveScreenshot(gen, _screenshotOf(bytes));
   }
 
+  /// Wider screenshot settings for the stitched full-page capture.
+  static final _fullPageScreenshotCfg = ScreenshotConfiguration(
+      compressFormat: CompressFormat.JPEG, quality: 70, snapshotWidth: 480);
+
+  /// Max viewport shots stitched into a full-page screenshot (very tall
+  /// pages are clipped at this many screens).
+  static const _maxFullPageShots = 50;
+
+  Observed<Uint8List> _fullPageShot = kNoScreenshot;
+
+  /// Full-page screenshot of the live browser (background of the Structure
+  /// tab); Unavailable until captured or when the platform gives none.
+  Observed<Uint8List> get fullPageScreenshot => _fullPageShot;
+
+  /// Scrolls the live browser through the page once, taking a screenshot per
+  /// viewport, stitches them into one full-page image and restores the scroll
+  /// position. Best effort: on any failure the viewport thumbnail remains.
+  Future<void> _captureFullPageScreenshot(int gen) async {
+    final c = activeWebViewController;
+    if (c == null || _disposed) return;
+    bool stale() => _disposed || gen != store.current.generation;
+    try {
+      final dims = await c.evaluateJavascript(
+          source: '([Math.ceil(Math.max(document.scrollingElement ? '
+              'document.scrollingElement.scrollHeight : 0, document.body ? '
+              'document.body.scrollHeight : 0)), window.innerHeight, '
+              'window.innerWidth, Math.round(window.scrollY)]).join(",")');
+      final parts = (dims?.toString() ?? '').split(',');
+      if (parts.length < 4) return;
+      final pageH = double.tryParse(parts[0]) ?? 0;
+      final vh = double.tryParse(parts[1]) ?? 0;
+      final iw = double.tryParse(parts[2]) ?? 0;
+      final oldY = double.tryParse(parts[3]) ?? 0;
+      if (pageH <= 0 || vh <= 0 || iw <= 0) return;
+      final shots = <Uint8List>[];
+      final steps = (pageH / vh).ceil();
+      for (var i = 0; i < steps && i < _maxFullPageShots; i++) {
+        if (stale()) return;
+        await c.scrollTo(x: 0, y: (i * vh).round());
+        // Let the new scroll position render before capturing.
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        final shot = await c.takeScreenshot(
+            screenshotConfiguration: _fullPageScreenshotCfg);
+        if (shot != null && shot.isNotEmpty) shots.add(shot);
+      }
+      await c.scrollTo(x: 0, y: oldY.round());
+      if (stale() || shots.isEmpty) return;
+      final image = await stitchScreenshots(shots,
+          pageHeight: pageH, viewportWidth: iw);
+      if (image == null) return;
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (stale() || bytes == null) return;
+      _fullPageShot =
+          Present(bytes.buffer.asUint8List(), source: DataSource.browser);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Full-page screenshot unavailable: $e');
+    }
+  }
+
   /// Measures the live page's boxes for the Structure tab. Dropped when the
   /// user navigates meanwhile.
   Future<void> collectLayout() async {
@@ -4734,6 +4864,7 @@ Technical details: $message''';
   void _scheduleBrowserRefreshes(int gen, String url, Uri uri) {
     _cancelBrowserRefreshes();
     final policy = _browserPoll;
+    _fullPageShot = kNoScreenshot;
     _captureLiveScreenshot(gen).ignore();
     if (!policy.enabled) {
       store.markBrowserSettled(gen);
@@ -4783,6 +4914,7 @@ Technical details: $message''';
           }
           store.markBrowserSettled(gen);
           _captureLiveScreenshot(gen).ignore();
+          _captureFullPageScreenshot(gen).ignore();
           collectLayout().ignore();
         } else {
           next();

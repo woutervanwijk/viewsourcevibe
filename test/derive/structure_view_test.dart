@@ -154,10 +154,41 @@ void main() {
     expect(m.blocks.map((b) => b.block.area), [250000, 100, 810000]);
   });
 
-  test('wireframeScale', () {
-    expect(wireframeScale(layout(w: 400, h: 2000), 400), 1.0);
-    expect(wireframeScale(layout(w: 1200, h: 2400), 400), closeTo(1 / 3, 1e-9));
-    expect(wireframeScale(layout(w: 400, h: 100000), 400), closeTo(0.06, 1e-9));
+  test('wireframeScale: page width, capped at 1000', () {
+    expect(wireframeScale(layout(w: 400, h: 2000)), 1.0);
+    expect(wireframeScale(layout(w: 1000, h: 2000)), 1.0);
+    expect(wireframeScale(layout(w: 1200, h: 2400)), closeTo(1000 / 1200, 1e-9));
+    // A very tall page no longer shrinks the drawing below page width.
+    expect(wireframeScale(layout(w: 400, h: 100000)), 1.0);
+  });
+
+  test('occurrenceOfBlock counts same-signature blocks in document order', () {
+    final blocks = [
+      block('p', classes: 'a'),
+      block('div'),
+      block('p', classes: 'a'),
+      block('p', classes: 'b'),
+      block('p', classes: 'a', id: 'x'),
+    ];
+    expect(occurrenceOfBlock(blocks, blocks[0]), 0);
+    expect(occurrenceOfBlock(blocks, blocks[2]), 1);
+    expect(occurrenceOfBlock(blocks, blocks[3]), 0); // different classes
+    expect(occurrenceOfBlock(blocks, blocks[4]), 0); // different id
+    expect(occurrenceOfBlock(blocks, block('p', classes: 'a')), 0);
+  });
+
+  test('lineOfSignature picks the occurrence-th matching opening tag', () {
+    const src = '<html>\n<body>\n<p class="a">one</p>\n<p id="x" class="a">two</p>'
+        '\n<p class="b">three</p>\n</body>\n</html>';
+    expect(lineOfSignature(src, tag: 'p', classes: 'a', occurrence: 0), 3);
+    expect(lineOfSignature(src, tag: 'p', classes: 'a', occurrence: 1), 4);
+    expect(lineOfSignature(src, tag: 'p', id: 'x', occurrence: 0), 4);
+    expect(lineOfSignature(src, tag: 'p', classes: 'b', occurrence: 0), 5);
+    expect(lineOfSignature(src, tag: 'p', occurrence: 2), 5);
+    expect(lineOfSignature(src, tag: 'p', id: 'nope', occurrence: 0), isNull);
+    expect(lineOfSignature(src, tag: 'table', occurrence: 0), isNull);
+    // Class attribute with single quotes also matches.
+    expect(lineOfSignature("<p class='a'>z</p>", tag: 'p', classes: 'a'), 1);
   });
 
   test('blockAt picks the smallest box under the point', () {

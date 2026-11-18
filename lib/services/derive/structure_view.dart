@@ -62,13 +62,14 @@ class StructureModel {
   });
 }
 
-const double kMaxWireframeHeight = 6000;
+/// The wireframe is never drawn wider than this, even when the page is.
+const double kMaxWireframeWidth = 1000;
 
-/// Scale from page pixels to logical pixels: fits [availableWidth], and
-/// never lets the drawing exceed [kMaxWireframeHeight].
-double wireframeScale(PageLayout l, double availableWidth) {
+/// Scale from page pixels to logical pixels: 1:1, so the drawing is as wide
+/// as the page itself, capped at [kMaxWireframeWidth].
+double wireframeScale(PageLayout l) {
   if (l.width <= 0 || l.height <= 0) return 1;
-  return math.min(availableWidth / l.width, kMaxWireframeHeight / l.height);
+  return math.min(1.0, kMaxWireframeWidth / l.width);
 }
 
 /// The smallest block that contains the page point; null when none does.
@@ -92,6 +93,53 @@ int? lineOfId(String source, String id) {
       .firstMatch(source);
   if (m == null) return null;
   return '\n'.allMatches(source.substring(0, m.start)).length + 1;
+}
+
+/// Two blocks have the same signature when tag, id and classes match; the
+/// signature plus the occurrence index identifies an element even without a
+/// unique id.
+bool sameBlockSignature(LayoutBlock a, LayoutBlock b) =>
+    a.tag == b.tag && a.id == b.id && a.classes == b.classes;
+
+/// 0-based index of [target] among [blocks] (document order) that share its
+/// signature.
+int occurrenceOfBlock(List<LayoutBlock> blocks, LayoutBlock target) {
+  var n = 0;
+  for (final b in blocks) {
+    if (identical(b, target)) return n;
+    if (sameBlockSignature(b, target)) n++;
+  }
+  return 0;
+}
+
+/// 1-based line of the [occurrence]-th (0-based) opening tag in [source] that
+/// matches [tag] and carries [id] (when non-empty) and all of [classes] (when
+/// non-empty); null when there is no such tag.
+int? lineOfSignature(String source,
+    {required String tag, String id = '', String classes = '', int occurrence = 0}) {
+  final tagRe = RegExp('<${RegExp.escape(tag)}\\b', caseSensitive: false);
+  final idRe = id.isEmpty
+      ? null
+      : RegExp('\\bid\\s*=\\s*(?:"${RegExp.escape(id)}"|\'${RegExp.escape(id)}\')');
+  final classRe = RegExp('\\bclass\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')');
+  final wanted = classes.isEmpty ? const <String>[] : classes.split(RegExp(r'\s+'));
+  var n = 0;
+  for (final m in tagRe.allMatches(source)) {
+    final gt = source.indexOf('>', m.start);
+    if (gt < 0) continue;
+    final tagText = source.substring(m.start, gt);
+    if (idRe != null && !idRe.hasMatch(tagText)) continue;
+    if (wanted.isNotEmpty) {
+      final cm = classRe.firstMatch(tagText);
+      final have = (cm?.group(1) ?? cm?.group(2) ?? '').split(RegExp(r'\s+'));
+      if (!wanted.every(have.contains)) continue;
+    }
+    if (n == occurrence) {
+      return '\n'.allMatches(source.substring(0, m.start)).length + 1;
+    }
+    n++;
+  }
+  return null;
 }
 
 const _notInBrowser = Unavailable<StructureModel>(

@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
@@ -20,12 +23,73 @@ class StructureView extends StatefulWidget {
 class _StructureViewState extends State<StructureView> {
   StructureColoring _coloring = StructureColoring.owner;
 
+  /// The live browser's screenshot, decoded, drawn behind the wireframe.
+  ui.Image? _background;
+  Uint8List? _backgroundBytes;
+
+  /// Whether [_background] covers the whole page (true) or only the first
+  /// screen (false).
+  bool _backgroundFullPage = false;
+
+  @override
+  void dispose() {
+    _background?.dispose();
+    super.dispose();
+  }
+
+  /// Decodes [bytes] into [_background]; a new screenshot replaces the old.
+  Future<void> _loadBackground(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      final image = frame.image;
+      if (!mounted || !identical(bytes, _backgroundBytes)) {
+        image.dispose();
+        return;
+      }
+      setState(() {
+        _background?.dispose();
+        _background = image;
+      });
+    } catch (_) {
+      // Not a decodable image: draw the wireframe without a background.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context
         .select<HtmlService, Observed<StructureModel>>((s) => s.structureView);
     final hasBrowser = context
         .select<HtmlService, bool>((s) => s.store.current.target is UrlTarget);
+    final fullShot = context.select<HtmlService, Observed<Uint8List>>(
+        (s) => s.fullPageScreenshot);
+    final liveShot = context.select<HtmlService, Observed<Uint8List>>(
+        (s) => s.store.current.liveScreenshot);
+    // Prefer the full-page screenshot; fall back to the viewport thumbnail.
+    final useFull = fullShot is Present<Uint8List>;
+    final shot = useFull ? fullShot : liveShot;
+    final bytes = shot is Present<Uint8List> ? shot.value : null;
+    if (!identical(bytes, _backgroundBytes)) {
+      _backgroundBytes = bytes;
+      final b = bytes;
+      final full = useFull;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _backgroundFullPage = full;
+        if (b == null) {
+          if (_background != null) {
+            setState(() {
+              _background?.dispose();
+              _background = null;
+            });
+          }
+        } else {
+          _loadBackground(b);
+        }
+      });
+    }
     return switch (state) {
       Pending<StructureModel>(:final detail) => Center(
           child: Column(
@@ -76,6 +140,7 @@ class _StructureViewState extends State<StructureView> {
   Widget _model(BuildContext context, StructureModel model) {
     final scheme = Theme.of(context).colorScheme;
     final palette = StructurePalette(scheme);
+    final scale = wireframeScale(model.layout);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -100,6 +165,74 @@ class _StructureViewState extends State<StructureView> {
               ),
             ),
           const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            children: [
+              for (final (label, color) in palette.legend(_coloring))
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.55),
+                      border: Border.all(color: scheme.outline),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(label, style: Theme.of(context).textTheme.bodySmall),
+                ]),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // The wireframe is as wide as the page (max 1000 px), centred in
+          // the tab; when that is wider than the tab it scrolls horizontally.
+          LayoutBuilder(builder: (context, constraints) {
+            final w = model.layout.width * scale;
+            final boxWidth =
+                w < constraints.maxWidth ? constraints.maxWidth : w;
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: boxWidth,
+                child: Center(
+                  child: GestureDetector(
+                    onTapUp: (d) => _openDetails(
+                        context,
+                        blockAt(model, d.localPosition.dx / scale,
+                            d.localPosition.dy / scale)),
+                    child: Semantics(
+                      label: 'Page wireframe, ${model.blocks.length} blocks',
+                      child: CustomPaint(
+                        key: const Key('structure-wireframe'),
+                        size: Size(model.layout.width * scale,
+                            model.layout.height * scale),
+                        painter: StructurePainter(
+                            model: model,
+                            scale: scale,
+                            coloring: _coloring,
+                            scheme: scheme,
+                            background: _background,
+                            backgroundFullPage: _backgroundFullPage),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 16),
+          Text('Headings', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          if (model.headings.isEmpty)
+            const Text('No headings.')
+          else
+            for (final h in model.headings)
+              Padding(
+                padding: EdgeInsets.only(left: (h.level - 1) * 16.0, top: 2),
+                child: Text(h.text.isEmpty ? '(empty h${h.level})' : h.text),
+              ),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -124,60 +257,6 @@ class _StructureViewState extends State<StructureView> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            runSpacing: 4,
-            children: [
-              for (final (label, color) in palette.legend(_coloring))
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.55),
-                      border: Border.all(color: scheme.outline),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(label, style: Theme.of(context).textTheme.bodySmall),
-                ]),
-            ],
-          ),
-          const SizedBox(height: 12),
-          LayoutBuilder(builder: (context, constraints) {
-            final scale = wireframeScale(model.layout, constraints.maxWidth);
-            return GestureDetector(
-              onTapUp: (d) => _openDetails(
-                  context,
-                  blockAt(model, d.localPosition.dx / scale,
-                      d.localPosition.dy / scale)),
-              child: Semantics(
-                label: 'Page wireframe, ${model.blocks.length} blocks',
-                child: CustomPaint(
-                  key: const Key('structure-wireframe'),
-                  size: Size(
-                      model.layout.width * scale, model.layout.height * scale),
-                  painter: StructurePainter(
-                      model: model,
-                      scale: scale,
-                      coloring: _coloring,
-                      scheme: scheme),
-                ),
-              ),
-            );
-          }),
-          const SizedBox(height: 16),
-          Text('Headings', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          if (model.headings.isEmpty)
-            const Text('No headings.')
-          else
-            for (final h in model.headings)
-              Padding(
-                padding: EdgeInsets.only(left: (h.level - 1) * 16.0, top: 2),
-                child: Text(h.text.isEmpty ? '(empty h${h.level})' : h.text),
-              ),
         ],
       ),
     );
@@ -187,7 +266,7 @@ class _StructureViewState extends State<StructureView> {
     if (s == null) return;
     final service = context.read<HtmlService>();
     final b = s.block;
-    final line = b.id.isEmpty ? null : service.sourceLineOfId(b.id);
+    final line = service.sourceLineOfBlock(s);
     String n(double v) => v.round().toString();
     showModalBottomSheet<void>(
       context: context,
@@ -208,16 +287,33 @@ class _StructureViewState extends State<StructureView> {
               if (b.src.isNotEmpty) Text('Source: ${b.src}'),
               Text('Contains ${b.descendants} elements'),
               if (b.fixed) const Text('fixed'),
-              if (line != null) ...[
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(sheet).pop();
-                    service.revealSourceLine(line);
-                  },
-                  child: const Text('Show in source'),
-                ),
-              ],
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(sheet).pop();
+                      service.revealDomBlock(s);
+                    },
+                    icon: const Icon(Icons.account_tree_outlined),
+                    label: const Text('Open in DOM tree'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(sheet).pop();
+                      if (line != null) {
+                        service.revealSourceLine(line);
+                      } else {
+                        service.showSourceTab();
+                      }
+                    },
+                    icon: const Icon(Icons.code),
+                    label: const Text('Open in source'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

@@ -276,19 +276,11 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  Future<void> _handleRefresh() async {
-    final htmlService = Provider.of<HtmlService>(context, listen: false);
-    await htmlService.refresh(switchToTab: _tabController.index);
-  }
-
-  Widget _buildRefreshable(Widget child, String tag) {
+  Widget _buildTabPage(Widget child, String tag) {
     final page = TabPageWrapper(
       tag: tag,
       focusNode: _tabFocusNode(tag),
-      child: RefreshIndicator(
-        onRefresh: _handleRefresh,
-        child: child,
-      ),
+      child: child,
     );
     // Analysis tabs get the disclaimer; browser, reader, source and DOM tree
     // show the page itself.
@@ -313,31 +305,28 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildScrollableRefreshable(Widget child, String tag,
+  Widget _buildScrollableTabPage(Widget child, String tag,
       {bool hasScrollBody = true, bool useSliverToBoxAdapter = false}) {
     return TabPageWrapper(
       tag: tag,
       focusNode: _tabFocusNode(tag),
-      child: RefreshIndicator(
-        onRefresh: _handleRefresh,
-        child: CustomScrollView(
-          shrinkWrap: false,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            if (useSliverToBoxAdapter)
-              SliverToBoxAdapter(child: child)
-            else if (hasScrollBody)
-              SliverFillRemaining(
-                hasScrollBody: true,
-                child: child,
-              )
-            else
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: child,
-              ),
-          ],
-        ),
+      child: CustomScrollView(
+        shrinkWrap: false,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          if (useSliverToBoxAdapter)
+            SliverToBoxAdapter(child: child)
+          else if (hasScrollBody)
+            SliverFillRemaining(
+              hasScrollBody: true,
+              child: child,
+            )
+          else
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: child,
+            ),
+        ],
       ),
     );
   }
@@ -350,7 +339,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final sourceView = currentFile != null
         ? KeepAliveWrapper(
             key: const ValueKey('tab_source'),
-            child: _buildRefreshable(
+            child: _buildTabPage(
               SourceViewer(
                 key: const ValueKey('file_viewer_source'),
                 file: currentFile,
@@ -358,7 +347,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               'source',
             ),
           )
-        : _buildScrollableRefreshable(
+        : _buildScrollableTabPage(
             Center(
                 key: const ValueKey('tab_source_empty'),
                 child: htmlService.isLoading
@@ -373,7 +362,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       focusNode: _tabFocusNode('browser'),
       isBrowserTab: true,
       child: KeepAliveWrapper(
-        child: _buildRefreshable(
+        child: _buildTabPage(
           (currentFile != null &&
                       (currentFile.isUrl ||
                           isHtmlOrXml ||
@@ -398,7 +387,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final readerView = KeepAliveWrapper(
       key: const ValueKey('tab_reader'),
-      child: _buildRefreshable(
+      child: _buildTabPage(
         ReaderView(
           gestureRecognizers: {
             Factory<VerticalDragGestureRecognizer>(
@@ -412,7 +401,7 @@ class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     Widget page(AppTab tab, Widget view) => KeepAliveWrapper(
         key: ValueKey('tab_${tab.tag}'),
-        child: _buildRefreshable(view, tab.tag));
+        child: _buildTabPage(view, tab.tag));
 
     return [
       for (final tab in _tabs)

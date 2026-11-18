@@ -91,6 +91,30 @@ void main() {
     expect(find.textContaining('1000 × 100 px'), findsOneWidget);
   });
 
+  testWidgets('the sheet opens the DOM tree at the tapped element',
+      (tester) async {
+    await show(tester, pageWithLayout());
+    await tester.tapAt(wireframeOrigin(tester) + const Offset(20, 20));
+    await tester.pumpAndSettle();
+    expect(find.text('Open in DOM tree'), findsOneWidget);
+    expect(find.text('Open in source'), findsOneWidget);
+    await tester.tap(find.text('Open in DOM tree'));
+    await tester.pumpAndSettle();
+    expect(service.pendingDomReveal?.id, 'top');
+    expect(service.pendingDomReveal?.tag, 'header');
+    expect(service.requestedTabIndex, HtmlService.domTreeTab);
+  });
+
+  testWidgets('the sheet opens the source view at the tapped element',
+      (tester) async {
+    await show(tester, pageWithLayout());
+    await tester.tapAt(wireframeOrigin(tester) + const Offset(20, 20));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open in source'));
+    await tester.pumpAndSettle();
+    expect(service.requestedTabIndex, HtmlService.sourceTab);
+  });
+
   testWidgets('without a browser the tab says why', (tester) async {
     await show(tester, localFile());
     expect(find.textContaining('only for pages loaded in the browser'),

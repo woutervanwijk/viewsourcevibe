@@ -213,3 +213,70 @@ DomTree buildDomTreeRecord((String, DomTreeKind) args) =>
 
 typedef DomTreeBuilder = Future<DomTree> Function(
     String text, DomTreeKind kind);
+
+/// What to reveal in the DOM tree: an element found by tag/id/classes plus
+/// its occurrence among same-signature elements in document order (most
+/// elements have no id, so the signature alone is not always unique).
+class DomReveal {
+  final String tag, id, classes;
+  final int occurrence;
+  const DomReveal(
+      {required this.tag, required this.id, required this.classes, required this.occurrence});
+
+  @override
+  bool operator ==(Object other) =>
+      other is DomReveal &&
+      other.tag == tag &&
+      other.id == id &&
+      other.classes == classes &&
+      other.occurrence == occurrence;
+
+  @override
+  int get hashCode => Object.hash(tag, id, classes, occurrence);
+}
+
+bool _nodeMatches(DomTreeNode n, DomReveal r) {
+  if (!n.isElement) return false;
+  if (r.tag.isNotEmpty && n.label.toLowerCase() != r.tag.toLowerCase()) {
+    return false;
+  }
+  if (r.id.isNotEmpty && n.attributes['id'] != r.id) return false;
+  if (r.classes.isNotEmpty) {
+    final have = (n.attributes['class'] ?? '').split(RegExp(r'\s+'));
+    if (!r.classes.split(RegExp(r'\s+')).every(have.contains)) return false;
+  }
+  return true;
+}
+
+/// The [r.occurrence]-th (0-based) element in document order that matches
+/// [r], searched in the body subtree when there is one (layout blocks come
+/// from body); null when there is no such node.
+DomTreeNode? findNodeBySignature(List<DomTreeNode> roots, DomReveal r) {
+  var start = roots;
+  for (final root in roots) {
+    for (final c in root.children) {
+      if (c.label.toLowerCase() == 'body') {
+        start = [c];
+        break;
+      }
+    }
+  }
+  var n = 0;
+  DomTreeNode? found;
+  void walk(List<DomTreeNode> nodes) {
+    for (final node in nodes) {
+      if (found != null) return;
+      if (_nodeMatches(node, r)) {
+        if (n == r.occurrence) {
+          found = node;
+          return;
+        }
+        n++;
+      }
+      walk(node.children);
+    }
+  }
+
+  walk(start);
+  return found;
+}

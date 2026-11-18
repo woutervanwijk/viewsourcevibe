@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
@@ -51,17 +52,25 @@ class StructurePalette {
 }
 
 /// Draws the page's blocks in page proportions: [scale] logical px per CSS px.
+/// When [background] is set (a screenshot of the page), it is drawn opaque
+/// behind the blocks — over the whole drawing when [backgroundFullPage], else
+/// over the first screen only. The blocks themselves are drawn 75%
+/// transparent so the screenshot shows through.
 class StructurePainter extends CustomPainter {
   final StructureModel model;
   final double scale;
   final StructureColoring coloring;
   final ColorScheme scheme;
+  final ui.Image? background;
+  final bool backgroundFullPage;
 
   StructurePainter({
     required this.model,
     required this.scale,
     required this.coloring,
     required this.scheme,
+    this.background,
+    this.backgroundFullPage = false,
   });
 
   static const double minLabelWidth = 60;
@@ -78,6 +87,21 @@ class StructurePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..color = scheme.outlineVariant);
 
+    // The screenshot is the background, fully opaque: the whole page when we
+    // have a full-page capture, else the first screen only.
+    if (background != null) {
+      final bgHeight = backgroundFullPage
+          ? size.height
+          : math.min(model.layout.viewportHeight * scale, size.height);
+      canvas.drawImageRect(
+        background!,
+        Rect.fromLTWH(
+            0, 0, background!.width.toDouble(), background!.height.toDouble()),
+        Rect.fromLTWH(0, 0, size.width, bgHeight),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    }
+
     final fill = Paint()..style = PaintingStyle.fill;
     final outline = Paint()
       ..style = PaintingStyle.stroke
@@ -88,7 +112,8 @@ class StructurePainter extends CustomPainter {
       final b = s.block;
       final rect = Rect.fromLTWH(
           b.x * scale, b.y * scale, b.width * scale, b.height * scale);
-      fill.color = palette.of(s, coloring).withValues(alpha: 0.55);
+      // 75% transparent: the screenshot shows through the structure overlay.
+      fill.color = palette.of(s, coloring).withValues(alpha: 0.20);
       canvas.drawRect(rect, fill);
       if (b.fixed) {
         _dashedRect(canvas, rect, outline);
@@ -149,5 +174,7 @@ class StructurePainter extends CustomPainter {
       !identical(old.model, model) ||
       old.scale != scale ||
       old.coloring != coloring ||
-      old.scheme != scheme;
+      old.scheme != scheme ||
+      old.background != background ||
+      old.backgroundFullPage != backgroundFullPage;
 }

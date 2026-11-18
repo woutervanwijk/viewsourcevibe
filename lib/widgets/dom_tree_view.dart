@@ -24,6 +24,22 @@ class _DomTreeViewState extends State<DomTreeView> {
   TreeController<DomTreeNode>? _treeController;
   DomTree? _controllerTree;
 
+  /// The reveal handled from the Structure tab and the node it matched; the
+  /// node's row carries [_revealKey] so the view can scroll to it and is
+  /// highlighted like a selected line in the Source view.
+  DomReveal? _handledReveal;
+  DomTreeNode? _revealedNode;
+  final GlobalKey _revealKey = GlobalKey();
+
+  /// True while a reveal scroll is in progress: the tree then builds all
+  /// expanded rows (large finite cacheExtent) so the target row exists and
+  /// can be scrolled to precisely.
+  bool _revealScrolling = false;
+
+  /// Cache extent used during a reveal scroll: ~30k rows; finite because an
+  /// infinite extent breaks the sliver's semantics rect.
+  static const double _revealCacheExtent = 1000000;
+
   /// A controller for [tree]: root expanded, plus head/body/channel.
   TreeController<DomTreeNode> _controllerFor(DomTree tree) {
     if (identical(tree, _controllerTree)) return _treeController!;
@@ -31,9 +47,22 @@ class _DomTreeViewState extends State<DomTreeView> {
     if (old != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     }
+    // Parent map so expandAncestors can walk up to a revealed node.
+    final parents = <DomTreeNode, DomTreeNode>{};
+    void walk(DomTreeNode node) {
+      for (final child in node.children) {
+        parents[child] = node;
+        walk(child);
+      }
+    }
+
+    for (final root in tree.roots) {
+      walk(root);
+    }
     final controller = TreeController<DomTreeNode>(
       roots: tree.roots,
       childrenProvider: (DomTreeNode node) => node.children,
+      parentProvider: (DomTreeNode node) => parents[node],
     );
     if (tree.roots.isNotEmpty) {
       final root = tree.roots.first;
@@ -101,6 +130,7 @@ class _DomTreeViewState extends State<DomTreeView> {
     final muted =
         TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant);
     final controller = _controllerFor(tree);
+    _handlePendingReveal(context, tree, controller);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -117,10 +147,14 @@ class _DomTreeViewState extends State<DomTreeView> {
               primary: true,
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.only(bottom: bottomInset),
+              cacheExtent: _revealScrolling ? _revealCacheExtent : null,
               treeController: controller,
               nodeBuilder:
                   (BuildContext context, TreeEntry<DomTreeNode> entry) {
+                final revealed = identical(entry.node, _revealedNode);
                 return DomTreeTile(
+                  key: revealed ? _revealKey : null,
+                  highlighted: revealed,
                   entry: entry,
                   onTap: () => controller.toggleExpansion(entry.node),
                 );
@@ -130,6 +164,54 @@ class _DomTreeViewState extends State<DomTreeView> {
         ),
       ],
     );
+  }
+
+  /// Expands the ancestors of the pending reveal (from the Structure tab) and
+  /// scrolls its row into view. Elements without an id are matched by
+  /// tag/classes plus their occurrence in document order.
+  void _handlePendingReveal(BuildContext context, DomTree tree,
+      TreeController<DomTreeNode> controller) {
+    final pending =
+        context.select<HtmlService, DomReveal?>((s) => s.pendingDomReveal);
+    if (pending == null || identical(pending, _handledReveal)) return;
+    _handledReveal = pending;
+    final service = context.read<HtmlService>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = findNodeBySignature(tree.roots, pending);
+      if (node != null) {
+        _revealedNode = node;
+        // Build all expanded rows first, so the target row exists and the
+        // scroll can be exact (slivers otherwise build lazily).
+        setState(() => _revealScrolling = true);
+        controller.expandAncestors(node);
+        // Open the node itself one level, so its children are visible too.
+        controller.expand(node);
+      }
+      service.consumeDomReveal();
+      if (node == null) return;
+      var attempts = 0;
+      void scroll() {
+        if (!mounted) return;
+        final ctx = _revealKey.currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(ctx,
+              duration: const Duration(milliseconds: 250), alignment: 0.3);
+          setState(() => _revealScrolling = false);
+          return;
+        }
+        if (++attempts < 20) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => scroll());
+        } else {
+          setState(() => _revealScrolling = false);
+        }
+      }
+
+      // Wait for the expanded rows (with the reveal key) to be built.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) scroll();
+      });
+    });
   }
 
   /// No text to parse: show why (the tree never shows another document).
@@ -166,10 +248,15 @@ class DomTreeTile extends StatelessWidget {
   final TreeEntry<DomTreeNode> entry;
   final VoidCallback onTap;
 
+  /// True for the node revealed from the Structure tab: its row is
+  /// highlighted like a selected line in the Source view.
+  final bool highlighted;
+
   const DomTreeTile({
     super.key,
     required this.entry,
     required this.onTap,
+    this.highlighted = false,
   });
 
   /// Get color for specific tags
@@ -307,7 +394,17 @@ class DomTreeTile extends StatelessWidget {
         color: Colors.grey,
         thickness: 1,
       ),
-      child: InkWell(
+      child: Container(
+        decoration: highlighted
+            ? BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primaryContainer
+                    .withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(4),
+              )
+            : null,
+        child: InkWell(
         onTap: entry.hasChildren ? onTap : null,
         onLongPress: () {
           Clipboard.setData(ClipboardData(text: node.content));
@@ -422,6 +519,7 @@ class DomTreeTile extends StatelessWidget {
               ],
             ],
           ),
+        ),
         ),
       ),
     );

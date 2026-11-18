@@ -61,6 +61,35 @@ void main() {
     test('empty text is an empty tree', () {
       expect(html('').roots, isEmpty);
     });
+
+    test('findNodeBySignature matches by tag/classes and occurrence', () {
+      final t = html('<html><body><p class="a">one</p>'
+          '<div><p class="a">two</p></div><p class="b">three</p>'
+          '</body></html>');
+      DomTreeNode? n(DomReveal r) => findNodeBySignature(t.roots, r);
+      expect(
+          n(const DomReveal(tag: 'p', id: '', classes: 'a', occurrence: 0))
+              ?.content,
+          contains('one'));
+      expect(
+          n(const DomReveal(tag: 'p', id: '', classes: 'a', occurrence: 1))
+              ?.content,
+          contains('two'));
+      expect(
+          n(const DomReveal(tag: 'p', id: '', classes: 'b', occurrence: 0))
+              ?.content,
+          contains('three'));
+      expect(
+          n(const DomReveal(tag: '', id: 'missing', classes: '', occurrence: 0)),
+          isNull);
+      // Head elements are not matched: the search runs in the body subtree.
+      final withHead =
+          html('<html><head><title>t</title></head><body><p>x</p></body></html>');
+      expect(
+          findNodeBySignature(withHead.roots,
+              const DomReveal(tag: 'title', id: '', classes: '', occurrence: 0)),
+          isNull);
+    });
   });
 
   group('DomTreeView', () {
@@ -108,6 +137,56 @@ void main() {
       service.selectSourceDocument(DataSource.server);
       await tester.pump();
       expect(service.domTreeBuilds, 2);
+    });
+
+    testWidgets('a pending reveal scrolls the node into view and highlights it',
+        (tester) async {
+      // Tall enough that the target sits far below the 800x600 test surface.
+      final fillers = List.generate(200, (i) => '<div>filler $i</div>').join();
+      final deep =
+          '<!DOCTYPE html><html><body>$fillers<div id="wrap"><p id="deep">x</p></div></body></html>';
+      final p = fullPage().copyWith(
+          browser: browser(browserSnapshot(url: fullPageUrl, dom: deep)));
+      await show(tester, p);
+      // Collapsed: the deep node's row is not built yet.
+      expect(find.textContaining('id="deep"'), findsNothing);
+
+      service.revealDomNode('wrap');
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(service.pendingDomReveal, isNull);
+      expect(service.requestedTabIndex, HtmlService.domTreeTab);
+      final row = find.textContaining('id="wrap"');
+      expect(row, findsOneWidget);
+      // Scrolled into view (the test surface is 800x600).
+      final pos = tester.getTopLeft(row);
+      expect(pos.dy, greaterThanOrEqualTo(0));
+      expect(pos.dy, lessThan(600));
+      // The node is opened one level: its child is visible too.
+      expect(find.textContaining('id="deep"'), findsOneWidget);
+      // Highlighted like a selected line in the Source view.
+      expect(
+          find.byWidgetPredicate((w) => w is DomTreeTile && w.highlighted),
+          findsOneWidget);
+    });
+
+    testWidgets('a reveal without id matches by signature and scrolls to it',
+        (tester) async {
+      const doc = '<!DOCTYPE html><html><body><p class="target">one</p>'
+          '<div><p class="target">two</p></div></body></html>';
+      final p = fullPage().copyWith(
+          browser: browser(browserSnapshot(url: fullPageUrl, dom: doc)));
+      await show(tester, p);
+      // Only the first matching <p> is visible; the one in the collapsed
+      // div is not built yet.
+      expect(find.textContaining('class="target"'), findsOneWidget);
+
+      service.revealDomSignature(
+          const DomReveal(tag: 'p', id: '', classes: 'target', occurrence: 1));
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(service.pendingDomReveal, isNull);
+      expect(find.textContaining('class="target"'), findsNWidgets(2));
     });
 
     testWidgets('server HTML still pending: a message, no stale tree',
