@@ -17,6 +17,7 @@ In a nice user interface you can easily view:
 - Http Headers
 - Robots.txt
 - Security Score
+- Permissions (what the page may use, hands to frames and stores on your device)
 - DOM Tree
 - Plain Html
 
@@ -78,6 +79,7 @@ Each page opens into a set of tabs:
   - **Timeline:** The request timeline of the page load.
   - **Probe & Headers:** HTTP details and response headers.
   - **Security:** Security headers and TLS details.
+  - **Permissions:** Permissions policy, access handed to embedded frames, denied permission requests and site storage.
 
 - **🛠️ Everything else**
   - **Bundles:** Save and organize favorite sites and snippets.

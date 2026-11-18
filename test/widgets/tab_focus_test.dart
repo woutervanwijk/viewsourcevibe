@@ -1,3 +1,4 @@
+import 'package:view_source_vibe/services/batch_runner.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,8 @@ Future<void> pumpApp(WidgetTester tester, HtmlService service) async {
   await tester.pumpWidget(MultiProvider(
     providers: [
       ChangeNotifierProvider<HtmlService>.value(value: service),
+      ChangeNotifierProvider<BatchRunner>(
+          create: (_) => BatchRunner(HtmlServiceBatchTarget(service))),
       ChangeNotifierProvider<AppSettings>.value(value: settings),
     ],
     child: const MyApp(),

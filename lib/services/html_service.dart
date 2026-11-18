@@ -26,6 +26,7 @@ import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/page_layout.dart';
+import 'package:view_source_vibe/models/inspection/permission_request.dart';
 import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/collectors/collector_world.dart';
@@ -38,8 +39,10 @@ import 'package:view_source_vibe/services/derive/detections_view.dart';
 import 'package:view_source_vibe/services/derive/divergences.dart';
 import 'package:view_source_vibe/services/derive/block_page.dart';
 import 'package:view_source_vibe/services/derive/header_insights.dart';
+import 'package:view_source_vibe/services/derive/inspection_summary.dart';
 import 'package:view_source_vibe/services/derive/probe_general.dart';
 import 'package:view_source_vibe/services/derive/request_timeline.dart';
+import 'package:view_source_vibe/services/derive/permissions_view.dart';
 import 'package:view_source_vibe/services/derive/security_audit.dart';
 import 'package:view_source_vibe/services/collectors/fresh_load_measurer.dart';
 import 'package:view_source_vibe/services/collectors/transfer_size_lookup.dart';
@@ -118,6 +121,7 @@ class HtmlService extends ChangeNotifier {
   /// Removes the browser's data for one site (long-press Reload); a seam
   /// for tests.
   final Future<void> Function(Uri url) _clearSiteData;
+
   /// Null: the default lookup on the per-navigation shared client.
   final ResourceSizeLookup? _sizeLookup;
   final FreshLoadMeasurer _freshMeasurer;
@@ -828,6 +832,18 @@ class HtmlService extends ChangeNotifier {
     return _divergences!;
   }
 
+  /// The key findings and facts of the current inspection. Not cached.
+  InspectionSummary get summary => deriveSummary(SummaryInputs(
+        inspection: store.current,
+        general: generalView,
+        security: securityView,
+        cookies: cookiesView,
+        detections: detectionsView,
+        sovereignty: sovereigntyState,
+        blockPage: blockPage,
+        divergences: divergences,
+      ));
+
   Observed<GeneralModel>? _general;
   ({
     InspectionTarget target,
@@ -883,6 +899,32 @@ class HtmlService extends ChangeNotifier {
       _security = deriveSecurity(current);
     }
     return _security!;
+  }
+
+  Observed<PermissionsModel>? _permissions;
+  ({
+    InspectionTarget target,
+    Observed<BrowserSnapshot> browser,
+    Observed<ServerSnapshot> server,
+    List<PermissionRequestEvent> requests
+  })? _permissionsFor;
+
+  /// The Permissions tab: declared policy, delegation to frames, requests
+  /// the app denied, what is stored. Cached on the inputs, not on the
+  /// PageInspection object.
+  Observed<PermissionsModel> get permissionsView {
+    final current = store.current;
+    final key = (
+      target: current.target,
+      browser: current.browser,
+      server: current.server,
+      requests: current.permissionRequests
+    );
+    if (_permissions == null || _permissionsFor != key) {
+      _permissionsFor = key;
+      _permissions = derivePermissions(current);
+    }
+    return _permissions!;
   }
 
   Observed<CookiesModel>? _cookiesView;
@@ -1523,7 +1565,10 @@ class HtmlService extends ChangeNotifier {
           // In low-resource mode the Browser WebView is paused once its tab
           // is hidden, but extraction evaluates JS in it — so pause only
           // after the extraction has finished.
-          reader.extractIfStale().whenComplete(_applyWebViewResourceMode).ignore();
+          reader
+              .extractIfStale()
+              .whenComplete(_applyWebViewResourceMode)
+              .ignore();
         } else {
           _applyWebViewResourceMode();
         }
@@ -4447,10 +4492,9 @@ Technical details: $message''';
 
   /// Our own download of a resource, measured like the browser's transfer
   /// size (compressed bytes plus headers); see [lookupTransferSize].
-  Future<int?> _lookupResourceSize(int gen, String url) => lookupTransferSize(
-      url,
-      userAgent: kServerUserAgent,
-      shared: _clientFor(gen));
+  Future<int?> _lookupResourceSize(int gen, String url) =>
+      lookupTransferSize(url,
+          userAgent: kServerUserAgent, shared: _clientFor(gen));
 
   /// The browser reported a URL change (history API / SPA route, redirect).
   /// The same document as the current navigation (R20) is nothing new; any
@@ -4678,8 +4722,55 @@ Technical details: $message''';
   /// load, for engines whose page cannot read its own status (WebKit).
   ({int gen, int status})? _browserHttpError;
 
-  /// The browser started loading a new main-frame document.
-  void onBrowserLoadStart() => _browserHttpError = null;
+  /// The browser started loading a new main-frame document ([url] when
+  /// known: an in-view navigation starts its generation only later, so the
+  /// load start is matched to the page by URL).
+  void onBrowserLoadStart([Uri? url]) {
+    _browserHttpError = null;
+    _loadStartGen = store.current.generation;
+    _loadStartUrl = url;
+    _loadStartAt = DateTime.now();
+    _loadStartSeq++;
+  }
+
+  /// Counts main-frame load starts. A native callback reads it on entry and
+  /// hands it back with the request, so a request that waited (for the
+  /// WebView's URL) across a navigation or reload is dropped.
+  int get loadStartSeq => _loadStartSeq;
+  int _loadStartSeq = 0;
+
+  int? _loadStartGen;
+  Uri? _loadStartUrl;
+  DateTime? _loadStartAt;
+
+  /// The page asked for a native permission (the browser denied it). Only
+  /// recorded when the WebView's main frame ([mainFrameUrl]) is the page
+  /// being inspected; a request from a page already left is dropped. The
+  /// request's own [origin] may differ (embedded frames).
+  void onBrowserPermissionRequest(
+      String origin, List<String> resources, Uri? mainFrameUrl,
+      {required int loadSeq}) {
+    if (_disposed ||
+        loadSeq != _loadStartSeq ||
+        mainFrameUrl == null ||
+        !_storeCovers(mainFrameUrl)) {
+      return;
+    }
+    final start = _loadStartAt;
+    final startUrl = _loadStartUrl;
+    final startBelongs = start != null &&
+        (startUrl != null
+            ? _storeCovers(startUrl)
+            : _loadStartGen == store.current.generation);
+    store.addPermissionRequest(
+        store.current.generation,
+        PermissionRequestEvent(
+          origin: origin,
+          resources: resources,
+          sinceLoadStart:
+              startBelongs ? DateTime.now().difference(start) : null,
+        ));
+  }
 
   /// The WebView received an HTTP error for the main frame.
   void onBrowserMainFrameHttpError(int status) =>

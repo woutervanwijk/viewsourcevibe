@@ -8,6 +8,7 @@ import 'derive/cookies_view.dart';
 import 'derive/observed_text.dart' show notPresentAs;
 import 'derive/page_weight.dart';
 import 'derive/probe_general.dart';
+import 'derive/permissions_view.dart';
 import 'derive/security_audit.dart';
 import 'derive/structure_view.dart';
 import 'observed_json.dart';
@@ -386,6 +387,91 @@ class InspectionExportData {
       },
     };
   }
+
+  static Object? _area(StorageArea a) => {
+        'count': a.count,
+        'bytes': observedPlain(a.bytes, source: DataSource.browser),
+      };
+
+  /// analysis/permissions.json: names, counts and sizes; never a stored
+  /// value.
+  static Map<String, Object?> permissions(Observed<PermissionsModel> p) =>
+      observedJson(
+        p,
+        (m) => {
+          'notes': m.notes,
+          'declared': observedJson(
+            m.declared,
+            (list) => [
+              for (final f in list)
+                {
+                  'feature': f.feature,
+                  'allowed': f.allowed,
+                  'powerful': f.powerful,
+                },
+            ],
+            source: DataSource.server,
+            provenance: Provenance.derived,
+          ),
+          'invalidDeclarations': m.invalidDeclarations,
+          'legacyHeaderOnly': m.legacyHeaderOnly,
+          'delegations': observedJson(
+            m.delegations,
+            (list) => [
+              for (final d in list)
+                {
+                  'frameHost': d.frameHost,
+                  'thirdParty': d.thirdParty,
+                  'features': d.features,
+                  'sandboxed': d.sandboxed,
+                },
+            ],
+            source: DataSource.browser,
+            provenance: Provenance.derived,
+          ),
+          'frameCount': observedPlain(m.frameCount, source: DataSource.browser),
+          'requests': [
+            for (final r in m.requests)
+              {
+                'origin': r.origin,
+                'resources': r.resources,
+                'sinceLoadStartMs': r.sinceLoadStart?.inMilliseconds,
+              },
+          ],
+          'stored': observedJson(
+            m.stored,
+            (s) => {
+              'usageBytes':
+                  observedPlain(s.usageBytes, source: DataSource.browser),
+              'quotaBytes':
+                  observedPlain(s.quotaBytes, source: DataSource.browser),
+              'indexedDbNames':
+                  observedPlain(s.indexedDbNames, source: DataSource.browser),
+              'cacheNames':
+                  observedPlain(s.cacheNames, source: DataSource.browser),
+              'serviceWorkers': observedJson(
+                s.serviceWorkers,
+                (list) => [
+                  for (final w in list) {'scope': w.scope, 'script': w.script},
+                ],
+                source: DataSource.browser,
+              ),
+            },
+            source: DataSource.browser,
+          ),
+          'webStorage': observedJson(
+            m.webStorage,
+            (w) => {
+              'local': observedJson(w.local, _area, source: DataSource.browser),
+              'session':
+                  observedJson(w.session, _area, source: DataSource.browser),
+            },
+            source: DataSource.browser,
+          ),
+        },
+        source: DataSource.browser,
+        provenance: Provenance.derived,
+      );
 
   /// analysis/security-scorecard.json
   static Map<String, Object?> securityScorecard(Observed<SecurityModel> s) =>

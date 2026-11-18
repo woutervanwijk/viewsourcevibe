@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart'
+    show PermissionResourceType;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/app_tab.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
@@ -13,6 +15,7 @@ import 'package:view_source_vibe/services/collectors/browser_loader.dart';
 import 'package:view_source_vibe/services/derive/cookies.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/services/permission_resources.dart';
 
 import 'html_service_lifecycle_test.dart'
     show
@@ -151,8 +154,8 @@ void main() {
     test('cookies are deleted before every URL load when enabled', () async {
       var deletions = 0;
       service.dispose();
-      service = make(
-          cleanCookies: true, deleteAllCookies: () async => deletions++);
+      service =
+          make(cleanCookies: true, deleteAllCookies: () async => deletions++);
       await service.loadUrl('https://a.test/');
       fetcher.pending.last
           .complete(okSnapshot('https://a.test/', '<html>S</html>'));
@@ -462,12 +465,12 @@ void main() {
       // initial sync + first poll + post-scroll poll, then settled
       expect(collectCalls.length, greaterThanOrEqualTo(3));
       expect(store.current.browserSettled, isTrue);
-      final names =
-          service.resourceTimelineData.map((r) => r['name']).toSet();
+      final names = service.resourceTimelineData.map((r) => r['name']).toSet();
       expect(names, contains('https://a.test/lazy.gif'));
       // The banner explains the scroll and how to disable it.
       expect(HtmlService.scrollThroughBannerText, contains('Settings'));
-      expect(HtmlService.scrollThroughBannerText, contains('Load lazy content'));
+      expect(
+          HtmlService.scrollThroughBannerText, contains('Load lazy content'));
       // The scroll-through raised the banner for the current page.
       expect(service.showScrollThroughBanner, isTrue);
       // Back at the top, the page reports it: the banner goes away.
@@ -964,6 +967,87 @@ void main() {
       await loadAndAnswer('https://b.test/');
       await service.syncWebViewState('https://b.test/');
       expect(browserOf(service).mainStatus, isA<Unavailable<int>>());
+    });
+  });
+
+  group('permission requests', () {
+    test('a request is recorded for the current page', () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserLoadStart();
+      service.onBrowserPermissionRequest('https://a.test',
+          ['camera', 'microphone'], Uri.parse('https://a.test/'),
+          loadSeq: service.loadStartSeq);
+      final r = store.current.permissionRequests.single;
+      expect(r.origin, 'https://a.test');
+      expect(r.resources, ['camera', 'microphone']);
+      expect(r.sinceLoadStart, greaterThanOrEqualTo(Duration.zero));
+    });
+
+    test('a request that waited for getUrl across a load start is dropped',
+        () async {
+      await loadAndAnswer('https://a.test/');
+      final seq = service.loadStartSeq; // read at native-callback entry
+      service.onBrowserLoadStart(Uri.parse('https://a.test/')); // reload
+      service.onBrowserPermissionRequest(
+          'https://a.test', ['camera'], Uri.parse('https://a.test/'),
+          loadSeq: seq);
+      expect(store.current.permissionRequests, isEmpty);
+    });
+
+    test('without a load start the time is unknown', () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserPermissionRequest(
+          'https://a.test', ['geolocation'], Uri.parse('https://a.test/'),
+          loadSeq: service.loadStartSeq);
+      expect(store.current.permissionRequests.single.sinceLoadStart, isNull);
+    });
+
+    test(
+        'a late request from the page left is dropped; one from the new page is kept',
+        () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserPermissionRequest(
+          'https://a.test', ['camera'], Uri.parse('https://a.test/'),
+          loadSeq: service.loadStartSeq);
+      await loadAndAnswer('https://b.test/');
+      expect(store.current.permissionRequests, isEmpty);
+      service.onBrowserPermissionRequest(
+          'https://a.test', ['camera'], Uri.parse('https://a.test/'),
+          loadSeq: service.loadStartSeq);
+      expect(store.current.permissionRequests, isEmpty);
+      // A third-party frame on page B: origin differs, main frame is B.
+      service.onBrowserPermissionRequest(
+          'https://maps.test', ['geolocation'], Uri.parse('https://b.test/'),
+          loadSeq: service.loadStartSeq);
+      expect(
+          store.current.permissionRequests.single.origin, 'https://maps.test');
+    });
+
+    test('a load start of the previous page gives unknown', () async {
+      await loadAndAnswer('https://a.test/');
+      service.onBrowserLoadStart(Uri.parse('https://a.test/'));
+      await loadAndAnswer('https://b.test/');
+      service.onBrowserPermissionRequest(
+          'https://b.test', ['camera'], Uri.parse('https://b.test/'),
+          loadSeq: service.loadStartSeq);
+      expect(store.current.permissionRequests.single.sinceLoadStart, isNull);
+    });
+  });
+
+  group('permission resource names', () {
+    test('camera, microphone, both, geolocation and others', () {
+      expect(
+          permissionResourceNames([PermissionResourceType.CAMERA]), ['camera']);
+      expect(permissionResourceNames([PermissionResourceType.MICROPHONE]),
+          ['microphone']);
+      expect(
+          permissionResourceNames(
+              [PermissionResourceType.CAMERA_AND_MICROPHONE]),
+          ['camera', 'microphone']);
+      expect(permissionResourceNames([PermissionResourceType.GEOLOCATION]),
+          ['geolocation']);
+      expect(permissionResourceNames([PermissionResourceType.NOTIFICATIONS]),
+          ['notifications']);
     });
   });
 }

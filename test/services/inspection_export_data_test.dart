@@ -4,6 +4,8 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/services/derive/permissions_view.dart';
+import 'package:view_source_vibe/services/inspection_export_data.dart';
 import 'package:view_source_vibe/services/inspection_export_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/observed_json.dart';
@@ -16,6 +18,7 @@ import '../fixtures/inspection/full_page.dart';
 import '../fixtures/inspection/ios_partial.dart';
 import '../fixtures/inspection/local_file.dart';
 import '../fixtures/inspection/pump.dart';
+import '../widgets/permissions_data_test.dart' show pageWithPermissions;
 
 void main() {
   group('observedJson', () {
@@ -241,5 +244,20 @@ void main() {
       expect(json(a, 'analysis/page-weight.json')['status'],
           isNot('unavailable'));
     });
+  });
+
+  test('the permissions export has names and sizes, never storage values', () {
+    final text = jsonEncode(InspectionExportData.permissions(
+        derivePermissions(pageWithPermissions)));
+    expect(text, contains('keyval-store'));
+    expect(text, contains('camera'));
+    expect(text, contains('sinceLoadStartMs'));
+    expect(text, contains('"count":3'));
+    // The observed envelope uses 'value'; no storage item (key or value) is
+    // exported, only counts, sizes and names.
+    expect(text, isNot(contains('topItems')));
+    expect(text, isNot(contains('"v"')));
+    expect(text, isNot(contains('secret-token-key')));
+    expect(text, isNot(contains('987654')));
   });
 }

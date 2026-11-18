@@ -4,6 +4,7 @@ import 'browser_snapshot.dart';
 import 'file_snapshot.dart';
 import 'observed.dart';
 import 'page_layout.dart';
+import 'permission_request.dart';
 import 'server_snapshot.dart';
 
 /// [PageInspection.freshLoad] before the user asked for one.
@@ -83,6 +84,9 @@ class PageInspection {
   /// The boxes of the live page (Structure tab).
   final Observed<PageLayout> layout;
 
+  /// Native permission requests the page made (all denied), oldest first.
+  final List<PermissionRequestEvent> permissionRequests;
+
   const PageInspection({
     required this.generation,
     required this.target,
@@ -99,6 +103,7 @@ class PageInspection {
     this.liveScreenshot = kNoScreenshot,
     this.freshScreenshot = kNoScreenshot,
     this.layout = kLayoutNotMeasured,
+    this.permissionRequests = const [],
   });
 
   const PageInspection.empty()
@@ -120,7 +125,8 @@ class PageInspection {
         freshEstimates = const {},
         liveScreenshot = kNoScreenshot,
         freshScreenshot = kNoScreenshot,
-        layout = kLayoutNotMeasured;
+        layout = kLayoutNotMeasured,
+        permissionRequests = const [];
 
   PageInspection copyWith({
     Observed<ServerSnapshot>? server,
@@ -136,6 +142,7 @@ class PageInspection {
     Observed<Uint8List>? liveScreenshot,
     Observed<Uint8List>? freshScreenshot,
     Observed<PageLayout>? layout,
+    List<PermissionRequestEvent>? permissionRequests,
   }) =>
       PageInspection(
         generation: generation,
@@ -155,6 +162,7 @@ class PageInspection {
         liveScreenshot: liveScreenshot ?? this.liveScreenshot,
         freshScreenshot: freshScreenshot ?? this.freshScreenshot,
         layout: layout ?? this.layout,
+        permissionRequests: permissionRequests ?? this.permissionRequests,
       );
 
   bool _has(DataSource s) => switch (s) {

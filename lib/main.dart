@@ -1,3 +1,4 @@
+import 'package:view_source_vibe/services/batch_runner.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -345,6 +346,8 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: inspectionStore),
         ChangeNotifierProvider.value(value: htmlService),
+        ChangeNotifierProvider<BatchRunner>(
+            create: (_) => BatchRunner(HtmlServiceBatchTarget(htmlService))),
         ChangeNotifierProvider.value(value: readerService),
         ChangeNotifierProvider.value(value: appSettings),
         ChangeNotifierProvider.value(value: appStateService),
