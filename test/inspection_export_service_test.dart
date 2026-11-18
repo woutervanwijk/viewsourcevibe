@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/services/derive/network_quiet.dart';
 import 'package:view_source_vibe/models/html_file.dart';
 import 'package:view_source_vibe/models/inspection/browser_snapshot.dart';
+import 'package:view_source_vibe/services/derive/inspection_summary.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
 import 'package:view_source_vibe/services/inspection_export_service.dart';
@@ -61,6 +62,30 @@ void main() {
       ]) {
         expect(report, contains(section));
       }
+    });
+
+    test('the package carries the summary', () async {
+      final service = HtmlService();
+      await service.loadFile(
+        HtmlFile(
+          name: 'example.html',
+          path: 'https://example.com',
+          content: '<!doctype html><html><head><title>Example</title></head>'
+              '<body>Hello</body></html>',
+          lastModified: DateTime.utc(2026, 4, 29),
+          size: 82,
+          isUrl: true,
+        ),
+      );
+      final archive = ZipDecoder()
+          .decodeBytes(InspectionExportService().buildPackageBytes(service));
+      final json = jsonDecode(utf8.decode(
+              archive.findFile('analysis/summary.json')!.content as List<int>))
+          as Map<String, dynamic>;
+      expect((json['facts'] as Map).keys, containsAll(summaryFactKeys));
+      final report =
+          utf8.decode(archive.findFile('report.html')!.content as List<int>);
+      expect(report, contains('<h2>Key findings</h2>'));
     });
 
     test(

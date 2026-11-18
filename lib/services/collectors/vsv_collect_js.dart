@@ -440,6 +440,102 @@ window.__vsv_collect = function(opts) {
 
   out.cookies = section(function() { return {raw: document.cookie || ''}; });
 
+  // Every iframe's delegation attributes (the cap keeps the payload small).
+  out.frames = section(function() {
+    var list = document.getElementsByTagName('iframe');
+    var items = [];
+    for (var i = 0; i < list.length && i < 200; i++) {
+      var f = list[i];
+      items.push({
+        src: f.getAttribute('src') || '',
+        allow: f.getAttribute('allow') || '',
+        sandbox: f.getAttribute('sandbox')
+      });
+    }
+    return {total: list.length, items: items};
+  });
+
+  // What the page can ask for at all: a WebView may lack these APIs.
+  out.capabilities = section(function() {
+    var n = typeof navigator !== 'undefined' ? navigator : {};
+    return {
+      mediaDevices: !!(n.mediaDevices && n.mediaDevices.getUserMedia),
+      geolocation: !!n.geolocation
+    };
+  });
+
+  // What the site stored on the device. The lookups are promises, so they
+  // start once per document and a later collect picks the results up.
+  function startSiteStorage() {
+    if (window.__vsv_site) return;
+    var site = window.__vsv_site = {done: false, started: Date.now()};
+    var left = 4;
+    function settle() { if (--left === 0) site.done = true; }
+    function track(key, api, call, shape) {
+      var p;
+      try { p = call(); } catch (e) {
+        site[key] = {ok: false, error: describe(e)}; settle(); return;
+      }
+      if (!p || typeof p.then !== 'function') {
+        site[key] = {ok: false, error: api + ' is not supported'}; settle(); return;
+      }
+      try {
+        p.then(function(v) {
+          try { site[key] = shape(v); }
+          catch (e) { site[key] = {ok: false, error: describe(e)}; }
+          settle();
+        }).catch(function(e) {
+          site[key] = {ok: false, error: describe(e)}; settle();
+        });
+      } catch (e) {
+        site[key] = {ok: false, error: describe(e)}; settle();
+      }
+    }
+    var nav = typeof navigator !== 'undefined' ? navigator : {};
+    site.usage = null; site.quota = null;
+    track('est', 'navigator.storage.estimate',
+      function() { return nav.storage && nav.storage.estimate ? nav.storage.estimate() : null; },
+      function(e) { site.usage = num(e.usage); site.quota = num(e.quota); return {ok: true}; });
+    track('idb', 'indexedDB.databases',
+      function() { return typeof indexedDB !== 'undefined' && indexedDB.databases ? indexedDB.databases() : null; },
+      function(dbs) {
+        var names = [];
+        for (var i = 0; i < dbs.length && i < 100; i++) names.push(String(dbs[i].name));
+        return {ok: true, names: names};
+      });
+    track('caches', 'caches.keys',
+      function() { return typeof caches !== 'undefined' && caches.keys ? caches.keys() : null; },
+      function(keys) {
+        var names = [];
+        for (var i = 0; i < keys.length && i < 100; i++) names.push(String(keys[i]));
+        return {ok: true, names: names};
+      });
+    track('sw', 'navigator.serviceWorker.getRegistrations',
+      function() { return nav.serviceWorker && nav.serviceWorker.getRegistrations ? nav.serviceWorker.getRegistrations() : null; },
+      function(regs) {
+        var items = [];
+        for (var i = 0; i < regs.length && i < 50; i++) {
+          var w = regs[i].active || regs[i].waiting || regs[i].installing;
+          items.push({scope: String(regs[i].scope), script: w ? String(w.scriptURL) : ''});
+        }
+        return {ok: true, items: items};
+      });
+  }
+  out.siteStorage = section(function() {
+    startSiteStorage();
+    var s = window.__vsv_site;
+    if (!s) return {pending: true};
+    if (!s.done) {
+      // One API that never answers must not keep the section pending.
+      if (!(Date.now() - s.started > 4000)) return {pending: true};
+      var late = ['idb', 'caches', 'sw'];
+      for (var i = 0; i < late.length; i++) {
+        if (!s[late[i]]) s[late[i]] = {ok: false, error: 'no answer within 4 s'};
+      }
+    }
+    return {usage: s.usage, quota: s.quota, idb: s.idb, caches: s.caches, sw: s.sw};
+  });
+
   try { return JSON.stringify(out); }
   catch (e) { return JSON.stringify({v: 1, fatal: describe(e)}); }
 };

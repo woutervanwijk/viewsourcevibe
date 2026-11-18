@@ -28,8 +28,10 @@ class Divergence {
 
 String _hostKey(Uri u) => u.host.toLowerCase();
 
+/// The path with a trailing slash ignored; an empty path is the root '/'
+/// (as in `HtmlService.areUrlsEqual`).
 String _pathKey(Uri u) {
-  final p = u.path;
+  final p = u.path.isEmpty ? '/' : u.path;
   return p.length > 1 && p.endsWith('/') ? p.substring(0, p.length - 1) : p;
 }
 

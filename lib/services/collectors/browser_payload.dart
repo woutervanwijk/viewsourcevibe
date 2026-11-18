@@ -104,6 +104,13 @@ BrowserSnapshot parseBrowserPayload(Object? raw, BrowserPlatform platform,
     storage: _parseStorage(p['storage']),
     navigation: _section(p['navigation'], (m) => _parseNavigation(m, _isWebPage(effectiveUrl))),
     mainStatus: parseMainStatus(p['navigation']),
+    frames: _section(p['frames'], (m) => _parseFrames(m, effectiveUrl)),
+    frameCount: p['frames'] is Map && p['frames']['total'] is num
+        ? (p['frames']['total'] as num).toInt()
+        : 0,
+    siteStorage: _parseSiteStorage(p['siteStorage']),
+    mediaDevices: _capability(p['capabilities'], 'mediaDevices'),
+    geolocation: _capability(p['capabilities'], 'geolocation'),
     snapshotTimeMs: _section(p['timing'], (m) {
       final n = m['now'];
       if (n is! num) throw const FormatException('timing.now missing');
@@ -539,6 +546,76 @@ Observed<StorageArea> _parseArea(Object? a) {
   } catch (e) {
     return Failed('$e');
   }
+}
+
+// ---- Frames and site storage ----------------------------------------------
+
+List<FrameInfo> _parseFrames(Map<String, dynamic> m, Uri pageUrl) {
+  final out = <FrameInfo>[];
+  for (final f in (m['items'] as List? ?? const [])) {
+    if (f is! Map) continue;
+    final raw = f['src'];
+    var src = '';
+    if (raw is String && raw.isNotEmpty && raw != 'about:blank') {
+      try {
+        src = pageUrl.resolve(raw).toString();
+      } catch (_) {
+        src = raw;
+      }
+    }
+    final sandbox = f['sandbox'];
+    out.add(FrameInfo(
+      src: src,
+      allow: f['allow'] is String ? f['allow'] as String : '',
+      sandbox: sandbox is String ? sandbox : null,
+    ));
+  }
+  return out;
+}
+
+/// A missing or malformed flag is Unavailable, never false.
+Observed<bool> _capability(Object? sec, String key) {
+  final v = sec is Map && sec['ok'] == true ? sec[key] : null;
+  return v is bool ? _measured(v) : kCapabilityNotCollected;
+}
+
+Observed<SiteStorage> _parseSiteStorage(Object? sec) {
+  if (sec == null) return kSiteStorageNotCollected;
+  if (sec is! Map) return const Failed('section is not an object');
+  if (sec['ok'] != true) return Failed('${sec['error'] ?? 'unknown error'}');
+  if (sec['pending'] == true) return const Pending();
+
+  Observed<int> bytes(Object? v) => v is num
+      ? _measured(v.toInt())
+      : const Unavailable(UnavailableReason.notReportedByPlatform,
+          'navigator.storage.estimate() reported nothing');
+
+  Observed<List<T>> list<T>(Object? part, String key, T Function(Object?) conv) {
+    if (part is! Map) {
+      return const Unavailable(
+          UnavailableReason.notReportedByPlatform, 'not collected');
+    }
+    if (part['ok'] != true) {
+      return Unavailable(UnavailableReason.notReportedByPlatform,
+          '${part['error'] ?? 'not reported by this browser'}');
+    }
+    return _measured([
+      for (final e in (part[key] as List? ?? const [])) conv(e),
+    ]);
+  }
+
+  return _measured(SiteStorage(
+    usageBytes: bytes(sec['usage']),
+    quotaBytes: bytes(sec['quota']),
+    indexedDbNames: list(sec['idb'], 'names', (e) => '$e'),
+    cacheNames: list(sec['caches'], 'names', (e) => '$e'),
+    serviceWorkers: list(
+        sec['sw'],
+        'items',
+        (e) => ServiceWorkerInfo(
+            scope: e is Map ? '${e['scope'] ?? ''}' : '',
+            script: e is Map ? '${e['script'] ?? ''}' : '')),
+  ));
 }
 
 // ---- Cookies -------------------------------------------------------------

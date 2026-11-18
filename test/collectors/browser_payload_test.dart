@@ -914,4 +914,99 @@ void main() {
           200);
     });
   });
+
+  group('frames and site storage', () {
+    BrowserSnapshot withSections(Map<String, Object?> extra) =>
+        parseBrowserPayload(
+            jsonEncode({
+              'v': 1,
+              'url': 'https://a.test/x',
+              'timing': {'ok': true, 'now': 5},
+              ...extra,
+            }),
+            BrowserPlatform.macos,
+            pageUrl: Uri.parse('https://a.test/x'));
+
+    test('frames resolve against the page URL', () {
+      final snap = withSections({
+        'frames': {
+          'ok': true,
+          'total': 3,
+          'items': [
+            {'src': '/embed', 'allow': 'camera; microphone', 'sandbox': ''},
+            {'src': '', 'allow': '', 'sandbox': null},
+          ],
+        },
+      });
+      final frames = present(snap.frames);
+      expect(frames.first.src, 'https://a.test/embed');
+      expect(frames.first.allow, 'camera; microphone');
+      expect(frames.first.sandbox, '');
+      expect(frames.last.src, '');
+      expect(frames.last.sandbox, isNull);
+      expect(snap.frameCount, 3);
+    });
+
+    test('capabilities map to Observed, missing is never false', () {
+      final snap = withSections({
+        'capabilities': {'ok': true, 'mediaDevices': false, 'geolocation': true},
+      });
+      expect(present(snap.mediaDevices), isFalse);
+      expect(present(snap.geolocation), isTrue);
+      final old = withSections({});
+      expect(unavailable(old.mediaDevices),
+          UnavailableReason.notReportedByPlatform);
+      expect(unavailable(old.geolocation),
+          UnavailableReason.notReportedByPlatform);
+    });
+
+    test('sections missing from an old payload are Unavailable', () {
+      final snap = withSections({});
+      expect(unavailable(snap.frames), UnavailableReason.notReportedByPlatform);
+      expect((snap.siteStorage as Unavailable).detail, 'not collected');
+    });
+
+    test('site storage sections map to Observed', () {
+      expect(withSections({'siteStorage': {'ok': true, 'pending': true}})
+          .siteStorage, isA<Pending<SiteStorage>>());
+
+      final s = present(withSections({
+        'siteStorage': {
+          'ok': true,
+          'usage': 10,
+          'quota': 100,
+          'idb': {'ok': false, 'error': 'indexedDB.databases is not supported'},
+          'caches': {'ok': true, 'names': ['v1']},
+          'sw': {
+            'ok': true,
+            'items': [
+              {'scope': 'https://a.test/', 'script': 'https://a.test/sw.js'}
+            ]
+          },
+        },
+      }).siteStorage);
+      expect(present(s.usageBytes), 10);
+      expect(present(s.cacheNames), ['v1']);
+      expect(unavailable(s.indexedDbNames),
+          UnavailableReason.notReportedByPlatform);
+      expect((s.indexedDbNames as Unavailable).detail,
+          'indexedDB.databases is not supported');
+      expect(present(s.serviceWorkers).single.script, 'https://a.test/sw.js');
+    });
+
+    test('usage null is Unavailable', () {
+      final s = present(withSections({
+        'siteStorage': {
+          'ok': true,
+          'usage': null,
+          'quota': null,
+          'idb': {'ok': true, 'names': []},
+          'caches': {'ok': true, 'names': []},
+          'sw': {'ok': true, 'items': []},
+        },
+      }).siteStorage);
+      expect(unavailable(s.usageBytes), UnavailableReason.notReportedByPlatform);
+      expect(present(s.indexedDbNames), isEmpty);
+    });
+  });
 }

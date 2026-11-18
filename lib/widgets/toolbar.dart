@@ -8,6 +8,7 @@ import 'package:view_source_vibe/widgets/share_package_dialog.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:view_source_vibe/models/inspection/file_snapshot.dart';
 import 'package:view_source_vibe/services/collectors/file_loader.dart';
+import 'package:view_source_vibe/screens/batch_screen.dart';
 import 'package:view_source_vibe/screens/settings_screen.dart';
 import 'package:universal_io/io.dart';
 import 'package:flutter/services.dart';
@@ -260,6 +261,12 @@ class Toolbar extends StatelessWidget {
                   hasFile ? () => _exportInspectionPackage(context) : null,
             );
           },
+        ),
+        IconButton(
+          icon: const Icon(CupertinoIcons.list_bullet),
+          tooltip: 'Batch…',
+          onPressed: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const BatchScreen())),
         ),
         IconButton(
           icon: const Icon(CupertinoIcons.gear),

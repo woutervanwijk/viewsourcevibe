@@ -45,8 +45,8 @@ class RenderedDom {
       other.shadowRootCount == shadowRootCount;
 
   @override
-  int get hashCode => Object.hash(
-      text, unwrappedRawDocument, iframeCount, shadowRootCount);
+  int get hashCode =>
+      Object.hash(text, unwrappedRawDocument, iframeCount, shadowRootCount);
 
   /// Parts of the page that [text] does not contain.
   List<String> get limitations => [
@@ -130,8 +130,8 @@ class BrowserCookie {
       sameObserved(other.sameSite, sameSite);
 
   @override
-  int get hashCode => Object.hash(name, value, domain, path, expires, isSecure,
-      isHttpOnly, sameSite);
+  int get hashCode => Object.hash(
+      name, value, domain, path, expires, isSecure, isHttpOnly, sameSite);
 }
 
 class StorageItem {
@@ -230,6 +230,85 @@ class NavigationTiming {
       domContentLoaded, loadEvent, protocol, documentTransfer, documentDecoded);
 }
 
+/// One iframe as the page declares it.
+class FrameInfo {
+  /// Absolute URL; '' for srcdoc / about:blank frames.
+  final String src;
+
+  /// The raw `allow` attribute, '' when absent.
+  final String allow;
+
+  /// The raw `sandbox` attribute; null = no sandbox attribute.
+  final String? sandbox;
+  const FrameInfo({required this.src, this.allow = '', this.sandbox});
+
+  @override
+  bool operator ==(Object other) =>
+      other is FrameInfo &&
+      other.src == src &&
+      other.allow == allow &&
+      other.sandbox == sandbox;
+
+  @override
+  int get hashCode => Object.hash(src, allow, sandbox);
+}
+
+class ServiceWorkerInfo {
+  final String scope;
+  final String script;
+  const ServiceWorkerInfo({required this.scope, required this.script});
+
+  @override
+  bool operator ==(Object other) =>
+      other is ServiceWorkerInfo &&
+      other.scope == scope &&
+      other.script == script;
+
+  @override
+  int get hashCode => Object.hash(scope, script);
+}
+
+/// What the site keeps on the device besides cookies and Web Storage.
+class SiteStorage {
+  final Observed<int> usageBytes;
+  final Observed<int> quotaBytes;
+  final Observed<List<String>> indexedDbNames;
+  final Observed<List<String>> cacheNames;
+  final Observed<List<ServiceWorkerInfo>> serviceWorkers;
+  const SiteStorage({
+    required this.usageBytes,
+    required this.quotaBytes,
+    required this.indexedDbNames,
+    required this.cacheNames,
+    required this.serviceWorkers,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is SiteStorage &&
+      sameObserved(other.usageBytes, usageBytes) &&
+      sameObserved(other.quotaBytes, quotaBytes) &&
+      sameObserved(other.indexedDbNames, indexedDbNames) &&
+      sameObserved(other.cacheNames, cacheNames) &&
+      sameObserved(other.serviceWorkers, serviceWorkers);
+
+  @override
+  int get hashCode => Object.hash(
+      usageBytes.runtimeType,
+      quotaBytes.runtimeType,
+      indexedDbNames.runtimeType,
+      cacheNames.runtimeType,
+      serviceWorkers.runtimeType);
+}
+
+const kFramesNotCollected = Unavailable<List<FrameInfo>>(
+    UnavailableReason.notReportedByPlatform, 'not collected');
+const kSiteStorageNotCollected = Unavailable<SiteStorage>(
+    UnavailableReason.notReportedByPlatform, 'not collected');
+
+const kCapabilityNotCollected = Unavailable<bool>(
+    UnavailableReason.notReportedByPlatform, 'not collected');
+
 /// Everything the WebView told us about the current page, one section each.
 class BrowserSnapshot {
   final Uri url;
@@ -255,6 +334,18 @@ class BrowserSnapshot {
   final bool resourcesTruncated;
   final int resourcesDropped;
 
+  /// The iframes the page declares (at most 200) and how many there are.
+  final Observed<List<FrameInfo>> frames;
+  final int frameCount;
+
+  /// Quota usage, IndexedDB, Cache Storage and service workers.
+  final Observed<SiteStorage> siteStorage;
+
+  /// Whether the page can ask for camera/microphone and for location at all
+  /// (navigator.mediaDevices.getUserMedia / navigator.geolocation exist).
+  final Observed<bool> mediaDevices;
+  final Observed<bool> geolocation;
+
   /// The raw collector payload (debug export / fixture recording).
   final String? rawPayload;
 
@@ -271,6 +362,11 @@ class BrowserSnapshot {
     this.mainStatus = mainStatusNotReported,
     this.resourcesTruncated = false,
     this.resourcesDropped = 0,
+    this.frames = kFramesNotCollected,
+    this.frameCount = 0,
+    this.siteStorage = kSiteStorageNotCollected,
+    this.mediaDevices = kCapabilityNotCollected,
+    this.geolocation = kCapabilityNotCollected,
     this.rawPayload,
   });
 
@@ -298,7 +394,9 @@ class BrowserSnapshot {
 
   BrowserSnapshot copyWith(
           {Observed<List<BrowserCookie>>? cookies,
-          Observed<int>? mainStatus}) =>
+          Observed<int>? mainStatus,
+          Observed<bool>? mediaDevices,
+          Observed<bool>? geolocation}) =>
       BrowserSnapshot(
         url: url,
         platform: platform,
@@ -312,6 +410,11 @@ class BrowserSnapshot {
         mainStatus: mainStatus ?? this.mainStatus,
         resourcesTruncated: resourcesTruncated,
         resourcesDropped: resourcesDropped,
+        frames: frames,
+        frameCount: frameCount,
+        siteStorage: siteStorage,
+        mediaDevices: mediaDevices ?? this.mediaDevices,
+        geolocation: geolocation ?? this.geolocation,
         rawPayload: rawPayload,
       );
 
@@ -333,6 +436,8 @@ class BrowserSnapshot {
         storage: Unavailable(reason, detail),
         navigation: Unavailable(reason, detail),
         snapshotTimeMs: Unavailable(reason, detail),
+        frames: Unavailable(reason, detail),
+        siteStorage: Unavailable(reason, detail),
         rawPayload: rawPayload,
       );
 
@@ -353,6 +458,8 @@ class BrowserSnapshot {
         storage: Failed(error),
         navigation: Failed(error),
         snapshotTimeMs: Failed(error),
+        frames: Failed(error),
+        siteStorage: Failed(error),
         rawPayload: rawPayload,
       );
 }

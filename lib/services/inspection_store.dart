@@ -7,6 +7,7 @@ import '../models/inspection/browser_snapshot.dart';
 import '../models/inspection/file_snapshot.dart';
 import '../models/inspection/observed.dart';
 import '../models/inspection/page_inspection.dart';
+import '../models/inspection/permission_request.dart';
 import '../models/inspection/server_snapshot.dart';
 import '../models/inspection/technique_signals.dart';
 import 'collectors/browser_payload.dart';
@@ -145,6 +146,16 @@ class InspectionStore extends ChangeNotifier {
     if (!_accepts(gen)) return;
     if (listEquals(_current.declaredMedia, urls)) return;
     _set(_current.copyWith(declaredMedia: urls));
+  }
+
+  static const _maxPermissionRequests = 50;
+
+  /// A denied native permission request, kept for the page that asked only.
+  void addPermissionRequest(int gen, PermissionRequestEvent e) {
+    if (!_accepts(gen)) return;
+    if (_current.permissionRequests.length >= _maxPermissionRequests) return;
+    _set(_current
+        .copyWith(permissionRequests: [..._current.permissionRequests, e]));
   }
 
   /// The live load stopped requesting (see [PageInspection.browserSettled]).
@@ -295,6 +306,11 @@ bool _sameBrowser(BrowserSnapshot a, BrowserSnapshot b) {
       sameObserved(a.navigation, b.navigation) &&
       sameObserved(a.snapshotTimeMs, b.snapshotTimeMs) &&
       sameObserved(a.mainStatus, b.mainStatus) &&
+      sameObserved(a.frames, b.frames) &&
+      a.frameCount == b.frameCount &&
+      sameObserved(a.siteStorage, b.siteStorage) &&
+      sameObserved(a.mediaDevices, b.mediaDevices) &&
+      sameObserved(a.geolocation, b.geolocation) &&
       a.resourcesTruncated == b.resourcesTruncated &&
       a.resourcesDropped == b.resourcesDropped &&
       a.rawPayload == b.rawPayload;
@@ -319,6 +335,13 @@ BrowserSnapshot _merge(BrowserSnapshot old, BrowserSnapshot n) {
     storage: _fresher(old.storage, n.storage),
     navigation: _fresher(old.navigation, n.navigation),
     snapshotTimeMs: _fresher(old.snapshotTimeMs, n.snapshotTimeMs),
+    frames: _fresher(old.frames, n.frames),
+    frameCount: old.frames is Present && n.frames is! Present
+        ? old.frameCount
+        : n.frameCount,
+    siteStorage: _fresher(old.siteStorage, n.siteStorage),
+    mediaDevices: _fresher(old.mediaDevices, n.mediaDevices),
+    geolocation: _fresher(old.geolocation, n.geolocation),
     // Per document: the newest collect knows best (a reload after a
     // challenge page must not keep the challenge's 403).
     mainStatus: sameObserved(old.mainStatus, n.mainStatus)

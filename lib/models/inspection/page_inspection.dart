@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'browser_snapshot.dart';
 import 'file_snapshot.dart';
 import 'observed.dart';
+import 'permission_request.dart';
 import 'server_snapshot.dart';
 import 'technique_signals.dart';
 
@@ -80,6 +81,9 @@ class PageInspection {
   final Observed<Uint8List> liveScreenshot;
   final Observed<Uint8List> freshScreenshot;
 
+  /// Native permission requests the page made (all denied), oldest first.
+  final List<PermissionRequestEvent> permissionRequests;
+
   const PageInspection({
     required this.generation,
     required this.target,
@@ -96,6 +100,7 @@ class PageInspection {
     this.freshEstimates = const {},
     this.liveScreenshot = kNoScreenshot,
     this.freshScreenshot = kNoScreenshot,
+    this.permissionRequests = const [],
   });
 
   const PageInspection.empty()
@@ -117,7 +122,8 @@ class PageInspection {
         freshTechniques = kTechniquesNotMeasured,
         freshEstimates = const {},
         liveScreenshot = kNoScreenshot,
-        freshScreenshot = kNoScreenshot;
+        freshScreenshot = kNoScreenshot,
+        permissionRequests = const [];
 
   PageInspection copyWith({
     Observed<ServerSnapshot>? server,
@@ -133,6 +139,7 @@ class PageInspection {
     Map<String, Observed<int>>? freshEstimates,
     Observed<Uint8List>? liveScreenshot,
     Observed<Uint8List>? freshScreenshot,
+    List<PermissionRequestEvent>? permissionRequests,
   }) =>
       PageInspection(
         generation: generation,
@@ -152,6 +159,7 @@ class PageInspection {
         freshEstimates: freshEstimates ?? this.freshEstimates,
         liveScreenshot: liveScreenshot ?? this.liveScreenshot,
         freshScreenshot: freshScreenshot ?? this.freshScreenshot,
+        permissionRequests: permissionRequests ?? this.permissionRequests,
       );
 
   bool _has(DataSource s) => switch (s) {
