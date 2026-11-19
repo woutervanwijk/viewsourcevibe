@@ -24,6 +24,7 @@ void main() {
     final img = await stitchScreenshots(
         [(top, 0), (bottom, 50)],
         pageHeight: 200,
+        viewportHeight: 100,
         viewportWidth: 100);
     expect(img, isNotNull);
     expect(img!.width, 100);
@@ -48,6 +49,7 @@ void main() {
     final img = await stitchScreenshots(
         [(top, 0), (bottom, 50)],
         pageHeight: 150,
+        viewportHeight: 100,
         viewportWidth: 100);
     expect(img, isNotNull);
     expect(img!.width, 100);
@@ -68,6 +70,7 @@ void main() {
     final img = await stitchScreenshots(
         [(shot, 0), (shot, 400)],
         pageHeight: 800,
+        viewportHeight: 400,
         viewportWidth: 400);
     expect(img, isNotNull);
     expect(img!.width, 200);
@@ -75,14 +78,38 @@ void main() {
     img.dispose();
   });
 
+  test('a shot that decodes taller than one viewport is squeezed into its '
+      'slot, not drawn larger', () async {
+    // Phone quirk: the second shot comes back at an odd pixel size.
+    final tall = await solidPng(100, 150, const ui.Color(0xFF0000FF));
+    final bottom = await solidPng(100, 100, const ui.Color(0xFF00FF00));
+    final img = await stitchScreenshots(
+        [(tall, 0), (bottom, 100)],
+        pageHeight: 200,
+        viewportHeight: 100,
+        viewportWidth: 100);
+    expect(img, isNotNull);
+    // One viewport slot per shot: the image is the page height, not taller.
+    expect(img!.width, 100);
+    expect(img.height, 200);
+
+    final raw = await img.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
+    final px = raw!.buffer.asUint8List();
+    int at(int x, int y) => (y * img.width + x) * 4;
+    expect(px[at(10, 50) + 2], 0xFF); // first slot: blue, squeezed to 100 px
+    expect(px[at(10, 150) + 1], 0xFF); // second slot: green
+    img.dispose();
+  });
+
   test('stitchScreenshots returns null without decodable shots', () async {
     expect(
-        await stitchScreenshots([], pageHeight: 100, viewportWidth: 100),
+        await stitchScreenshots([], pageHeight: 100, viewportHeight: 100, viewportWidth: 100),
         isNull);
     expect(
         await stitchScreenshots(
             [(Uint8List.fromList([1, 2, 3]), 0)],
             pageHeight: 100,
+            viewportHeight: 100,
             viewportWidth: 100),
         isNull);
   });

@@ -4609,6 +4609,26 @@ Technical details: $message''';
     notifyListeners();
   }
 
+  /// Scrolls the page to [y] CSS pixels and waits until the scroll settled.
+  /// The native scrollTo works in view pixels, which on phones
+  /// (devicePixelRatio > 1) are not CSS pixels — scrolling by viewportHeight
+  /// there would advance only a fraction of a screen — so scroll via
+  /// JavaScript in an isolated world, with instant behavior (pages may set
+  /// scroll-behavior: smooth).
+  Future<void> _scrollPageTo(InAppWebViewController c, int y) async {
+    final world = collectorWorld(defaultTargetPlatform);
+    await c.evaluateJavascript(
+        source: 'window.scrollTo({top: $y, left: 0, behavior: "instant"})',
+        contentWorld: world);
+    for (var i = 0; i < 10; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      final cur = await c.evaluateJavascript(
+          source: 'window.scrollY', contentWorld: world);
+      final curY = double.tryParse(cur?.toString() ?? '') ?? 0;
+      if ((curY - y).abs() <= 1) return;
+    }
+  }
+
   /// One scroll through the live page in viewport-sized steps: lazy content
   /// (loading=lazy, IntersectionObserver) is fetched while each step is
   /// screenshotted; the shots are stitched into one full-page image and the
@@ -4624,7 +4644,8 @@ Technical details: $message''';
           source: '([Math.ceil(Math.max(document.scrollingElement ? '
               'document.scrollingElement.scrollHeight : 0, document.body ? '
               'document.body.scrollHeight : 0)), window.innerHeight, '
-              'window.innerWidth, Math.round(window.scrollY)]).join(",")');
+              'window.innerWidth, Math.round(window.scrollY)]).join(",")',
+          contentWorld: collectorWorld(defaultTargetPlatform));
       final parts = (dims?.toString() ?? '').split(',');
       if (parts.length < 4) return;
       final pageH = double.tryParse(parts[0]) ?? 0;
@@ -4636,23 +4657,24 @@ Technical details: $message''';
       final steps = (pageH / vh).ceil();
       for (var i = 0; i < steps && i < _maxFullPageShots; i++) {
         if (stale()) return;
-        await c.scrollTo(x: 0, y: (i * vh).round());
+        await _scrollPageTo(c, (i * vh).round());
         // Let the new scroll position render and lazy content start.
-        await Future<void>.delayed(const Duration(milliseconds: 120));
+        await Future<void>.delayed(const Duration(milliseconds: 80));
         // Where the browser actually scrolled to: rounding and clamping at
         // the bottom make this differ from i*vh. The stitch places each shot
         // at its real offset, so the image stays aligned with the page.
         final pos = await c.evaluateJavascript(
-            source: 'Math.round(window.scrollY)');
+            source: 'Math.round(window.scrollY)',
+            contentWorld: collectorWorld(defaultTargetPlatform));
         final y = double.tryParse(pos?.toString() ?? '') ?? i * vh;
         final shot = await c.takeScreenshot(
             screenshotConfiguration: _fullPageScreenshotCfg);
         if (shot != null && shot.isNotEmpty) shots.add((shot, y));
       }
-      await c.scrollTo(x: 0, y: oldY.round());
+      await _scrollPageTo(c, oldY.round());
       if (stale() || shots.isEmpty) return;
       final image = await stitchScreenshots(shots,
-          pageHeight: pageH, viewportWidth: iw);
+          pageHeight: pageH, viewportHeight: vh, viewportWidth: iw);
       if (image == null) return;
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose();
