@@ -304,25 +304,24 @@ void main() {
 
     testWidgets('(d) the lazy-content note shows for URLs only while the '
         'setting is off', (tester) async {
-      // Default: "Load lazy content" is off, so the note explains the
-      // totals may be underestimated.
+      // Default: "Scroll page once" is on, so no note.
       await show(tester, fullPage());
-      expect(find.textContaining('Load lazy content'), findsOneWidget);
-      expect(find.textContaining('may be underestimated'), findsOneWidget);
+      expect(find.textContaining('Scroll page once'), findsNothing);
 
-      // Setting on: no note.
+      // Setting off: the note explains the totals may be underestimated.
       service = makeService(seedStore(InspectionStore(), fullPage()));
       addTearDown(service.dispose);
       await pumpWithProviders(tester,
           service: service,
-          settings: AppSettings()..scrollToLoadLazy = true,
+          settings: AppSettings()..scrollThroughPage = false,
           child: const PageSizeView());
       await tester.pump();
-      expect(find.textContaining('Load lazy content'), findsNothing);
+      expect(find.textContaining('Scroll page once'), findsOneWidget);
+      expect(find.textContaining('may be underestimated'), findsOneWidget);
 
       // Local file: measured differently, no note either.
       await show(tester, localFile());
-      expect(find.textContaining('Load lazy content'), findsNothing);
+      expect(find.textContaining('Scroll page once'), findsNothing);
     });
 
     testWidgets('(d) a loading-progress tick does not rebuild', (tester) async {

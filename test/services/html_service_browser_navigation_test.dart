@@ -7,6 +7,7 @@ import 'package:view_source_vibe/models/inspection/server_snapshot.dart';
 import 'package:view_source_vibe/models/settings.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/services/navigation_policy.dart';
 
 import 'html_service_browser_sync_test.dart' show payload;
 import 'html_service_lifecycle_test.dart'
@@ -132,6 +133,43 @@ void main() {
     await pumpEventQueue();
 
     expect(fetcher.calls.map((u) => u.toString()), ['https://www.ad.nl/']);
+  });
+
+  test('a cookiewall round-trip back to the start URL is not re-issued',
+      () async {
+    // nu.nl/ad.nl: the page forwards to a cookiewall, the cookiewall sends
+    // the browser back to the start URL. Each hop is a navigation the
+    // WebView performs itself; the app must not load it again.
+    await service.loadUrl('https://www.ad.nl/');
+    fetcher.pending.last.complete(okSnapshot('https://www.ad.nl/', '<html/>'));
+    await service.syncWebViewState('https://www.ad.nl/');
+    await pumpEventQueue();
+    loader.calls.clear();
+
+    // Forward to the cookiewall after the first page settled.
+    service.beginBrowserNavigation(callback);
+    await service.syncWebViewState(callback);
+    await pumpEventQueue();
+    loader.calls.clear();
+
+    // The cookiewall sends the browser back to the start URL.
+    service.beginBrowserNavigation('https://www.ad.nl/');
+    await pumpEventQueue();
+
+    // The WebView is already navigating there: marked as the in-flight
+    // load, so a BrowserView rebuild must not call loadUrl again (that
+    // restarted the redirect chain in an endless loop).
+    expect(service.webViewLoadingUrl, 'https://www.ad.nl/');
+    expect(service.browserLoadIssuedUrl, 'https://www.ad.nl/');
+    expect(loader.calls, isEmpty);
+    expect(
+        browserAlreadyHas(
+          targetUrl: 'https://www.ad.nl/',
+          issuedUrl: service.browserLoadIssuedUrl,
+          currentUrl: callback, // the WebView is still on the cookiewall
+          same: service.areUrlsEqual,
+        ),
+        isTrue);
   });
 
   test('a user-typed URL is fetched immediately and loaded in the browser',

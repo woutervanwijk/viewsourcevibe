@@ -28,6 +28,8 @@ class AppSettings with ChangeNotifier {
   static const String _prefsShowLineNumbers = 'showLineNumbers';
   static const String _prefsWrapText = 'wrapText';
   static const String _prefsUseBrowserByDefault = 'useBrowserByDefault';
+  static const String _prefsScrollThroughPage = 'scrollThroughPage';
+  // Old key of the same setting, kept to migrate a stored choice.
   static const String _prefsScrollToLoadLazy = 'scrollToLoadLazy';
   static const String _prefsDisableBrowserCache = 'disableBrowserCache';
   static const String _prefsCleanCookies = 'cleanCookies';
@@ -51,7 +53,7 @@ class AppSettings with ChangeNotifier {
   // Behavior settings
   bool _wrapText = false;
   bool _useBrowserByDefault = true;
-  bool _scrollToLoadLazy = false;
+  bool _scrollThroughPage = true;
   bool _disableBrowserCache = false;
   bool _cleanCookies = false;
   bool _lowResourceMode = false;
@@ -67,9 +69,11 @@ class AppSettings with ChangeNotifier {
   bool get wrapText => _wrapText;
   bool get useBrowserByDefault => _useBrowserByDefault;
 
-  /// Scroll the page once after it settles, so lazy content (loading=lazy,
-  /// IntersectionObserver) is fetched and measured for real.
-  bool get scrollToLoadLazy => _scrollToLoadLazy;
+  /// Scroll the page once after it settles — only while the Size or
+  /// Structure tab is open — so lazy content (loading=lazy,
+  /// IntersectionObserver) is fetched and measured, and the full-page
+  /// screenshot for those tabs is taken in the same pass.
+  bool get scrollThroughPage => _scrollThroughPage;
 
   /// Never use the in-app browser's cache: every load is a fresh download.
   bool get disableBrowserCache => _disableBrowserCache;
@@ -297,10 +301,10 @@ class AppSettings with ChangeNotifier {
     }
   }
 
-  set scrollToLoadLazy(bool value) {
-    if (_scrollToLoadLazy != value) {
-      _scrollToLoadLazy = value;
-      _saveSetting(_prefsScrollToLoadLazy, value);
+  set scrollThroughPage(bool value) {
+    if (_scrollThroughPage != value) {
+      _scrollThroughPage = value;
+      _saveSetting(_prefsScrollThroughPage, value);
       notifyListeners();
     }
   }
@@ -377,7 +381,9 @@ class AppSettings with ChangeNotifier {
     _showLineNumbers = _prefs!.getBool(_prefsShowLineNumbers) ?? true;
     _wrapText = _prefs!.getBool(_prefsWrapText) ?? false;
     _useBrowserByDefault = _prefs!.getBool(_prefsUseBrowserByDefault) ?? true;
-    _scrollToLoadLazy = _prefs!.getBool(_prefsScrollToLoadLazy) ?? false;
+    _scrollThroughPage = _prefs!.getBool(_prefsScrollThroughPage) ??
+        _prefs!.getBool(_prefsScrollToLoadLazy) ??
+        true;
     _disableBrowserCache = _prefs!.getBool(_prefsDisableBrowserCache) ?? false;
     _cleanCookies = _prefs!.getBool(_prefsCleanCookies) ?? false;
     _lowResourceMode = _prefs!.getBool(_prefsLowResourceMode) ?? false;
@@ -417,7 +423,7 @@ class AppSettings with ChangeNotifier {
     _showLineNumbers = true;
     _wrapText = false;
     _useBrowserByDefault = true;
-    _scrollToLoadLazy = false;
+    _scrollThroughPage = true;
     _disableBrowserCache = false;
     _cleanCookies = false;
     _lowResourceMode = false;
@@ -438,7 +444,7 @@ class AppSettings with ChangeNotifier {
     await _saveSetting(_prefsShowLineNumbers, _showLineNumbers);
     await _saveSetting(_prefsWrapText, _wrapText);
     await _saveSetting(_prefsUseBrowserByDefault, _useBrowserByDefault);
-    await _saveSetting(_prefsScrollToLoadLazy, _scrollToLoadLazy);
+    await _saveSetting(_prefsScrollThroughPage, _scrollThroughPage);
     await _saveSetting(_prefsDisableBrowserCache, _disableBrowserCache);
     await _saveSetting(_prefsCleanCookies, _cleanCookies);
     await _saveSetting(_prefsLowResourceMode, _lowResourceMode);

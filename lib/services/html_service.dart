@@ -481,6 +481,12 @@ class HtmlService extends ChangeNotifier {
   /// DOM tree tab index (-1 when not shown; only HTML/XML pages have it).
   int get domTreeTabIndex => tabIndexOf(AppTab.domTree);
 
+  /// Structure tab index (-1 when not shown; only browser-loaded HTML).
+  int get structureTabIndex => tabIndexOf(AppTab.structure);
+
+  /// Page size tab index (-1 when not shown; only HTML URL pages).
+  int get sizeTabIndex => tabIndexOf(AppTab.size);
+
   /// Source tab index; Source is always shown.
   int get sourceTabIndex => tabIndexOf(AppTab.source);
 
@@ -1737,9 +1743,15 @@ class HtmlService extends ChangeNotifier {
       }
 
       // Structure tab: the page may have changed since it was measured.
-      if (index == tabIndexOf(AppTab.structure) &&
-          store.current.browserSettled) {
+      if (index == structureTabIndex && store.current.browserSettled) {
         collectLayout().ignore();
+      }
+
+      // Size or Structure tab: run the scroll-through pass in the background
+      // (lazy content + full-page screenshot) if it has not run for this page.
+      if ((index == structureTabIndex || index == sizeTabIndex) &&
+          store.current.browserSettled) {
+        _maybeScrollThroughAndCapture(store.current.generation).ignore();
       }
 
       // Source tab without content yet: the server body may have arrived.
@@ -2196,6 +2208,12 @@ class HtmlService extends ChangeNotifier {
     _deferredServerFetch = (gen, uri);
 
     _webViewLoadingUrl = url;
+    // The WebView is performing this navigation itself (allowed in
+    // shouldOverrideUrlLoading). Record it as the in-flight load: the
+    // placeholder file above triggers a BrowserView rebuild, and without
+    // this the view would issue the request again — restarting the
+    // redirect chain (cookiewall loop on nu.nl/ad.nl).
+    _browserLoadIssuedUrl = url;
     _isWebViewLoading = true;
     _recordBrowserFirstHistory(url);
     notifyListeners();
@@ -4524,14 +4542,80 @@ Technical details: $message''';
 
   Observed<Uint8List> _fullPageShot = kNoScreenshot;
 
-  /// Full-page screenshot of the live browser (background of the Structure
-  /// tab); Unavailable until captured or when the platform gives none.
+  /// The page's CSS size at the moment the full-page screenshot was taken;
+  /// null when there is none. The Structure tab draws the image at this size
+  /// so it lines up with the wireframe even when the layout was measured at
+  /// a different page height.
+  ({double width, double height})? _fullPageShotCss;
+
+  /// Full-page screenshot of the live browser (Size and Structure tabs);
+  /// Unavailable until the scroll-through capture produced one or when the
+  /// platform gives none. Until then those tabs show the top-of-page shot.
   Observed<Uint8List> get fullPageScreenshot => _fullPageShot;
 
-  /// Scrolls the live browser through the page once, taking a screenshot per
-  /// viewport, stitches them into one full-page image and restores the scroll
-  /// position. Best effort: on any failure the viewport thumbnail remains.
-  Future<void> _captureFullPageScreenshot(int gen) async {
+  /// CSS size of [fullPageScreenshot]'s page at capture time.
+  ({double width, double height})? get fullPageScreenshotCss =>
+      _fullPageShotCss;
+
+  @visibleForTesting
+  void debugSetFullPageScreenshot(Observed<Uint8List> shot) {
+    _fullPageShot = shot;
+    notifyListeners();
+  }
+
+  /// Generation whose scroll-through pass already ran (-1 = none); the pass
+  /// runs at most once per page.
+  int _scrollCaptureGen = -1;
+
+  /// Whether the combined scroll-through pass should run now: the setting
+  /// is on and the user is looking at a tab that shows the screenshot
+  /// (Structure or Size), so the scroll happens in the background there.
+  bool get _wantsScrollThrough {
+    if (_appSettings?.scrollThroughPage != true) return false;
+    return _activeTabIndex == structureTabIndex ||
+        _activeTabIndex == sizeTabIndex;
+  }
+
+  /// Runs the combined scroll-through pass for [gen] when it is wanted and
+  /// has not run yet: lazy content is fetched and the full-page screenshot
+  /// is taken (see [_scrollThroughAndCapture]), then the new resources are
+  /// collected once, with the DOM.
+  Future<void> _maybeScrollThroughAndCapture(int gen) async {
+    if (_disposed || !_browserReachable) return;
+    if (gen != store.current.generation || _scrollCaptureGen == gen) return;
+    if (!_wantsScrollThrough) return;
+    final b = store.current.browser;
+    final target = store.current.target;
+    final Uri? uri = b is Present<BrowserSnapshot>
+        ? b.value.url
+        : target is UrlTarget
+            ? target.url
+            : null;
+    if (uri == null) return;
+    _startScrollThroughBanner(gen);
+    await _scrollThroughAndCapture(gen);
+    if (_disposed || gen != store.current.generation) return;
+    // Lazy content swapped in during the scroll: collect it, with the DOM,
+    // and re-measure the layout (the page may have grown).
+    await _collectAndApply(gen, uri.toString(), uri, true);
+    if (_disposed || gen != store.current.generation) return;
+    _applyBrowserDerivedToMetadata();
+    collectLayout().ignore();
+  }
+
+  void _startScrollThroughBanner(int gen) {
+    _scrollThroughGen = gen;
+    _scrollThroughDismissedGen = -1;
+    notifyListeners();
+  }
+
+  /// One scroll through the live page in viewport-sized steps: lazy content
+  /// (loading=lazy, IntersectionObserver) is fetched while each step is
+  /// screenshotted; the shots are stitched into one full-page image and the
+  /// original scroll position is restored. Best effort: on any failure the
+  /// top-of-page screenshot remains.
+  Future<void> _scrollThroughAndCapture(int gen) async {
+    _scrollCaptureGen = gen;
     final c = activeWebViewController;
     if (c == null || _disposed) return;
     bool stale() => _disposed || gen != store.current.generation;
@@ -4548,16 +4632,22 @@ Technical details: $message''';
       final iw = double.tryParse(parts[2]) ?? 0;
       final oldY = double.tryParse(parts[3]) ?? 0;
       if (pageH <= 0 || vh <= 0 || iw <= 0) return;
-      final shots = <Uint8List>[];
+      final shots = <(Uint8List shot, double offset)>[];
       final steps = (pageH / vh).ceil();
       for (var i = 0; i < steps && i < _maxFullPageShots; i++) {
         if (stale()) return;
         await c.scrollTo(x: 0, y: (i * vh).round());
-        // Let the new scroll position render before capturing.
+        // Let the new scroll position render and lazy content start.
         await Future<void>.delayed(const Duration(milliseconds: 120));
+        // Where the browser actually scrolled to: rounding and clamping at
+        // the bottom make this differ from i*vh. The stitch places each shot
+        // at its real offset, so the image stays aligned with the page.
+        final pos = await c.evaluateJavascript(
+            source: 'Math.round(window.scrollY)');
+        final y = double.tryParse(pos?.toString() ?? '') ?? i * vh;
         final shot = await c.takeScreenshot(
             screenshotConfiguration: _fullPageScreenshotCfg);
-        if (shot != null && shot.isNotEmpty) shots.add(shot);
+        if (shot != null && shot.isNotEmpty) shots.add((shot, y));
       }
       await c.scrollTo(x: 0, y: oldY.round());
       if (stale() || shots.isEmpty) return;
@@ -4569,9 +4659,16 @@ Technical details: $message''';
       if (stale() || bytes == null) return;
       _fullPageShot =
           Present(bytes.buffer.asUint8List(), source: DataSource.browser);
+      // The page's CSS size at capture time, so the Structure tab can draw
+      // the image at exactly that size (the layout may have been measured
+      // at a different moment and differ, e.g. after lazy content grew).
+      _fullPageShotCss = (width: iw, height: pageH);
       notifyListeners();
     } catch (e) {
-      debugPrint('Full-page screenshot unavailable: $e');
+      debugPrint('Scroll-through screenshot unavailable: $e');
+    } finally {
+      // Back at the original position (or giving up): hide the banner.
+      onScrollThroughDone();
     }
   }
 
@@ -4865,13 +4962,19 @@ Technical details: $message''';
     _cancelBrowserRefreshes();
     final policy = _browserPoll;
     _fullPageShot = kNoScreenshot;
+    _fullPageShotCss = null;
+    // Screenshot of the top of the page right away, without scrolling; the
+    // Size and Structure tabs show it until the full-page capture is done.
     _captureLiveScreenshot(gen).ignore();
+    // Measure the layout right away too: the Structure tab shows the
+    // wireframe as soon as the page loaded, not only after the network went
+    // quiet. The poll below re-measures once the page settled (and after the
+    // scroll-through pass changed the page).
+    collectLayout().ignore();
     if (!policy.enabled) {
       store.markBrowserSettled(gen);
+      _maybeScrollThroughAndCapture(gen).ignore();
       return;
-    }
-    if (store.current.layout is! Present) {
-      store.applyLayout(gen, const Pending('waiting for the page to settle'));
     }
     bool stale() => _disposed || gen != store.current.generation;
     final clock = Stopwatch()..start();
@@ -4896,17 +4999,17 @@ Technical details: $message''';
           lastChange = now;
         }
         if (policy.done(elapsed: now, sinceLastChange: now - lastChange)) {
-          // Use the browser's own lazy loading once: scroll through the
-          // page so loading=lazy / IntersectionObserver content is fetched
-          // and measured, then keep collecting until it is quiet again.
-          if (!scrolled && (_appSettings?.scrollToLoadLazy ?? false)) {
+          // One scroll through the page — only while a tab that shows the
+          // screenshot is open: lazy content (loading=lazy,
+          // IntersectionObserver) is fetched and measured and the full-page
+          // screenshot is taken in the same pass; collecting then continues
+          // until it is quiet again.
+          if (!scrolled && _wantsScrollThrough) {
             scrolled = true;
-            await _scrollThroughPage();
+            _startScrollThroughBanner(gen);
+            await _scrollThroughAndCapture(gen);
             if (stale()) return;
             collectDom = true;
-            _scrollThroughGen = gen;
-            _scrollThroughDismissedGen = -1;
-            notifyListeners();
             signature = _browserSignature();
             lastChange = clock.elapsed;
             next();
@@ -4914,7 +5017,7 @@ Technical details: $message''';
           }
           store.markBrowserSettled(gen);
           _captureLiveScreenshot(gen).ignore();
-          _captureFullPageScreenshot(gen).ignore();
+          _maybeScrollThroughAndCapture(gen).ignore();
           collectLayout().ignore();
         } else {
           next();
@@ -4925,26 +5028,13 @@ Technical details: $message''';
     next();
   }
 
-  /// Scrolls the live page to the bottom and back to the top once, so lazy
-  /// content loads and the resource observer measures it. The polling loop
-  /// picks the new resources up; the scroll itself needs no awaiting here.
-  Future<void> _scrollThroughPage() async {
-    final c = activeWebViewController;
-    if (c == null) return;
-    try {
-      await c.evaluateJavascript(
-          source:
-              'window.__vsv_scrollThrough && window.__vsv_scrollThrough(true)',
-          contentWorld: collectorWorld(defaultTargetPlatform));
-    } catch (_) {}
-  }
-
-  /// Banner text shown above the browser view when the page was scrolled
+  /// Banner text shown above the browser view when the page is scrolled
   /// automatically once.
   static const String scrollThroughBannerText =
-      'Scrolling the page once so lazy images and embeds loaded and could be '
-      'measured in the Page size tab. Turn off in Settings → Behavior → '
-      '"Load lazy content".';
+      'Scrolling the page once in the background: lazy images and embeds are '
+      'fetched and measured (Size tab) and a full-page screenshot is taken '
+      '(Size and Structure tabs). Turn off in Settings → Behavior → '
+      '"Scroll page once".';
 
   /// Generation whose page was scrolled through automatically (-1 = none).
   int _scrollThroughGen = -1;

@@ -154,12 +154,19 @@ void main() {
     expect(m.blocks.map((b) => b.block.area), [250000, 100, 810000]);
   });
 
-  test('wireframeScale: page width, capped at 1000', () {
-    expect(wireframeScale(layout(w: 400, h: 2000)), 1.0);
-    expect(wireframeScale(layout(w: 1000, h: 2000)), 1.0);
-    expect(wireframeScale(layout(w: 1200, h: 2400)), closeTo(1000 / 1200, 1e-9));
-    // A very tall page no longer shrinks the drawing below page width.
-    expect(wireframeScale(layout(w: 400, h: 100000)), 1.0);
+  test('wireframeScale: page width, scaled to the screen, capped at 1000', () {
+    // A page narrower than the screen is drawn 1:1.
+    expect(wireframeScale(layout(w: 400, h: 2000), 800), 1.0);
+    expect(wireframeScale(layout(w: 1000, h: 2000), 2000), 1.0);
+    // Wide screen: the cap of 1000 applies.
+    expect(wireframeScale(layout(w: 1200, h: 2400), 2000),
+        closeTo(1000 / 1200, 1e-9));
+    // Narrow screen (phone): the page is scaled down to the screen width.
+    expect(wireframeScale(layout(w: 1200, h: 2400), 390),
+        closeTo(390 / 1200, 1e-9));
+    expect(wireframeScale(layout(w: 400, h: 2000), 390), closeTo(390 / 400, 1e-9));
+    // A very tall page does not shrink the drawing: height is irrelevant.
+    expect(wireframeScale(layout(w: 300, h: 100000), 390), 1.0);
   });
 
   test('occurrenceOfBlock counts same-signature blocks in document order', () {

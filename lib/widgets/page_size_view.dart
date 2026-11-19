@@ -120,8 +120,8 @@ class _PageSizeViewState extends State<PageSizeView>
     final htmlService = context.read<HtmlService>();
     final isFile = context
         .select<HtmlService, bool>((s) => s.store.current.target is FileTarget);
-    final loadLazy =
-        context.select<AppSettings, bool>((s) => s.scrollToLoadLazy);
+    final scrollThrough =
+        context.select<AppSettings, bool>((s) => s.scrollThroughPage);
     final fresh = model.fresh;
     // The fresh load's files once there is one, unless the user picked this
     // load.
@@ -140,7 +140,7 @@ class _PageSizeViewState extends State<PageSizeView>
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 66),
         children: [
           _buildTotalsCard(context, model, active),
-          if (!isFile && !loadLazy) ...[
+          if (!isFile && !scrollThrough) ...[
             const SizedBox(height: 12),
             _lazyContentNote(context),
           ],
@@ -242,9 +242,9 @@ class _PageSizeViewState extends State<PageSizeView>
                 'Sizes may be underestimated: lazy content (loading="lazy" '
                 'images, IntersectionObserver embeds) is only fetched when '
                 'scrolled into view, and this page was not scrolled. Turn on '
-                'Settings → Behavior → "Load lazy content" to scroll each '
-                'page once after it loads, so those resources load and are '
-                'measured for real.',
+                'Settings → Behavior → "Scroll page once" to scroll each '
+                'page once in the background while this tab is open, so those '
+                'resources load and are measured for real.',
                 style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
               ),
             ),
@@ -402,6 +402,12 @@ class _PageSizeViewState extends State<PageSizeView>
 
   Widget _buildTotalsCard(
       BuildContext context, PageSizeModel model, PageSizeModel active) {
+    // Full-page screenshot when the scroll-through capture is done, else the
+    // top-of-page shot taken without scrolling.
+    final fullShot = context.select<HtmlService, Observed<Uint8List>>(
+        (s) => s.fullPageScreenshot);
+    final liveShot =
+        fullShot is Present<Uint8List> ? fullShot : model.liveScreenshot;
     final weight = active.weight;
     final fresh = model.fresh;
     final hasFresh = fresh is Present<PageSizeModel>;
@@ -459,7 +465,7 @@ class _PageSizeViewState extends State<PageSizeView>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _thumbnail(context, 'This load', model.liveScreenshot),
+                    _thumbnail(context, 'This load', liveShot),
                     if (fresh is! Unavailable<PageSizeModel>) ...[
                       const SizedBox(width: 8),
                       _thumbnail(context, 'Fresh load', model.freshScreenshot),

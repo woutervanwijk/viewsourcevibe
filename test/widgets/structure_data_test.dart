@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
@@ -5,6 +7,7 @@ import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/page_layout.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/widgets/structure_painter.dart';
 import 'package:view_source_vibe/widgets/structure_view.dart';
 
 import '../fixtures/inspection/full_page.dart';
@@ -131,5 +134,65 @@ void main() {
     await show(tester,
         fullPage().copyWith(layout: const Pending('waiting for the page to settle')));
     expect(find.text('waiting for the page to settle'), findsOneWidget);
+  });
+
+  // A valid 1x1 PNG, so the test engine can decode it.
+  const List<int> pngBytes = [
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89,
+    0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54,
+    0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+    0x0D, 0x0A, 0x2D, 0xB4,
+    0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+  ];
+
+  StructurePainter wireframePainter(WidgetTester tester) =>
+      tester
+          .widget<CustomPaint>(find.byKey(const Key('structure-wireframe')))
+          .painter as StructurePainter;
+
+  Future<void> showWithShots(
+      WidgetTester tester, PageInspection p, Observed<Uint8List> live) async {
+    final store = seedStore(InspectionStore(), p);
+    store.applyLayout(store.current.generation, p.layout);
+    store.applyLiveScreenshot(store.current.generation, live);
+    service = makeService(store);
+    addTearDown(service.dispose);
+    await pumpWithProviders(tester, service: service, child: const StructureView());
+    await tester.pump();
+    await tester.pump();
+  }
+
+  testWidgets('the top screenshot shows at once and the full-page shot '
+      'replaces it when ready', (tester) async {
+    final live = Present<Uint8List>(Uint8List.fromList(pngBytes),
+        source: DataSource.browser);
+    await showWithShots(tester, pageWithLayout(), live);
+
+    // The top-of-page shot is selected behind the wireframe, not full-page.
+    // (The test engine does not decode images, so only the selection and
+    // the full-page flag are observable here.)
+    expect(wireframePainter(tester).backgroundFullPage, isFalse);
+
+    // The scroll-through capture finishes: the larger screenshot replaces it.
+    service.debugSetFullPageScreenshot(Present<Uint8List>(
+        Uint8List.fromList(pngBytes),
+        source: DataSource.browser));
+    await tester.pump();
+    await tester.pump();
+    expect(wireframePainter(tester).backgroundFullPage, isTrue);
+  });
+
+  testWidgets('while the wireframe is still measuring, the top screenshot '
+      'already shows behind the progress', (tester) async {
+    final live = Present<Uint8List>(Uint8List.fromList(pngBytes),
+        source: DataSource.browser);
+    await showWithShots(
+        tester, fullPage().copyWith(layout: const Pending()), live);
+    expect(find.byKey(const Key('structure-wireframe')), findsNothing);
+    expect(find.text('Measuring the page…'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
   });
 }

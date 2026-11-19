@@ -62,14 +62,15 @@ class StructureModel {
   });
 }
 
-/// The wireframe is never drawn wider than this, even when the page is.
+/// The wireframe is never drawn wider than this, even on a wide screen.
 const double kMaxWireframeWidth = 1000;
 
-/// Scale from page pixels to logical pixels: 1:1, so the drawing is as wide
-/// as the page itself, capped at [kMaxWireframeWidth].
-double wireframeScale(PageLayout l) {
+/// Scale from page pixels to logical pixels: 1:1 when the page fits, else
+/// scaled down so the drawing is as wide as the available space — capped at
+/// [kMaxWireframeWidth], so on a phone the whole page fits the screen.
+double wireframeScale(PageLayout l, double availableWidth) {
   if (l.width <= 0 || l.height <= 0) return 1;
-  return math.min(1.0, kMaxWireframeWidth / l.width);
+  return math.min(1.0, math.min(availableWidth, kMaxWireframeWidth) / l.width);
 }
 
 /// The smallest block that contains the page point; null when none does.

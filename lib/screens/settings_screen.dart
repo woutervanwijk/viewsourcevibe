@@ -119,13 +119,13 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     _settingsTile(
                       context: context,
-                      icon: Icons.vertical_align_bottom,
-                      title: 'Load lazy content',
+                      icon: Icons.unfold_more,
+                      title: 'Scroll page once',
                       description:
-                          'Scroll the page once after it loads (and back to the top), so lazy images and embeds are actually fetched and measured in the Page size tab instead of estimated',
+                          'While the Size or Structure tab is open, scroll the page once in the background after it settles: lazy images and embeds are fetched and measured in the Page size tab, and a full-page screenshot is taken for the Size and Structure tabs',
                       control: Switch(
-                        value: settings.scrollToLoadLazy,
-                        onChanged: (value) => settings.scrollToLoadLazy = value,
+                        value: settings.scrollThroughPage,
+                        onChanged: (value) => settings.scrollThroughPage = value,
                       ),
                     ),
                     _settingsTile(

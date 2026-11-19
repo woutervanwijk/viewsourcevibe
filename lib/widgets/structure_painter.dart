@@ -53,9 +53,12 @@ class StructurePalette {
 
 /// Draws the page's blocks in page proportions: [scale] logical px per CSS px.
 /// When [background] is set (a screenshot of the page), it is drawn opaque
-/// behind the blocks — over the whole drawing when [backgroundFullPage], else
-/// over the first screen only. The blocks themselves are drawn 75%
-/// transparent so the screenshot shows through.
+/// behind the blocks — over the whole page when [backgroundFullPage], else
+/// over the first screen only. A full-page background is drawn at
+/// [backgroundCss] (the page's CSS size at capture time) when known, so the
+/// image lines up with the blocks even when the layout was measured at a
+/// different page height. The blocks themselves are drawn 75% transparent so
+/// the screenshot shows through.
 class StructurePainter extends CustomPainter {
   final StructureModel model;
   final double scale;
@@ -63,6 +66,7 @@ class StructurePainter extends CustomPainter {
   final ColorScheme scheme;
   final ui.Image? background;
   final bool backgroundFullPage;
+  final ({double width, double height})? backgroundCss;
 
   StructurePainter({
     required this.model,
@@ -71,6 +75,7 @@ class StructurePainter extends CustomPainter {
     required this.scheme,
     this.background,
     this.backgroundFullPage = false,
+    this.backgroundCss,
   });
 
   static const double minLabelWidth = 60;
@@ -88,16 +93,26 @@ class StructurePainter extends CustomPainter {
           ..color = scheme.outlineVariant);
 
     // The screenshot is the background, fully opaque: the whole page when we
-    // have a full-page capture, else the first screen only.
+    // have a full-page capture, else the first screen only. A full-page
+    // capture is drawn at the page's CSS size at capture time, so it stays
+    // aligned with the blocks (the layout may have been measured later, at a
+    // different page height).
     if (background != null) {
-      final bgHeight = backgroundFullPage
-          ? size.height
-          : math.min(model.layout.viewportHeight * scale, size.height);
+      final Rect dest;
+      if (backgroundFullPage && backgroundCss != null) {
+        dest = Rect.fromLTWH(0, 0, backgroundCss!.width * scale,
+            backgroundCss!.height * scale);
+      } else if (backgroundFullPage) {
+        dest = Rect.fromLTWH(0, 0, size.width, size.height);
+      } else {
+        dest = Rect.fromLTWH(0, 0, size.width,
+            math.min(model.layout.viewportHeight * scale, size.height));
+      }
       canvas.drawImageRect(
         background!,
         Rect.fromLTWH(
             0, 0, background!.width.toDouble(), background!.height.toDouble()),
-        Rect.fromLTWH(0, 0, size.width, bgHeight),
+        dest,
         Paint()..filterQuality = FilterQuality.medium,
       );
     }
@@ -176,5 +191,6 @@ class StructurePainter extends CustomPainter {
       old.coloring != coloring ||
       old.scheme != scheme ||
       old.background != background ||
-      old.backgroundFullPage != backgroundFullPage;
+      old.backgroundFullPage != backgroundFullPage ||
+      old.backgroundCss != backgroundCss;
 }

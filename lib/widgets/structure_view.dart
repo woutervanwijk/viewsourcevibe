@@ -67,17 +67,18 @@ class _StructureViewState extends State<StructureView> {
         (s) => s.fullPageScreenshot);
     final liveShot = context.select<HtmlService, Observed<Uint8List>>(
         (s) => s.store.current.liveScreenshot);
-    // Prefer the full-page screenshot; fall back to the viewport thumbnail.
+    // Prefer the full-page screenshot; until the scroll-through capture is
+    // done, show the top-of-page shot taken without scrolling. When the
+    // larger one arrives, this rebuild swaps it in.
     final useFull = fullShot is Present<Uint8List>;
     final shot = useFull ? fullShot : liveShot;
     final bytes = shot is Present<Uint8List> ? shot.value : null;
     if (!identical(bytes, _backgroundBytes)) {
       _backgroundBytes = bytes;
+      _backgroundFullPage = useFull;
       final b = bytes;
-      final full = useFull;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _backgroundFullPage = full;
         if (b == null) {
           if (_background != null) {
             setState(() {
@@ -90,7 +91,7 @@ class _StructureViewState extends State<StructureView> {
         }
       });
     }
-    return switch (state) {
+    final body = switch (state) {
       Pending<StructureModel>(:final detail) => Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -106,6 +107,21 @@ class _StructureViewState extends State<StructureView> {
       Present<StructureModel>(:final value) => _model(context, value),
       _ => _unknown(context, state, hasBrowser),
     };
+    // While the wireframe is not measured yet, the screenshot already shows
+    // behind the message (the wireframe draws it itself once present).
+    if (state is Present<StructureModel> || bytes == null) return body;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Opacity(
+            opacity: 0.3,
+            child: Image.memory(bytes,
+                fit: BoxFit.cover, gaplessPlayback: true),
+          ),
+        ),
+        body,
+      ],
+    );
   }
 
   Widget _unknown(
@@ -140,7 +156,9 @@ class _StructureViewState extends State<StructureView> {
   Widget _model(BuildContext context, StructureModel model) {
     final scheme = Theme.of(context).colorScheme;
     final palette = StructurePalette(scheme);
-    final scale = wireframeScale(model.layout);
+    final fullCss =
+        context.select<HtmlService, ({double width, double height})?>(
+            (s) => s.fullPageScreenshotCss);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -185,9 +203,11 @@ class _StructureViewState extends State<StructureView> {
             ],
           ),
           const SizedBox(height: 12),
-          // The wireframe is as wide as the page (max 1000 px), centred in
-          // the tab; when that is wider than the tab it scrolls horizontally.
+          // The wireframe is as wide as the page, scaled down to the tab's
+          // width when the page is wider (never wider than 1000 px), centred
+          // in the tab.
           LayoutBuilder(builder: (context, constraints) {
+            final scale = wireframeScale(model.layout, constraints.maxWidth);
             final w = model.layout.width * scale;
             final boxWidth =
                 w < constraints.maxWidth ? constraints.maxWidth : w;
@@ -213,7 +233,8 @@ class _StructureViewState extends State<StructureView> {
                             coloring: _coloring,
                             scheme: scheme,
                             background: _background,
-                            backgroundFullPage: _backgroundFullPage),
+                            backgroundFullPage: _backgroundFullPage,
+                            backgroundCss: _backgroundFullPage ? fullCss : null),
                       ),
                     ),
                   ),

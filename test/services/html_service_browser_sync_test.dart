@@ -102,7 +102,7 @@ void main() {
   HtmlService make(
       {NetworkQuietPolicy? poll,
       Duration? late,
-      bool scrollToLoadLazy = false,
+      bool scrollThroughPage = false,
       bool cleanCookies = false,
       Future<void> Function()? deleteAllCookies}) {
     final s = HtmlService(
@@ -123,7 +123,7 @@ void main() {
     );
     s.setAppSettings(AppSettings()
       ..useBrowserByDefault = true
-      ..scrollToLoadLazy = scrollToLoadLazy
+      ..scrollThroughPage = scrollThroughPage
       ..cleanCookies = cleanCookies);
     return s;
   }
@@ -355,21 +355,27 @@ void main() {
         lateCollectDelay: const Duration(milliseconds: 10),
         spaSettleDelay: Duration.zero,
       );
-      s.setAppSettings(AppSettings()..useBrowserByDefault = true);
+      s.setAppSettings(AppSettings()
+        ..useBrowserByDefault = true
+        ..scrollThroughPage = false);
       return s;
     }
 
-    test('the tab says it waits while the page settles', () async {
+    test('the layout is measured as soon as the page loads, and re-measured '
+        'once the network went quiet', () async {
       service.dispose();
       final calls = <String>[];
       service = makeWithLayout(once(60), calls);
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
-      final l = store.current.layout as Pending;
-      expect(l.detail, 'waiting for the page to settle');
+      await pumpEventQueue();
+      // Measured right at sync — no waiting for the page to settle.
+      expect(calls, hasLength(1));
+      expect(store.current.layout, isA<Present>());
       await Future<void>.delayed(const Duration(milliseconds: 150));
       await pumpEventQueue();
-      expect(calls, hasLength(1));
+      // Re-measured when the page settled.
+      expect(calls, hasLength(2));
     });
 
     test('activating the Structure tab re-measures once settled', () async {
@@ -381,22 +387,26 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       await pumpEventQueue();
       expect(store.current.browserSettled, isTrue);
-      expect(calls, hasLength(1));
+      // One measure at sync, one when the page settled.
+      expect(calls, hasLength(2));
       service.setActiveTabIndex(service.tabIndexOf(AppTab.structure));
       await pumpEventQueue();
-      expect(calls, hasLength(2));
+      expect(calls, hasLength(3));
     });
 
-    test('activating the Structure tab before settling does not measure',
+    test('activating the Structure tab before settling does not re-measure',
         () async {
       service.dispose();
       final calls = <String>[];
       service = makeWithLayout(once(1000), calls);
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
+      await pumpEventQueue();
+      // Measured once at sync; the tab switch before settling adds nothing.
+      expect(calls, hasLength(1));
       service.setActiveTabIndex(service.tabIndexOf(AppTab.structure));
       await pumpEventQueue();
-      expect(calls, isEmpty);
+      expect(calls, hasLength(1));
     });
   });
 
@@ -436,10 +446,11 @@ void main() {
     });
 
     test(
-        'scrollToLoadLazy: when the load is quiet, the page is scrolled once '
-        'and polling continues until the lazy loads are in', () async {
+        'scrollThroughPage: when the load is quiet and a screenshot tab is '
+        'open, the page is scrolled once and polling continues until the '
+        'lazy loads are in', () async {
       service.dispose();
-      service = make(poll: once(20), scrollToLoadLazy: true);
+      service = make(poll: once(20), scrollThroughPage: true);
       var n = 0;
       collect = (url) async {
         n++;
@@ -460,6 +471,8 @@ void main() {
       };
       await loadAndAnswer('https://a.test/');
       await service.syncWebViewState('https://a.test/');
+      // The scroll-through runs only while the Size or Structure tab is open.
+      service.setActiveTabIndex(service.tabIndexOf(AppTab.size));
       await Future<void>.delayed(const Duration(milliseconds: 200));
       await pumpEventQueue();
       // initial sync + first poll + post-scroll poll, then settled
@@ -470,7 +483,7 @@ void main() {
       // The banner explains the scroll and how to disable it.
       expect(HtmlService.scrollThroughBannerText, contains('Settings'));
       expect(
-          HtmlService.scrollThroughBannerText, contains('Load lazy content'));
+          HtmlService.scrollThroughBannerText, contains('Scroll page once'));
       // The scroll-through raised the banner for the current page.
       expect(service.showScrollThroughBanner, isTrue);
       // Back at the top, the page reports it: the banner goes away.
@@ -485,6 +498,29 @@ void main() {
       expect(service.showScrollThroughBanner, isTrue);
       service.dismissScrollThroughBanner();
       expect(service.showScrollThroughBanner, isFalse);
+    });
+
+    test('the scroll-through pass runs only on the Size/Structure tab, '
+        'also when switched to after the page settled', () async {
+      service.dispose();
+      service = make(poll: once(20), scrollThroughPage: true);
+      collect = (url) async => payload(url: url);
+      await loadAndAnswer('https://a.test/');
+      await service.syncWebViewState('https://a.test/');
+      // Still on the Browser tab: no scroll pass at settle.
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await pumpEventQueue();
+      expect(store.current.browserSettled, isTrue);
+      expect(service.showScrollThroughBanner, isFalse);
+      final callsAtSettle = collectCalls.length;
+
+      // Switch to the Size tab: the pass runs in the background and the
+      // lazy content is collected afterwards.
+      service.setActiveTabIndex(service.tabIndexOf(AppTab.size));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await pumpEventQueue();
+      expect(service.showScrollThroughBanner, isTrue);
+      expect(collectCalls.length, greaterThan(callsAtSettle));
     });
 
     test('a refresh whose collect completes after navigation is dropped',
