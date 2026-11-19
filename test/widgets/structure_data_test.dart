@@ -7,6 +7,7 @@ import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/page_layout.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/structure_painter.dart';
 import 'package:view_source_vibe/widgets/structure_view.dart';
 
@@ -90,8 +91,32 @@ void main() {
     await show(tester, pageWithLayout());
     await tester.tapAt(wireframeOrigin(tester) + const Offset(20, 20));
     await tester.pumpAndSettle();
-    expect(find.textContaining('header#top'), findsOneWidget);
+    expect(find.text('header#top'), findsOneWidget);
     expect(find.textContaining('1000 × 100 px'), findsOneWidget);
+  });
+
+  testWidgets('the sheet shows a DOM tree of only the tapped element',
+      (tester) async {
+    final p = pageWithLayout().copyWith(
+        layout: Present(
+      PageLayout(
+          viewportWidth: 1000,
+          viewportHeight: 800,
+          width: 1000,
+          height: 2000,
+          totalBlocks: 1,
+          blocks: [
+            _block('div', LayoutKind.block, id: 'app', w: 1000, h: 500),
+          ]),
+      source: DataSource.browser,
+    ));
+    await show(tester, p);
+    await tester.tapAt(wireframeOrigin(tester) + const Offset(20, 20));
+    await tester.pumpAndSettle();
+    // The sheet is large and embeds the element's subtree, root expanded.
+    expect(find.text('DOM of div#app'), findsOneWidget);
+    expect(find.byType(DomSubtreeView), findsOneWidget);
+    expect(find.textContaining('RENDERED-DOM'), findsOneWidget);
   });
 
   testWidgets('the sheet opens the DOM tree at the tapped element',

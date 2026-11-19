@@ -4,10 +4,13 @@ import 'dart:ui' as ui;
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:view_source_vibe/models/inspection/observed.dart';
+import 'package:view_source_vibe/models/inspection/page_layout.dart';
 import 'package:view_source_vibe/models/inspection/page_inspection.dart';
+import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/observed_text.dart';
 import 'package:view_source_vibe/services/derive/structure_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/structure_painter.dart';
 
 /// The Structure tab: a wireframe of the rendered page, coloured by who owns
@@ -285,58 +288,129 @@ class _StructureViewState extends State<StructureView> {
 
   void _openDetails(BuildContext context, StructureBlock? s) {
     if (s == null) return;
-    final service = context.read<HtmlService>();
-    final b = s.block;
-    final line = service.sourceLineOfBlock(s);
-    String n(double v) => v.round().toString();
+    // Large sheet: the details plus the element's DOM subtree need room.
     showModalBottomSheet<void>(
       context: context,
-      builder: (sheet) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(s.label, style: Theme.of(sheet).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text('${n(b.width)} × ${n(b.height)} px at '
-                  '(${n(b.x)}, ${n(b.y)})'),
-              Text('Kind: ${b.kind.name}'),
-              Text('Owner: ${s.owner.name}'),
-              if (s.service != null) Text('Service: ${s.service}'),
-              if (b.src.isNotEmpty) Text('Source: ${b.src}'),
-              Text('Contains ${b.descendants} elements'),
-              if (b.fixed) const Text('fixed'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.of(sheet).pop();
-                      service.revealDomBlock(s);
-                    },
-                    icon: const Icon(Icons.account_tree_outlined),
-                    label: const Text('Open in DOM tree'),
+      isScrollControlled: true,
+      builder: (sheet) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (sheet, scrollController) => _BlockDetailsSheet(
+          block: s,
+          scrollController: scrollController,
+        ),
+      ),
+    );
+  }
+}
+
+/// The body of the Structure tab's details sheet: the block's facts, the
+/// actions, and a small DOM tree of just the selected element's subtree.
+class _BlockDetailsSheet extends StatelessWidget {
+  final StructureBlock block;
+  final ScrollController scrollController;
+
+  const _BlockDetailsSheet({
+    required this.block,
+    required this.scrollController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.read<HtmlService>();
+    final s = block;
+    final b = s.block;
+    final line = service.sourceLineOfBlock(s);
+    final theme = Theme.of(context);
+    String n(double v) => v.round().toString();
+
+    // The DOM node matching this block (tag/id/classes + occurrence), so the
+    // sheet can show only its subtree. The tree builds lazily for large
+    // pages: selecting it starts the build and this sheet rebuilds when the
+    // notifyListeners from the finished build arrives.
+    final layout = context.select<HtmlService, PageLayout?>((s) {
+      final l = s.store.current.layout;
+      return l is Present<PageLayout> ? l.value : null;
+    });
+    final tree = context.select<HtmlService, DomTree?>((s) => s.domTree);
+    final node = (layout != null && tree != null)
+        ? findNodeBySignature(
+            tree.roots,
+            DomReveal(
+              tag: b.tag,
+              id: b.id,
+              classes: b.classes,
+              occurrence: occurrenceOfBlock(layout.blocks, b),
+            ))
+        : null;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        controller: scrollController,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(s.label, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text('${n(b.width)} × ${n(b.height)} px at (${n(b.x)}, ${n(b.y)})'),
+            Text('Kind: ${b.kind.name}'),
+            Text('Owner: ${s.owner.name}'),
+            if (s.service != null) Text('Service: ${s.service}'),
+            if (b.src.isNotEmpty) Text('Source: ${b.src}'),
+            Text('Contains ${b.descendants} elements'),
+            if (b.fixed) const Text('fixed'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    service.revealDomBlock(s);
+                  },
+                  icon: const Icon(Icons.account_tree_outlined),
+                  label: const Text('Open in DOM tree'),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    if (line != null) {
+                      service.revealSourceLine(line);
+                    } else {
+                      service.showSourceTab();
+                    }
+                  },
+                  icon: const Icon(Icons.code),
+                  label: const Text('Open in source'),
+                ),
+              ],
+            ),
+            if (node != null) ...[
+              const SizedBox(height: 12),
+              Text('DOM of ${s.label}', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              SizedBox(
+                height: 280,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: theme.colorScheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.of(sheet).pop();
-                      if (line != null) {
-                        service.revealSourceLine(line);
-                      } else {
-                        service.showSourceTab();
-                      }
-                    },
-                    icon: const Icon(Icons.code),
-                    label: const Text('Open in source'),
-                  ),
-                ],
+                  child: DomSubtreeView(root: node),
+                ),
               ),
-            ],
-          ),
+            ] else if (tree != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text('No matching DOM node for ${s.label}.',
+                    style: TextStyle(color: theme.colorScheme.outline)),
+              ),
+          ],
         ),
       ),
     );

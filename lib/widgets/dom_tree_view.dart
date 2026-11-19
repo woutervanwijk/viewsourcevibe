@@ -525,3 +525,49 @@ class DomTreeTile extends StatelessWidget {
     );
   }
 }
+
+/// A small tree of only [root]'s subtree — e.g. the element tapped in the
+/// Structure tab's details sheet. The root is expanded when the view opens.
+class DomSubtreeView extends StatefulWidget {
+  final DomTreeNode root;
+  const DomSubtreeView({super.key, required this.root});
+
+  @override
+  State<DomSubtreeView> createState() => _DomSubtreeViewState();
+}
+
+class _DomSubtreeViewState extends State<DomSubtreeView> {
+  DomTreeNode? _root;
+  TreeController<DomTreeNode>? _controller;
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final root = widget.root;
+    if (!identical(_root, root)) {
+      final old = _controller;
+      if (old != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+      }
+      _root = root;
+      _controller = TreeController<DomTreeNode>(
+        roots: [root],
+        childrenProvider: (DomTreeNode node) => node.children,
+      )..expand(root);
+    }
+    return Scrollbar(
+      child: TreeView<DomTreeNode>(
+        treeController: _controller!,
+        nodeBuilder: (context, entry) => DomTreeTile(
+          entry: entry,
+          onTap: () => _controller!.toggleExpansion(entry.node),
+        ),
+      ),
+    );
+  }
+}
