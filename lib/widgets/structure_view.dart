@@ -346,71 +346,102 @@ class _BlockDetailsSheet extends StatelessWidget {
             ))
         : null;
 
-    return SafeArea(
-      child: SingleChildScrollView(
-        controller: scrollController,
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final details = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(s.label, style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Text('${n(b.width)} × ${n(b.height)} px at (${n(b.x)}, ${n(b.y)})'),
+        Text('Kind: ${b.kind.name}'),
+        Text('Owner: ${s.owner.name}'),
+        if (s.service != null) Text('Service: ${s.service}'),
+        if (b.src.isNotEmpty) Text('Source: ${b.src}'),
+        Text('Contains ${b.descendants} elements'),
+        if (b.fixed) const Text('fixed'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
           children: [
-            Text(s.label, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text('${n(b.width)} × ${n(b.height)} px at (${n(b.x)}, ${n(b.y)})'),
-            Text('Kind: ${b.kind.name}'),
-            Text('Owner: ${s.owner.name}'),
-            if (s.service != null) Text('Service: ${s.service}'),
-            if (b.src.isNotEmpty) Text('Source: ${b.src}'),
-            Text('Contains ${b.descendants} elements'),
-            if (b.fixed) const Text('fixed'),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                TextButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    service.revealDomBlock(s);
-                  },
-                  icon: const Icon(Icons.account_tree_outlined),
-                  label: const Text('Open in DOM tree'),
-                ),
-                TextButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    if (line != null) {
-                      service.revealSourceLine(line);
-                    } else {
-                      service.showSourceTab();
-                    }
-                  },
-                  icon: const Icon(Icons.code),
-                  label: const Text('Open in source'),
-                ),
-              ],
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                service.revealDomBlock(s);
+              },
+              icon: const Icon(Icons.account_tree_outlined),
+              label: const Text('Open in DOM tree'),
             ),
-            if (node != null) ...[
-              const SizedBox(height: 12),
-              Text('DOM of ${s.label}', style: theme.textTheme.titleSmall),
-              const SizedBox(height: 4),
-              SizedBox(
-                height: 280,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: DomSubtreeView(root: node),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                if (line != null) {
+                  service.revealSourceLine(line);
+                } else {
+                  service.showSourceTab();
+                }
+              },
+              icon: const Icon(Icons.code),
+              label: const Text('Open in source'),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The facts and buttons take what they need (at most half the
+              // sheet) and scroll when there is less room.
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: constraints.maxHeight * 0.5),
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  child: details,
                 ),
               ),
-            ] else if (tree != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text('No matching DOM node for ${s.label}.',
-                    style: TextStyle(color: theme.colorScheme.outline)),
-              ),
-          ],
+              if (node != null) ...[
+                const SizedBox(height: 12),
+                Text('DOM of ${s.label}', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                // The subtree fills the rest of the sheet downward.
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border:
+                          Border.all(color: theme.colorScheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DomSubtreeView(root: node),
+                  ),
+                ),
+              ] else if (tree == null)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                      SizedBox(width: 8),
+                      Text('Building the DOM tree…'),
+                    ],
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text('No matching DOM node for ${s.label}.',
+                      style: TextStyle(color: theme.colorScheme.outline)),
+                ),
+            ],
+          ),
         ),
       ),
     );

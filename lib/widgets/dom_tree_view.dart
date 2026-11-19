@@ -387,7 +387,10 @@ class DomTreeTile extends StatelessWidget {
     final attrString =
         attributes.entries.map((e) => '${e.key}="${e.value}"').join(' ');
 
-    return TreeIndentation(
+    // Clip to the row: a very long attribute (e.g. a big srcset URL) must not
+    // paint its text — or the highlight background — outside the tile.
+    return ClipRect(
+      child: TreeIndentation(
       entry: entry,
       guide: const IndentGuide.connectingLines(
         indent: 16,
@@ -522,6 +525,7 @@ class DomTreeTile extends StatelessWidget {
         ),
         ),
       ),
+      ),
     );
   }
 }
@@ -563,8 +567,14 @@ class _DomSubtreeViewState extends State<DomSubtreeView> {
     return Scrollbar(
       child: TreeView<DomTreeNode>(
         treeController: _controller!,
+        // Own scroll position: embedded in a sheet whose outer scroller is
+        // the primary one, the tree must not attach to that controller (its
+        // rows would then paint outside this widget's bounds).
+        primary: false,
         nodeBuilder: (context, entry) => DomTreeTile(
           entry: entry,
+          // The tapped element itself is the highlighted root.
+          highlighted: identical(entry.node, root),
           onTap: () => _controller!.toggleExpansion(entry.node),
         ),
       ),

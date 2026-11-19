@@ -117,6 +117,15 @@ void main() {
     expect(find.text('DOM of div#app'), findsOneWidget);
     expect(find.byType(DomSubtreeView), findsOneWidget);
     expect(find.textContaining('RENDERED-DOM'), findsOneWidget);
+    // The subtree fills the rest of the sheet down to its bottom edge
+    // (no fixed height anymore).
+    final treeBottom = tester.getBottomLeft(find.byType(DomSubtreeView)).dy;
+    final contentBottom = tester
+        .getBottomLeft(find.descendant(
+            of: find.byType(DraggableScrollableSheet),
+            matching: find.byType(SafeArea)))
+        .dy;
+    expect(contentBottom - treeBottom, lessThan(24)); // 16 padding + border
   });
 
   testWidgets('the sheet opens the DOM tree at the tapped element',
