@@ -44,6 +44,13 @@ const String vsvLayoutJs = r'''
     var body = document.body;
     var se = document.scrollingElement || document.documentElement;
     var docW = se ? se.scrollWidth : 0, docH = se ? se.scrollHeight : 0;
+    // Some pages size <body> beyond the scrolling element (or the reverse).
+    // Take the max of both, like the full-page screenshot capture does, so
+    // the wireframe's page size matches the capture's.
+    if (body) {
+      if (body.scrollWidth > docW) docW = body.scrollWidth;
+      if (body.scrollHeight > docH) docH = body.scrollHeight;
+    }
     if (!body || !docW || !docH) return JSON.stringify({v: 1, empty: true});
     var sx = window.pageXOffset || window.scrollX || 0;
     var sy = window.pageYOffset || window.scrollY || 0;
