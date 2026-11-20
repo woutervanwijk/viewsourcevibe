@@ -30,8 +30,9 @@ class _StructureViewState extends State<StructureView> {
   ui.Image? _background;
   Uint8List? _backgroundBytes;
 
-  /// Whether [_background] covers the whole page (true) or only the first
-  /// screen (false).
+  /// Whether the decoded [_background] covers the whole page (true) or only
+  /// the first screen (false). Swapped together with [_background], so the
+  /// painter never draws the old shot as full-page while the new one decodes.
   bool _backgroundFullPage = false;
 
   @override
@@ -41,9 +42,13 @@ class _StructureViewState extends State<StructureView> {
   }
 
   /// Decodes [bytes] into [_background]; a new screenshot replaces the old.
-  Future<void> _loadBackground(Uint8List bytes) async {
+  /// The bitmap is decoded downscaled to the wireframe's max width — the
+  /// wireframe never displays wider than [kMaxWireframeWidth], so a
+  /// full-resolution full-page shot would only waste memory.
+  Future<void> _loadBackground(Uint8List bytes, bool fullPage) async {
     try {
-      final codec = await ui.instantiateImageCodec(bytes);
+      final codec = await ui.instantiateImageCodec(bytes,
+          targetWidth: kMaxWireframeWidth.round(), allowUpscaling: false);
       final frame = await codec.getNextFrame();
       codec.dispose();
       final image = frame.image;
@@ -54,6 +59,7 @@ class _StructureViewState extends State<StructureView> {
       setState(() {
         _background?.dispose();
         _background = image;
+        _backgroundFullPage = fullPage;
       });
     } catch (_) {
       // Not a decodable image: draw the wireframe without a background.
@@ -77,9 +83,11 @@ class _StructureViewState extends State<StructureView> {
     final shot = useFull ? fullShot : liveShot;
     final bytes = shot is Present<Uint8List> ? shot.value : null;
     if (!identical(bytes, _backgroundBytes)) {
+      final wasFull = _backgroundFullPage;
       _backgroundBytes = bytes;
       _backgroundFullPage = useFull;
       final b = bytes;
+      final full = useFull;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (b == null) {
@@ -90,7 +98,15 @@ class _StructureViewState extends State<StructureView> {
             });
           }
         } else {
-          _loadBackground(b);
+          // Drop a stale shot of the other kind right away, so it is not
+          // drawn with the new full-page flag while the new one decodes.
+          if (_background != null && wasFull != full) {
+            setState(() {
+              _background?.dispose();
+              _background = null;
+            });
+          }
+          _loadBackground(b, full);
         }
       });
     }
@@ -159,9 +175,6 @@ class _StructureViewState extends State<StructureView> {
   Widget _model(BuildContext context, StructureModel model) {
     final scheme = Theme.of(context).colorScheme;
     final palette = StructurePalette(scheme);
-    final fullCss =
-        context.select<HtmlService, ({double width, double height})?>(
-            (s) => s.fullPageScreenshotCss);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -236,8 +249,7 @@ class _StructureViewState extends State<StructureView> {
                             coloring: _coloring,
                             scheme: scheme,
                             background: _background,
-                            backgroundFullPage: _backgroundFullPage,
-                            backgroundCss: _backgroundFullPage ? fullCss : null),
+                            backgroundFullPage: _backgroundFullPage),
                       ),
                     ),
                   ),

@@ -4542,20 +4542,10 @@ Technical details: $message''';
 
   Observed<Uint8List> _fullPageShot = kNoScreenshot;
 
-  /// The page's CSS size at the moment the full-page screenshot was taken;
-  /// null when there is none. The Structure tab draws the image at this size
-  /// so it lines up with the wireframe even when the layout was measured at
-  /// a different page height.
-  ({double width, double height})? _fullPageShotCss;
-
   /// Full-page screenshot of the live browser (Size and Structure tabs);
   /// Unavailable until the scroll-through capture produced one or when the
   /// platform gives none. Until then those tabs show the top-of-page shot.
   Observed<Uint8List> get fullPageScreenshot => _fullPageShot;
-
-  /// CSS size of [fullPageScreenshot]'s page at capture time.
-  ({double width, double height})? get fullPageScreenshotCss =>
-      _fullPageShotCss;
 
   @visibleForTesting
   void debugSetFullPageScreenshot(Observed<Uint8List> shot) {
@@ -4681,10 +4671,6 @@ Technical details: $message''';
       if (stale() || bytes == null) return;
       _fullPageShot =
           Present(bytes.buffer.asUint8List(), source: DataSource.browser);
-      // The page's CSS size at capture time, so the Structure tab can draw
-      // the image at exactly that size (the layout may have been measured
-      // at a different moment and differ, e.g. after lazy content grew).
-      _fullPageShotCss = (width: iw, height: pageH);
       notifyListeners();
     } catch (e) {
       debugPrint('Scroll-through screenshot unavailable: $e');
@@ -4984,7 +4970,6 @@ Technical details: $message''';
     _cancelBrowserRefreshes();
     final policy = _browserPoll;
     _fullPageShot = kNoScreenshot;
-    _fullPageShotCss = null;
     // Screenshot of the top of the page right away, without scrolling; the
     // Size and Structure tabs show it until the full-page capture is done.
     _captureLiveScreenshot(gen).ignore();
