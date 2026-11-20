@@ -41,9 +41,13 @@ class _StructureViewState extends State<StructureView> {
   }
 
   /// Decodes [bytes] into [_background]; a new screenshot replaces the old.
+  /// The bitmap is decoded downscaled to the wireframe's max width — the
+  /// wireframe never displays wider than [kMaxWireframeWidth], so a
+  /// full-resolution full-page shot would only waste memory.
   Future<void> _loadBackground(Uint8List bytes) async {
     try {
-      final codec = await ui.instantiateImageCodec(bytes);
+      final codec = await ui.instantiateImageCodec(bytes,
+          targetWidth: kMaxWireframeWidth.round(), allowUpscaling: false);
       final frame = await codec.getNextFrame();
       codec.dispose();
       final image = frame.image;
@@ -159,9 +163,6 @@ class _StructureViewState extends State<StructureView> {
   Widget _model(BuildContext context, StructureModel model) {
     final scheme = Theme.of(context).colorScheme;
     final palette = StructurePalette(scheme);
-    final fullCss =
-        context.select<HtmlService, ({double width, double height})?>(
-            (s) => s.fullPageScreenshotCss);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -236,8 +237,7 @@ class _StructureViewState extends State<StructureView> {
                             coloring: _coloring,
                             scheme: scheme,
                             background: _background,
-                            backgroundFullPage: _backgroundFullPage,
-                            backgroundCss: _backgroundFullPage ? fullCss : null),
+                            backgroundFullPage: _backgroundFullPage),
                       ),
                     ),
                   ),
