@@ -63,6 +63,7 @@ PageInspection pageWithLayout() => fullPage().copyWith(
     ));
 
 void main() {
+  _backgroundRectTests();
   late HtmlService service;
 
   Future<void> show(WidgetTester tester, PageInspection p) async {
@@ -228,5 +229,26 @@ void main() {
     expect(find.byKey(const Key('structure-wireframe')), findsNothing);
     expect(find.text('Measuring the page…'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
+  });
+}
+
+void _backgroundRectTests() {
+  group('StructurePainter.backgroundRect', () {
+    const layout = PageLayout(
+        viewportWidth: 400,
+        viewportHeight: 800,
+        width: 600, // document overflows the viewport horizontally
+        height: 3000,
+        totalBlocks: 0,
+        blocks: []);
+
+    test('draws the shot viewport-wide at its own aspect ratio', () {
+      // 480x2400 px shot of a 400x2000 CSS px page, at scale 0.5.
+      final r = StructurePainter.backgroundRect(480, 2400, layout, 0.5);
+      expect(r.left, 0);
+      expect(r.top, 0);
+      expect(r.width, closeTo(200, 1e-9));
+      expect(r.height, closeTo(1000, 1e-9));
+    });
   });
 }
