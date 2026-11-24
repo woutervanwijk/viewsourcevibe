@@ -133,6 +133,18 @@ add(mk('section', {rect: [0, 5000, 412, 300]}));
     expect((r['blocks'] as List).length, 2);
   });
 
+  test('the document size takes the max of scrollingElement and body',
+      () async {
+    final r = await layout(r'''
+body.scrollWidth = 500; body.scrollHeight = 9000;
+document.scrollingElement.scrollWidth = 412;
+document.scrollingElement.scrollHeight = 5210;
+add(mk('section', {rect: [0, 100, 412, 300]}));
+''');
+    if (r == null) return markTestSkipped('node not installed');
+    expect([r['w'], r['h']], [500, 9000]);
+  });
+
   test('scanCapped is set only when the element scan hit its limit', () async {
     final few = await layout(r'''
 add(mk('section', {rect: [0, 0, 100, 100]}));
