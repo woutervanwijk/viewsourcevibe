@@ -7,6 +7,7 @@ import 'package:view_source_vibe/models/inspection/page_inspection.dart';
 import 'package:view_source_vibe/models/inspection/page_layout.dart';
 import 'package:view_source_vibe/services/html_service.dart';
 import 'package:view_source_vibe/services/inspection_store.dart';
+import 'package:view_source_vibe/services/screenshot_stitch.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/structure_painter.dart';
 import 'package:view_source_vibe/widgets/structure_view.dart';
@@ -212,9 +213,10 @@ void main() {
     expect(wireframePainter(tester).backgroundFullPage, isFalse);
 
     // The scroll-through capture finishes: the larger screenshot replaces it.
-    service.debugSetFullPageScreenshot(Present<Uint8List>(
-        Uint8List.fromList(pngBytes),
-        source: DataSource.browser));
+    final shot = Uint8List.fromList(pngBytes);
+    service.debugSetFullPageScreenshot(
+        Present<Uint8List>(shot, source: DataSource.browser),
+        tiles: PageShotTiles([(shot, 0), (shot, 800)], cssWidth: 1000));
     await tester.pump();
     await tester.pump();
     expect(wireframePainter(tester).backgroundFullPage, isTrue);
@@ -233,22 +235,22 @@ void main() {
 }
 
 void _backgroundRectTests() {
-  group('StructurePainter.backgroundRect', () {
-    const layout = PageLayout(
-        viewportWidth: 400,
-        viewportHeight: 800,
-        width: 600, // document overflows the viewport horizontally
-        height: 3000,
-        totalBlocks: 0,
-        blocks: []);
-
-    test('draws the shot viewport-wide at its own aspect ratio', () {
-      // 480x2400 px shot of a 400x2000 CSS px page, at scale 0.5.
-      final r = StructurePainter.backgroundRect(480, 2400, layout, 0.5);
+  group('StructurePainter.tileRect', () {
+    test('draws a tile viewport-wide at its own aspect ratio', () {
+      // 480x2400 px shot of a 400 CSS px wide viewport, at scale 0.5.
+      final r = StructurePainter.tileRect(480, 2400, 400, 0, 0.5);
       expect(r.left, 0);
       expect(r.top, 0);
       expect(r.width, closeTo(200, 1e-9));
       expect(r.height, closeTo(1000, 1e-9));
+    });
+
+    test('a tile starts at its page offset, scaled', () {
+      // 960x1100 px shot of a 400 CSS px wide viewport, 1300 CSS px down.
+      final r = StructurePainter.tileRect(960, 1100, 400, 1300, 0.5);
+      expect(r.top, closeTo(650, 1e-9));
+      expect(r.width, closeTo(200, 1e-9));
+      expect(r.height, closeTo(200 * 1100 / 960, 1e-9));
     });
   });
 }

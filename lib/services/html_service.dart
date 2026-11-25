@@ -4547,9 +4547,18 @@ Technical details: $message''';
   /// platform gives none. Until then those tabs show the top-of-page shot.
   Observed<Uint8List> get fullPageScreenshot => _fullPageShot;
 
+  PageShotTiles? _fullPageTiles;
+
+  /// The same capture as [fullPageScreenshot], as the separate shots: the
+  /// Structure tab draws these, sharp at any page length. Null until the
+  /// scroll-through capture is done.
+  PageShotTiles? get fullPageTiles => _fullPageTiles;
+
   @visibleForTesting
-  void debugSetFullPageScreenshot(Observed<Uint8List> shot) {
+  void debugSetFullPageScreenshot(Observed<Uint8List> shot,
+      {PageShotTiles? tiles}) {
     _fullPageShot = shot;
+    _fullPageTiles = tiles;
     notifyListeners();
   }
 
@@ -4683,6 +4692,7 @@ Technical details: $message''';
       if (stale() || bytes == null) return;
       _fullPageShot =
           Present(bytes.buffer.asUint8List(), source: DataSource.browser);
+      _fullPageTiles = PageShotTiles(shots, cssWidth: iw);
       notifyListeners();
     } catch (e) {
       debugPrint('Scroll-through screenshot unavailable: $e');
@@ -4997,6 +5007,7 @@ Technical details: $message''';
     _cancelBrowserRefreshes();
     final policy = _browserPoll;
     _fullPageShot = kNoScreenshot;
+    _fullPageTiles = null;
     // Screenshot of the top of the page right away, without scrolling; the
     // Size and Structure tabs show it until the full-page capture is done.
     _captureLiveScreenshot(gen).ignore();

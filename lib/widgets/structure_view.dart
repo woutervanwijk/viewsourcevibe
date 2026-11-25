@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -10,6 +11,7 @@ import 'package:view_source_vibe/services/derive/dom_tree.dart';
 import 'package:view_source_vibe/services/derive/observed_text.dart';
 import 'package:view_source_vibe/services/derive/structure_view.dart';
 import 'package:view_source_vibe/services/html_service.dart';
+import 'package:view_source_vibe/services/screenshot_stitch.dart';
 import 'package:view_source_vibe/widgets/dom_tree_view.dart';
 import 'package:view_source_vibe/widgets/structure_painter.dart';
 
@@ -26,44 +28,76 @@ class StructureView extends StatefulWidget {
 class _StructureViewState extends State<StructureView> {
   StructureColoring _coloring = StructureColoring.owner;
 
-  /// The live browser's screenshot, decoded, drawn behind the wireframe.
-  ui.Image? _background;
-  Uint8List? _backgroundBytes;
+  /// The page's screenshots, decoded, drawn behind the wireframe: one tile
+  /// per screen of the scroll-through capture, or the top-of-page shot as a
+  /// single tile at 0 until that capture is done.
+  List<(ui.Image, double)> _tiles = const [];
 
-  /// Whether the decoded [_background] covers the whole page (true) or only
-  /// the first screen (false). Swapped together with [_background], so the
-  /// painter never draws the old shot as full-page while the new one decodes.
-  bool _backgroundFullPage = false;
+  /// CSS width the decoded [_tiles] cover; null for the top-of-page shot
+  /// (the painter then uses the measured viewport width).
+  double? _tilesCssWidth;
+
+  /// What the tiles are (being) decoded from: the [PageShotTiles] or the
+  /// top-of-page shot's bytes. A newer source makes an older decode drop.
+  Object? _tilesSource;
+
+  /// Whether the selected source is the full-page capture. Each tile carries
+  /// its own page offset, so this only reports which one is shown.
+  bool _tilesFullPage = false;
+
+  /// Decoded pixels across all tiles, at most: a long page has up to 50
+  /// tiles, each decoded only as wide as this budget allows (~100 MB RGBA).
+  static const _tilePixelBudget = 24000000;
 
   @override
   void dispose() {
-    _background?.dispose();
+    _disposeTiles(_tiles);
     super.dispose();
   }
 
-  /// Decodes [bytes] into [_background]; a new screenshot replaces the old.
-  /// The bitmap is decoded downscaled to the wireframe's max width — the
-  /// wireframe never displays wider than [kMaxWireframeWidth], so a
-  /// full-resolution full-page shot would only waste memory.
-  Future<void> _loadBackground(Uint8List bytes, bool fullPage) async {
-    try {
-      final codec = await ui.instantiateImageCodec(bytes,
-          targetWidth: kMaxWireframeWidth.round(), allowUpscaling: false);
-      final frame = await codec.getNextFrame();
-      codec.dispose();
-      final image = frame.image;
-      if (!mounted || !identical(bytes, _backgroundBytes)) {
-        image.dispose();
-        return;
-      }
-      setState(() {
-        _background?.dispose();
-        _background = image;
-        _backgroundFullPage = fullPage;
-      });
-    } catch (_) {
-      // Not a decodable image: draw the wireframe without a background.
+  static void _disposeTiles(List<(ui.Image, double)> tiles) {
+    for (final (image, _) in tiles) {
+      image.dispose();
     }
+  }
+
+  /// Decodes [shots] into [_tiles], replacing the old ones. Each is decoded
+  /// at most as wide as the wireframe can show it sharp (2x its max width)
+  /// and as the pixel budget across all tiles allows; never upscaled.
+  Future<void> _loadTiles(Object source, List<(Uint8List, double)> shots,
+      double? cssWidth) async {
+    final out = <(ui.Image, double)>[];
+    try {
+      for (final (shot, cssY) in shots) {
+        final buffer = await ui.ImmutableBuffer.fromUint8List(shot);
+        final descriptor = await ui.ImageDescriptor.encoded(buffer);
+        final w = descriptor.width, h = descriptor.height;
+        final budgetWidth = w > 0 && h > 0
+            ? math.sqrt(_tilePixelBudget * w / (shots.length * h))
+            : 0.0;
+        final maxWidth =
+            math.min(2 * kMaxWireframeWidth, budgetWidth).floor();
+        final codec = await descriptor.instantiateCodec(
+            targetWidth: maxWidth > 0 && w > maxWidth ? maxWidth : null);
+        final frame = await codec.getNextFrame();
+        codec.dispose();
+        descriptor.dispose();
+        buffer.dispose();
+        out.add((frame.image, cssY));
+        if (!mounted || !identical(source, _tilesSource)) break;
+      }
+    } catch (_) {
+      // A shot that does not decode: draw what did decode (or nothing).
+    }
+    if (!mounted || !identical(source, _tilesSource)) {
+      _disposeTiles(out);
+      return;
+    }
+    setState(() {
+      _disposeTiles(_tiles);
+      _tiles = out;
+      _tilesCssWidth = cssWidth;
+    });
   }
 
   @override
@@ -72,44 +106,40 @@ class _StructureViewState extends State<StructureView> {
         .select<HtmlService, Observed<StructureModel>>((s) => s.structureView);
     final hasBrowser = context
         .select<HtmlService, bool>((s) => s.store.current.target is UrlTarget);
-    final fullShot = context.select<HtmlService, Observed<Uint8List>>(
-        (s) => s.fullPageScreenshot);
+    final fullTiles =
+        context.select<HtmlService, PageShotTiles?>((s) => s.fullPageTiles);
     final liveShot = context.select<HtmlService, Observed<Uint8List>>(
         (s) => s.store.current.liveScreenshot);
-    // Prefer the full-page screenshot; until the scroll-through capture is
-    // done, show the top-of-page shot taken without scrolling. When the
-    // larger one arrives, this rebuild swaps it in.
-    final useFull = fullShot is Present<Uint8List>;
-    final shot = useFull ? fullShot : liveShot;
-    final bytes = shot is Present<Uint8List> ? shot.value : null;
-    if (!identical(bytes, _backgroundBytes)) {
-      final wasFull = _backgroundFullPage;
-      _backgroundBytes = bytes;
-      _backgroundFullPage = useFull;
-      final b = bytes;
-      final full = useFull;
+    final liveBytes = liveShot is Present<Uint8List> ? liveShot.value : null;
+    // Prefer the full-page capture; until the scroll-through is done, show
+    // the top-of-page shot taken without scrolling. The old tiles stay on
+    // screen until the new ones are decoded (both are drawn at their own
+    // page offsets, so either lines up with the wireframe).
+    final Object? source = fullTiles ?? liveBytes;
+    if (!identical(source, _tilesSource)) {
+      _tilesSource = source;
+      _tilesFullPage = fullTiles != null;
+      final shots = fullTiles?.tiles ??
+          [if (liveBytes != null) (liveBytes, 0.0)];
+      final cssWidth = fullTiles?.cssWidth;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (b == null) {
-          if (_background != null) {
+        if (!mounted || !identical(source, _tilesSource)) return;
+        if (source == null) {
+          if (_tiles.isNotEmpty) {
             setState(() {
-              _background?.dispose();
-              _background = null;
+              _disposeTiles(_tiles);
+              _tiles = const [];
             });
           }
         } else {
-          // Drop a stale shot of the other kind right away, so it is not
-          // drawn with the new full-page flag while the new one decodes.
-          if (_background != null && wasFull != full) {
-            setState(() {
-              _background?.dispose();
-              _background = null;
-            });
-          }
-          _loadBackground(b, full);
+          _loadTiles(source, shots, cssWidth);
         }
       });
     }
+    final bytes = liveBytes ??
+        (fullTiles != null && fullTiles.tiles.isNotEmpty
+            ? fullTiles.tiles.first.$1
+            : null);
     final body = switch (state) {
       Pending<StructureModel>(:final detail) => Center(
           child: Column(
@@ -248,8 +278,9 @@ class _StructureViewState extends State<StructureView> {
                             scale: scale,
                             coloring: _coloring,
                             scheme: scheme,
-                            background: _background,
-                            backgroundFullPage: _backgroundFullPage),
+                            background: _tiles,
+                            backgroundCssWidth: _tilesCssWidth,
+                            backgroundFullPage: _tilesFullPage),
                       ),
                     ),
                   ),

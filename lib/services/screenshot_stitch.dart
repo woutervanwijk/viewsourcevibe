@@ -4,6 +4,17 @@ import 'dart:ui'
     show Canvas, FilterQuality, Image, Paint, PictureRecorder, Rect,
         instantiateImageCodec;
 
+/// The scroll-through screenshots of a page, kept as separate tiles so the
+/// Structure tab can draw them sharp: one stitched image of a long page has
+/// to shrink to fit GPU limits (a 22000 px page ends up ~0.4 px per CSS px).
+/// Each tile is [cssWidth] CSS px wide and starts at page offset `cssY`; its
+/// height follows from its own aspect ratio.
+class PageShotTiles {
+  final List<(Uint8List shot, double cssY)> tiles;
+  final double cssWidth;
+  const PageShotTiles(this.tiles, {required this.cssWidth});
+}
+
 /// Longest side of the stitched image in pixels (safe on mobile GPUs).
 const double _maxSide = 8192;
 

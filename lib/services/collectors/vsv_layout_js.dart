@@ -40,6 +40,12 @@ const String vsvLayoutJs = r'''
     return /^data:/i.test(s) ? '' : s.slice(0, 2000);
   }
 
+  function clipsX(el) {
+    if (!el) return false;
+    var o = getComputedStyle(el).overflowX;
+    return o === 'hidden' || o === 'clip';
+  }
+
   window.__vsv_layout = function() {
     var body = document.body;
     var se = document.scrollingElement || document.documentElement;
@@ -50,6 +56,14 @@ const String vsvLayoutJs = r'''
     if (body) {
       if (body.scrollWidth > docW) docW = body.scrollWidth;
       if (body.scrollHeight > docH) docH = body.scrollHeight;
+    }
+    // Content sticking out to the right only widens the page when the reader
+    // can scroll there. With overflow-x hidden/clip on <html> or <body> it is
+    // cut off, and the page is as wide as the window (e.g. CNN: an off-screen
+    // menu makes scrollWidth twice the window width).
+    if (clipsX(document.documentElement) || clipsX(body)) {
+      var iw = window.innerWidth || 0;
+      if (iw > 0 && iw < docW) docW = iw;
     }
     if (!body || !docW || !docH) return JSON.stringify({v: 1, empty: true});
     var sx = window.pageXOffset || window.scrollX || 0;
