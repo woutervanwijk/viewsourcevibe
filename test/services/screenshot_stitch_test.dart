@@ -113,4 +113,16 @@ void main() {
             viewportWidth: 100),
         isNull);
   });
+
+  test('a very tall page is scaled down whole, not cropped', () async {
+    final shot = await solidPng(100, 100, const ui.Color(0xFF0000FF));
+    // 100 CSS px wide at scale 1, page 40000 px tall: over the size limit.
+    final img = await stitchScreenshots([(shot, 0)],
+        pageHeight: 40000, viewportHeight: 100, viewportWidth: 100);
+    expect(img, isNotNull);
+    expect(img!.height, lessThanOrEqualTo(8192));
+    // The aspect ratio of the page is kept.
+    expect(img.width / img.height, closeTo(100 / 40000, 0.001));
+    img.dispose();
+  });
 }
