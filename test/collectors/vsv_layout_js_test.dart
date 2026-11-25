@@ -36,7 +36,9 @@ var document = {
   documentElement: { scrollWidth: 412, scrollHeight: 5210 }
 };
 body.getElementsByTagName = function() { return __els; };
-function getComputedStyle(e) { return { position: e.pos, visibility: e.vis }; }
+function getComputedStyle(e) {
+  return { position: e.pos, visibility: e.vis, overflowX: e.ox || 'visible' };
+}
 ''';
 
 Future<Map<String, dynamic>?> layout(String dom) async {
@@ -143,6 +145,37 @@ add(mk('section', {rect: [0, 100, 412, 300]}));
 ''');
     if (r == null) return markTestSkipped('node not installed');
     expect([r['w'], r['h']], [500, 9000]);
+  });
+
+  test('overflow-x hidden on html caps the page width at the window',
+      () async {
+    final r = await layout(r'''
+document.documentElement.ox = 'hidden';
+document.scrollingElement.scrollWidth = 760;
+body.scrollWidth = 760;
+add(mk('section', {rect: [0, 100, 412, 300]}));
+''');
+    if (r == null) return markTestSkipped('node not installed');
+    expect(r['w'], 412);
+  });
+
+  test('overflow-x clip on body caps the page width at the window', () async {
+    final r = await layout(r'''
+body.ox = 'clip';
+document.scrollingElement.scrollWidth = 760;
+add(mk('section', {rect: [0, 100, 412, 300]}));
+''');
+    if (r == null) return markTestSkipped('node not installed');
+    expect(r['w'], 412);
+  });
+
+  test('a page that really scrolls sideways keeps its width', () async {
+    final r = await layout(r'''
+document.scrollingElement.scrollWidth = 760;
+add(mk('section', {rect: [0, 100, 760, 300]}));
+''');
+    if (r == null) return markTestSkipped('node not installed');
+    expect(r['w'], 760);
   });
 
   test('scanCapped is set only when the element scan hit its limit', () async {
