@@ -4644,27 +4644,39 @@ Technical details: $message''';
       final oldY = double.tryParse(parts[3]) ?? 0;
       if (pageH <= 0 || vh <= 0 || iw <= 0) return;
       final shots = <(Uint8List shot, double offset)>[];
-      final steps = (pageH / vh).ceil();
-      for (var i = 0; i < steps && i < _maxFullPageShots; i++) {
+      // How much page one shot covers. The snapshot is the web view's own
+      // bounds, which can be shorter than window.innerHeight, so the step
+      // follows the first shot's aspect ratio (it covers iw CSS px of
+      // width) instead of assuming innerHeight.
+      var step = vh;
+      var y = 0.0;
+      while (y < pageH && shots.length < _maxFullPageShots) {
         if (stale()) return;
-        await _scrollPageTo(c, (i * vh).round());
+        await _scrollPageTo(c, y.round());
         // Let the new scroll position render and lazy content start.
         await Future<void>.delayed(const Duration(milliseconds: 80));
         // Where the browser actually scrolled to: rounding and clamping at
-        // the bottom make this differ from i*vh. The stitch places each shot
+        // the bottom make this differ from y. The stitch places each shot
         // at its real offset, so the image stays aligned with the page.
         final pos = await c.evaluateJavascript(
             source: 'Math.round(window.scrollY)',
             contentWorld: collectorWorld(defaultTargetPlatform));
-        final y = double.tryParse(pos?.toString() ?? '') ?? i * vh;
+        final at = double.tryParse(pos?.toString() ?? '') ?? y;
         final shot = await c.takeScreenshot(
             screenshotConfiguration: _fullPageScreenshotCfg);
-        if (shot != null && shot.isNotEmpty) shots.add((shot, y));
+        if (shot != null && shot.isNotEmpty) {
+          if (shots.isEmpty) {
+            final covered = await _coveredHeight(shot, iw);
+            if (covered != null) step = covered;
+          }
+          shots.add((shot, at));
+        }
+        y += step;
       }
       await _scrollPageTo(c, oldY.round());
       if (stale() || shots.isEmpty) return;
       final image = await stitchScreenshots(shots,
-          pageHeight: pageH, viewportHeight: vh, viewportWidth: iw);
+          pageHeight: pageH, viewportHeight: step, viewportWidth: iw);
       if (image == null) return;
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose();
@@ -4677,6 +4689,21 @@ Technical details: $message''';
     } finally {
       // Back at the original position (or giving up): hide the banner.
       onScrollThroughDone();
+    }
+  }
+
+  /// The CSS height a screenshot covers, given that it covers [cssWidth] of
+  /// width: from its own aspect ratio. Null when it does not decode.
+  Future<double?> _coveredHeight(Uint8List shot, double cssWidth) async {
+    try {
+      final codec = await ui.instantiateImageCodec(shot);
+      final frame = await codec.getNextFrame();
+      codec.dispose();
+      final h = cssWidth * frame.image.height / frame.image.width;
+      frame.image.dispose();
+      return h > 0 ? h.floorToDouble() : null;
+    } catch (_) {
+      return null;
     }
   }
 

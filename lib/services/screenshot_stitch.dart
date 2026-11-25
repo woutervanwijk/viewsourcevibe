@@ -1,7 +1,11 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui'
     show Canvas, FilterQuality, Image, Paint, PictureRecorder, Rect,
         instantiateImageCodec;
+
+/// Longest side of the stitched image in pixels (safe on mobile GPUs).
+const double _maxSide = 8192;
 
 /// Stitches viewport screenshots taken while scrolling through a page into
 /// one full-page image. Each entry is a shot plus the page's actual scroll
@@ -37,8 +41,15 @@ Future<Image?> stitchScreenshots(
   final slotH = viewportHeight * scale;
   final targetH =
       (pageHeight * scale).clamp(1.0, 100000.0).ceilToDouble();
+  // GPU textures have a size limit and an over-size picture is cropped, not
+  // scaled (only the top-left of the page would survive): shrink everything
+  // so the result stays within [_maxSide].
+  final k = math.min(1.0, _maxSide / math.max(w, targetH));
+  final outW = math.max(1, (w * k).ceil());
+  final outH = math.max(1, (targetH * k).ceil());
   final recorder = PictureRecorder();
   final canvas = Canvas(recorder);
+  canvas.scale(k);
   canvas.clipRect(Rect.fromLTWH(0, 0, w, targetH));
   for (final (img, offset) in images) {
     canvas.drawImageRect(
@@ -50,7 +61,7 @@ Future<Image?> stitchScreenshots(
     img.dispose();
   }
   final picture = recorder.endRecording();
-  final out = await picture.toImage(w.ceil(), targetH.ceil());
+  final out = await picture.toImage(outW, outH);
   picture.dispose();
   return out;
 }

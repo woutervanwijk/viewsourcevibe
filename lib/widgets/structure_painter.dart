@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
@@ -77,6 +76,20 @@ class StructurePainter extends CustomPainter {
     this.backgroundFullPage = false,
   });
 
+  /// Where the screenshot goes on the canvas. The shot is as wide as the
+  /// viewport (not the document, which can overflow it, esp. on phones), so
+  /// it is drawn [layout.viewportWidth] * [scale] wide with its own aspect
+  /// ratio: one uniform scale, no stretching, so it lines up with the blocks
+  /// at the top and drifts only if the page height changed after capture.
+  /// Without a viewport width it falls back to the canvas width.
+  static Rect backgroundRect(
+      int imageWidth, int imageHeight, PageLayout layout, double scale) {
+    final w = (layout.viewportWidth > 0 ? layout.viewportWidth : layout.width) *
+        scale;
+    final h = imageWidth > 0 ? w * imageHeight / imageWidth : 0.0;
+    return Rect.fromLTWH(0, 0, w, h);
+  }
+
   static const double minLabelWidth = 60;
   static const double minLabelHeight = 16;
 
@@ -96,14 +109,12 @@ class StructurePainter extends CustomPainter {
     // image and the blocks share coordinates), else over the first screen
     // only.
     if (background != null) {
-      final bgHeight = backgroundFullPage
-          ? size.height
-          : math.min(model.layout.viewportHeight * scale, size.height);
       canvas.drawImageRect(
         background!,
         Rect.fromLTWH(
             0, 0, background!.width.toDouble(), background!.height.toDouble()),
-        Rect.fromLTWH(0, 0, size.width, bgHeight),
+        backgroundRect(
+            background!.width, background!.height, model.layout, scale),
         Paint()..filterQuality = FilterQuality.medium,
       );
     }
