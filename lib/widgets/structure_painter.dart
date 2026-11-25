@@ -51,20 +51,20 @@ class StructurePalette {
 }
 
 /// Draws the page's blocks in page proportions: [scale] logical px per CSS px.
-/// When [background] is set (a screenshot of the page), it is drawn opaque
-/// behind the blocks — stretched over the whole canvas when
-/// [backgroundFullPage], else over the first screen only. The canvas is the
-/// page at [model.layout]'s size, so a full-page background drawn at canvas
-/// size always shares its coordinate space with the blocks, even when the
-/// layout was measured at a different page height than the capture. The
-/// blocks themselves are drawn 75% transparent so the screenshot shows
-/// through.
+/// Behind them, opaque, the page's screenshots: each of [background] is a
+/// tile [backgroundCssWidth] CSS px wide (default: the viewport width) at
+/// page offset `cssY`, drawn at the blocks' scale with its own aspect ratio,
+/// so screenshot and blocks share one coordinate space. The top-of-page shot
+/// is a single tile at 0; the scroll-through capture ([backgroundFullPage])
+/// is one tile per screen. The blocks are drawn 75% transparent so the
+/// screenshot shows through.
 class StructurePainter extends CustomPainter {
   final StructureModel model;
   final double scale;
   final StructureColoring coloring;
   final ColorScheme scheme;
-  final ui.Image? background;
+  final List<(ui.Image image, double cssY)> background;
+  final double? backgroundCssWidth;
   final bool backgroundFullPage;
 
   StructurePainter({
@@ -72,22 +72,20 @@ class StructurePainter extends CustomPainter {
     required this.scale,
     required this.coloring,
     required this.scheme,
-    this.background,
+    this.background = const [],
+    this.backgroundCssWidth,
     this.backgroundFullPage = false,
   });
 
-  /// Where the screenshot goes on the canvas. The shot is as wide as the
-  /// viewport (not the document, which can overflow it, esp. on phones), so
-  /// it is drawn [layout.viewportWidth] * [scale] wide with its own aspect
-  /// ratio: one uniform scale, no stretching, so it lines up with the blocks
-  /// at the top and drifts only if the page height changed after capture.
-  /// Without a viewport width it falls back to the canvas width.
-  static Rect backgroundRect(
-      int imageWidth, int imageHeight, PageLayout layout, double scale) {
-    final w = (layout.viewportWidth > 0 ? layout.viewportWidth : layout.width) *
-        scale;
+  /// Where a screenshot tile goes on the canvas: [cssWidth] CSS px wide (the
+  /// viewport the shot covers, not the document, which can be wider) at page
+  /// offset [cssY], with the image's own aspect ratio, all at [scale] — no
+  /// stretching, so it lines up with the blocks.
+  static Rect tileRect(int imageWidth, int imageHeight, double cssWidth,
+      double cssY, double scale) {
+    final w = cssWidth * scale;
     final h = imageWidth > 0 ? w * imageHeight / imageWidth : 0.0;
-    return Rect.fromLTWH(0, 0, w, h);
+    return Rect.fromLTWH(0, cssY * scale, w, h);
   }
 
   static const double minLabelWidth = 60;
@@ -104,18 +102,18 @@ class StructurePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..color = scheme.outlineVariant);
 
-    // The screenshot is the background, fully opaque: stretched over the
-    // whole canvas for a full-page capture (the canvas is the page, so the
-    // image and the blocks share coordinates), else over the first screen
-    // only.
-    if (background != null) {
+    // The screenshot tiles, fully opaque, in capture order (the last shot
+    // is clamped at the page bottom and overlaps the one before it).
+    final l = model.layout;
+    final cssWidth = backgroundCssWidth ??
+        (l.viewportWidth > 0 ? l.viewportWidth : l.width);
+    final tilePaint = Paint()..filterQuality = FilterQuality.medium;
+    for (final (image, cssY) in background) {
       canvas.drawImageRect(
-        background!,
-        Rect.fromLTWH(
-            0, 0, background!.width.toDouble(), background!.height.toDouble()),
-        backgroundRect(
-            background!.width, background!.height, model.layout, scale),
-        Paint()..filterQuality = FilterQuality.medium,
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        tileRect(image.width, image.height, cssWidth, cssY, scale),
+        tilePaint,
       );
     }
 
@@ -192,6 +190,7 @@ class StructurePainter extends CustomPainter {
       old.scale != scale ||
       old.coloring != coloring ||
       old.scheme != scheme ||
-      old.background != background ||
+      !identical(old.background, background) ||
+      old.backgroundCssWidth != backgroundCssWidth ||
       old.backgroundFullPage != backgroundFullPage;
 }
